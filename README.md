@@ -6,11 +6,15 @@
 
 ## Overview
 
-Accord is a native mobile dating application (iOS + Android) designed specifically for individuals seeking lavender marriages - marriages of convenience between LGBTQ+ individuals. The app provides advanced compatibility matching, end-to-end encrypted messaging, rigorous verification, and comprehensive privacy controls.
+Accord is a native mobile dating application (iOS + Android) for individuals seeking lavender marriages - platonic marriages between:
+- LGBTQ+ individuals (e.g., gay men + lesbian women)
+- **Straight women + gay men** (escaping hetero dating dynamics)
+
+The app provides advanced compatibility matching, end-to-end encrypted messaging, rigorous verification, and comprehensive privacy controls.
 
 ### Why Accord?
 
-With anti-LGBTQ+ sentiment rising 112% from 2022-2024, and Gen Z/Millennials increasingly embracing alternative relationship structures, there's a growing need for safe platforms that facilitate lavender marriages. Accord addresses this need with:
+With anti-LGBTQ+ sentiment rising 112%, **women increasingly rejecting cis-hetero relationships** (4B movement), and Gen Z/Millennials embracing platonic partnerships, there's massive demand for safe lavender marriage platforms. Accord addresses this with:
 
 - **Advanced Matching**: Compatibility based on goals, finances, lifestyle, location
 - **Privacy-First**: E2E encryption, photo blur, incognito mode
@@ -18,7 +22,8 @@ With anti-LGBTQ+ sentiment rising 112% from 2022-2024, and Gen Z/Millennials inc
 - **Purpose-Built**: Not a generic dating app - designed specifically for lavender marriages
 
 ### Target Market
-- **Primary**: LGBTQ+ individuals aged 22-40 seeking marriages of convenience
+- **Primary**: LGBTQ+ individuals AND straight women aged 22-40 seeking platonic marriages
+- **Market Size**: 65M+ in US (50M LGBTQ+, 15M straight women)
 - **Revenue Goal**: $40K MRR by Month 3
 
 ---
@@ -269,4 +274,4 @@ Copyright © 2025 Accord. All rights reserved.
 
 ---
 
-**Let's build a safe, verified platform for lavender marriages. 🌈**
+**Let's build a safe, verified platform for lavender marriages - for LGBTQ+ individuals and straight women seeking platonic life partners. 🌈**
