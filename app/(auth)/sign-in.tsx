@@ -1,13 +1,25 @@
-import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGoogleAuth, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
   const { signIn } = useAuth();
+  const { signInWithGoogle } = useGoogleAuth();
+
+  useEffect(() => {
+    checkAppleAuth();
+  }, []);
+
+  const checkAppleAuth = async () => {
+    const available = await isAppleAuthAvailable();
+    setAppleAuthAvailable(available);
+  };
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -21,6 +33,34 @@ export default function SignIn() {
       router.replace('/(tabs)/discover');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to sign in');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+      router.replace('/(tabs)/discover');
+    } catch (error: any) {
+      if (error.message !== 'User cancelled') {
+        Alert.alert('Error', error.message || 'Failed to sign in with Google');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setLoading(true);
+    try {
+      const result = await signInWithApple();
+      if (result) {
+        router.replace('/(tabs)/discover');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to sign in with Apple');
     } finally {
       setLoading(false);
     }
@@ -75,9 +115,44 @@ export default function SignIn() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity className="items-center mt-4">
+        <TouchableOpacity
+          className="items-center mt-4"
+          onPress={() => router.push('/(auth)/forgot-password')}
+        >
           <Text className="text-primary-600">Forgot password?</Text>
         </TouchableOpacity>
+
+        {/* Divider */}
+        <View className="flex-row items-center my-6">
+          <View className="flex-1 h-px bg-gray-300" />
+          <Text className="mx-4 text-gray-500">or continue with</Text>
+          <View className="flex-1 h-px bg-gray-300" />
+        </View>
+
+        {/* Social Sign-In Buttons */}
+        <View className="space-y-3">
+          <TouchableOpacity
+            className="border border-gray-300 rounded-full py-3 px-4 flex-row items-center justify-center"
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+          >
+            <Text className="text-gray-700 font-semibold ml-2">
+              Continue with Google
+            </Text>
+          </TouchableOpacity>
+
+          {appleAuthAvailable && (
+            <TouchableOpacity
+              className="bg-black rounded-full py-3 px-4 flex-row items-center justify-center"
+              onPress={handleAppleSignIn}
+              disabled={loading}
+            >
+              <Text className="text-white font-semibold ml-2">
+                Continue with Apple
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         <View className="flex-row justify-center items-center mt-6">
           <Text className="text-gray-600">Don't have an account? </Text>

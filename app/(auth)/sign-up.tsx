@@ -1,14 +1,26 @@
-import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGoogleAuth, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
 
 export default function SignUp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
   const { signUp } = useAuth();
+  const { signInWithGoogle } = useGoogleAuth();
+
+  useEffect(() => {
+    checkAppleAuth();
+  }, []);
+
+  const checkAppleAuth = async () => {
+    const available = await isAppleAuthAvailable();
+    setAppleAuthAvailable(available);
+  };
 
   const handleSignUp = async () => {
     if (!email || !password || !confirmPassword) {
@@ -32,6 +44,34 @@ export default function SignUp() {
       router.replace('/(onboarding)/basic-info');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to sign up');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+      router.replace('/(onboarding)/basic-info');
+    } catch (error: any) {
+      if (error.message !== 'User cancelled') {
+        Alert.alert('Error', error.message || 'Failed to sign up with Google');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleSignUp = async () => {
+    setLoading(true);
+    try {
+      const result = await signInWithApple();
+      if (result) {
+        router.replace('/(onboarding)/basic-info');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to sign up with Apple');
     } finally {
       setLoading(false);
     }
@@ -106,6 +146,38 @@ export default function SignUp() {
           By creating an account, you agree to our Terms of Service and Privacy
           Policy
         </Text>
+
+        {/* Divider */}
+        <View className="flex-row items-center my-6">
+          <View className="flex-1 h-px bg-gray-300" />
+          <Text className="mx-4 text-gray-500">or sign up with</Text>
+          <View className="flex-1 h-px bg-gray-300" />
+        </View>
+
+        {/* Social Sign-Up Buttons */}
+        <View className="space-y-3">
+          <TouchableOpacity
+            className="border border-gray-300 rounded-full py-3 px-4 flex-row items-center justify-center"
+            onPress={handleGoogleSignUp}
+            disabled={loading}
+          >
+            <Text className="text-gray-700 font-semibold ml-2">
+              Continue with Google
+            </Text>
+          </TouchableOpacity>
+
+          {appleAuthAvailable && (
+            <TouchableOpacity
+              className="bg-black rounded-full py-3 px-4 flex-row items-center justify-center"
+              onPress={handleAppleSignUp}
+              disabled={loading}
+            >
+              <Text className="text-white font-semibold ml-2">
+                Continue with Apple
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         <View className="flex-row justify-center items-center mt-6">
           <Text className="text-gray-600">Already have an account? </Text>
