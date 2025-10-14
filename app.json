@@ -1,13 +1,11 @@
 {
   "expo": {
-    "name": "Accord",
+    "name": "Accord - Lavender Marriage",
     "slug": "accord",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#8B5CF6"
     },
@@ -16,11 +14,13 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.accord.app",
+      "bundleIdentifier": "com.privyreviews.accord",
+      "buildNumber": "3",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Accord needs access to your photos to upload profile pictures.",
         "NSCameraUsageDescription": "Accord needs access to your camera to take profile photos.",
         "NSLocationWhenInUseUsageDescription": "Accord uses your location to find compatible matches nearby.",
+        "NSMicrophoneUsageDescription": "Accord needs access to your microphone to record your voice introduction.",
         "NSUserTrackingUsageDescription": "This allows us to provide personalized matching and improve your experience."
       },
       "config": {
@@ -29,24 +29,25 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#8B5CF6"
       },
-      "package": "com.accord.app",
+      "package": "com.privyreviews.accord",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
+    "scheme": "accord",
     "plugins": [
       "expo-router",
+      "expo-dev-client",
       [
         "expo-image-picker",
         {
@@ -59,22 +60,20 @@
           "locationWhenInUsePermission": "Accord uses your location to find compatible matches nearby."
         }
       ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#8B5CF6"
-        }
-      ]
+      "expo-secure-store"
     ],
-    "scheme": "accord",
     "extra": {
       "router": {
         "origin": false
       },
       "eas": {
-        "projectId": "your-project-id"
-      }
-    }
+        "projectId": "71ca414e-ff65-488b-97f6-9150455475a0"
+      },
+      "supabaseUrl": "https://xcaktvlosjsaxcntxbyf.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjYWt0dmxvc2pzYXhjbnR4YnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODIzOTIsImV4cCI6MjA3NTM1ODM5Mn0.XFYpZEcKiH8MQPDbONBBTqmXJ9KeUbbn5-ARGavXjKg",
+      "googleIosClientId": "609854216709-81grqvlc66iahvd56749ot511p9agh09.apps.googleusercontent.com",
+      "googleWebClientId": "609854216709-ff54d58803kcbvpudv7aet8vo1bpq07g.apps.googleusercontent.com"
+    },
+    "owner": "vfranz"
   }
 }

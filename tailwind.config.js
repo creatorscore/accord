@@ -4,33 +4,48 @@ module.exports = {
     './app/**/*.{js,jsx,ts,tsx}',
     './components/**/*.{js,jsx,ts,tsx}',
   ],
+  presets: [require("nativewind/preset")],
   theme: {
     extend: {
       colors: {
+        // Primary: Lavender Purple (our namesake)
         primary: {
           50: '#F5F3FF',
           100: '#EDE9FE',
           200: '#DDD6FE',
           300: '#C4B5FD',
-          400: '#A78BFA',
+          400: '#A78BFA', // Lavender Purple
           500: '#8B5CF6',
-          600: '#7C3AED',
+          600: '#7C3AED', // Deep Purple
           700: '#6D28D9',
           800: '#5B21B6',
           900: '#4C1D95',
         },
+        // Accent: Hot Pink (bold, queer, impossible to ignore)
         accent: {
-          50: '#FDF4FF',
-          100: '#FAE8FF',
-          200: '#F5D0FE',
-          300: '#F0ABFC',
-          400: '#E879F9',
-          500: '#D946EF',
-          600: '#C026D3',
-          700: '#A21CAF',
-          800: '#86198F',
-          900: '#701A75',
+          50: '#FDF2F8',
+          100: '#FCE7F3',
+          200: '#FBCFE8',
+          300: '#F9A8D4',
+          400: '#F472B6',
+          500: '#EC4899', // Hot Pink
+          600: '#DB2777',
+          700: '#BE185D',
+          800: '#9D174D',
+          900: '#831843',
         },
+        // Sunset Orange (warmth, community)
+        orange: {
+          500: '#FB923C',
+        },
+        // Electric Blue (trust, safety, verification)
+        blue: {
+          500: '#3B82F6',
+        },
+        // Cream (soft backgrounds)
+        cream: '#FFFBEB',
+        // Charcoal (text, sophistication)
+        charcoal: '#1F2937',
       },
     },
   },

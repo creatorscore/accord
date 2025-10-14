@@ -7,20 +7,33 @@
     "resolveJsonModule": true,
     "jsx": "react-native",
     "paths": {
-      "@/*": ["./*"],
-      "@/components/*": ["./components/*"],
-      "@/lib/*": ["./lib/*"],
-      "@/types/*": ["./types/*"],
-      "@/hooks/*": ["./hooks/*"],
-      "@/stores/*": ["./stores/*"],
-      "@/contexts/*": ["./contexts/*"]
+      "@/*": [
+        "./*"
+      ],
+      "@/components/*": [
+        "./components/*"
+      ],
+      "@/lib/*": [
+        "./lib/*"
+      ],
+      "@/types/*": [
+        "./types/*"
+      ],
+      "@/hooks/*": [
+        "./hooks/*"
+      ],
+      "@/stores/*": [
+        "./stores/*"
+      ],
+      "@/contexts/*": [
+        "./contexts/*"
+      ]
     }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "nativewind-env.d.ts"
   ],
   "exclude": [
     "node_modules"

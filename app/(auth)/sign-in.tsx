@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { useGoogleAuth, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
+import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -10,7 +10,6 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false);
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
   const { signIn } = useAuth();
-  const { signInWithGoogle } = useGoogleAuth();
 
   useEffect(() => {
     checkAppleAuth();
@@ -67,16 +66,16 @@ export default function SignIn() {
   };
 
   return (
-    <View className="flex-1 bg-white px-6 pt-16">
+    <View className="flex-1 bg-cream px-6 pt-16">
       <TouchableOpacity onPress={() => router.back()} className="mb-8">
-        <Text className="text-primary-600 text-lg">← Back</Text>
+        <Text className="text-primary-600 text-lg font-semibold">← Back</Text>
       </TouchableOpacity>
 
-      <Text className="text-3xl font-bold text-gray-900 mb-2">
-        Welcome Back
+      <Text className="text-4xl font-bold text-charcoal mb-2">
+        Hey there! 💜
       </Text>
-      <Text className="text-gray-600 mb-8">
-        Sign in to continue to Accord
+      <Text className="text-gray-600 text-lg mb-8">
+        Let's find your perfect arrangement
       </Text>
 
       <View className="space-y-4">
@@ -104,13 +103,13 @@ export default function SignIn() {
         </View>
 
         <TouchableOpacity
-          className={`bg-primary-600 rounded-full py-4 items-center mt-4 ${
+          className={`bg-primary-600 rounded-full py-4 items-center mt-4 shadow-lg ${
             loading ? 'opacity-50' : ''
           }`}
           onPress={handleSignIn}
           disabled={loading}
         >
-          <Text className="text-white font-semibold text-lg">
+          <Text className="text-white font-bold text-lg">
             {loading ? 'Signing In...' : 'Sign In'}
           </Text>
         </TouchableOpacity>

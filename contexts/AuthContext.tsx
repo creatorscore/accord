@@ -7,7 +7,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<void>;
   sendPasswordResetEmail: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
@@ -61,11 +61,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: 'accord://auth/callback'
+      }
     });
     if (error) throw error;
+
+    // Return data so caller can check if email confirmation is needed
+    return data;
   };
 
   const signOut = async () => {

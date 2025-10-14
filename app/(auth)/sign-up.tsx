@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { useGoogleAuth, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
+import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
+import { supabase } from '@/lib/supabase';
 
 export default function SignUp() {
   const [email, setEmail] = useState('');
@@ -10,8 +11,9 @@ export default function SignUp() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
-  const { signUp } = useAuth();
-  const { signInWithGoogle } = useGoogleAuth();
+  const [showVerificationMessage, setShowVerificationMessage] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const { signUp, signIn } = useAuth();
 
   useEffect(() => {
     checkAppleAuth();
@@ -23,27 +25,73 @@ export default function SignUp() {
   };
 
   const handleSignUp = async () => {
+    console.log('Sign up button clicked');
+    console.log('Email:', email, 'Password length:', password.length);
+
     if (!email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      if (Platform.OS === 'web') {
+        alert('Please fill in all fields');
+      } else {
+        Alert.alert('Error', 'Please fill in all fields');
+      }
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      if (Platform.OS === 'web') {
+        alert('Passwords do not match');
+      } else {
+        Alert.alert('Error', 'Passwords do not match');
+      }
       return;
     }
 
     if (password.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters');
+      if (Platform.OS === 'web') {
+        alert('Password must be at least 8 characters');
+      } else {
+        Alert.alert('Error', 'Password must be at least 8 characters');
+      }
       return;
     }
 
     setLoading(true);
     try {
-      await signUp(email, password);
-      router.replace('/(onboarding)/basic-info');
+      console.log('Calling signUp with:', email);
+      const result = await signUp(email, password);
+      console.log('Sign up result:', result);
+
+      // Check if email confirmation is required
+      if (result.user && !result.session) {
+        // Email verification required - show success message
+        console.log('Email confirmation required for:', email);
+        setUserEmail(email);
+        setShowVerificationMessage(true);
+      } else if (result.session) {
+        // Direct sign in successful (email confirmation disabled)
+        console.log('Direct sign in successful');
+        setTimeout(() => {
+          router.replace('/(onboarding)/basic-info');
+        }, 500);
+      } else if (result.user) {
+        // User created but no session - try to sign in
+        console.log('User created, attempting sign in...');
+        try {
+          await signIn(email, password);
+          router.replace('/(onboarding)/basic-info');
+        } catch (signInError) {
+          // Email confirmation is likely required
+          setUserEmail(email);
+          setShowVerificationMessage(true);
+        }
+      }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to sign up');
+      console.error('Sign up error:', error);
+      if (Platform.OS === 'web') {
+        alert(error.message || 'Failed to sign up');
+      } else {
+        Alert.alert('Error', error.message || 'Failed to sign up');
+      }
     } finally {
       setLoading(false);
     }
@@ -52,12 +100,20 @@ export default function SignUp() {
   const handleGoogleSignUp = async () => {
     setLoading(true);
     try {
-      await signInWithGoogle();
-      router.replace('/(onboarding)/basic-info');
+      const result = await signInWithGoogle();
+      if (result) {
+        // Wait for auth state to update
+        setTimeout(() => {
+          router.replace('/(onboarding)/basic-info');
+        }, 500);
+      } else {
+        Alert.alert('Error', 'Google sign-in was cancelled or failed');
+      }
     } catch (error: any) {
       if (error.message !== 'User cancelled') {
         Alert.alert('Error', error.message || 'Failed to sign up with Google');
       }
+      console.error('Google sign-up error:', error);
     } finally {
       setLoading(false);
     }
@@ -77,17 +133,75 @@ export default function SignUp() {
     }
   };
 
+  if (showVerificationMessage) {
+    return (
+      <View className="flex-1 bg-cream px-6 pt-16 justify-center">
+        <View className="items-center">
+          <Text className="text-6xl mb-6">📧</Text>
+          <Text className="text-3xl font-bold text-charcoal mb-4 text-center">
+            Check Your Email!
+          </Text>
+          <Text className="text-gray-600 text-lg text-center mb-2">
+            We've sent a confirmation email to:
+          </Text>
+          <Text className="text-primary-600 font-semibold text-lg mb-6">
+            {userEmail}
+          </Text>
+          <Text className="text-gray-600 text-center mb-8 px-4">
+            Please click the link in the email to verify your account and continue setting up your profile.
+          </Text>
+
+          <TouchableOpacity
+            className="bg-primary-600 rounded-full py-4 px-8 mb-4"
+            onPress={() => router.replace('/(auth)/sign-in')}
+          >
+            <Text className="text-white font-bold text-lg">
+              Go to Sign In
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setShowVerificationMessage(false)}
+          >
+            <Text className="text-primary-600 font-semibold">
+              Use Different Email
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="mt-4"
+            onPress={async () => {
+              try {
+                await supabase.auth.resend({
+                  type: 'signup',
+                  email: userEmail,
+                });
+                Alert.alert('Success', 'Verification email resent!');
+              } catch (error) {
+                Alert.alert('Error', 'Could not resend email. Please try again.');
+              }
+            }}
+          >
+            <Text className="text-gray-500 underline">
+              Resend verification email
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <View className="flex-1 bg-white px-6 pt-16">
+    <View className="flex-1 bg-cream px-6 pt-16">
       <TouchableOpacity onPress={() => router.back()} className="mb-8">
-        <Text className="text-primary-600 text-lg">← Back</Text>
+        <Text className="text-primary-600 text-lg font-semibold">← Back</Text>
       </TouchableOpacity>
 
-      <Text className="text-3xl font-bold text-gray-900 mb-2">
-        Create Account
+      <Text className="text-4xl font-bold text-charcoal mb-2">
+        Let's do this! ✨
       </Text>
-      <Text className="text-gray-600 mb-8">
-        Join Accord and find your perfect match
+      <Text className="text-gray-600 text-lg mb-8">
+        Your perfect arrangement awaits
       </Text>
 
       <View className="space-y-4">
@@ -131,20 +245,21 @@ export default function SignUp() {
         </View>
 
         <TouchableOpacity
-          className={`bg-primary-600 rounded-full py-4 items-center mt-4 ${
+          className={`bg-primary-600 rounded-full py-4 items-center mt-4 shadow-lg ${
             loading ? 'opacity-50' : ''
           }`}
           onPress={handleSignUp}
           disabled={loading}
         >
-          <Text className="text-white font-semibold text-lg">
+          <Text className="text-white font-bold text-lg">
             {loading ? 'Creating Account...' : 'Create Account'}
           </Text>
         </TouchableOpacity>
 
         <Text className="text-gray-500 text-xs text-center mt-4">
-          By creating an account, you agree to our Terms of Service and Privacy
-          Policy
+          By creating an account, you agree to our{' '}
+          <Text className="text-primary-600">Terms of Service</Text> and{' '}
+          <Text className="text-primary-600">Privacy Policy</Text>
         </Text>
 
         {/* Divider */}

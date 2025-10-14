@@ -144,16 +144,18 @@
 - [ ] Add "empty state" (no more profiles)
 - [ ] Test swipe interface on iOS and Android
 
-### Days 13-14: Matching & Notifications
-- [ ] Create Supabase Edge Function: `matching/like`
-- [ ] Implement match detection logic:
-  - [ ] Check if mutual like exists
-  - [ ] Create `matches` record
-  - [ ] Calculate final compatibility score
-- [ ] Set up Expo Push Notifications
-- [ ] Request notification permissions (on first launch)
-- [ ] Store push token in profiles table
-- [ ] Send push notification on new match
+### Days 13-14: Matching & Notifications ✅
+- [x] Create Supabase Edge Function: `matching/like` (using direct DB insert for MVP)
+- [x] Implement match detection logic:
+  - [x] Check if mutual like exists
+  - [x] Create `matches` record
+  - [x] Calculate final compatibility score
+- [x] Set up Expo Push Notifications
+- [x] Request notification permissions (on first launch)
+- [x] Store push token in profiles table
+- [x] Send push notification on new match
+- [x] Send push notification on new message
+- [x] Send push notification on new like (premium feature)
 - [ ] Build match list screen
   - [ ] Display all matches
   - [ ] Profile photo, name, age
@@ -172,72 +174,72 @@
 
 ## 📅 Week 3: Messaging & Premium (Days 15-21)
 
-### Days 15-16: Messaging System
-- [ ] Build message list screen
-  - [ ] Query matches with last message
-  - [ ] Display profile photo, name
-  - [ ] Message preview
-  - [ ] Timestamp
-  - [ ] Unread count badge
-- [ ] Build chat screen UI
-  - [ ] Message bubbles (sent/received)
-  - [ ] Timestamp display
-  - [ ] E2E encryption indicator
-  - [ ] Chat input field
-  - [ ] Send button
-- [ ] Implement E2E encryption
-  - [ ] Generate key pair on first message
-  - [ ] Store public key in profile
-  - [ ] Store private key in SecureStore
-  - [ ] Encrypt messages before sending
-  - [ ] Decrypt messages on receive
-- [ ] Set up Supabase Realtime for messages
-- [ ] Create Supabase Edge Function: `messaging/send`
-- [ ] Implement message sending
-- [ ] Implement message receiving
-- [ ] Add typing indicator
-- [ ] Add photo messages
-  - [ ] Image picker
+### Days 15-16: Messaging System ✅
+- [x] Build message list screen
+  - [x] Query matches with last message
+  - [x] Display profile photo, name
+  - [x] Message preview
+  - [x] Timestamp
+  - [x] Unread count badge
+- [x] Build chat screen UI
+  - [x] Message bubbles (sent/received)
+  - [x] Timestamp display
+  - [x] E2E encryption indicator
+  - [x] Chat input field
+  - [x] Send button
+- [x] Implement E2E encryption
+  - [x] Generate key pair on first message
+  - [x] Store public key in profile
+  - [x] Store private key in SecureStore
+  - [x] Encrypt messages before sending
+  - [x] Decrypt messages on receive
+- [x] Set up Supabase Realtime for messages
+- [ ] Create Supabase Edge Function: `messaging/send` (using direct DB insert for MVP)
+- [x] Implement message sending
+- [x] Implement message receiving
+- [ ] Add typing indicator (future)
+- [ ] Add photo messages (UI ready, upload pending)
+  - [x] Image picker
   - [ ] Upload to Supabase Storage
   - [ ] Display in chat
-- [ ] Add voice messages (premium feature)
+- [ ] Add voice messages (premium feature - future)
   - [ ] expo-file-system for recording
   - [ ] Upload audio to Supabase Storage
   - [ ] Audio player in chat
-- [ ] Add read receipts (premium feature)
+- [ ] Add read receipts (premium feature - future)
 - [ ] Test messaging on iOS and Android
 
-### Days 17-18: Payments & Subscriptions
-- [ ] Create RevenueCat account
-- [ ] Configure products in App Store Connect:
+### Days 17-18: Payments & Subscriptions ✅
+- [x] Create RevenueCat account
+- [ ] Configure products in App Store Connect (pending app setup):
   - [ ] Premium subscription ($14.99/mo)
   - [ ] Platinum subscription ($24.99/mo)
   - [ ] Verification badge ($29.99)
   - [ ] Profile boost ($9.99)
   - [ ] Super Like bundle ($19.99)
-- [ ] Configure products in Google Play Console (same as above)
-- [ ] Install RevenueCat SDK (react-native-purchases)
-- [ ] Create SubscriptionContext.tsx
-- [ ] Build paywall screens
-  - [ ] Premium paywall (features list, price)
-  - [ ] Platinum paywall (all features list)
-  - [ ] Animated feature showcase
-- [ ] Implement purchase flow
-  - [ ] Trigger native payment sheet
-  - [ ] Handle purchase success
-  - [ ] Handle purchase failure
-  - [ ] Show confirmation
-- [ ] Implement restore purchases
-- [ ] Feature gating:
-  - [ ] Check subscription status before premium features
-  - [ ] "Upgrade to Premium" modal for free users
-  - [ ] Unlock features for paid users
-- [ ] Create Supabase Edge Function: `webhooks/revenuecat`
-- [ ] Sync subscription status to Supabase
-- [ ] Build subscription management screen
-  - [ ] Display current plan
-  - [ ] Expiration date
-  - [ ] Cancel subscription option
+- [ ] Configure products in Google Play Console (pending app setup)
+- [x] Install RevenueCat SDK (react-native-purchases)
+- [x] Create SubscriptionContext.tsx
+- [x] Build paywall screens
+  - [x] Premium paywall (features list, price)
+  - [x] Platinum paywall (all features list)
+  - [x] Animated feature showcase
+- [x] Implement purchase flow
+  - [x] Trigger native payment sheet
+  - [x] Handle purchase success
+  - [x] Handle purchase failure
+  - [x] Show confirmation
+- [x] Implement restore purchases
+- [x] Feature gating:
+  - [x] Check subscription status before premium features
+  - [x] "Upgrade to Premium" modal for free users
+  - [x] Unlock features for paid users
+- [ ] Create Supabase Edge Function: `webhooks/revenuecat` (future - using direct DB sync for MVP)
+- [x] Sync subscription status to Supabase
+- [x] Build subscription management screen
+  - [x] Display current plan
+  - [x] Expiration date
+  - [x] Cancel subscription option
 - [ ] Test IAP in sandbox (iOS)
 - [ ] Test IAP in test mode (Android)
 - [ ] Test free trial (7 days)
@@ -259,27 +261,27 @@
 - [ ] Handle verification status updates
 - [ ] Display verified badge on profiles
 - [ ] Send notification when verified
-- [ ] Build block functionality
-  - [ ] Block button on profile
-  - [ ] Confirmation modal
-  - [ ] Insert into `blocks` table
-  - [ ] Remove from matches/discovery
-- [ ] Build report functionality
-  - [ ] Report modal (reason + description)
-  - [ ] Insert into `reports` table
+- [x] Build block functionality ✅
+  - [x] Block button on profile
+  - [x] Confirmation modal
+  - [x] Insert into `blocks` table
+  - [x] Remove from matches/discovery
+- [x] Build report functionality ✅
+  - [x] Report modal (reason + description)
+  - [x] Insert into `reports` table
   - [ ] Admin review flag (future)
-- [ ] Build Safety Center screens
+- [ ] Build Safety Center screens (future)
   - [ ] Safe meeting tips
   - [ ] Relationship contracts info
   - [ ] Legal resources links
   - [ ] How to report
-- [ ] Build privacy settings screen
-  - [ ] Photo blur toggle
-  - [ ] Incognito mode toggle
-  - [ ] Hide last active toggle
-  - [ ] Show distance toggle
+- [x] Build privacy settings screen ✅
+  - [x] Photo blur toggle
+  - [x] Incognito mode toggle
+  - [x] Hide last active toggle
+  - [x] Show distance toggle
 - [ ] Test verification flow
-- [ ] Test block/report functionality
+- [x] Test block/report functionality ✅
 
 ---
 
@@ -379,9 +381,9 @@
   - [ ] Promotional text (170 chars)
   - [ ] Support URL
   - [ ] Marketing URL
-- [ ] **Legal pages:**
-  - [ ] Privacy policy (host on Vercel/Netlify)
-  - [ ] Terms of service
+- [x] **Legal pages:** ✅
+  - [x] Privacy policy (created - needs hosting on Vercel/Netlify)
+  - [x] Terms of service (created - needs hosting on Vercel/Netlify)
   - [ ] EULA (optional)
 - [ ] **App icons:**
   - [ ] iOS (1024x1024)

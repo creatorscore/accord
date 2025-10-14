@@ -1,7 +1,15 @@
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Platform } from 'react-native';
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+
+  // Add extra padding for Android navigation bar
+  const tabBarHeight = Platform.OS === 'android' ? 60 + insets.bottom : 60;
+  const paddingBottom = Platform.OS === 'android' ? insets.bottom + 5 : 5;
+
   return (
     <Tabs
       screenOptions={{
@@ -12,9 +20,9 @@ export default function TabsLayout() {
           backgroundColor: 'white',
           borderTopWidth: 1,
           borderTopColor: '#E5E7EB',
-          paddingBottom: 5,
+          paddingBottom: paddingBottom,
           paddingTop: 5,
-          height: 60,
+          height: tabBarHeight,
         },
       }}
     >

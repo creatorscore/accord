@@ -4,7 +4,7 @@ import { PaperProvider } from 'react-native-paper';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 import '../global.css';
 
 export default function RootLayout() {
@@ -13,15 +13,10 @@ export default function RootLayout() {
       <PaperProvider>
         <AuthProvider>
           <SubscriptionProvider>
-            <ProtectedRoute>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="(auth)" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="(onboarding)" />
-              </Stack>
-            </ProtectedRoute>
-            <StatusBar style="auto" />
+            <NotificationProvider>
+              <Stack screenOptions={{ headerShown: false }} />
+              <StatusBar style="auto" />
+            </NotificationProvider>
           </SubscriptionProvider>
         </AuthProvider>
       </PaperProvider>
