@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -52,6 +53,7 @@ const DAILY_SWIPE_LIMIT = 10; // Free users get 10 swipes per day
 export default function Discover() {
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
+  const insets = useSafeAreaInsets();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [currentUserPhoto, setCurrentUserPhoto] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -1016,7 +1018,7 @@ export default function Discover() {
   return (
     <View className="flex-1 bg-cream">
       {/* Header */}
-      <View className="bg-primary-500 pt-16 pb-4 px-6">
+      <View className="bg-primary-500 pb-4 px-6" style={{ paddingTop: insets.top + 16 }}>
         <View className="flex-row justify-between items-center">
           <View className="flex-1">
             <Text className="text-4xl font-bold text-white mb-1">

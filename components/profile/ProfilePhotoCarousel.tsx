@@ -10,6 +10,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -43,6 +44,7 @@ export default function ProfilePhotoCarousel({
 }: ProfilePhotoCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
@@ -130,7 +132,7 @@ export default function ProfilePhotoCarousel({
 
       {/* Photo Indicators */}
       {photos.length > 1 && (
-        <View style={styles.indicators}>
+        <View style={[styles.indicators, { top: insets.top + 20 }]}>
           {photos.map((_, index) => (
             <TouchableOpacity
               key={index}
@@ -159,7 +161,7 @@ export default function ProfilePhotoCarousel({
           from={{ scale: 0, rotate: '-15deg' }}
           animate={{ scale: 1, rotate: '0deg' }}
           transition={{ type: 'spring', delay: 500 }}
-          style={styles.compatibilityBadge}
+          style={[styles.compatibilityBadge, { top: insets.top + 60 }]}
         >
           <LinearGradient
             colors={['#8B5CF6', '#EC4899']}
