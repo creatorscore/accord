@@ -666,7 +666,7 @@ export default function ImmersiveProfileCard({
             </View>
           </BlurView>
         </SafeAreaView>
-      ) : (
+      ) : onSendMessage ? (
         // Message button for matched profiles
         <SafeAreaView edges={['bottom']} style={styles.actionContainer}>
           <BlurView intensity={95} tint="light" style={styles.actionBlur}>
@@ -685,7 +685,7 @@ export default function ImmersiveProfileCard({
             </View>
           </BlurView>
         </SafeAreaView>
-      )}
+      ) : null}
 
       {/* Action Sheet Modal */}
       <Modal

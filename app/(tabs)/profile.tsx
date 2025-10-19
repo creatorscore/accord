@@ -672,11 +672,10 @@ export default function Profile() {
               distance: undefined,
             }}
             preferences={preferences}
-            onSwipeLeft={() => {}} // Dummy handlers since it's a preview
-            onSwipeRight={() => {}}
-            onSuperLike={() => {}}
             onClose={() => setShowPreview(false)}
             visible={showPreview}
+            isMatched={true} // Hide swipe actions for self-preview
+            onSendMessage={undefined} // No message button for self-preview
           />
         )}
       </Modal>

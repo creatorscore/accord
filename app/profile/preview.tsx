@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
@@ -39,6 +39,16 @@ export default function ProfilePreview() {
       loadCurrentUserProfile();
     }
   }, [profileDataParam, isRealtimeParam]);
+
+  // Refetch profile data when screen comes back into focus (e.g., after editing)
+  useFocusEffect(
+    useCallback(() => {
+      // Only refetch if not using live preview data
+      if (!profileDataParam || isRealtimeParam !== 'true') {
+        loadCurrentUserProfile();
+      }
+    }, [profileDataParam, isRealtimeParam])
+  );
 
   const loadCurrentUserProfile = async () => {
     try {

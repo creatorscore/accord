@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -98,6 +98,16 @@ export default function ProfileView() {
       checkIfMatched();
     }
   }, [id, currentProfileId]);
+
+  // Refetch profile data when screen comes back into focus (e.g., after editing)
+  useFocusEffect(
+    useCallback(() => {
+      if (id && currentProfileId) {
+        loadProfile();
+        checkIfMatched();
+      }
+    }, [id, currentProfileId])
+  );
 
   const loadCurrentProfile = async () => {
     try {
