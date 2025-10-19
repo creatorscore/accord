@@ -35,18 +35,22 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [dbPremiumStatus, setDbPremiumStatus] = useState(false);
   const [dbPlatinumStatus, setDbPlatinumStatus] = useState(false);
 
+  // Check if we should use database-only mode (development only)
+  const isDatabaseOnlyMode = process.env.EXPO_PUBLIC_APP_ENV === 'development';
+
   // Load premium status from database (for development)
   useEffect(() => {
     console.log('🔄 SubscriptionContext: useEffect triggered', {
       hasUser: !!user,
       userId: user?.id,
-      isDev: __DEV__
+      appEnv: process.env.EXPO_PUBLIC_APP_ENV,
+      isDatabaseOnlyMode
     });
-    if (user && __DEV__) {
+    if (user && isDatabaseOnlyMode) {
       console.log('📞 Calling loadDatabasePremiumStatus...');
       loadDatabasePremiumStatus();
     }
-  }, [user]);
+  }, [user, isDatabaseOnlyMode]);
 
   const loadDatabasePremiumStatus = async () => {
     console.log('🔍 Loading premium status from database for user:', user?.id);
@@ -59,7 +63,16 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       console.log('📊 Database query result:', { data, error });
 
-      if (error) throw error;
+      // If profile doesn't exist yet (user is in onboarding), silently return
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.log('Profile not found yet - user likely in onboarding. Premium status will be loaded after profile creation.');
+          setDbPremiumStatus(false);
+          setDbPlatinumStatus(false);
+          return;
+        }
+        throw error;
+      }
 
       const premium = data?.is_premium || false;
       const platinum = data?.is_platinum || false;
@@ -75,9 +88,9 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Initialize RevenueCat when user logs in
   useEffect(() => {
     if (user) {
-      // Skip RevenueCat in development/Expo Go
-      if (__DEV__) {
-        console.log('Skipping RevenueCat in development');
+      // Skip RevenueCat in database-only development mode
+      if (isDatabaseOnlyMode) {
+        console.log('Skipping RevenueCat in database-only development mode');
         setIsLoading(false);
         return;
       }
@@ -87,11 +100,11 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setCustomerInfo(null);
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, isDatabaseOnlyMode]);
 
   // Listen for subscription updates
   useEffect(() => {
-    if (!user || __DEV__) return; // Skip in development
+    if (!user || isDatabaseOnlyMode) return; // Skip in database-only mode
 
     const listener = Purchases.addCustomerInfoUpdateListener((info) => {
       setCustomerInfo(info);
@@ -100,7 +113,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => {
       listener.remove();
     };
-  }, [user]);
+  }, [user, isDatabaseOnlyMode]);
 
   const loadSubscriptionStatus = async () => {
     try {
@@ -118,17 +131,18 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     await loadSubscriptionStatus();
   }, []);
 
-  // In development, use database status; in production, use RevenueCat
-  const isSubscribed = __DEV__ ? (dbPremiumStatus || dbPlatinumStatus) : hasActiveSubscription(customerInfo);
-  const isPremium = __DEV__ ? dbPremiumStatus : hasPremium(customerInfo);
-  const isPlatinum = __DEV__ ? dbPlatinumStatus : hasPlatinum(customerInfo);
-  const subscriptionTier = __DEV__
+  // In database-only mode, use database status; otherwise use RevenueCat
+  const isSubscribed = isDatabaseOnlyMode ? (dbPremiumStatus || dbPlatinumStatus) : hasActiveSubscription(customerInfo);
+  const isPremium = isDatabaseOnlyMode ? dbPremiumStatus : hasPremium(customerInfo);
+  const isPlatinum = isDatabaseOnlyMode ? dbPlatinumStatus : hasPlatinum(customerInfo);
+  const subscriptionTier = isDatabaseOnlyMode
     ? (dbPlatinumStatus ? 'platinum' : dbPremiumStatus ? 'premium' : null)
     : getSubscriptionTier(customerInfo);
 
   // Debug log computed values
   console.log('💎 Subscription Status:', {
-    isDev: __DEV__,
+    appEnv: process.env.EXPO_PUBLIC_APP_ENV,
+    isDatabaseOnlyMode,
     dbPremiumStatus,
     dbPlatinumStatus,
     isSubscribed,

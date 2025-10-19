@@ -4,8 +4,10 @@
     "slug": "accord",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#8B5CF6"
     },
@@ -15,23 +17,36 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.privyreviews.accord",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Accord needs access to your photos to upload profile pictures.",
         "NSCameraUsageDescription": "Accord needs access to your camera to take profile photos.",
         "NSLocationWhenInUseUsageDescription": "Accord uses your location to find compatible matches nearby.",
         "NSMicrophoneUsageDescription": "Accord needs access to your microphone to record your voice introduction.",
-        "NSUserTrackingUsageDescription": "This allows us to provide personalized matching and improve your experience."
+        "NSUserTrackingUsageDescription": "We use this to understand which features work best and improve your match quality. Your personal information always stays private.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "accord",
+              "com.googleusercontent.apps.609854216709-81grqvlc66iahvd56749ot511p9agh09"
+            ]
+          }
+        ]
       },
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": []
       }
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#8B5CF6"
       },
       "package": "com.privyreviews.accord",
+      "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -45,6 +60,11 @@
       "bundler": "metro"
     },
     "scheme": "accord",
+    "privacy": "public",
+    "description": "Find your perfect lavender marriage arrangement. Connect with like-minded LGBTQ+ individuals seeking mutually beneficial partnerships in a safe, verified space.",
+    "primaryCategory": "SOCIAL_NETWORKING",
+    "privacyPolicyUrl": "https://joinaccord.app/privacy",
+    "termsOfServiceUrl": "https://joinaccord.app/terms",
     "plugins": [
       "expo-router",
       "expo-dev-client",
@@ -60,7 +80,8 @@
           "locationWhenInUsePermission": "Accord uses your location to find compatible matches nearby."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-tracking-transparency"
     ],
     "extra": {
       "router": {
@@ -72,7 +93,9 @@
       "supabaseUrl": "https://xcaktvlosjsaxcntxbyf.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjYWt0dmxvc2pzYXhjbnR4YnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODIzOTIsImV4cCI6MjA3NTM1ODM5Mn0.XFYpZEcKiH8MQPDbONBBTqmXJ9KeUbbn5-ARGavXjKg",
       "googleIosClientId": "609854216709-81grqvlc66iahvd56749ot511p9agh09.apps.googleusercontent.com",
-      "googleWebClientId": "609854216709-ff54d58803kcbvpudv7aet8vo1bpq07g.apps.googleusercontent.com"
+      "googleWebClientId": "609854216709-ff54d58803kcbvpudv7aet8vo1bpq07g.apps.googleusercontent.com",
+      "revenueCatAppleApiKey": "appl_enRnexAwhhNNHTGSZFUKzQBQefF",
+      "revenueCatGoogleApiKey": "YOUR_REVENUECAT_GOOGLE_API_KEY"
     },
     "owner": "vfranz"
   }

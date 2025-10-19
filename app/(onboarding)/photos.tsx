@@ -6,8 +6,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
-import * as FileSystem from 'expo-file-system/legacy';
-import { decode } from 'base64-arraybuffer';
+import { optimizeImage, uriToArrayBuffer, validateImage } from '@/lib/image-optimization';
 
 interface Photo {
   uri: string;
@@ -66,16 +65,25 @@ export default function Photos() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        // Compress image with better memory management
-        const compressed = await ImageManipulator.manipulateAsync(
-          result.assets[0].uri,
-          [{ resize: { width: 1080 } }],
-          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-        );
+        const selectedUri = result.assets[0].uri;
+
+        // Validate image before processing
+        const validation = await validateImage(selectedUri);
+        if (!validation.isValid) {
+          Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
+          return;
+        }
+
+        // Optimize image with better compression and memory management
+        const { optimized } = await optimizeImage(selectedUri, {
+          generateThumbnail: true, // Generate thumbnail for faster loading
+        });
+
+        console.log(`Optimized image: ${(optimized.size! / 1024).toFixed(0)}KB (${optimized.width}x${optimized.height})`);
 
         // Update state if component is still mounted
         if (isMounted.current) {
-          setPhotos(prev => [...prev, { uri: compressed.uri }]);
+          setPhotos(prev => [...prev, { uri: optimized.uri }]);
         }
       }
     } catch (error: any) {
@@ -111,13 +119,8 @@ export default function Photos() {
         const fileName = `${profileId}/${timestamp}_${i}.${fileExt}`;
 
         try {
-          // Read file as base64 using legacy API (still supported)
-          const base64 = await FileSystem.readAsStringAsync(photo.uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-
-          // Convert base64 to ArrayBuffer
-          const arrayBuffer = decode(base64);
+          // Convert URI to ArrayBuffer using optimized utility
+          const arrayBuffer = await uriToArrayBuffer(photo.uri);
 
           // Upload to Supabase Storage
           const { data: uploadData, error: uploadError } = await supabase.storage

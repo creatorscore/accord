@@ -9,6 +9,8 @@ import {
   StyleSheet,
   Alert,
   StatusBar,
+  Linking,
+  Modal,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
@@ -23,6 +25,7 @@ import ProfileStoryCard from '@/components/profile/ProfileStoryCard';
 import ProfileInteractiveSection from '@/components/profile/ProfileInteractiveSection';
 import ProfileQuickFacts from '@/components/profile/ProfileQuickFacts';
 import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
+import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
 
 interface ProfileData {
   id: string;
@@ -49,13 +52,29 @@ export default function Profile() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [preferences, setPreferences] = useState<any>(null);
 
   useEffect(() => {
     loadProfile();
   }, []);
 
+  // Reload profile when user changes (handles OAuth sign-in timing)
+  useEffect(() => {
+    if (user?.id && !profile) {
+      loadProfile();
+    }
+  }, [user]);
+
   const loadProfile = async () => {
     try {
+      // Safety check: ensure user is loaded before querying
+      if (!user?.id) {
+        console.log('User not loaded yet, retrying...');
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .select(`
@@ -80,10 +99,18 @@ export default function Profile() {
             display_order
           )
         `)
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // If profile doesn't exist (PGRST116 = no rows), redirect to onboarding
+        if (error.code === 'PGRST116') {
+          console.log('No profile found, redirecting to onboarding');
+          router.replace('/(onboarding)/basic-info');
+          return;
+        }
+        throw error;
+      }
 
       // Add mock captions for demo
       const enhancedPhotos = data.photos?.sort((a: any, b: any) =>
@@ -101,7 +128,25 @@ export default function Profile() {
       });
     } catch (error: any) {
       console.error('Error loading profile:', error);
-      Alert.alert('Error', 'Failed to load profile');
+      Alert.alert(
+        'Error Loading Profile',
+        'There was a problem loading your profile. Please try again.',
+        [
+          {
+            text: 'Sign Out',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await signOut();
+                router.replace('/(auth)/welcome');
+              } catch (err) {
+                console.error('Sign out error:', err);
+              }
+            }
+          },
+          { text: 'Retry', onPress: loadProfile }
+        ]
+      );
     } finally {
       setLoading(false);
     }
@@ -127,6 +172,26 @@ export default function Profile() {
         },
       ]
     );
+  };
+
+  const handlePreviewProfile = async () => {
+    if (!profile) return;
+
+    try {
+      // Load preferences for preview
+      const { data: prefsData } = await supabase
+        .from('preferences')
+        .select('*')
+        .eq('profile_id', profile.id)
+        .single();
+
+      setPreferences(prefsData);
+      setShowPreview(true);
+    } catch (error) {
+      console.error('Error loading preferences for preview:', error);
+      // Show preview anyway, just without preferences
+      setShowPreview(true);
+    }
   };
 
   if (loading || subscriptionLoading) {
@@ -205,12 +270,14 @@ export default function Profile() {
 
         {/* Quick Facts */}
         {quickFacts.length > 0 && (
-          <ProfileQuickFacts facts={quickFacts} />
+          <View style={{ position: 'relative', zIndex: 100, overflow: 'visible' }}>
+            <ProfileQuickFacts facts={quickFacts} />
+          </View>
         )}
 
         {/* Voice Introduction */}
         {profile?.voice_intro_url && (
-          <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+          <View style={{ paddingHorizontal: 20, marginTop: 12, marginBottom: 16, position: 'relative', zIndex: 100 }}>
             <ProfileVoiceNote
               voiceUrl={profile.voice_intro_url}
               duration={profile.voice_intro_duration}
@@ -343,6 +410,15 @@ export default function Profile() {
             </LinearGradient>
           </TouchableOpacity>
 
+          {/* Preview Profile Button */}
+          <TouchableOpacity
+            style={styles.previewProfileButton}
+            onPress={handlePreviewProfile}
+          >
+            <MaterialCommunityIcons name="eye-outline" size={20} color="#8B5CF6" />
+            <Text style={styles.previewProfileText}>Preview Profile</Text>
+          </TouchableOpacity>
+
           {/* Premium Status */}
           {isPremium ? (
         <MotiView
@@ -369,7 +445,7 @@ export default function Profile() {
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={() => Alert.alert('Manage Subscription', 'Subscription management coming soon')}
+                onPress={() => router.push('/settings/subscription')}
               >
                 <MaterialCommunityIcons name="cog" size={20} color="white" />
               </TouchableOpacity>
@@ -386,8 +462,8 @@ export default function Profile() {
               {[
                 'Unlimited swipes',
                 'See who likes you',
-                isPlatinum ? 'Weekly profile boost' : 'Advanced filters',
-                isPlatinum ? 'Priority support' : 'Read receipts',
+                isPlatinum ? 'Weekly profile boost' : '5 Super Likes/week',
+                isPlatinum ? 'Priority support' : 'Voice messages',
               ].map((benefit, i) => (
                 <View key={i} style={styles.benefitRow}>
                   <MaterialCommunityIcons name="check-circle" size={16} color="white" />
@@ -485,7 +561,7 @@ export default function Profile() {
         {isPremium && (
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Subscription', 'Subscription management coming soon')}
+            onPress={() => router.push('/settings/subscription')}
           >
             <View style={styles.menuItemLeft}>
               <MaterialCommunityIcons name="credit-card-outline" size={24} color="#6B7280" />
@@ -497,13 +573,53 @@ export default function Profile() {
 
         <TouchableOpacity
           style={styles.menuItem}
-          onPress={() => Alert.alert('Help', 'Help center coming soon')}
+          onPress={() => router.push('/settings/safety-center')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="shield-check-outline" size={24} color="#6B7280" />
+            <Text style={styles.menuItemText}>Safety Center</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push('/settings/blocked-users')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="cancel" size={24} color="#6B7280" />
+            <Text style={styles.menuItemText}>Blocked Users</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => {
+            Linking.openURL('mailto:hello@joinaccord.app?subject=Support Request&body=Hi Accord Team,\n\n');
+          }}
         >
           <View style={styles.menuItemLeft}>
             <MaterialCommunityIcons name="help-circle-outline" size={24} color="#6B7280" />
             <Text style={styles.menuItemText}>Help & Support</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+        </TouchableOpacity>
+          </View>
+
+          {/* Danger Zone */}
+          <View style={styles.menuSection}>
+        <Text style={styles.menuSectionTitle}>Danger Zone</Text>
+
+        <TouchableOpacity
+          style={[styles.menuItem, { borderColor: '#FEE2E2', borderWidth: 1 }]}
+          onPress={() => router.push('/settings/delete-account')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="delete-forever" size={24} color="#EF4444" />
+            <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Delete Account</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
         </TouchableOpacity>
           </View>
 
@@ -540,6 +656,30 @@ export default function Profile() {
         onClose={() => setShowPaywall(false)}
         variant={isPremium ? 'platinum' : 'premium'}
       />
+
+      {/* Profile Preview Modal */}
+      <Modal
+        visible={showPreview}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowPreview(false)}
+      >
+        {profile && (
+          <ImmersiveProfileCard
+            profile={{
+              ...profile,
+              compatibility_score: undefined, // Don't show compatibility for own profile
+              distance: undefined,
+            }}
+            preferences={preferences}
+            onSwipeLeft={() => {}} // Dummy handlers since it's a preview
+            onSwipeRight={() => {}}
+            onSuperLike={() => {}}
+            onClose={() => setShowPreview(false)}
+            visible={showPreview}
+          />
+        )}
+      </Modal>
     </View>
   );
 }
@@ -551,6 +691,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
+    paddingTop: 10,
     paddingBottom: 20,
   },
   placeholderHeader: {
@@ -613,6 +754,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: 'white',
+  },
+  previewProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#8B5CF6',
+    backgroundColor: 'white',
+    marginBottom: 20,
+  },
+  previewProfileText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#8B5CF6',
   },
   loadingContainer: {
     flex: 1,

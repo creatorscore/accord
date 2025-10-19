@@ -30,19 +30,30 @@ export function GradientButton({
       disabled={disabled || loading}
       className={className}
       activeOpacity={0.8}
+      style={{
+        shadowColor: gradientColors[variant][1],
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+        elevation: 12,
+      }}
     >
       <LinearGradient
         colors={gradientColors[variant]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        className={`rounded-full py-4 px-8 items-center shadow-lg ${
+        className={`rounded-full py-5 px-8 items-center ${
           disabled || loading ? 'opacity-50' : ''
         }`}
+        style={{
+          minHeight: 56,
+          justifyContent: 'center',
+        }}
       >
         {loading ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text className="text-white font-bold text-lg">{title}</Text>
+          <Text className="text-white font-bold text-lg tracking-wide">{title}</Text>
         )}
       </LinearGradient>
     </TouchableOpacity>

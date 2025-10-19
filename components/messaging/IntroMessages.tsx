@@ -71,7 +71,7 @@ export default function IntroMessages({
       >
         <View style={styles.header}>
           <View style={styles.headerContent}>
-            <MaterialCommunityIcons name="sparkles" size={20} color="#8B5CF6" />
+            <MaterialCommunityIcons name="auto-fix" size={20} color="#8B5CF6" />
             <Text style={styles.headerTitle}>Intro Message Suggestions</Text>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>

@@ -13,6 +13,7 @@ import FilterModal, { FilterOptions } from '@/components/matching/FilterModal';
 import ProfileBoostModal from '@/components/premium/ProfileBoostModal';
 import { sendMatchNotification, sendLikeNotification } from '@/lib/notifications';
 import { calculateCompatibilityScore } from '@/lib/matching-algorithm';
+import { initializeTracking } from '@/lib/tracking-permissions';
 import { router } from 'expo-router';
 
 interface Profile {
@@ -87,6 +88,8 @@ export default function Discover() {
   useEffect(() => {
     loadCurrentProfile();
     loadSwipeCount();
+    // Request tracking permission on first app use
+    initializeTracking();
   }, []);
 
   useEffect(() => {
@@ -562,8 +565,22 @@ export default function Discover() {
 
     const targetProfile = profiles[currentIndex];
 
+    // Check premium status FIRST before any async operations
+    if (!isPremium) {
+      // Free users need to upgrade - show alert and return immediately
+      Alert.alert(
+        '💜 Upgrade to Premium',
+        'Super likes are a Premium feature! Upgrade to send 5 super likes per week.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => setShowPaywall(true) },
+        ]
+      );
+      return; // Don't proceed with the swipe
+    }
+
     try {
-      // Check super like limit
+      // Check super like limit for premium users
       const { data: profileData } = await supabase
         .from('profiles')
         .select('super_likes_count, super_likes_reset_date')
@@ -588,29 +605,17 @@ export default function Discover() {
             .eq('id', currentProfileId);
         }
 
-        // Check limit: Free users = 0, Premium users = 5 per week
-        const weeklyLimit = isPremium ? 5 : 0;
+        // Check limit for premium users (5 per week)
+        const weeklyLimit = 5;
 
         if (currentCount >= weeklyLimit) {
-          if (!isPremium) {
-            // Free users need to upgrade
-            Alert.alert(
-              '💜 Upgrade to Premium',
-              'Super likes are a Premium feature! Upgrade to send 5 super likes per week.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Upgrade', onPress: () => setShowPaywall(true) },
-              ]
-            );
-          } else {
-            // Premium users hit their limit
-            Alert.alert(
-              '✨ Super Like Limit Reached',
-              `You've used all 5 super likes this week. Your super likes will reset next ${getDayName((resetDate.getDay() + 7) % 7)}.`,
-              [{ text: 'OK' }]
-            );
-          }
-          return;
+          // Premium users hit their limit
+          Alert.alert(
+            '✨ Super Like Limit Reached',
+            `You've used all 5 super likes this week. Your super likes will reset next ${getDayName((resetDate.getDay() + 7) % 7)}.`,
+            [{ text: 'OK' }]
+          );
+          return; // Don't proceed with the swipe
         }
       }
 
@@ -789,21 +794,11 @@ export default function Discover() {
     if (currentIndex >= profiles.length) return;
     const targetProfile = profiles[currentIndex];
 
-    try {
-      // Load preferences for this profile
-      const { data: prefsData } = await supabase
-        .from('preferences')
-        .select('*')
-        .eq('profile_id', targetProfile.id)
-        .single();
-
-      setCurrentProfilePreferences(prefsData);
-      setShowImmersiveProfile(true);
-    } catch (error: any) {
-      console.error('Error loading preferences:', error);
-      // Show immersive profile anyway, just without preferences
-      setShowImmersiveProfile(true);
-    }
+    // Use preferences that are already embedded in the profile
+    // from the main query (line 267: preferences:preferences(*))
+    const prefs = (targetProfile as any).preferences;
+    setCurrentProfilePreferences(prefs);
+    setShowImmersiveProfile(true);
   }, [currentIndex, profiles]);
 
   const handleRefresh = () => {
@@ -843,6 +838,122 @@ export default function Discover() {
   const handleImmersiveSwipeUp = () => {
     setShowImmersiveProfile(false);
     handleSwipeUp();
+  };
+
+  const handleBlock = async () => {
+    const currentProfile = profiles[currentIndex];
+    if (!currentProfile) return;
+
+    setShowImmersiveProfile(false);
+
+    Alert.alert(
+      'Block User',
+      `Are you sure you want to block ${currentProfile.display_name}? They will no longer be able to see your profile or contact you.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Get current user's profile ID
+              const { data: myProfile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user?.id)
+                .single();
+
+              if (!myProfile) {
+                throw new Error('Could not find your profile');
+              }
+
+              // Insert block record
+              const { error } = await supabase
+                .from('blocks')
+                .insert({
+                  blocker_profile_id: myProfile.id,
+                  blocked_profile_id: currentProfile.id,
+                  reason: 'Blocked from discover',
+                });
+
+              if (error) throw error;
+
+              // Move to next profile
+              setCurrentIndex((prev) => prev + 1);
+
+              Alert.alert('Blocked', `You have blocked ${currentProfile.display_name}`);
+            } catch (error: any) {
+              console.error('Error blocking user:', error);
+              Alert.alert('Error', 'Failed to block user. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReport = () => {
+    const currentProfile = profiles[currentIndex];
+    if (!currentProfile) return;
+
+    setShowImmersiveProfile(false);
+
+    Alert.prompt(
+      'Report User',
+      `Why are you reporting ${currentProfile.display_name}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Submit',
+          onPress: async (reason) => {
+            if (!reason || reason.trim() === '') {
+              Alert.alert('Error', 'Please provide a reason for reporting.');
+              return;
+            }
+
+            try {
+              // Get current user's profile ID
+              const { data: myProfile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user?.id)
+                .single();
+
+              if (!myProfile) {
+                throw new Error('Could not find your profile');
+              }
+
+              // Insert report
+              const { error } = await supabase
+                .from('reports')
+                .insert({
+                  reporter_profile_id: myProfile.id,
+                  reported_profile_id: currentProfile.id,
+                  reason: reason.trim(),
+                  status: 'pending',
+                });
+
+              if (error) throw error;
+
+              Alert.alert(
+                'Report Submitted',
+                'Thank you for helping keep Accord safe. Our team will review this report.'
+              );
+            } catch (error: any) {
+              console.error('Error reporting user:', error);
+              Alert.alert('Error', 'Failed to submit report. Please try again.');
+            }
+          },
+        },
+      ],
+      'plain-text'
+    );
   };
 
   // Loading state
@@ -1052,6 +1163,8 @@ export default function Discover() {
             onSuperLike={handleImmersiveSwipeUp}
             onClose={handleCloseImmersiveProfile}
             visible={showImmersiveProfile}
+            onBlock={handleBlock}
+            onReport={handleReport}
           />
         )}
       </Modal>

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { initializeEncryption, hasEncryptionKeys } from '@/lib/encryption';
 
 interface AuthContextType {
   user: User | null;
@@ -52,6 +53,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => subscription.unsubscribe();
   }, []);
 
+  // Initialize encryption keys for authenticated users
+  useEffect(() => {
+    const setupEncryption = async () => {
+      if (!user) return;
+
+      try {
+        // Check if user already has encryption keys
+        const hasKeys = await hasEncryptionKeys(user.id);
+        if (hasKeys) {
+          console.log('✅ Encryption keys already exist');
+          return;
+        }
+
+        console.log('🔐 Initializing encryption keys...');
+        const publicKey = await initializeEncryption(user.id);
+
+        // Store public key in user's profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (profile) {
+          await supabase
+            .from('profiles')
+            .update({ encryption_public_key: publicKey })
+            .eq('id', profile.id);
+
+          console.log('✅ Encryption keys initialized and saved');
+        }
+      } catch (error) {
+        console.error('Error setting up encryption:', error);
+      }
+    };
+
+    setupEncryption();
+  }, [user]);
+
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -81,7 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const sendPasswordResetEmail = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'accord://reset-password',
+      redirectTo: 'accord://auth/callback'
     });
     if (error) throw error;
   };

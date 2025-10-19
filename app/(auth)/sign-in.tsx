@@ -29,7 +29,9 @@ export default function SignIn() {
     setLoading(true);
     try {
       await signIn(email, password);
-      router.replace('/(tabs)/discover');
+      // Let index.tsx handle navigation based on profile status
+      await new Promise(resolve => setTimeout(resolve, 300));
+      router.replace('/');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to sign in');
     } finally {
@@ -40,8 +42,14 @@ export default function SignIn() {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      await signInWithGoogle();
-      router.replace('/(tabs)/discover');
+      const result = await signInWithGoogle();
+
+      // Let the root index.tsx handle navigation based on profile status
+      if (result) {
+        // Wait for auth state to update, then let index.tsx redirect
+        await new Promise(resolve => setTimeout(resolve, 300));
+        router.replace('/');
+      }
     } catch (error: any) {
       if (error.message !== 'User cancelled') {
         Alert.alert('Error', error.message || 'Failed to sign in with Google');
@@ -56,7 +64,9 @@ export default function SignIn() {
     try {
       const result = await signInWithApple();
       if (result) {
-        router.replace('/(tabs)/discover');
+        // Let index.tsx handle navigation based on profile status
+        await new Promise(resolve => setTimeout(resolve, 300));
+        router.replace('/');
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to sign in with Apple');

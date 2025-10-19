@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Modal } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Modal, Alert, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
-import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
+import { isOnline, getLastActiveText } from '@/lib/online-status';
 
 interface Match {
   id: string;
@@ -18,6 +19,8 @@ interface Match {
     age: number;
     photos?: Array<{ url: string; is_primary: boolean }>;
     is_verified?: boolean;
+    last_active_at?: string | null;
+    hide_last_active?: boolean;
   };
   compatibility_score?: number;
   matched_at: string;
@@ -33,14 +36,14 @@ interface Match {
 export default function Matches() {
   const { user } = useAuth();
   const { isPremium } = useSubscription();
+  const insets = useSafeAreaInsets();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const [likesCount, setLikesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
-  const [selectedMatchPreferences, setSelectedMatchPreferences] = useState<any>(null);
+  const [showActionSheet, setShowActionSheet] = useState(false);
+  const [actionSheetMatch, setActionSheetMatch] = useState<Match | null>(null);
 
   useEffect(() => {
     loadCurrentProfile();
@@ -105,6 +108,8 @@ export default function Matches() {
               display_name,
               age,
               is_verified,
+              last_active_at,
+              hide_last_active,
               photos (
                 url,
                 is_primary,
@@ -264,64 +269,212 @@ export default function Matches() {
     loadLikesCount();
   }, [currentProfileId]);
 
-  const handleMatchPress = async (match: Match) => {
-    try {
-      // Load full profile data with all fields
-      const { data: fullProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select(`
-          *,
-          photos (
-            url,
-            is_primary,
-            display_order
-          ),
-          prompt_answers
-        `)
-        .eq('id', match.profile.id)
-        .single();
-
-      if (profileError) throw profileError;
-
-      // Load preferences
-      const { data: prefs, error: prefsError } = await supabase
-        .from('preferences')
-        .select('*')
-        .eq('profile_id', match.profile.id)
-        .single();
-
-      if (prefsError) console.error('Error loading preferences:', prefsError);
-
-      // Set match with full profile data
-      setSelectedMatch({
-        ...match,
-        profile: {
-          ...fullProfile,
-          photos: fullProfile.photos?.sort((a: any, b: any) => a.display_order - b.display_order),
-        },
-      });
-      setSelectedMatchPreferences(prefs);
-      setShowProfileModal(true);
-    } catch (error: any) {
-      console.error('Error loading match profile:', error);
-    }
+  const handleMatchPress = (match: Match) => {
+    // Navigate to profile page (consistent with messages tab)
+    router.push(`/profile/${match.profile.id}`);
   };
 
   const handleLikesPress = () => {
     router.push('/likes');
   };
 
-  const handleCloseProfileModal = () => {
-    setShowProfileModal(false);
-    setSelectedMatch(null);
-    setSelectedMatchPreferences(null);
+  const handleUnmatch = (match: Match) => {
+    Alert.alert(
+      'Unmatch',
+      `Are you sure you want to unmatch with ${match.profile.display_name}? This cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Unmatch',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Get current profile ID to track who unmatched
+              const { data: currentProfile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user?.id)
+                .single();
+
+              if (!currentProfile) {
+                throw new Error('Could not find your profile');
+              }
+
+              // Update match status to unmatched
+              const { error } = await supabase
+                .from('matches')
+                .update({
+                  status: 'unmatched',
+                  unmatch_reason: 'User unmatched',
+                  unmatched_by: currentProfile.id,
+                  unmatched_at: new Date().toISOString(),
+                })
+                .eq('id', match.id);
+
+              if (error) throw error;
+
+              // Remove from local state immediately
+              setMatches((prev) => prev.filter((m) => m.id !== match.id));
+
+              // Show success message
+              Alert.alert('Unmatched', `You have unmatched with ${match.profile.display_name}`);
+            } catch (error: any) {
+              console.error('Error unmatching:', error);
+              Alert.alert('Error', 'Failed to unmatch. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
-  const handleSendMessage = () => {
-    if (selectedMatch) {
-      setShowProfileModal(false);
-      router.push(`/chat/${selectedMatch.id}`);
-    }
+  const handleBlock = (match: Match) => {
+    Alert.alert(
+      'Block User',
+      `Are you sure you want to block ${match.profile.display_name}? They will no longer be able to see your profile or contact you.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Get current profile ID
+              const { data: currentProfile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user?.id)
+                .single();
+
+              if (!currentProfile) {
+                throw new Error('Could not find your profile');
+              }
+
+              // Insert block record
+              const { error: blockError } = await supabase
+                .from('blocks')
+                .insert({
+                  blocker_profile_id: currentProfile.id,
+                  blocked_profile_id: match.profile.id,
+                  reason: 'Blocked from matches',
+                });
+
+              if (blockError) throw blockError;
+
+              // Update match status to blocked
+              const { error: matchError } = await supabase
+                .from('matches')
+                .update({ status: 'blocked' })
+                .eq('id', match.id);
+
+              if (matchError) throw matchError;
+
+              // Remove from local state
+              setMatches((prev) => prev.filter((m) => m.id !== match.id));
+
+              Alert.alert('Blocked', `You have blocked ${match.profile.display_name}`);
+            } catch (error: any) {
+              console.error('Error blocking user:', error);
+              Alert.alert('Error', 'Failed to block user. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReport = (match: Match) => {
+    Alert.prompt(
+      'Report User',
+      `Why are you reporting ${match.profile.display_name}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Submit',
+          onPress: async (reason) => {
+            if (!reason || reason.trim() === '') {
+              Alert.alert('Error', 'Please provide a reason for reporting.');
+              return;
+            }
+
+            try {
+              // Get current profile ID
+              const { data: currentProfile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user?.id)
+                .single();
+
+              if (!currentProfile) {
+                throw new Error('Could not find your profile');
+              }
+
+              // Insert report
+              const { error } = await supabase
+                .from('reports')
+                .insert({
+                  reporter_profile_id: currentProfile.id,
+                  reported_profile_id: match.profile.id,
+                  reason: reason.trim(),
+                  status: 'pending',
+                });
+
+              if (error) throw error;
+
+              Alert.alert(
+                'Report Submitted',
+                'Thank you for helping keep Accord safe. Our team will review this report.'
+              );
+            } catch (error: any) {
+              console.error('Error reporting user:', error);
+              Alert.alert('Error', 'Failed to submit report. Please try again.');
+            }
+          },
+        },
+      ],
+      'plain-text'
+    );
+  };
+
+  const handleMatchLongPress = (match: Match) => {
+    setActionSheetMatch(match);
+    setShowActionSheet(true);
+  };
+
+  const handleActionSelect = (action: string) => {
+    if (!actionSheetMatch) return;
+
+    setShowActionSheet(false);
+
+    // Small delay to allow modal to close smoothly before action
+    setTimeout(() => {
+      switch (action) {
+        case 'view_profile':
+          handleMatchPress(actionSheetMatch);
+          break;
+        case 'send_message':
+          router.push(`/chat/${actionSheetMatch.id}`);
+          break;
+        case 'report':
+          handleReport(actionSheetMatch);
+          break;
+        case 'block':
+          handleBlock(actionSheetMatch);
+          break;
+        case 'unmatch':
+          handleUnmatch(actionSheetMatch);
+          break;
+      }
+    }, 100);
   };
 
   const getTimeAgo = (dateString: string) => {
@@ -394,6 +547,9 @@ export default function Matches() {
   const renderMatch = ({ item, index }: { item: Match; index: number }) => {
     const primaryPhoto = item.profile.photos?.find(p => p.is_primary) || item.profile.photos?.[0];
     const hasUnread = (item.unread_count || 0) > 0;
+    const userIsOnline = isOnline(item.profile.last_active_at || null);
+    const showOnlineStatus = userIsOnline && !item.profile.hide_last_active;
+    const lastActiveText = getLastActiveText(item.profile.last_active_at || null, item.profile.hide_last_active);
 
     return (
       <MotiView
@@ -404,6 +560,7 @@ export default function Matches() {
         <TouchableOpacity
           style={styles.matchCard}
           onPress={() => handleMatchPress(item)}
+          onLongPress={() => handleMatchLongPress(item)}
           activeOpacity={0.7}
         >
           {/* Profile Photo */}
@@ -418,6 +575,7 @@ export default function Matches() {
               </View>
             )}
             {hasUnread && <View style={styles.unreadDot} />}
+            {showOnlineStatus && <View style={styles.onlineDot} />}
           </View>
 
           {/* Match Info */}
@@ -444,6 +602,11 @@ export default function Matches() {
                   <Text style={styles.compatibilityText}>{item.compatibility_score}% Match</Text>
                 </LinearGradient>
               </View>
+            )}
+
+            {/* Online Status */}
+            {lastActiveText && (
+              <Text style={styles.onlineStatusText}>{lastActiveText}</Text>
             )}
 
             {/* Last Message or CTA */}
@@ -564,24 +727,78 @@ export default function Matches() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Profile Modal */}
-      {selectedMatch && (
-        <Modal
-          visible={showProfileModal}
-          animationType="slide"
-          presentationStyle="fullScreen"
-          onRequestClose={handleCloseProfileModal}
+      {/* Action Sheet Modal */}
+      <Modal
+        visible={showActionSheet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActionSheet(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowActionSheet(false)}
         >
-          <ImmersiveProfileCard
-            profile={selectedMatch.profile}
-            preferences={selectedMatchPreferences}
-            onClose={handleCloseProfileModal}
-            visible={showProfileModal}
-            isMatched={true}
-            onSendMessage={handleSendMessage}
-          />
-        </Modal>
-      )}
+          <Pressable style={[styles.actionSheet, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]} onPress={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <View style={styles.actionSheetHeader}>
+              <Text style={styles.actionSheetTitle}>
+                {actionSheetMatch?.profile.display_name}
+              </Text>
+              <Pressable onPress={() => setShowActionSheet(false)}>
+                <MaterialCommunityIcons name="close" size={24} color="#9CA3AF" />
+              </Pressable>
+            </View>
+
+            {/* Actions */}
+            <View style={styles.actionsList}>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => handleActionSelect('view_profile')}
+              >
+                <MaterialCommunityIcons name="account" size={24} color="#6B7280" />
+                <Text style={styles.actionText}>View Profile</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => handleActionSelect('send_message')}
+              >
+                <MaterialCommunityIcons name="message-text" size={24} color="#6B7280" />
+                <Text style={styles.actionText}>Send Message</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => handleActionSelect('report')}
+              >
+                <MaterialCommunityIcons name="flag" size={24} color="#6B7280" />
+                <Text style={styles.actionText}>Report</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionItem, styles.actionItemDanger]}
+                onPress={() => handleActionSelect('block')}
+              >
+                <MaterialCommunityIcons name="block-helper" size={24} color="#EF4444" />
+                <Text style={[styles.actionText, styles.actionTextDanger]}>Block</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionItem, styles.actionItemDanger]}
+                onPress={() => handleActionSelect('unmatch')}
+              >
+                <MaterialCommunityIcons name="heart-broken" size={24} color="#EF4444" />
+                <Text style={[styles.actionText, styles.actionTextDanger]}>Unmatch</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -713,6 +930,17 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
   },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 2,
+    left: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
   matchInfo: {
     flex: 1,
     gap: 6,
@@ -748,6 +976,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#fff',
+  },
+  onlineStatusText: {
+    fontSize: 12,
+    color: '#10B981',
+    fontWeight: '500',
   },
   lastMessage: {
     fontSize: 14,
@@ -824,5 +1057,52 @@ const styles = StyleSheet.create({
   },
   premiumIcon: {
     marginLeft: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  actionSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  actionSheetTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  actionsList: {
+    paddingTop: 8,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  actionItemDanger: {
+    borderTopWidth: 1,
+    borderTopColor: '#FEE2E2',
+    marginTop: 8,
+  },
+  actionText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#374151',
+  },
+  actionTextDanger: {
+    color: '#EF4444',
   },
 });

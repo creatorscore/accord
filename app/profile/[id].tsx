@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
@@ -11,6 +12,7 @@ import ProfileStoryCard from '@/components/profile/ProfileStoryCard';
 import ProfileInteractiveSection from '@/components/profile/ProfileInteractiveSection';
 import ProfileQuickFacts from '@/components/profile/ProfileQuickFacts';
 import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
+import ModerationMenu from '@/components/moderation/ModerationMenu';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -50,6 +52,9 @@ interface Profile {
   interests?: string[];
   voice_intro_url?: string;
   voice_intro_duration?: number;
+  my_story?: string;
+  religion?: string;
+  political_views?: string;
 }
 
 interface Preferences {
@@ -73,22 +78,26 @@ interface Preferences {
 export default function ProfileView() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [isSuperLiked, setIsSuperLiked] = useState(false);
+  const [isMatched, setIsMatched] = useState(false);
+  const [matchId, setMatchId] = useState<string | null>(null);
 
   useEffect(() => {
     loadCurrentProfile();
   }, []);
 
   useEffect(() => {
-    if (id) {
+    if (id && currentProfileId) {
       loadProfile();
+      checkIfMatched();
     }
-  }, [id]);
+  }, [id, currentProfileId]);
 
   const loadCurrentProfile = async () => {
     try {
@@ -102,6 +111,29 @@ export default function ProfileView() {
       setCurrentProfileId(data.id);
     } catch (error: any) {
       console.error('Error loading current profile:', error);
+    }
+  };
+
+  const checkIfMatched = async () => {
+    if (!currentProfileId || !id) return;
+
+    try {
+      // Check if there's an active match between current user and viewed profile
+      const { data: match } = await supabase
+        .from('matches')
+        .select('id')
+        .eq('status', 'active')
+        .or(`and(profile1_id.eq.${currentProfileId},profile2_id.eq.${id}),and(profile1_id.eq.${id},profile2_id.eq.${currentProfileId})`)
+        .single();
+
+      if (match) {
+        setIsMatched(true);
+        setMatchId(match.id);
+      }
+    } catch (error: any) {
+      // No match found, which is fine
+      setIsMatched(false);
+      setMatchId(null);
     }
   };
 
@@ -126,8 +158,17 @@ export default function ProfileView() {
           is_verified,
           prompt_answers,
           interests,
+          hobbies,
           voice_intro_url,
           voice_intro_duration,
+          height_inches,
+          zodiac_sign,
+          personality_type,
+          love_language,
+          languages_spoken,
+          my_story,
+          religion,
+          political_views,
           photos (
             url,
             is_primary,
@@ -146,7 +187,7 @@ export default function ProfileView() {
         .eq('profile_id', id)
         .single();
 
-      // Transform profile data with enhanced mock data
+      // Transform profile data
       const transformedProfile: Profile = {
         ...profileData,
         photos: profileData.photos?.sort((a: Photo, b: Photo) =>
@@ -159,11 +200,12 @@ export default function ProfileView() {
         })),
         compatibility_score: Math.floor(Math.random() * 30) + 70,
         distance: Math.floor(Math.random() * 50) + 1,
-        height_cm: 170 + Math.floor(Math.random() * 20),
-        languages: ['English', 'Spanish'],
-        zodiac_sign: 'Libra',
-        personality_type: 'ENFJ',
-        love_language: 'Quality Time',
+        // Use real data from database (no more mocking)
+        height_cm: profileData.height_inches ? profileData.height_inches * 2.54 : undefined,
+        languages: profileData.languages_spoken || [],
+        zodiac_sign: profileData.zodiac_sign,
+        personality_type: profileData.personality_type,
+        love_language: profileData.love_language,
       };
 
       setProfile(transformedProfile);
@@ -368,6 +410,15 @@ export default function ProfileView() {
         <MaterialCommunityIcons name="arrow-left" size={24} color="#374151" />
       </TouchableOpacity>
 
+      {/* Report/Block Menu */}
+      <View className="absolute top-12 right-4 z-10 bg-white/90 rounded-full shadow-lg">
+        <ModerationMenu
+          profileId={id}
+          profileName={profile.display_name}
+          onBlock={() => router.back()}
+        />
+      </View>
+
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* Enhanced Photo Carousel */}
         <ProfilePhotoCarousel
@@ -408,6 +459,17 @@ export default function ProfileView() {
             />
           )}
 
+          {/* My Full Story */}
+          {profile.my_story && (
+            <ProfileStoryCard
+              title="What Brings Me Here"
+              icon="heart-circle"
+              content={profile.my_story}
+              gradient={['#F59E0B', '#FBBF24']}
+              delay={150}
+            />
+          )}
+
           {/* About Section - Comprehensive */}
           <ProfileInteractiveSection
             title="About Me"
@@ -443,6 +505,16 @@ export default function ProfileView() {
                 icon: 'translate',
                 label: 'Languages',
                 value: profile.languages.join(', '),
+              }] : []),
+              ...(profile.religion ? [{
+                icon: 'hands-pray',
+                label: 'Religion',
+                value: profile.religion,
+              }] : []),
+              ...(profile.political_views ? [{
+                icon: 'vote',
+                label: 'Political Views',
+                value: profile.political_views,
               }] : []),
             ]}
           />
@@ -488,7 +560,7 @@ export default function ProfileView() {
                   label: 'Children',
                   value: preferences.wants_children === true ? 'Yes, definitely' :
                          preferences.wants_children === false ? 'No children' : 'Open to discussion',
-                  detail: preferences.children_timeline ? formatLabel(preferences.children_timeline) : undefined
+                  detail: preferences.children_arrangement ? formatLabel(preferences.children_arrangement) : undefined
                 }] : []),
                 ...(preferences.housing_preference ? [{
                   emoji: '🏠',
@@ -514,6 +586,47 @@ export default function ProfileView() {
             />
           )}
 
+          {/* Hobbies Section */}
+          {profile.hobbies && profile.hobbies.length > 0 && (
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{
+                fontSize: 20,
+                fontWeight: 'bold',
+                color: '#111827',
+                marginBottom: 12,
+                paddingHorizontal: 4
+              }}>Hobbies</Text>
+              <View style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: 8,
+              }}>
+                {profile.hobbies.map((hobby, index) => (
+                  <MotiView
+                    key={index}
+                    from={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ type: 'spring', delay: index * 50 }}
+                    style={{
+                      backgroundColor: index % 3 === 0 ? '#DCFCE7' :
+                                       index % 3 === 1 ? '#FFEDD5' : '#E0E7FF',
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                    }}
+                  >
+                    <Text style={{
+                      color: index % 3 === 0 ? '#16A34A' :
+                             index % 3 === 1 ? '#EA580C' : '#6366F1',
+                      fontWeight: '600',
+                      fontSize: 14,
+                    }}>{hobby}</Text>
+                  </MotiView>
+                ))}
+              </View>
+            </View>
+          )}
+
           {/* Interests Section */}
           {profile.interests && profile.interests.length > 0 && (
             <View style={{ marginBottom: 16 }}>
@@ -523,7 +636,7 @@ export default function ProfileView() {
                 color: '#111827',
                 marginBottom: 12,
                 paddingHorizontal: 4
-              }}>Interests & Hobbies</Text>
+              }}>Interests & Favorites</Text>
               <View style={{
                 flexDirection: 'row',
                 flexWrap: 'wrap',
@@ -556,42 +669,137 @@ export default function ProfileView() {
           )}
 
           {/* Lifestyle - Interactive Section */}
-          {preferences && (
+          {preferences && preferences.lifestyle_preferences && (
             <ProfileInteractiveSection
               title="Lifestyle & Values"
               items={[
-                ...(preferences.smoking ? [{
+                ...(preferences.lifestyle_preferences.smoking ? [{
                   emoji: '🚬',
                   label: 'Smoking',
-                  value: formatLabel(preferences.smoking),
+                  value: formatLabel(preferences.lifestyle_preferences.smoking),
                 }] : []),
-                ...(preferences.drinking ? [{
+                ...(preferences.lifestyle_preferences.drinking ? [{
                   emoji: '🍷',
                   label: 'Drinking',
-                  value: formatLabel(preferences.drinking),
+                  value: formatLabel(preferences.lifestyle_preferences.drinking),
                 }] : []),
-                ...(preferences.pets ? [{
+                ...(preferences.lifestyle_preferences.pets ? [{
                   emoji: '🐾',
                   label: 'Pets',
-                  value: formatLabel(preferences.pets),
-                }] : []),
-                ...(preferences.religion ? [{
-                  emoji: '🙏',
-                  label: 'Religion',
-                  value: formatLabel(preferences.religion),
-                }] : []),
-                ...(preferences.political_views ? [{
-                  emoji: '🗳️',
-                  label: 'Politics',
-                  value: formatLabel(preferences.political_views),
-                }] : []),
-                ...(preferences.family_involvement ? [{
-                  emoji: '👨‍👩‍👧‍👦',
-                  label: 'Family',
-                  value: formatLabel(preferences.family_involvement),
+                  value: formatLabel(preferences.lifestyle_preferences.pets),
                 }] : []),
               ]}
             />
+          )}
+
+          {/* Matching Preferences Section */}
+          {preferences && (
+            <ProfileInteractiveSection
+              title="Looking For"
+              items={[
+                ...(preferences.age_min && preferences.age_max ? [{
+                  emoji: '🎯',
+                  label: 'Age Range',
+                  value: `${preferences.age_min}-${preferences.age_max} years old`,
+                }] : []),
+                ...(preferences.gender_preference && preferences.gender_preference.length > 0 ? [{
+                  emoji: '💜',
+                  label: 'Gender Preference',
+                  value: preferences.gender_preference.join(', '),
+                }] : []),
+                ...(preferences.max_distance_miles ? [{
+                  emoji: '📍',
+                  label: 'Distance',
+                  value: `Within ${preferences.max_distance_miles} miles`,
+                }] : []),
+              ]}
+            />
+          )}
+
+          {/* Dealbreakers & Must-Haves */}
+          {preferences && (preferences.dealbreakers?.length > 0 || preferences.must_haves?.length > 0) && (
+            <View style={{ marginBottom: 16 }}>
+              {preferences.dealbreakers && preferences.dealbreakers.length > 0 && (
+                <>
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: 'bold',
+                    color: '#111827',
+                    marginBottom: 12,
+                    paddingHorizontal: 4
+                  }}>Dealbreakers</Text>
+                  <View style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    marginBottom: 16,
+                  }}>
+                    {preferences.dealbreakers.map((dealbreaker, index) => (
+                      <MotiView
+                        key={index}
+                        from={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: 'spring', delay: index * 50 }}
+                        style={{
+                          backgroundColor: '#FEE2E2',
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          borderRadius: 20,
+                          borderWidth: 1,
+                          borderColor: '#FCA5A5',
+                        }}
+                      >
+                        <Text style={{
+                          color: '#DC2626',
+                          fontWeight: '600',
+                          fontSize: 14,
+                        }}>❌ {dealbreaker}</Text>
+                      </MotiView>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {preferences.must_haves && preferences.must_haves.length > 0 && (
+                <>
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: 'bold',
+                    color: '#111827',
+                    marginBottom: 12,
+                    paddingHorizontal: 4
+                  }}>Must-Haves</Text>
+                  <View style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                  }}>
+                    {preferences.must_haves.map((mustHave, index) => (
+                      <MotiView
+                        key={index}
+                        from={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: 'spring', delay: index * 50 }}
+                        style={{
+                          backgroundColor: '#D1FAE5',
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          borderRadius: 20,
+                          borderWidth: 1,
+                          borderColor: '#6EE7B7',
+                        }}
+                      >
+                        <Text style={{
+                          color: '#059669',
+                          fontWeight: '600',
+                          fontSize: 14,
+                        }}>✓ {mustHave}</Text>
+                      </MotiView>
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
           )}
 
           {/* Compatibility Insights */}
@@ -608,79 +816,100 @@ export default function ProfileView() {
       </ScrollView>
 
       {/* Fixed Action Buttons with Animations */}
-      <LinearGradient
-        colors={['transparent', 'rgba(255,255,255,0.9)', 'white']}
-        className="absolute bottom-0 left-0 right-0 pb-8 pt-8"
-      >
-        <View className="flex-row justify-center items-center gap-4 px-6">
-          {/* Pass Button */}
-          <MotiView
-            from={{ scale: 0, rotate: '-180deg' }}
-            animate={{ scale: 1, rotate: '0deg' }}
-            transition={{ type: 'spring', delay: 100 }}
-          >
-            <TouchableOpacity
-              className="bg-white rounded-full w-14 h-14 items-center justify-center shadow-xl border border-gray-200"
-              onPress={handlePass}
-              disabled={isLiked || isSuperLiked}
+      {!isMatched ? (
+        <LinearGradient
+          colors={['transparent', 'rgba(255,255,255,0.9)', 'white']}
+          className="absolute bottom-0 left-0 right-0 pt-8"
+          style={{ paddingBottom: Math.max(insets.bottom, 32) }}
+        >
+          <View className="flex-row justify-center items-center gap-4 px-6">
+            {/* Pass Button */}
+            <MotiView
+              from={{ scale: 0, rotate: '-180deg' }}
+              animate={{ scale: 1, rotate: '0deg' }}
+              transition={{ type: 'spring', delay: 100 }}
             >
-              <MaterialCommunityIcons name="close" size={28} color="#EF4444" />
-            </TouchableOpacity>
-          </MotiView>
+              <TouchableOpacity
+                className="bg-white rounded-full w-14 h-14 items-center justify-center shadow-xl border border-gray-200"
+                onPress={handlePass}
+                disabled={isLiked || isSuperLiked}
+              >
+                <MaterialCommunityIcons name="close" size={28} color="#EF4444" />
+              </TouchableOpacity>
+            </MotiView>
 
-          {/* Obsessed Button */}
-          <MotiView
-            from={{ scale: 0 }}
-            animate={{ scale: isSuperLiked ? [1, 1.2, 1] : 1 }}
-            transition={{ type: 'spring', delay: 200 }}
-          >
-            <TouchableOpacity
-              className={`rounded-full w-20 h-20 items-center justify-center shadow-xl ${
-                isSuperLiked ? 'bg-yellow-400' : 'bg-gradient-to-br from-purple-500 to-pink-500'
-              }`}
-              onPress={handleObsessed}
-              disabled={isLiked || isSuperLiked}
-              style={{
-                backgroundColor: isSuperLiked ? '#FBBF24' : '#8B5CF6',
-              }}
+            {/* Obsessed Button */}
+            <MotiView
+              from={{ scale: 0 }}
+              animate={{ scale: isSuperLiked ? [1, 1.2, 1] : 1 }}
+              transition={{ type: 'spring', delay: 200 }}
             >
-              <MaterialCommunityIcons
-                name={isSuperLiked ? "star" : "star-outline"}
-                size={36}
-                color="white"
-              />
-            </TouchableOpacity>
-          </MotiView>
+              <TouchableOpacity
+                className={`rounded-full w-20 h-20 items-center justify-center shadow-xl ${
+                  isSuperLiked ? 'bg-yellow-400' : 'bg-gradient-to-br from-purple-500 to-pink-500'
+                }`}
+                onPress={handleObsessed}
+                disabled={isLiked || isSuperLiked}
+                style={{
+                  backgroundColor: isSuperLiked ? '#FBBF24' : '#8B5CF6',
+                }}
+              >
+                <MaterialCommunityIcons
+                  name={isSuperLiked ? "star" : "star-outline"}
+                  size={36}
+                  color="white"
+                />
+              </TouchableOpacity>
+            </MotiView>
 
-          {/* Like Button */}
-          <MotiView
-            from={{ scale: 0, rotate: '180deg' }}
-            animate={{ scale: isLiked ? [1, 1.2, 1] : 1, rotate: '0deg' }}
-            transition={{ type: 'spring', delay: 300 }}
-          >
-            <TouchableOpacity
-              className={`rounded-full w-14 h-14 items-center justify-center shadow-xl ${
-                isLiked ? 'bg-green-500' : 'bg-white border border-gray-200'
-              }`}
-              onPress={handleLike}
-              disabled={isLiked || isSuperLiked}
+            {/* Like Button */}
+            <MotiView
+              from={{ scale: 0, rotate: '180deg' }}
+              animate={{ scale: isLiked ? [1, 1.2, 1] : 1, rotate: '0deg' }}
+              transition={{ type: 'spring', delay: 300 }}
             >
-              <MaterialCommunityIcons
-                name={isLiked ? "heart" : "heart-outline"}
-                size={28}
-                color={isLiked ? "white" : "#10B981"}
-              />
-            </TouchableOpacity>
-          </MotiView>
-        </View>
+              <TouchableOpacity
+                className={`rounded-full w-14 h-14 items-center justify-center shadow-xl ${
+                  isLiked ? 'bg-green-500' : 'bg-white border border-gray-200'
+                }`}
+                onPress={handleLike}
+                disabled={isLiked || isSuperLiked}
+              >
+                <MaterialCommunityIcons
+                  name={isLiked ? "heart" : "heart-outline"}
+                  size={28}
+                  color={isLiked ? "white" : "#10B981"}
+                />
+              </TouchableOpacity>
+            </MotiView>
+          </View>
 
-        {/* Action Labels */}
-        <View className="flex-row justify-center items-center gap-8 mt-2 px-6">
-          <Text className="text-xs text-gray-500 font-medium">Pass</Text>
-          <Text className="text-xs text-purple-600 font-bold">Obsessed</Text>
-          <Text className="text-xs text-gray-500 font-medium">Like</Text>
-        </View>
-      </LinearGradient>
+          {/* Action Labels */}
+          <View className="flex-row justify-center items-center gap-8 mt-2 px-6">
+            <Text className="text-xs text-gray-500 font-medium">Pass</Text>
+            <Text className="text-xs text-purple-600 font-bold">Obsessed</Text>
+            <Text className="text-xs text-gray-500 font-medium">Like</Text>
+          </View>
+        </LinearGradient>
+      ) : (
+        <LinearGradient
+          colors={['transparent', 'rgba(255,255,255,0.9)', 'white']}
+          className="absolute bottom-0 left-0 right-0 pt-8"
+          style={{ paddingBottom: Math.max(insets.bottom, 32) }}
+        >
+          <View className="px-6">
+            <TouchableOpacity
+              onPress={() => matchId && router.push(`/chat/${matchId}`)}
+              className="bg-purple-600 rounded-full py-4 shadow-xl"
+            >
+              <View className="flex-row items-center justify-center gap-2">
+                <MaterialCommunityIcons name="message-text" size={24} color="white" />
+                <Text className="text-white text-lg font-bold">Send Message</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      )}
     </View>
   );
 }

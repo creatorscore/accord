@@ -14,6 +14,7 @@ interface Profile {
   age: number;
   gender: string;
   sexual_orientation: string;
+  ethnicity: string | null;
   latitude: number | null;
   longitude: number | null;
   hobbies: string[] | null;
@@ -32,6 +33,7 @@ interface Preferences {
   primary_reason: string;
   relationship_type: string;
   wants_children: boolean | null;
+  children_arrangement: string | null;
   financial_arrangement: string | null;
   housing_preference: string | null;
   age_min: number;
@@ -113,9 +115,9 @@ function calculateLocationScore(
 function calculateGoalsScore(prefs1: Preferences, prefs2: Preferences): number {
   let score = 0;
 
-  // Primary reason alignment (40 points)
+  // Primary reason alignment (35 points)
   if (prefs1.primary_reason === prefs2.primary_reason) {
-    score += 40;
+    score += 35;
   } else {
     // Partial credit for compatible reasons
     const compatibleReasons: { [key: string]: string[] } = {
@@ -126,23 +128,49 @@ function calculateGoalsScore(prefs1: Preferences, prefs2: Preferences): number {
       safety: ['immigration', 'companionship'],
     };
     if (compatibleReasons[prefs1.primary_reason]?.includes(prefs2.primary_reason)) {
-      score += 20;
+      score += 18;
     }
   }
 
-  // Relationship type compatibility (35 points)
+  // Relationship type compatibility (30 points)
   const typeCompatibility: { [key: string]: { [key: string]: number } } = {
-    platonic: { platonic: 35, romantic: 10, open: 20 },
-    romantic: { platonic: 10, romantic: 35, open: 25 },
-    open: { platonic: 20, romantic: 25, open: 35 },
+    platonic: { platonic: 30, romantic: 8, open: 18 },
+    romantic: { platonic: 8, romantic: 30, open: 22 },
+    open: { platonic: 18, romantic: 22, open: 30 },
   };
   score += typeCompatibility[prefs1.relationship_type]?.[prefs2.relationship_type] || 0;
 
-  // Children compatibility (25 points)
+  // Children compatibility (20 points - whether they want children)
   if (prefs1.wants_children === prefs2.wants_children) {
-    score += 25;
+    score += 20;
   } else if (prefs1.wants_children === null || prefs2.wants_children === null) {
-    score += 15; // One is open/unsure
+    score += 12; // One is open/unsure
+  }
+
+  // Children arrangement compatibility (15 points - HOW they want children)
+  // Only consider if both want children
+  if (prefs1.wants_children && prefs2.wants_children &&
+      prefs1.children_arrangement && prefs2.children_arrangement) {
+
+    // Perfect match - same arrangement preference
+    if (prefs1.children_arrangement === prefs2.children_arrangement) {
+      score += 15;
+    } else {
+      // Check for compatible arrangements
+      const arrangementCompatibility: { [key: string]: { [key: string]: number } } = {
+        biological: { biological: 15, adoption: 8, foster: 8, 'step-parenting': 10, surrogacy: 12, open: 12 },
+        adoption: { biological: 8, adoption: 15, foster: 12, 'step-parenting': 10, surrogacy: 8, open: 12 },
+        foster: { biological: 8, adoption: 12, foster: 15, 'step-parenting': 10, surrogacy: 6, open: 12 },
+        'step-parenting': { biological: 10, adoption: 10, foster: 10, 'step-parenting': 15, surrogacy: 8, open: 12 },
+        surrogacy: { biological: 12, adoption: 8, foster: 6, 'step-parenting': 8, surrogacy: 15, open: 12 },
+        open: { biological: 12, adoption: 12, foster: 12, 'step-parenting': 12, surrogacy: 12, open: 15 }
+      };
+
+      score += arrangementCompatibility[prefs1.children_arrangement]?.[prefs2.children_arrangement] || 8;
+    }
+  } else if (prefs1.wants_children && prefs2.wants_children) {
+    // Both want children but at least one hasn't specified arrangement
+    score += 10; // Partial credit
   }
 
   return Math.min(score, 100);
@@ -228,6 +256,27 @@ function calculateLifestyleScore(
     if (sharedLanguages.length > 0) {
       score += Math.min(10, sharedLanguages.length * 3); // More shared languages = higher score
     }
+  }
+
+  // Ethnicity compatibility (10 points - cultural background)
+  // Weighted carefully: provides small bonus for shared backgrounds without penalizing differences
+  if (profile1.ethnicity && profile2.ethnicity &&
+      profile1.ethnicity !== 'Prefer not to say' &&
+      profile2.ethnicity !== 'Prefer not to say') {
+
+    if (profile1.ethnicity === profile2.ethnicity) {
+      // Same ethnicity - bonus for potential shared cultural understanding
+      score += 10;
+    } else if (profile1.ethnicity === 'Multiracial' || profile2.ethnicity === 'Multiracial') {
+      // One is multiracial - may have experience with multiple cultures
+      score += 8;
+    } else {
+      // Different ethnicities - neutral, no penalty
+      score += 7; // Small base score for cultural diversity appreciation
+    }
+  } else {
+    // One or both prefer not to say - neutral
+    score += 7;
   }
 
   return Math.min(Math.max(score, 0), 100);

@@ -11,6 +11,8 @@ import {
   Platform,
   StatusBar,
   Alert,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -18,6 +20,7 @@ import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
+import { formatDistance } from '@/lib/geolocation';
 
 const { width, height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.6;
@@ -27,8 +30,14 @@ interface Profile {
   display_name: string;
   age: number;
   gender?: string;
+  pronouns?: string;
+  ethnicity?: string;
   location_city?: string;
   location_state?: string;
+  location_country?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  hide_distance?: boolean;
   bio?: string;
   occupation?: string;
   education?: string;
@@ -47,13 +56,20 @@ interface Profile {
   prompt_answers?: Array<{ prompt: string; answer: string }>;
   voice_intro_url?: string;
   voice_intro_duration?: number;
+  hobbies?: string[];
+  interests?: {
+    movies?: string[];
+    music?: string[];
+    books?: string[];
+    tv_shows?: string[];
+  };
 }
 
 interface Preferences {
   primary_reason?: string;
   relationship_type?: string;
   wants_children?: boolean;
-  children_timeline?: string;
+  children_arrangement?: string;
   housing_preference?: string;
   financial_arrangement?: string;
   income_level?: string;
@@ -79,6 +95,8 @@ interface ImmersiveProfileCardProps {
   visible: boolean;
   isMatched?: boolean; // Hide swipe actions if already matched
   onSendMessage?: () => void; // Show "Send Message" button instead
+  onBlock?: () => void; // Block user
+  onReport?: () => void; // Report user
 }
 
 export default function ImmersiveProfileCard({
@@ -91,10 +109,13 @@ export default function ImmersiveProfileCard({
   visible,
   isMatched = false,
   onSendMessage,
+  onBlock,
+  onReport,
 }: ImmersiveProfileCardProps) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0);
+  const [showActionSheet, setShowActionSheet] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const photos = profile.photos || [];
@@ -184,13 +205,20 @@ export default function ImmersiveProfileCard({
         </BlurView>
       </Animated.View>
 
-      {/* Close Button */}
+      {/* Close Button & Menu */}
       <SafeAreaView style={styles.closeContainer}>
-        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <BlurView intensity={80} tint="dark" style={styles.closeBlur}>
-            <Ionicons name="close" size={26} color="white" />
-          </BlurView>
-        </TouchableOpacity>
+        <View style={styles.topButtonsRow}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <BlurView intensity={80} tint="dark" style={styles.closeBlur}>
+              <Ionicons name="close" size={26} color="white" />
+            </BlurView>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowActionSheet(true)} style={styles.menuButton}>
+            <BlurView intensity={80} tint="dark" style={styles.closeBlur}>
+              <MaterialCommunityIcons name="dots-vertical" size={26} color="white" />
+            </BlurView>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
 
       <Animated.ScrollView
@@ -217,12 +245,23 @@ export default function ImmersiveProfileCard({
                 <MaterialCommunityIcons name="check-decagram" size={28} color="#3B82F6" />
               )}
             </View>
+            {(profile.gender || profile.pronouns || profile.ethnicity) && (
+              <View style={styles.heroIdentity}>
+                <Text style={styles.heroIdentityText}>
+                  {[
+                    profile.gender,
+                    profile.pronouns,
+                    profile.ethnicity && profile.ethnicity !== 'Prefer not to say' ? profile.ethnicity : null
+                  ].filter(Boolean).join(' • ')}
+                </Text>
+              </View>
+            )}
             {profile.location_city && (
               <View style={styles.heroLocation}>
                 <Ionicons name="location" size={18} color="white" />
                 <Text style={styles.heroLocationText}>
                   {profile.location_city}, {profile.location_state}
-                  {profile.distance && ` • ${Math.round(profile.distance)} miles away`}
+                  {profile.distance && ` • ${formatDistance(profile.distance, profile.hide_distance, preferences?.willing_to_relocate)}`}
                 </Text>
               </View>
             )}
@@ -315,23 +354,29 @@ export default function ImmersiveProfileCard({
 
             {preferences?.primary_reason && (
               <View style={styles.criticalItem}>
-                <Text style={styles.criticalLabel}>Why I'm seeking this marriage</Text>
-                <Text style={styles.criticalValue}>{preferences.primary_reason}</Text>
+                <Text style={styles.criticalLabel}>Primary reason for partnership</Text>
+                <Text style={styles.criticalValue}>
+                  {preferences.primary_reason}
+                </Text>
               </View>
             )}
 
             {preferences?.relationship_type && (
               <View style={styles.criticalItem}>
-                <Text style={styles.criticalLabel}>Type of relationship</Text>
-                <Text style={styles.criticalValue}>{preferences.relationship_type}</Text>
+                <Text style={styles.criticalLabel}>Relationship dynamic</Text>
+                <Text style={styles.criticalValue}>
+                  {preferences.relationship_type}
+                </Text>
               </View>
             )}
 
-            {preferences?.wants_children !== undefined && (
+            {preferences?.wants_children !== undefined && preferences?.wants_children !== null && (
               <View style={styles.criticalItem}>
                 <Text style={styles.criticalLabel}>Children</Text>
                 <Text style={styles.criticalValue}>
-                  {preferences.wants_children ? `Yes, ${preferences.children_timeline || 'timeline open'}` : 'No children'}
+                  {preferences.wants_children === true ? `Yes${preferences.children_arrangement ? ` - ${preferences.children_arrangement}` : ''}` :
+                   preferences.wants_children === false ? 'No children' :
+                   'Maybe/Open to discussion'}
                 </Text>
               </View>
             )}
@@ -404,6 +449,15 @@ export default function ImmersiveProfileCard({
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Lifestyle & Values</Text>
             <View style={styles.lifestyleGrid}>
+              {profile.gender && (
+                <LifestyleItem icon="gender-male-female" label="Gender" value={profile.gender} />
+              )}
+              {profile.pronouns && (
+                <LifestyleItem icon="account" label="Pronouns" value={profile.pronouns} />
+              )}
+              {profile.ethnicity && profile.ethnicity !== 'Prefer not to say' && (
+                <LifestyleItem icon="earth" label="Ethnicity" value={profile.ethnicity} />
+              )}
               {profile.occupation && (
                 <LifestyleItem icon="briefcase" label="Work" value={profile.occupation} />
               )}
@@ -446,6 +500,88 @@ export default function ImmersiveProfileCard({
               )}
             </View>
           </View>
+
+          {/* Hobbies & Interests */}
+          {profile.hobbies && profile.hobbies.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Hobbies & Interests</Text>
+              <View style={styles.hobbiesContainer}>
+                {profile.hobbies.map((hobby, index) => (
+                  <View key={index} style={styles.hobbyTag}>
+                    <Text style={styles.hobbyText}>{hobby}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Favorites - Movies, Music, Books, TV Shows */}
+          {profile.interests && (
+            profile.interests.movies?.length > 0 ||
+            profile.interests.music?.length > 0 ||
+            profile.interests.books?.length > 0 ||
+            profile.interests.tv_shows?.length > 0
+          ) && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Favorites</Text>
+
+              {profile.interests.movies && profile.interests.movies.length > 0 && (
+                <View style={styles.favoriteCategory}>
+                  <View style={styles.favoriteCategoryHeader}>
+                    <MaterialCommunityIcons name="movie-open" size={22} color="#EC4899" />
+                    <Text style={styles.favoriteCategoryTitle}>Movies</Text>
+                  </View>
+                  <View style={styles.favoritesList}>
+                    {profile.interests.movies.map((movie, index) => (
+                      <Text key={index} style={styles.favoriteItem}>• {movie}</Text>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {profile.interests.music && profile.interests.music.length > 0 && (
+                <View style={styles.favoriteCategory}>
+                  <View style={styles.favoriteCategoryHeader}>
+                    <MaterialCommunityIcons name="music" size={22} color="#8B5CF6" />
+                    <Text style={styles.favoriteCategoryTitle}>Music Artists</Text>
+                  </View>
+                  <View style={styles.favoritesList}>
+                    {profile.interests.music.map((artist, index) => (
+                      <Text key={index} style={styles.favoriteItem}>• {artist}</Text>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {profile.interests.books && profile.interests.books.length > 0 && (
+                <View style={styles.favoriteCategory}>
+                  <View style={styles.favoriteCategoryHeader}>
+                    <MaterialCommunityIcons name="book-open-page-variant" size={22} color="#3B82F6" />
+                    <Text style={styles.favoriteCategoryTitle}>Books</Text>
+                  </View>
+                  <View style={styles.favoritesList}>
+                    {profile.interests.books.map((book, index) => (
+                      <Text key={index} style={styles.favoriteItem}>• {book}</Text>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {profile.interests.tv_shows && profile.interests.tv_shows.length > 0 && (
+                <View style={styles.favoriteCategory}>
+                  <View style={styles.favoriteCategoryHeader}>
+                    <MaterialCommunityIcons name="television" size={22} color="#10B981" />
+                    <Text style={styles.favoriteCategoryTitle}>TV Shows</Text>
+                  </View>
+                  <View style={styles.favoritesList}>
+                    {profile.interests.tv_shows.map((show, index) => (
+                      <Text key={index} style={styles.favoriteItem}>• {show}</Text>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
 
           {/* More Prompts + Photos */}
           {profile.prompt_answers?.slice(1).map((prompt, index) => (
@@ -550,6 +686,63 @@ export default function ImmersiveProfileCard({
           </BlurView>
         </SafeAreaView>
       )}
+
+      {/* Action Sheet Modal */}
+      <Modal
+        visible={showActionSheet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActionSheet(false)}
+        presentationStyle="overFullScreen"
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowActionSheet(false)}
+        >
+          <Pressable style={styles.actionSheet} onPress={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <View style={styles.actionSheetHeader}>
+              <Text style={styles.actionSheetTitle}>
+                {profile.display_name}
+              </Text>
+              <Pressable onPress={() => setShowActionSheet(false)}>
+                <MaterialCommunityIcons name="close" size={24} color="#9CA3AF" />
+              </Pressable>
+            </View>
+
+            {/* Actions */}
+            <View style={styles.actionsList}>
+              {onReport && (
+                <TouchableOpacity
+                  style={styles.actionItem}
+                  onPress={() => {
+                    setShowActionSheet(false);
+                    setTimeout(() => onReport(), 100);
+                  }}
+                >
+                  <MaterialCommunityIcons name="flag" size={24} color="#6B7280" />
+                  <Text style={styles.actionText}>Report</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                </TouchableOpacity>
+              )}
+
+              {onBlock && (
+                <TouchableOpacity
+                  style={[styles.actionItem, styles.actionItemDanger]}
+                  onPress={() => {
+                    setShowActionSheet(false);
+                    setTimeout(() => onBlock(), 100);
+                  }}
+                >
+                  <MaterialCommunityIcons name="block-helper" size={24} color="#EF4444" />
+                  <Text style={[styles.actionText, styles.actionTextDanger]}>Block</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -622,8 +815,16 @@ const styles = StyleSheet.create({
     right: 16,
     zIndex: 1001,
   },
-  closeButton: {
+  topButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
     marginTop: 8,
+  },
+  closeButton: {
+    // marginTop removed, now in topButtonsRow
+  },
+  menuButton: {
+    // Same styling as close button
   },
   closeBlur: {
     width: 44,
@@ -632,6 +833,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 34,
+  },
+  actionSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  actionSheetTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  actionsList: {
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    gap: 12,
+  },
+  actionItemDanger: {
+    borderTopWidth: 1,
+    borderTopColor: '#FEE2E2',
+    marginTop: 8,
+  },
+  actionText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#374151',
+  },
+  actionTextDanger: {
+    color: '#EF4444',
   },
   scrollView: {
     flex: 1,
@@ -674,6 +924,17 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
+  },
+  heroIdentity: {
+    marginBottom: 6,
+  },
+  heroIdentityText: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.95)',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   heroLocation: {
     flexDirection: 'row',
@@ -982,5 +1243,46 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
+  },
+  hobbiesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  hobbyTag: {
+    backgroundColor: '#F3E8FF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+  },
+  hobbyText: {
+    fontSize: 15,
+    color: '#7C3AED',
+    fontWeight: '600',
+  },
+  favoriteCategory: {
+    marginBottom: 20,
+  },
+  favoriteCategoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  favoriteCategoryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  favoritesList: {
+    gap: 6,
+    paddingLeft: 8,
+  },
+  favoriteItem: {
+    fontSize: 16,
+    color: '#4B5563',
+    lineHeight: 24,
   },
 });

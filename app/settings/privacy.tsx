@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
@@ -15,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { updateUserLocation } from '@/lib/geolocation';
 
 interface PrivacySettings {
   photo_blur_enabled: boolean;
@@ -27,12 +29,14 @@ export default function PrivacySettings() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [updatingLocation, setUpdatingLocation] = useState(false);
   const [settings, setSettings] = useState<PrivacySettings>({
     photo_blur_enabled: false,
     incognito_mode: false,
     hide_last_active: false,
     hide_distance: false,
   });
+  const [currentLocation, setCurrentLocation] = useState<string>('');
 
   useEffect(() => {
     loadSettings();
@@ -65,6 +69,7 @@ export default function PrivacySettings() {
   };
 
   const updateSetting = async (key: keyof PrivacySettings, value: boolean) => {
+    console.log(`🔧 Updating ${key} to ${value} for user ${user?.id}`);
     const previousValue = settings[key];
 
     // Optimistically update UI
@@ -72,19 +77,62 @@ export default function PrivacySettings() {
     setSaving(true);
 
     try {
-      const { error } = await supabase
+      console.log(`📤 Sending update to database...`);
+      const { data, error } = await supabase
         .from('profiles')
         .update({ [key]: value })
-        .eq('user_id', user?.id);
+        .eq('user_id', user?.id)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Database error:', error);
+        throw error;
+      }
+
+      console.log('✅ Setting updated successfully:', data);
     } catch (error: any) {
-      console.error('Error updating privacy setting:', error);
+      console.error('❌ Error updating privacy setting:', error);
       // Revert on error
       setSettings(prev => ({ ...prev, [key]: previousValue }));
       Alert.alert('Error', 'Failed to update privacy setting. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUpdateLocation = async () => {
+    setUpdatingLocation(true);
+    try {
+      const location = await updateUserLocation();
+      if (!location) {
+        Alert.alert(
+          'Permission Denied',
+          'Location permission is required to update your location. You can enable it in your device settings.'
+        );
+        return;
+      }
+
+      // Update profile in database
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          latitude: location.latitude,
+          longitude: location.longitude,
+        })
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      // Update display
+      setCurrentLocation(
+        `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`
+      );
+      Alert.alert('Success', 'Your location has been updated!');
+    } catch (error: any) {
+      console.error('Error updating location:', error);
+      Alert.alert('Error', 'Failed to update location. Please try again.');
+    } finally {
+      setUpdatingLocation(false);
     }
   };
 
@@ -226,6 +274,57 @@ export default function PrivacySettings() {
         />
       </View>
 
+      {/* Location Settings */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Location</Text>
+
+        <MotiView
+          from={{ opacity: 0, translateY: 10 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: 300 }}
+          style={styles.locationCard}
+        >
+          <View style={styles.locationHeader}>
+            <View style={styles.settingIcon}>
+              <MaterialCommunityIcons name="map-marker" size={24} color="#8B5CF6" />
+            </View>
+            <View style={styles.locationContent}>
+              <Text style={styles.settingTitle}>Update Location</Text>
+              <Text style={styles.settingDescription}>
+                Refresh your GPS coordinates to show accurate distance to matches
+              </Text>
+              {currentLocation && (
+                <Text style={styles.currentLocationText}>
+                  Current: {currentLocation}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.updateLocationButton,
+              updatingLocation && styles.updateLocationButtonDisabled,
+            ]}
+            onPress={handleUpdateLocation}
+            disabled={updatingLocation}
+          >
+            {updatingLocation ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <MaterialCommunityIcons
+                  name="crosshairs-gps"
+                  size={18}
+                  color="#fff"
+                />
+                <Text style={styles.updateLocationButtonText}>Update Now</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </MotiView>
+      </View>
+
       {/* Privacy Tips */}
       <View style={styles.tipsSection}>
         <Text style={styles.tipsTitle}>Privacy Tips</Text>
@@ -255,15 +354,26 @@ export default function PrivacySettings() {
         ))}
       </View>
 
-      {/* Learn More */}
-      <TouchableOpacity
-        style={styles.learnMoreButton}
-        onPress={() => Alert.alert('Privacy Policy', 'Privacy policy coming soon')}
-      >
-        <MaterialCommunityIcons name="information-outline" size={20} color="#8B5CF6" />
-        <Text style={styles.learnMoreText}>Read our Privacy Policy</Text>
-        <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
-      </TouchableOpacity>
+      {/* Legal Links */}
+      <View style={styles.legalSection}>
+        <TouchableOpacity
+          style={styles.learnMoreButton}
+          onPress={() => Linking.openURL('https://joinaccord.app/privacy')}
+        >
+          <MaterialCommunityIcons name="shield-lock-outline" size={20} color="#8B5CF6" />
+          <Text style={styles.learnMoreText}>Privacy Policy</Text>
+          <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.learnMoreButton}
+          onPress={() => Linking.openURL('https://joinaccord.app/terms')}
+        >
+          <MaterialCommunityIcons name="file-document-outline" size={20} color="#8B5CF6" />
+          <Text style={styles.learnMoreText}>Terms of Service</Text>
+          <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+        </TouchableOpacity>
+      </View>
 
       <View style={{ height: 40 }} />
     </ScrollView>
@@ -432,6 +542,9 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     lineHeight: 20,
   },
+  legalSection: {
+    marginBottom: 8,
+  },
   learnMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -441,6 +554,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     borderRadius: 16,
     gap: 12,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -452,5 +566,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#8B5CF6',
+  },
+  locationCard: {
+    backgroundColor: '#fff',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginHorizontal: 20,
+    marginBottom: 8,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  locationContent: {
+    flex: 1,
+  },
+  currentLocationText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 8,
+    fontFamily: 'monospace',
+  },
+  updateLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#8B5CF6',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+  },
+  updateLocationButtonDisabled: {
+    backgroundColor: '#A78BFA',
+    opacity: 0.6,
+  },
+  updateLocationButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

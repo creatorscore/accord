@@ -88,12 +88,12 @@ export default function Likes() {
         .from('likes')
         .select(`
           id,
-          from_profile_id,
+          liker_profile_id,
           like_type,
           message,
           created_at
         `)
-        .eq('to_profile_id', currentProfileId)
+        .eq('liked_profile_id', currentProfileId)
         .order('created_at', { ascending: false });
 
       if (likesError) throw likesError;

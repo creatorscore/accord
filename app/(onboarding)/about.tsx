@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { validateBio, validateContent, getModerationErrorMessage } from '@/lib/content-moderation';
 
 export default function About() {
   const router = useRouter();
@@ -21,14 +22,25 @@ export default function About() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, bio, occupation, education')
         .eq('user_id', user?.id)
         .single();
 
-      if (error) throw error;
-      setProfileId(data.id);
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 = no rows returned (new user)
+        console.error('Error loading profile:', error);
+        return;
+      }
+
+      if (data) {
+        setProfileId(data.id);
+        // Pre-fill form if data exists
+        if (data.bio) setBio(data.bio);
+        if (data.occupation) setOccupation(data.occupation);
+        if (data.education) setEducation(data.education);
+      }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to load profile');
+      console.error('Error loading profile:', error);
     }
   };
 
@@ -41,6 +53,43 @@ export default function About() {
     if (bio.length < 50) {
       Alert.alert('Too Short', 'Please write at least 50 characters for your bio');
       return;
+    }
+
+    // Check for profanity and contact info in bio
+    const bioValidation = validateContent(bio, {
+      checkProfanity: true,
+      checkContactInfo: true,
+      fieldName: 'bio',
+    });
+    if (!bioValidation.isValid) {
+      Alert.alert('Inappropriate Content', bioValidation.error);
+      return;
+    }
+
+    // Check occupation if provided
+    if (occupation.trim()) {
+      const occupationValidation = validateContent(occupation, {
+        checkProfanity: true,
+        checkContactInfo: false,
+        fieldName: 'occupation',
+      });
+      if (!occupationValidation.isValid) {
+        Alert.alert('Inappropriate Content', occupationValidation.error);
+        return;
+      }
+    }
+
+    // Check education if provided
+    if (education.trim()) {
+      const educationValidation = validateContent(education, {
+        checkProfanity: true,
+        checkContactInfo: false,
+        fieldName: 'education',
+      });
+      if (!educationValidation.isValid) {
+        Alert.alert('Inappropriate Content', educationValidation.error);
+        return;
+      }
     }
 
     try {
@@ -87,8 +136,13 @@ export default function About() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-blue-50">
-      <View className="px-6 pt-16 pb-8">
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <ScrollView className="flex-1 bg-blue-50" keyboardShouldPersistTaps="handled">
+        <View className="px-6 pt-16 pb-8">
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
@@ -211,6 +265,7 @@ export default function About() {
           </TouchableOpacity>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

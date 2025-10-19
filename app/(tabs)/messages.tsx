@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Alert, Modal, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,16 +26,23 @@ interface Conversation {
     read_at: string | null;
   };
   unread_count: number;
+  is_muted?: boolean;
+  is_archived?: boolean;
+  is_pinned?: boolean;
 }
 
 export default function Messages() {
   const { user } = useAuth();
   const { isPremium } = useSubscription();
+  const insets = useSafeAreaInsets();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [showActionSheet, setShowActionSheet] = useState(false);
 
   useEffect(() => {
     loadCurrentProfile();
@@ -45,7 +53,7 @@ export default function Messages() {
       loadConversations();
       subscribeToMessages();
     }
-  }, [currentProfileId]);
+  }, [currentProfileId, showArchived]);
 
   const loadCurrentProfile = async () => {
     try {
@@ -66,12 +74,13 @@ export default function Messages() {
     try {
       if (!currentProfileId) return;
 
-      // Get all matches
+      // Get all matches (filtered by archived status)
       const { data: matches, error: matchesError } = await supabase
         .from('matches')
-        .select('id, profile1_id, profile2_id')
+        .select('id, profile1_id, profile2_id, is_muted, is_archived, is_pinned')
         .or(`profile1_id.eq.${currentProfileId},profile2_id.eq.${currentProfileId}`)
-        .eq('status', 'active');
+        .eq('status', 'active')
+        .eq('is_archived', showArchived);
 
       if (matchesError) throw matchesError;
 
@@ -129,12 +138,20 @@ export default function Messages() {
             },
             last_message: lastMessage || undefined,
             unread_count: unreadCount || 0,
+            is_muted: match.is_muted || false,
+            is_archived: match.is_archived || false,
+            is_pinned: match.is_pinned || false,
           };
         })
       );
 
-      // Sort by last message time (most recent first)
+      // Sort: pinned first, then by last message time (most recent first)
       const sorted = conversationsData.sort((a, b) => {
+        // Pinned conversations always come first
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+
+        // Then sort by last message time
         if (!a.last_message) return 1;
         if (!b.last_message) return -1;
         return new Date(b.last_message.created_at).getTime() - new Date(a.last_message.created_at).getTime();
@@ -188,6 +205,303 @@ export default function Messages() {
 
   const handleConversationPress = (conversation: Conversation) => {
     router.push(`/chat/${conversation.match_id}`);
+  };
+
+  const handleDeleteConversation = (conversation: Conversation) => {
+    Alert.alert(
+      'Delete Conversation',
+      `Are you sure you want to delete your conversation with ${conversation.profile.display_name}? This will delete all messages in this thread.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Delete all messages in the conversation
+              const { error: messagesError } = await supabase
+                .from('messages')
+                .delete()
+                .eq('match_id', conversation.match_id);
+
+              if (messagesError) throw messagesError;
+
+              // Remove from local state immediately
+              setConversations((prev) => prev.filter((c) => c.match_id !== conversation.match_id));
+
+              // Show success message
+              Alert.alert('Deleted', 'Conversation has been deleted');
+            } catch (error: any) {
+              console.error('Error deleting conversation:', error);
+              Alert.alert('Error', 'Failed to delete conversation. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleBlock = (conversation: Conversation) => {
+    Alert.alert(
+      'Block User',
+      `Are you sure you want to block ${conversation.profile.display_name}? They will no longer be able to see your profile or contact you.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Get current profile ID
+              const { data: currentProfile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user?.id)
+                .single();
+
+              if (!currentProfile) {
+                throw new Error('Could not find your profile');
+              }
+
+              // Insert block record
+              const { error: blockError } = await supabase
+                .from('blocks')
+                .insert({
+                  blocker_profile_id: currentProfile.id,
+                  blocked_profile_id: conversation.profile.id,
+                  reason: 'Blocked from messages',
+                });
+
+              if (blockError) throw blockError;
+
+              // Update match status to blocked
+              const { error: matchError } = await supabase
+                .from('matches')
+                .update({ status: 'blocked' })
+                .eq('id', conversation.match_id);
+
+              if (matchError) throw matchError;
+
+              // Remove from local state
+              setConversations((prev) => prev.filter((c) => c.match_id !== conversation.match_id));
+
+              Alert.alert('Blocked', `You have blocked ${conversation.profile.display_name}`);
+            } catch (error: any) {
+              console.error('Error blocking user:', error);
+              Alert.alert('Error', 'Failed to block user. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReport = (conversation: Conversation) => {
+    Alert.prompt(
+      'Report User',
+      `Why are you reporting ${conversation.profile.display_name}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Submit',
+          onPress: async (reason) => {
+            if (!reason || reason.trim() === '') {
+              Alert.alert('Error', 'Please provide a reason for reporting.');
+              return;
+            }
+
+            try {
+              // Get current profile ID
+              const { data: currentProfile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user?.id)
+                .single();
+
+              if (!currentProfile) {
+                throw new Error('Could not find your profile');
+              }
+
+              // Insert report
+              const { error } = await supabase
+                .from('reports')
+                .insert({
+                  reporter_profile_id: currentProfile.id,
+                  reported_profile_id: conversation.profile.id,
+                  reason: reason.trim(),
+                  status: 'pending',
+                });
+
+              if (error) throw error;
+
+              Alert.alert(
+                'Report Submitted',
+                'Thank you for helping keep Accord safe. Our team will review this report.'
+              );
+            } catch (error: any) {
+              console.error('Error reporting user:', error);
+              Alert.alert('Error', 'Failed to submit report. Please try again.');
+            }
+          },
+        },
+      ],
+      'plain-text'
+    );
+  };
+
+  const handleMuteToggle = async (conversation: Conversation) => {
+    try {
+      const newMutedState = !conversation.is_muted;
+
+      const { error } = await supabase
+        .from('matches')
+        .update({ is_muted: newMutedState })
+        .eq('id', conversation.match_id);
+
+      if (error) throw error;
+
+      // Update local state
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.match_id === conversation.match_id ? { ...c, is_muted: newMutedState } : c
+        )
+      );
+
+      Alert.alert('Success', `Notifications ${newMutedState ? 'muted' : 'unmuted'} for ${conversation.profile.display_name}`);
+    } catch (error: any) {
+      console.error('Error toggling mute:', error);
+      Alert.alert('Error', 'Failed to update mute status. Please try again.');
+    }
+  };
+
+  const handleArchiveToggle = async (conversation: Conversation) => {
+    try {
+      const newArchivedState = !conversation.is_archived;
+
+      const { error } = await supabase
+        .from('matches')
+        .update({ is_archived: newArchivedState })
+        .eq('id', conversation.match_id);
+
+      if (error) throw error;
+
+      // Remove from current view immediately
+      setConversations((prev) => prev.filter((c) => c.match_id !== conversation.match_id));
+
+      Alert.alert('Success', `Conversation ${newArchivedState ? 'archived' : 'unarchived'}`);
+    } catch (error: any) {
+      console.error('Error toggling archive:', error);
+      Alert.alert('Error', 'Failed to update archive status. Please try again.');
+    }
+  };
+
+  const handlePinToggle = async (conversation: Conversation) => {
+    try {
+      const newPinnedState = !conversation.is_pinned;
+
+      const { error } = await supabase
+        .from('matches')
+        .update({ is_pinned: newPinnedState })
+        .eq('id', conversation.match_id);
+
+      if (error) throw error;
+
+      // Update local state and re-sort
+      setConversations((prev) => {
+        const updated = prev.map((c) =>
+          c.match_id === conversation.match_id ? { ...c, is_pinned: newPinnedState } : c
+        );
+
+        // Re-sort: pinned first, then by last message time
+        return updated.sort((a, b) => {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+          if (!a.last_message) return 1;
+          if (!b.last_message) return -1;
+          return new Date(b.last_message.created_at).getTime() - new Date(a.last_message.created_at).getTime();
+        });
+      });
+
+      Alert.alert('Success', `Conversation ${newPinnedState ? 'pinned' : 'unpinned'}`);
+    } catch (error: any) {
+      console.error('Error toggling pin:', error);
+      Alert.alert('Error', 'Failed to update pin status. Please try again.');
+    }
+  };
+
+  const handleMarkAsUnread = async (conversation: Conversation) => {
+    try {
+      if (!conversation.last_message) return;
+
+      // Mark the last message as unread
+      const { error } = await supabase
+        .from('messages')
+        .update({ read_at: null })
+        .eq('match_id', conversation.match_id)
+        .eq('receiver_profile_id', currentProfileId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+
+      // Reload conversations to update unread count
+      await loadConversations();
+
+      Alert.alert('Success', 'Marked as unread');
+    } catch (error: any) {
+      console.error('Error marking as unread:', error);
+      Alert.alert('Error', 'Failed to mark as unread. Please try again.');
+    }
+  };
+
+  const handleConversationLongPress = (conversation: Conversation) => {
+    setSelectedConversation(conversation);
+    setShowActionSheet(true);
+  };
+
+  const handleActionSelect = (action: string) => {
+    if (!selectedConversation) return;
+
+    setShowActionSheet(false);
+
+    // Small delay to allow modal to close smoothly before action
+    setTimeout(() => {
+      switch (action) {
+        case 'view_profile':
+          router.push(`/profile/${selectedConversation.profile.id}`);
+          break;
+        case 'pin':
+          handlePinToggle(selectedConversation);
+          break;
+        case 'mute':
+          handleMuteToggle(selectedConversation);
+          break;
+        case 'mark_unread':
+          handleMarkAsUnread(selectedConversation);
+          break;
+        case 'archive':
+          handleArchiveToggle(selectedConversation);
+          break;
+        case 'report':
+          handleReport(selectedConversation);
+          break;
+        case 'block':
+          handleBlock(selectedConversation);
+          break;
+        case 'delete':
+          handleDeleteConversation(selectedConversation);
+          break;
+      }
+    }, 100);
   };
 
   const getTimeAgo = (dateString: string) => {
@@ -269,6 +583,7 @@ export default function Messages() {
         <TouchableOpacity
           style={styles.conversationCard}
           onPress={() => handleConversationPress(item)}
+          onLongPress={() => handleConversationLongPress(item)}
           activeOpacity={0.7}
         >
           {/* Profile Photo */}
@@ -288,9 +603,17 @@ export default function Messages() {
           {/* Conversation Info */}
           <View style={styles.conversationInfo}>
             <View style={styles.conversationHeader}>
-              <Text style={styles.conversationName} numberOfLines={1}>
-                {item.profile.display_name}
-              </Text>
+              <View style={styles.nameRow}>
+                {item.is_pinned && (
+                  <MaterialCommunityIcons name="pin" size={16} color="#8B5CF6" style={{ marginRight: 4 }} />
+                )}
+                <Text style={styles.conversationName} numberOfLines={1}>
+                  {item.profile.display_name}
+                </Text>
+                {item.is_muted && (
+                  <MaterialCommunityIcons name="bell-off" size={14} color="#9CA3AF" style={{ marginLeft: 6 }} />
+                )}
+              </View>
               {item.last_message && (
                 <Text style={styles.timestamp}>{getTimeAgo(item.last_message.created_at)}</Text>
               )}
@@ -402,9 +725,26 @@ export default function Messages() {
         <View>
           <Text style={styles.headerTitle}>Messages</Text>
           <Text style={styles.headerSubtitle}>
-            {conversations.length} {conversations.length === 1 ? 'conversation' : 'conversations'}
+            {showArchived ? 'Archived conversations' : `${conversations.length} ${conversations.length === 1 ? 'conversation' : 'conversations'}`}
           </Text>
         </View>
+        <TouchableOpacity
+          onPress={() => {
+            setShowArchived(!showArchived);
+            setConversations([]); // Clear to trigger reload
+            setLoading(true);
+          }}
+          style={styles.archiveButton}
+        >
+          <MaterialCommunityIcons
+            name={showArchived ? "inbox" : "archive"}
+            size={24}
+            color="white"
+          />
+          <Text style={styles.archiveButtonText}>
+            {showArchived ? 'Active' : 'Archive'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Conversations List */}
@@ -413,7 +753,7 @@ export default function Messages() {
         renderItem={renderConversation}
         keyExtractor={(item) => item.match_id}
         ListHeaderComponent={renderUpgradeCard}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -432,6 +772,126 @@ export default function Messages() {
         variant="premium"
         feature="read_receipts"
       />
+
+      {/* Action Sheet Modal */}
+      <Modal
+        visible={showActionSheet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActionSheet(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowActionSheet(false)}
+        >
+          <Pressable style={[styles.actionSheet, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]} onPress={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <View style={styles.actionSheetHeader}>
+              <Text style={styles.actionSheetTitle}>
+                {selectedConversation?.profile.display_name}
+              </Text>
+              <Pressable onPress={() => setShowActionSheet(false)}>
+                <MaterialCommunityIcons name="close" size={24} color="#9CA3AF" />
+              </Pressable>
+            </View>
+
+            {/* Actions */}
+            <View style={styles.actionsList}>
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => handleActionSelect('view_profile')}
+              >
+                <MaterialCommunityIcons name="account" size={24} color="#6B7280" />
+                <Text style={styles.actionText}>View Profile</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => handleActionSelect('pin')}
+              >
+                <MaterialCommunityIcons
+                  name="pin"
+                  size={24}
+                  color={selectedConversation?.is_pinned ? '#8B5CF6' : '#6B7280'}
+                />
+                <Text style={styles.actionText}>
+                  {selectedConversation?.is_pinned ? 'Unpin Conversation' : 'Pin Conversation'}
+                </Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => handleActionSelect('mute')}
+              >
+                <MaterialCommunityIcons
+                  name={selectedConversation?.is_muted ? 'bell-ring' : 'bell-off'}
+                  size={24}
+                  color="#6B7280"
+                />
+                <Text style={styles.actionText}>
+                  {selectedConversation?.is_muted ? 'Unmute Notifications' : 'Mute Notifications'}
+                </Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+              </TouchableOpacity>
+
+              {selectedConversation?.last_message && selectedConversation.unread_count === 0 && (
+                <TouchableOpacity
+                  style={styles.actionItem}
+                  onPress={() => handleActionSelect('mark_unread')}
+                >
+                  <MaterialCommunityIcons name="email-mark-as-unread" size={24} color="#6B7280" />
+                  <Text style={styles.actionText}>Mark as Unread</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => handleActionSelect('archive')}
+              >
+                <MaterialCommunityIcons
+                  name={showArchived ? 'inbox' : 'archive'}
+                  size={24}
+                  color="#6B7280"
+                />
+                <Text style={styles.actionText}>
+                  {showArchived ? 'Unarchive' : 'Archive'}
+                </Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => handleActionSelect('report')}
+              >
+                <MaterialCommunityIcons name="flag" size={24} color="#6B7280" />
+                <Text style={styles.actionText}>Report</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionItem, styles.actionItemDanger]}
+                onPress={() => handleActionSelect('block')}
+              >
+                <MaterialCommunityIcons name="block-helper" size={24} color="#EF4444" />
+                <Text style={[styles.actionText, styles.actionTextDanger]}>Block</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionItem, styles.actionItemDanger]}
+                onPress={() => handleActionSelect('delete')}
+              >
+                <MaterialCommunityIcons name="delete" size={24} color="#EF4444" />
+                <Text style={[styles.actionText, styles.actionTextDanger]}>Delete Conversation</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -446,6 +906,23 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 24,
     paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  archiveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  archiveButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   headerTitle: {
     fontSize: 32,
@@ -572,11 +1049,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
   conversationName: {
     fontSize: 17,
     fontWeight: '600',
     color: '#111827',
-    flex: 1,
+    flexShrink: 1,
   },
   timestamp: {
     fontSize: 13,
@@ -677,5 +1159,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#8B5CF6',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  actionSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  actionSheetTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  actionsList: {
+    paddingTop: 8,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  actionItemDanger: {
+    borderTopWidth: 1,
+    borderTopColor: '#FEE2E2',
+    marginTop: 8,
+  },
+  actionText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#374151',
+  },
+  actionTextDanger: {
+    color: '#EF4444',
   },
 });

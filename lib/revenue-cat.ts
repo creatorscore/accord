@@ -89,18 +89,23 @@ export const purchasePackage = async (pkg: PurchasesPackage): Promise<CustomerIn
 
 /**
  * Restore purchases (for users who reinstalled app)
+ * Returns CustomerInfo if successful, throws error if not
  */
-export const restorePurchases = async (): Promise<CustomerInfo | null> => {
+export const restorePurchases = async (): Promise<CustomerInfo> => {
   if (!isInitialized) {
-    return null;
+    throw new Error('RevenueCat not initialized');
   }
 
   try {
     const customerInfo = await Purchases.restorePurchases();
+    console.log('Purchases restored successfully:', {
+      hasActiveSubscriptions: Object.keys(customerInfo.entitlements.active).length > 0,
+      activeEntitlements: Object.keys(customerInfo.entitlements.active),
+    });
     return customerInfo;
   } catch (error) {
-    console.log('Error restoring purchases:', error);
-    return null;
+    console.error('Error restoring purchases:', error);
+    throw error;
   }
 };
 
@@ -212,5 +217,80 @@ export const logOutRevenueCat = async () => {
     await Purchases.logOut();
   } catch (error) {
     console.error('Error logging out from RevenueCat:', error);
+  }
+};
+
+/**
+ * Get subscription expiration date
+ */
+export const getSubscriptionExpirationDate = (customerInfo: CustomerInfo | null): Date | null => {
+  if (!customerInfo) return null;
+
+  const activeEntitlements = customerInfo.entitlements.active;
+  const firstEntitlement = Object.values(activeEntitlements)[0];
+
+  if (firstEntitlement && firstEntitlement.expirationDate) {
+    return new Date(firstEntitlement.expirationDate);
+  }
+
+  return null;
+};
+
+/**
+ * Check if subscription will auto-renew
+ */
+export const willRenew = (customerInfo: CustomerInfo | null): boolean => {
+  if (!customerInfo) return false;
+
+  const activeEntitlements = customerInfo.entitlements.active;
+  const firstEntitlement = Object.values(activeEntitlements)[0];
+
+  if (firstEntitlement) {
+    return firstEntitlement.willRenew;
+  }
+
+  return false;
+};
+
+/**
+ * Get price string for a package
+ */
+export const getPriceString = (pkg: PurchasesPackage): string => {
+  return pkg.product.priceString;
+};
+
+/**
+ * Check if RevenueCat is initialized
+ */
+export const isRevenueCatInitialized = (): boolean => {
+  return isInitialized;
+};
+
+/**
+ * Sync subscription status with Supabase database
+ * Call this after purchase/restore to update DB
+ */
+export const syncSubscriptionStatus = async (
+  customerInfo: CustomerInfo,
+  profileId: string
+): Promise<void> => {
+  try {
+    const tier = getSubscriptionTier(customerInfo);
+    const isPremiumUser = tier === SUBSCRIPTION_TIERS.PREMIUM || tier === SUBSCRIPTION_TIERS.PLATINUM;
+    const isPlatinumUser = tier === SUBSCRIPTION_TIERS.PLATINUM;
+
+    // This would be called from your backend/edge function
+    // For now, just log what would be updated
+    console.log('Syncing subscription status to database:', {
+      profileId,
+      isPremium: isPremiumUser,
+      isPlatinum: isPlatinumUser,
+      tier,
+    });
+
+    // TODO: Call Supabase edge function to update subscription status
+    // This should be done server-side for security
+  } catch (error) {
+    console.error('Error syncing subscription status:', error);
   }
 };

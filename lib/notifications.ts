@@ -1,18 +1,36 @@
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import { Platform, LogBox } from 'react-native';
 import { supabase } from './supabase';
 
-// Configure how notifications are handled when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Suppress Expo Go notification warning (notifications work fine in dev/production builds)
+LogBox.ignoreLogs([
+  'expo-notifications: Android Push notifications',
+  'Notifications not available in Expo Go',
+]);
+
+// Safely import notifications - will be null in Expo Go
+let Notifications: any = null;
+let Device: any = null;
+
+try {
+  Notifications = require('expo-notifications');
+  Device = require('expo-device');
+
+  // Configure how notifications are handled when app is in foreground
+  if (Notifications) {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  }
+} catch (error) {
+  // Silently fail - notifications will work in dev/production builds
+  console.log('Notifications not available in Expo Go - will work in production build');
+}
 
 /**
  * Request notification permissions from the user
@@ -20,6 +38,12 @@ Notifications.setNotificationHandler({
  */
 export async function requestNotificationPermissions(): Promise<boolean> {
   try {
+    // Check if notifications are available
+    if (!Notifications || !Device) {
+      console.log('Notifications not available (Expo Go)');
+      return false;
+    }
+
     // Only request permissions on physical devices
     if (!Device.isDevice) {
       console.log('Notifications are not supported on simulator/emulator');
@@ -53,6 +77,12 @@ export async function requestNotificationPermissions(): Promise<boolean> {
  */
 export async function registerForPushNotifications(): Promise<string | null> {
   try {
+    // Check if notifications are available
+    if (!Notifications || !Device) {
+      console.log('Notifications not available (Expo Go)');
+      return null;
+    }
+
     // Only works on physical devices
     if (!Device.isDevice) {
       console.log('Push notifications require a physical device');
@@ -101,7 +131,15 @@ export async function savePushToken(userId: string, token: string): Promise<void
       .eq('user_id', userId)
       .single();
 
-    if (profileError) throw profileError;
+    // If profile doesn't exist yet (user is in onboarding), silently return
+    // The token will be saved when the profile is created during onboarding
+    if (profileError) {
+      if (profileError.code === 'PGRST116') {
+        console.log('Profile not found yet - user likely in onboarding. Push token will be saved after profile creation.');
+        return;
+      }
+      throw profileError;
+    }
 
     // Update profile with push token
     const { error } = await supabase
@@ -318,7 +356,12 @@ export async function sendLikeNotification(
  */
 export function setupNotificationListener(
   onNotificationTap: (data: any) => void
-): Notifications.Subscription {
+): any {
+  if (!Notifications) {
+    console.log('Notifications not available (Expo Go)');
+    return { remove: () => {} }; // Return mock subscription
+  }
+
   return Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data;
     onNotificationTap(data);

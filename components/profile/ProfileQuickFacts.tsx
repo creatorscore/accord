@@ -62,9 +62,12 @@ export default function ProfileQuickFacts({ facts }: ProfileQuickFactsProps) {
 const styles = StyleSheet.create({
   container: {
     marginVertical: 16,
+    zIndex: 10,
+    overflow: 'visible',
   },
   content: {
     paddingHorizontal: 20,
+    paddingBottom: 8,
     gap: 12,
   },
   factCard: {

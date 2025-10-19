@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,7 +7,16 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const { sendPasswordResetEmail } = useAuth();
+
+  // Cooldown timer for resend button
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   const handleResetPassword = async () => {
     if (!email) {
@@ -19,8 +28,25 @@ export default function ForgotPassword() {
     try {
       await sendPasswordResetEmail(email);
       setEmailSent(true);
+      setResendCooldown(60); // 60 second cooldown
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to send reset email');
+      console.error('Password reset error:', error);
+      Alert.alert('Error', error.message || error?.error_description || 'Failed to send reset email');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0) return;
+
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(email);
+      setResendCooldown(60); // Reset cooldown
+      Alert.alert('Success', 'Password reset email sent again!');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to resend email');
     } finally {
       setLoading(false);
     }
@@ -45,6 +71,23 @@ export default function ForgotPassword() {
           <Text className="text-gray-500 text-sm text-center px-8 mb-8">
             Click the link in the email to reset your password. The link will expire in 1 hour.
           </Text>
+
+          <TouchableOpacity
+            className={`border-2 border-primary-600 rounded-full py-3 px-8 mb-4 ${
+              resendCooldown > 0 || loading ? 'opacity-50' : ''
+            }`}
+            onPress={handleResend}
+            disabled={resendCooldown > 0 || loading}
+          >
+            <Text className="text-primary-600 font-semibold">
+              {resendCooldown > 0
+                ? `Resend in ${resendCooldown}s`
+                : loading
+                  ? 'Sending...'
+                  : 'Resend Email'}
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             className="bg-primary-600 rounded-full py-3 px-8"
             onPress={() => router.push('/(auth)/sign-in')}

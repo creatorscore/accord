@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { validatePromptAnswer, validateContent } from '@/lib/content-moderation';
 
 const PROMPTS = [
   'My ideal lavender marriage looks like...',
@@ -86,6 +87,19 @@ export default function Prompts() {
     if (filledPrompts.length === 0) {
       Alert.alert('Required', 'Please answer at least one prompt');
       return;
+    }
+
+    // Check all prompt answers for profanity and contact info
+    for (let i = 0; i < filledPrompts.length; i++) {
+      const validation = validateContent(filledPrompts[i].answer, {
+        checkProfanity: true,
+        checkContactInfo: true,
+        fieldName: 'prompt answer',
+      });
+      if (!validation.isValid) {
+        Alert.alert('Inappropriate Content', validation.error);
+        return;
+      }
     }
 
     if (!profileId) {

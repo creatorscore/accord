@@ -8,6 +8,7 @@ export default function Index() {
   const { user, loading } = useAuth();
   const [checking, setChecking] = useState(true);
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null);
+  const [onboardingStep, setOnboardingStep] = useState<number>(0);
 
   useEffect(() => {
     // Only check once when auth is ready
@@ -35,6 +36,8 @@ export default function Index() {
         console.error('Error checking profile:', error);
       }
 
+      // Store onboarding step for redirect
+      setOnboardingStep(profile?.onboarding_step || 0);
       setProfileComplete(profile?.profile_complete || false);
     } catch (error) {
       console.error('Error in checkUserStatus:', error);
@@ -60,6 +63,19 @@ export default function Index() {
     return <Redirect href="/(tabs)/discover" />;
   }
 
-  // Profile incomplete or new user
-  return <Redirect href="/(onboarding)/basic-info" />;
+  // Profile incomplete - redirect to appropriate onboarding step
+  const onboardingRoutes = [
+    '/(onboarding)/basic-info',      // step 0
+    '/(onboarding)/photos',          // step 1
+    '/(onboarding)/about',           // step 2
+    '/(onboarding)/personality',     // step 3
+    '/(onboarding)/interests',       // step 4
+    '/(onboarding)/prompts',         // step 5
+    '/(onboarding)/matching-preferences',  // step 6
+    '/(onboarding)/marriage-preferences',  // step 7
+    '/(onboarding)/voice-intro',     // step 8
+  ];
+
+  const targetRoute = onboardingRoutes[onboardingStep] || onboardingRoutes[0];
+  return <Redirect href={targetRoute as any} />;
 }

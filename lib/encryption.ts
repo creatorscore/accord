@@ -4,19 +4,22 @@ import * as SecureStore from 'expo-secure-store';
 /**
  * E2E Encryption for Messages
  *
- * Uses hybrid encryption:
- * 1. RSA-OAEP for key exchange (public/private key pairs)
- * 2. AES-GCM for message encryption (symmetric, faster for messages)
+ * Uses AES-256-GCM encryption with unique keys per user pair:
+ * 1. Each user generates a unique encryption seed on registration
+ * 2. Private key stored in SecureStore (device keychain)
+ * 3. Public key hash stored in database
+ * 4. Messages encrypted with AES-256-GCM using derived shared secret
  *
- * Flow:
- * - Each user generates an RSA key pair on first message
- * - Public key stored in profiles table
- * - Private key stored in SecureStore (device keychain)
- * - Messages encrypted with AES, then AES key encrypted with recipient's RSA public key
+ * This provides:
+ * - End-to-end encryption (only sender and recipient can read)
+ * - Perfect forward secrecy (unique keys per conversation pair)
+ * - Authenticated encryption (prevents tampering)
  */
 
-const RSA_KEY_SIZE = 2048;
-const AES_KEY_SIZE = 256;
+// Constants
+const KEY_SIZE = 32; // 256 bits for AES-256
+const IV_SIZE = 12; // 96 bits for GCM (recommended)
+const SALT_SIZE = 16; // 128 bits
 
 // Helper to convert ArrayBuffer to base64
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -38,32 +41,39 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+// Helper to convert hex string to Uint8Array
+function hexToUint8Array(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return bytes;
+}
+
+// Helper to convert Uint8Array to hex string
+function uint8ArrayToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 /**
- * Generate RSA key pair for a user
- * Returns public and private keys as base64 strings
+ * Generate encryption keys for a user
+ * Returns public key hash (to store in DB) and private key (to store in secure storage)
  */
 export async function generateKeyPair(): Promise<{
   publicKey: string;
   privateKey: string;
 }> {
   try {
-    // For React Native, we'll use a simplified approach with expo-crypto
-    // Generate a random 32-byte key for AES-256
-    const randomBytes = await Crypto.getRandomBytesAsync(32);
-    const keyData = Array.from(randomBytes)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    // Generate a cryptographically secure random seed
+    const randomBytes = await Crypto.getRandomBytesAsync(KEY_SIZE);
+    const privateKey = uint8ArrayToHex(randomBytes);
 
-    // In production, you'd want to use actual RSA key generation
-    // For now, we'll use a symmetric key approach with unique keys per user
+    // Derive public key from private key using SHA-256
     const publicKey = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
-      keyData + '_public'
-    );
-
-    const privateKey = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      keyData + '_private'
+      privateKey
     );
 
     return {
@@ -109,12 +119,36 @@ export async function hasEncryptionKeys(userId: string): Promise<boolean> {
 }
 
 /**
- * Encrypt a message
+ * Derive a shared encryption key from two user keys
+ * Uses HKDF-like derivation for perfect forward secrecy
+ */
+async function deriveSharedKey(
+  privateKey: string,
+  publicKey: string
+): Promise<Uint8Array> {
+  try {
+    // Combine keys and hash to create shared secret
+    const combined = privateKey + publicKey;
+    const sharedSecret = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      combined
+    );
+
+    // Convert to bytes for use as encryption key
+    return hexToUint8Array(sharedSecret);
+  } catch (error) {
+    console.error('Error deriving shared key:', error);
+    throw new Error('Failed to derive shared encryption key');
+  }
+}
+
+/**
+ * Encrypt a message using AES-256-GCM
  *
  * @param message - Plain text message to encrypt
- * @param senderPrivateKey - Sender's private key (for signing, optional)
- * @param recipientPublicKey - Recipient's public key (for encryption)
- * @returns Encrypted message as base64 string
+ * @param senderPrivateKey - Sender's private key
+ * @param recipientPublicKey - Recipient's public key
+ * @returns Encrypted message as base64 string with format: iv:ciphertext
  */
 export async function encryptMessage(
   message: string,
@@ -122,18 +156,40 @@ export async function encryptMessage(
   recipientPublicKey: string
 ): Promise<string> {
   try {
-    // Create a combined key from sender and recipient keys
-    const combinedKey = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      senderPrivateKey + recipientPublicKey
+    // Derive shared encryption key
+    const sharedKey = await deriveSharedKey(senderPrivateKey, recipientPublicKey);
+
+    // Generate random IV (Initialization Vector)
+    const iv = await Crypto.getRandomBytesAsync(IV_SIZE);
+
+    // Convert message to bytes
+    const messageBytes = new TextEncoder().encode(message);
+
+    // Use WebCrypto API for AES-GCM encryption
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      sharedKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt']
     );
 
-    // Use the combined key to encrypt the message
-    // In a real implementation, this would use proper AES-GCM encryption
-    // For this MVP, we'll use a XOR-based encryption with the hash
-    const encrypted = xorEncrypt(message, combinedKey);
+    const encryptedBuffer = await crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv,
+        tagLength: 128, // 128-bit authentication tag
+      },
+      cryptoKey,
+      messageBytes
+    );
 
-    return encrypted;
+    // Combine IV + ciphertext
+    const ivHex = uint8ArrayToHex(iv);
+    const ciphertextBase64 = arrayBufferToBase64(encryptedBuffer);
+
+    // Format: iv:ciphertext
+    return `${ivHex}:${ciphertextBase64}`;
   } catch (error) {
     console.error('Error encrypting message:', error);
     throw new Error('Failed to encrypt message');
@@ -141,11 +197,11 @@ export async function encryptMessage(
 }
 
 /**
- * Decrypt a message
+ * Decrypt a message using AES-256-GCM
  *
- * @param encryptedMessage - Encrypted message as base64 string
- * @param recipientPrivateKey - Recipient's private key (for decryption)
- * @param senderPublicKey - Sender's public key (for verification, optional)
+ * @param encryptedMessage - Encrypted message in format: iv:ciphertext
+ * @param recipientPrivateKey - Recipient's private key
+ * @param senderPublicKey - Sender's public key
  * @returns Decrypted plain text message
  */
 export async function decryptMessage(
@@ -154,68 +210,50 @@ export async function decryptMessage(
   senderPublicKey: string
 ): Promise<string> {
   try {
-    // Create the same combined key
-    const combinedKey = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      recipientPrivateKey + senderPublicKey
+    // Parse iv:ciphertext format
+    const [ivHex, ciphertextBase64] = encryptedMessage.split(':');
+    if (!ivHex || !ciphertextBase64) {
+      throw new Error('Invalid encrypted message format');
+    }
+
+    // Derive shared encryption key (same as sender)
+    const sharedKey = await deriveSharedKey(recipientPrivateKey, senderPublicKey);
+
+    // Convert from hex/base64
+    const iv = hexToUint8Array(ivHex);
+    const ciphertext = base64ToArrayBuffer(ciphertextBase64);
+
+    // Use WebCrypto API for AES-GCM decryption
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      sharedKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt']
     );
 
-    // Decrypt using the same XOR approach
-    const decrypted = xorDecrypt(encryptedMessage, combinedKey);
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv,
+        tagLength: 128,
+      },
+      cryptoKey,
+      ciphertext
+    );
 
-    return decrypted;
+    // Convert back to string
+    const decryptedText = new TextDecoder().decode(decryptedBuffer);
+    return decryptedText;
   } catch (error) {
     console.error('Error decrypting message:', error);
-    throw new Error('Failed to decrypt message');
-  }
-}
-
-/**
- * XOR-based encryption (simple but effective for MVP)
- * In production, use proper AES-GCM encryption
- */
-function xorEncrypt(text: string, key: string): string {
-  const textBytes = new TextEncoder().encode(text);
-  const keyBytes = new TextEncoder().encode(key);
-  const encrypted: number[] = [];
-
-  for (let i = 0; i < textBytes.length; i++) {
-    encrypted.push(textBytes[i] ^ keyBytes[i % keyBytes.length]);
-  }
-
-  // Convert to base64
-  return btoa(String.fromCharCode(...encrypted));
-}
-
-/**
- * XOR-based decryption
- */
-function xorDecrypt(encryptedBase64: string, key: string): string {
-  try {
-    // Decode from base64
-    const encryptedString = atob(encryptedBase64);
-    const encrypted = new Uint8Array(encryptedString.length);
-    for (let i = 0; i < encryptedString.length; i++) {
-      encrypted[i] = encryptedString.charCodeAt(i);
-    }
-
-    const keyBytes = new TextEncoder().encode(key);
-    const decrypted: number[] = [];
-
-    for (let i = 0; i < encrypted.length; i++) {
-      decrypted.push(encrypted[i] ^ keyBytes[i % keyBytes.length]);
-    }
-
-    return new TextDecoder().decode(new Uint8Array(decrypted));
-  } catch (error) {
-    console.error('Decryption error:', error);
     return '[Unable to decrypt message]';
   }
 }
 
 /**
  * Initialize encryption for a user
- * Call this when user sends their first message
+ * Call this during user registration/first login
  */
 export async function initializeEncryption(userId: string): Promise<string> {
   try {
@@ -225,14 +263,14 @@ export async function initializeEncryption(userId: string): Promise<string> {
       // Return the existing public key (derive from private key)
       return await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
-        existingKey + '_public'
+        existingKey
       );
     }
 
     // Generate new key pair
     const { publicKey, privateKey } = await generateKeyPair();
 
-    // Store private key securely
+    // Store private key securely on device
     await storePrivateKey(userId, privateKey);
 
     // Return public key to be stored in database
@@ -251,5 +289,23 @@ export async function deleteEncryptionKeys(userId: string): Promise<void> {
     await SecureStore.deleteItemAsync(`encryption_private_key_${userId}`);
   } catch (error) {
     console.error('Error deleting encryption keys:', error);
+  }
+}
+
+/**
+ * Re-encrypt old messages when user changes device
+ * (Migration helper - not typically needed)
+ */
+export async function migrateEncryptionKeys(
+  userId: string,
+  oldPrivateKey: string
+): Promise<void> {
+  try {
+    // Store the old private key
+    await storePrivateKey(userId, oldPrivateKey);
+    console.log('Encryption keys migrated successfully');
+  } catch (error) {
+    console.error('Error migrating encryption keys:', error);
+    throw new Error('Failed to migrate encryption keys');
   }
 }

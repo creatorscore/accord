@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
@@ -116,18 +116,27 @@ export default function Interests() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-purple-50">
-      <View className="px-6 pt-16 pb-8">
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <ScrollView
+        className="flex-1 bg-purple-50"
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 120 }}
+      >
+        <View className="px-6 pt-16 pb-8">
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 4 of 7</Text>
-            <Text className="text-sm text-primary-600 font-bold">57%</Text>
+            <Text className="text-sm text-gray-600 font-medium">Step 5 of 9</Text>
+            <Text className="text-sm text-primary-600 font-bold">56%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
               className="h-3 bg-primary-500 rounded-full"
-              style={{ width: '57%' }}
+              style={{ width: '56%' }}
             />
           </View>
         </View>
@@ -272,6 +281,7 @@ export default function Interests() {
           </TouchableOpacity>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

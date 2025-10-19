@@ -14,6 +14,7 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +29,10 @@ import BlockModal from '@/components/safety/BlockModal';
 import ReportModal from '@/components/safety/ReportModal';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import IntroMessages from '@/components/messaging/IntroMessages';
+import ModerationMenu from '@/components/moderation/ModerationMenu';
+import { validateMessage, containsContactInfo, validateContent } from '@/lib/content-moderation';
+import { encryptMessage, decryptMessage, getPrivateKey } from '@/lib/encryption';
+import { getLastActiveText, isOnline, getOnlineStatusColor } from '@/lib/online-status';
 
 interface Message {
   id: string;
@@ -51,6 +56,15 @@ interface MatchProfile {
   location_city?: string;
   compatibility_score?: number;
   distance?: number;
+  last_active_at?: string | null;
+  hide_last_active?: boolean;
+}
+
+interface MatchStatus {
+  status: 'active' | 'unmatched' | 'blocked';
+  unmatched_by?: string | null;
+  unmatched_at?: string | null;
+  unmatch_reason?: string | null;
 }
 
 export default function Chat() {
@@ -58,10 +72,12 @@ export default function Chat() {
   const { user } = useAuth();
   const { isPremium } = useSubscription();
   const flatListRef = useRef<FlatList>(null);
+  const insets = useSafeAreaInsets();
 
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [currentProfileName, setCurrentProfileName] = useState<string>('');
   const [matchProfile, setMatchProfile] = useState<MatchProfile | null>(null);
+  const [matchStatus, setMatchStatus] = useState<MatchStatus | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -80,12 +96,26 @@ export default function Chat() {
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const [showIntroMessages, setShowIntroMessages] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
     loadCurrentProfile();
     setupAudio();
+
+    // Track keyboard visibility
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+
     return () => {
       cleanupAudio();
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
     };
   }, []);
 
@@ -156,16 +186,31 @@ export default function Chat() {
     try {
       console.log('🔍 Loading match profile for match:', matchId);
 
-      // Get match details
+      // Get match details including status
       const { data: matchData, error: matchError } = await supabase
         .from('matches')
-        .select('profile1_id, profile2_id')
+        .select('profile1_id, profile2_id, status, unmatched_by, unmatched_at, unmatch_reason')
         .eq('id', matchId)
         .single();
 
       console.log('Match data:', { matchData, matchError });
 
       if (matchError) throw matchError;
+
+      // Store match status
+      setMatchStatus({
+        status: matchData.status,
+        unmatched_by: matchData.unmatched_by,
+        unmatched_at: matchData.unmatched_at,
+        unmatch_reason: matchData.unmatch_reason,
+      });
+
+      // If match is unmatched or blocked, stop here
+      if (matchData.status !== 'active') {
+        console.log('⚠️ Match is not active:', matchData.status);
+        setLoading(false);
+        return;
+      }
 
       // Determine other profile ID
       const otherProfileId =
@@ -187,6 +232,8 @@ export default function Chat() {
           location_city,
           latitude,
           longitude,
+          last_active_at,
+          hide_last_active,
           photos (
             url,
             is_primary,
@@ -245,6 +292,8 @@ export default function Chat() {
         location_city: profile.location_city,
         compatibility_score: matchCompatibility?.compatibility_score,
         distance: distance,
+        last_active_at: profile.last_active_at,
+        hide_last_active: profile.hide_last_active,
       };
 
       console.log('✅ Match profile loaded:', matchProfileData);
@@ -272,7 +321,17 @@ export default function Chat() {
         throw error;
       }
 
-      setMessages(data || []);
+      // Decrypt all text messages
+      if (data && data.length > 0) {
+        console.log('🔓 Decrypting', data.length, 'messages...');
+        const decryptedMessages = await Promise.all(
+          data.map(message => decryptSingleMessage(message as Message))
+        );
+        setMessages(decryptedMessages);
+        console.log('✅ All messages decrypted');
+      } else {
+        setMessages([]);
+      }
     } catch (error: any) {
       console.error('CATCH Error loading messages:', error);
       Alert.alert('Error', 'Failed to load messages: ' + error.message);
@@ -298,11 +357,16 @@ export default function Chat() {
           table: 'messages',
           filter: `match_id=eq.${matchId}`,
         },
-        (payload) => {
-          setMessages((prev) => [...prev, payload.new as Message]);
+        async (payload) => {
+          // Decrypt the new message before adding to state
+          const newMessage = payload.new as Message;
+          const decryptedMessage = await decryptSingleMessage(newMessage);
+
+          setMessages((prev) => [...prev, decryptedMessage]);
+
           // Mark as read if message is for current user
-          if (payload.new.receiver_profile_id === currentProfileId) {
-            markMessageAsRead(payload.new.id);
+          if (newMessage.receiver_profile_id === currentProfileId) {
+            markMessageAsRead(newMessage.id);
           }
         }
       )
@@ -339,11 +403,90 @@ export default function Chat() {
     }
   };
 
+  /**
+   * Decrypt a single message
+   * Returns the message with decrypted content, or error message if decryption fails
+   */
+  const decryptSingleMessage = async (message: Message): Promise<Message> => {
+    // Don't decrypt image or voice messages
+    if (message.content_type !== 'text') {
+      return message;
+    }
+
+    const isDevelopment = process.env.EXPO_PUBLIC_APP_ENV === 'development' || __DEV__;
+
+    // Check if message is encrypted (our format is "iv:ciphertext")
+    // If it doesn't contain ":", it's likely unencrypted (development mode only)
+    if (!message.encrypted_content.includes(':')) {
+      if (isDevelopment) {
+        console.log('⚠️ Unencrypted message detected (development mode)');
+        return message;
+      } else {
+        // In production, this shouldn't happen
+        console.error('❌ Unencrypted message in production!');
+        return { ...message, encrypted_content: '[Error: Unencrypted message]' };
+      }
+    }
+
+    try {
+      // Get current user's private key
+      const recipientPrivateKey = await getPrivateKey(user?.id || '');
+      if (!recipientPrivateKey) {
+        console.error('❌ Private key not found for decryption');
+        if (isDevelopment) {
+          return message;
+        } else {
+          return { ...message, encrypted_content: '[Unable to decrypt - keys not found]' };
+        }
+      }
+
+      // Get sender's public key
+      const senderId = message.sender_profile_id;
+      const { data: senderProfile, error: senderError } = await supabase
+        .from('profiles')
+        .select('encryption_public_key')
+        .eq('id', senderId)
+        .single();
+
+      if (senderError || !senderProfile?.encryption_public_key) {
+        console.error('❌ Sender public key not found');
+        if (isDevelopment) {
+          return message;
+        } else {
+          return { ...message, encrypted_content: '[Unable to decrypt - sender keys not found]' };
+        }
+      }
+
+      // Decrypt the message
+      const decryptedContent = await decryptMessage(
+        message.encrypted_content,
+        recipientPrivateKey,
+        senderProfile.encryption_public_key
+      );
+
+      return { ...message, encrypted_content: decryptedContent };
+    } catch (error) {
+      console.error('Error decrypting message:', error);
+      // In production, show error. In dev, return original (might be unencrypted)
+      if (isDevelopment) {
+        return message;
+      } else {
+        return { ...message, encrypted_content: '[Unable to decrypt message]' };
+      }
+    }
+  };
+
   const handleSendMessage = async () => {
     console.log('🚀 SEND BUTTON PRESSED!');
     console.log('New message:', newMessage);
     console.log('Current profile ID:', currentProfileId);
     console.log('Match profile:', matchProfile);
+
+    // Check if match is still active
+    if (matchStatus?.status !== 'active') {
+      Alert.alert('Cannot Send Message', 'This conversation has ended.');
+      return;
+    }
 
     if (!newMessage.trim() || !currentProfileId || !matchProfile || !user) {
       console.log('❌ VALIDATION FAILED - Missing required data');
@@ -355,6 +498,20 @@ export default function Chat() {
     setSending(true);
     Keyboard.dismiss();
 
+    // Validate message content before sending
+    const messageValidation = validateContent(messageContent, {
+      checkProfanity: true,
+      checkContactInfo: true,
+      fieldName: 'message',
+    });
+
+    if (!messageValidation.isValid) {
+      setNewMessage(messageContent); // Restore message to input
+      setSending(false);
+      Alert.alert('Inappropriate Content', messageValidation.error);
+      return;
+    }
+
     try {
       console.log('=== SENDING MESSAGE ===');
       console.log('Match ID:', matchId);
@@ -362,12 +519,68 @@ export default function Chat() {
       console.log('Receiver ID:', matchProfile.id);
       console.log('Content:', messageContent);
 
-      // Send message (plain text for MVP)
+      // Check if we're in development mode
+      const isDevelopment = process.env.EXPO_PUBLIC_APP_ENV === 'development' || __DEV__;
+
+      // Try to encrypt the message, but fallback to unencrypted only in development
+      let encryptedContent = null;
+      let shouldEncrypt = false;
+
+      // Get sender's private key for encryption
+      const senderPrivateKey = await getPrivateKey(user.id);
+
+      if (!senderPrivateKey) {
+        if (isDevelopment) {
+          console.warn('⚠️ Sender encryption keys not found. Sending unencrypted message (development mode).');
+        } else {
+          throw new Error('Encryption keys not set up. Please log out and log back in.');
+        }
+      }
+
+      if (senderPrivateKey) {
+        // Get recipient's public key for encryption
+        const { data: recipientProfile } = await supabase
+          .from('profiles')
+          .select('encryption_public_key')
+          .eq('id', matchProfile.id)
+          .single();
+
+        if (!recipientProfile?.encryption_public_key) {
+          if (isDevelopment) {
+            console.warn('⚠️ Recipient encryption keys not found. Sending unencrypted message (development mode).');
+          } else {
+            throw new Error('Cannot send message. Recipient has not set up encryption keys yet.');
+          }
+        }
+
+        if (recipientProfile?.encryption_public_key) {
+          shouldEncrypt = true;
+          console.log('🔐 Encrypting message...');
+          try {
+            encryptedContent = await encryptMessage(
+              messageContent,
+              senderPrivateKey,
+              recipientProfile.encryption_public_key
+            );
+            console.log('✅ Message encrypted successfully');
+          } catch (encryptError) {
+            console.error('❌ Encryption failed:', encryptError);
+            if (isDevelopment) {
+              console.warn('⚠️ Sending unencrypted (development mode)');
+              shouldEncrypt = false;
+            } else {
+              throw new Error('Failed to encrypt message. Please try again.');
+            }
+          }
+        }
+      }
+
+      // Send message (encrypted in production, may be unencrypted in development)
       const { data, error } = await supabase.from('messages').insert({
         match_id: matchId,
         sender_profile_id: currentProfileId,
         receiver_profile_id: matchProfile.id,
-        encrypted_content: messageContent,
+        encrypted_content: shouldEncrypt ? encryptedContent : messageContent,
         content_type: 'text',
       }).select();
 
@@ -381,9 +594,12 @@ export default function Chat() {
       console.log('Message sent successfully!');
 
       // Add message to UI immediately (optimistic update)
+      // Note: We already have the decrypted content (messageContent), so we don't need to decrypt
       if (data && data[0]) {
         console.log('Adding message to UI:', data[0]);
-        setMessages((prev) => [...prev, data[0] as Message]);
+        // Replace encrypted content with plain text for display (since we just sent it)
+        const displayMessage = { ...data[0], encrypted_content: messageContent } as Message;
+        setMessages((prev) => [...prev, displayMessage]);
       }
 
       // Send push notification to recipient (skip in Expo Go)
@@ -1034,13 +1250,86 @@ export default function Chat() {
     );
   };
 
-  if (loading || !matchProfile) {
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#8B5CF6" />
-        <Text style={{ marginTop: 16, color: '#6B7280' }}>
-          {!matchProfile ? 'Loading chat...' : 'Loading messages...'}
-        </Text>
+        <Text style={{ marginTop: 16, color: '#6B7280' }}>Loading chat...</Text>
+      </View>
+    );
+  }
+
+  // Show unmatched/blocked screen if match is not active
+  if (matchStatus && matchStatus.status !== 'active') {
+    const isUnmatched = matchStatus.status === 'unmatched';
+    const isBlocked = matchStatus.status === 'blocked';
+    const wasUnmatchedByMe = matchStatus.unmatched_by === currentProfileId;
+
+    return (
+      <View style={styles.container}>
+        {/* Header with back button */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <MaterialCommunityIcons name="chevron-left" size={28} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {isBlocked ? 'Blocked' : 'Conversation Ended'}
+          </Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        {/* Centered message */}
+        <View style={styles.unmatchedContainer}>
+          <MotiView
+            from={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'timing', duration: 300 }}
+          >
+            <View style={styles.unmatchedIconContainer}>
+              <MaterialCommunityIcons
+                name={isBlocked ? "cancel" : "heart-broken"}
+                size={64}
+                color="#9CA3AF"
+              />
+            </View>
+
+            <Text style={styles.unmatchedTitle}>
+              {isBlocked ? 'This user is blocked' : 'This conversation has ended'}
+            </Text>
+
+            <Text style={styles.unmatchedMessage}>
+              {isBlocked
+                ? 'You have blocked this user. You cannot send or receive messages.'
+                : isUnmatched && wasUnmatchedByMe
+                  ? 'You unmatched with this person. This conversation is now closed.'
+                  : 'This match has been unmatched. This conversation is now closed.'
+              }
+            </Text>
+
+            {isUnmatched && (
+              <Text style={styles.unmatchedSubtext}>
+                Messages are preserved for safety purposes but neither party can access them.
+              </Text>
+            )}
+
+            <TouchableOpacity
+              style={styles.unmatchedButton}
+              onPress={() => router.back()}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.unmatchedButtonText}>Back to Matches</Text>
+            </TouchableOpacity>
+          </MotiView>
+        </View>
+      </View>
+    );
+  }
+
+  if (!matchProfile) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#8B5CF6" />
+        <Text style={{ marginTop: 16, color: '#6B7280' }}>Loading...</Text>
       </View>
     );
   }
@@ -1049,7 +1338,7 @@ export default function Chat() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      keyboardVerticalOffset={0}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -1073,15 +1362,24 @@ export default function Chat() {
               )}
             </View>
             <View style={styles.encryptionRow}>
-              <MaterialCommunityIcons name="shield-check" size={12} color="rgba(255,255,255,0.7)" />
-              <Text style={styles.encryptionText}>Secure messaging</Text>
+              {/* Online status indicator */}
+              {isOnline(matchProfile?.last_active_at || null) && !matchProfile?.hide_last_active && (
+                <View style={styles.onlineDot} />
+              )}
+              <Text style={styles.encryptionText}>
+                {getLastActiveText(matchProfile?.last_active_at || null, matchProfile?.hide_last_active) || 'Secure messaging'}
+              </Text>
             </View>
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.headerRight} onPress={showActionMenu}>
-          <MaterialCommunityIcons name="dots-vertical" size={24} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <ModerationMenu
+            profileId={matchProfile?.id || ''}
+            profileName={matchProfile?.display_name || ''}
+            onBlock={() => router.back()}
+          />
+        </View>
       </View>
 
       {/* Premium Upsell Banner */}
@@ -1114,7 +1412,7 @@ export default function Chat() {
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.messagesList}
+        contentContainerStyle={[styles.messagesList, { paddingBottom: 100 }]}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
         showsVerticalScrollIndicator={false}
@@ -1165,7 +1463,7 @@ export default function Chat() {
       {/* Input Bar */}
       {isRecording ? (
         // Recording UI
-        <View style={styles.recordingContainer}>
+        <View style={[styles.recordingContainer, { paddingBottom: (insets.bottom || 4) + 8 }]}>
           <TouchableOpacity style={styles.cancelButton} onPress={handleVoiceRecordCancel}>
             <MaterialCommunityIcons name="close" size={24} color="#EF4444" />
           </TouchableOpacity>
@@ -1196,7 +1494,9 @@ export default function Chat() {
         </View>
       ) : (
         // Normal input UI
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, {
+          paddingBottom: (insets.bottom || 4) + 8
+        }]}>
           <TouchableOpacity style={styles.imageButton} onPress={handleImagePick} disabled={sending}>
             <MaterialCommunityIcons name="image-outline" size={24} color={sending ? "#D1D5DB" : "#8B5CF6"} />
           </TouchableOpacity>
@@ -1216,15 +1516,14 @@ export default function Chat() {
               placeholder="Type a message..."
               placeholderTextColor="#9CA3AF"
               value={newMessage}
-              onChangeText={(text) => {
-                console.log('TEXT INPUT CHANGED:', text);
-                setNewMessage(text);
-              }}
-              onFocus={() => console.log('TEXT INPUT FOCUSED')}
-              onBlur={() => console.log('TEXT INPUT BLURRED')}
+              onChangeText={setNewMessage}
               multiline
               maxLength={1000}
               editable={!sending}
+              underlineColorAndroid="transparent"
+              returnKeyType="default"
+              blurOnSubmit={false}
+              textAlignVertical="center"
             />
           </View>
 
@@ -1618,5 +1917,70 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  unmatchedContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    backgroundColor: '#F9FAFB',
+  },
+  unmatchedIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    alignSelf: 'center',
+  },
+  unmatchedTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F2937',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  unmatchedMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 16,
+  },
+  unmatchedSubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 32,
+    fontStyle: 'italic',
+  },
+  unmatchedButton: {
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignSelf: 'center',
+  },
+  unmatchedButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    flex: 1,
+    textAlign: 'center',
+  },
+  onlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 2,
   },
 });
