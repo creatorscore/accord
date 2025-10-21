@@ -59,8 +59,20 @@ export default function SwipeCard({
     setCurrentPhotoIndex(0);
   }, [profile.id]);
 
-  const primaryPhoto = profile.photos?.find(p => p.is_primary) || profile.photos?.[0];
   const allPhotos = profile.photos || [];
+  const currentPhoto = allPhotos[currentPhotoIndex] || allPhotos[0];
+
+  const handlePreviousPhoto = () => {
+    if (currentPhotoIndex > 0) {
+      setCurrentPhotoIndex(currentPhotoIndex - 1);
+    }
+  };
+
+  const handleNextPhoto = () => {
+    if (currentPhotoIndex < allPhotos.length - 1) {
+      setCurrentPhotoIndex(currentPhotoIndex + 1);
+    }
+  };
 
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
@@ -156,19 +168,35 @@ export default function SwipeCard({
         style={[cardStyle]}
         className="absolute w-full h-full px-4 pt-4"
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={onPress}
-          className="flex-1 bg-white rounded-3xl shadow-2xl overflow-hidden"
-        >
+        <View className="flex-1 bg-white rounded-3xl shadow-2xl overflow-hidden">
           {/* Main Photo */}
           <View className="relative flex-1">
             <Image
-              source={{ uri: primaryPhoto?.url || 'https://via.placeholder.com/400' }}
+              source={{ uri: currentPhoto?.url || 'https://via.placeholder.com/400' }}
               className="w-full h-full"
               resizeMode="cover"
               blurRadius={profile.photo_blur_enabled ? 30 : 0}
             />
+
+            {/* Photo Navigation Zones - Invisible tap areas */}
+            {allPhotos.length > 1 && (
+              <>
+                {/* Left tap zone - previous photo */}
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={handlePreviousPhoto}
+                  className="absolute left-0 top-0 bottom-0 w-1/3"
+                  style={{ zIndex: 10 }}
+                />
+                {/* Right tap zone - next photo */}
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={handleNextPhoto}
+                  className="absolute right-0 top-0 bottom-0 w-1/3"
+                  style={{ zIndex: 10 }}
+                />
+              </>
+            )}
 
             {/* Photo Progress Dots */}
             {allPhotos.length > 1 && (
@@ -208,11 +236,24 @@ export default function SwipeCard({
               </View>
             </Animated.View>
 
+            {/* Center tap zone - view full profile */}
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={onPress}
+              className="absolute left-1/3 right-1/3 top-0 bottom-0"
+              style={{ zIndex: 5 }}
+            />
+
             {/* Dark Overlay for text readability */}
             <View className="absolute bottom-0 left-0 right-0 h-64 bg-black/60" style={{ opacity: 0.8 }} />
 
-            {/* Profile Info */}
-            <View className="absolute bottom-0 left-0 right-0 p-6">
+            {/* Profile Info - tappable to view full profile */}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={onPress}
+              className="absolute bottom-0 left-0 right-0 p-6"
+              style={{ zIndex: 15 }}
+            >
               <View className="flex-row items-center gap-2 mb-2">
                 <Text className="text-white font-bold text-3xl">
                   {profile.display_name}, {profile.age}
@@ -249,9 +290,9 @@ export default function SwipeCard({
                   {profile.bio}
                 </Text>
               )}
-            </View>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </Animated.View>
     </GestureDetector>
   );

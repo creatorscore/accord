@@ -42,18 +42,17 @@ export function GradientButton({
         colors={gradientColors[variant]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        className={`rounded-full py-5 px-8 items-center ${
+        className={`rounded-full py-4 px-8 items-center justify-center ${
           disabled || loading ? 'opacity-50' : ''
         }`}
         style={{
           minHeight: 56,
-          justifyContent: 'center',
         }}
       >
         {loading ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text className="text-white font-bold text-lg tracking-wide">{title}</Text>
+          <Text className="text-white font-bold text-lg text-center">{title}</Text>
         )}
       </LinearGradient>
     </TouchableOpacity>

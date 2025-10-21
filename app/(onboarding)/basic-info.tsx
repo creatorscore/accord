@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -368,8 +368,17 @@ export default function BasicInfo() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-cream">
-      <View className="px-6 pt-16 pb-8">
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className="flex-1 bg-cream"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <ScrollView
+        className="flex-1"
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        <View className="px-6 pt-16 pb-8">
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
@@ -713,7 +722,8 @@ export default function BasicInfo() {
         <Text className="text-sm text-gray-600 text-center mt-6 px-4">
           🔒 Your privacy is our priority. Only matched users can see your full profile.
         </Text>
-      </View>
-    </ScrollView>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
