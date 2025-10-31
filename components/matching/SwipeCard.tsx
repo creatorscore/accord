@@ -10,7 +10,13 @@ import Animated, {
   runOnJS,
   interpolate,
   Extrapolate,
+  withRepeat,
+  withSequence,
+  withDelay,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.3;
@@ -50,6 +56,70 @@ export default function SwipeCard({
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [showNavigationHints, setShowNavigationHints] = useState(false);
+
+  // Animation values for tutorial
+  const tutorialOpacity = useSharedValue(0);
+  const leftArrowScale = useSharedValue(1);
+  const rightArrowScale = useSharedValue(1);
+
+  // Check if user has seen the tutorial
+  useEffect(() => {
+    checkTutorialStatus();
+  }, []);
+
+  const checkTutorialStatus = async () => {
+    try {
+      const hasSeenTutorial = await AsyncStorage.getItem('hasSeenPhotoTutorial');
+      if (!hasSeenTutorial) {
+        // Show tutorial after a brief delay
+        setTimeout(() => {
+          setShowTutorial(true);
+          tutorialOpacity.value = withTiming(1, { duration: 300 });
+
+          // Pulse arrows to draw attention
+          leftArrowScale.value = withRepeat(
+            withSequence(
+              withTiming(1.2, { duration: 600 }),
+              withTiming(1, { duration: 600 })
+            ),
+            3
+          );
+          rightArrowScale.value = withRepeat(
+            withSequence(
+              withTiming(1.2, { duration: 600 }),
+              withTiming(1, { duration: 600 })
+            ),
+            3
+          );
+
+          // Auto-dismiss tutorial after 5 seconds
+          setTimeout(() => {
+            dismissTutorial();
+          }, 5000);
+        }, 800);
+      }
+      // Always show navigation hints when there are multiple photos
+      if (profile.photos && profile.photos.length > 1) {
+        setShowNavigationHints(true);
+      }
+    } catch (error) {
+      console.error('Error checking tutorial status:', error);
+    }
+  };
+
+  const dismissTutorial = async () => {
+    tutorialOpacity.value = withTiming(0, { duration: 300 });
+    setTimeout(() => {
+      setShowTutorial(false);
+    }, 300);
+    try {
+      await AsyncStorage.setItem('hasSeenPhotoTutorial', 'true');
+    } catch (error) {
+      console.error('Error saving tutorial status:', error);
+    }
+  };
 
   // Reset animation values when profile changes
   useEffect(() => {
@@ -57,6 +127,7 @@ export default function SwipeCard({
     translateX.value = 0;
     translateY.value = 0;
     setCurrentPhotoIndex(0);
+    setShowNavigationHints(profile.photos && profile.photos.length > 1);
   }, [profile.id]);
 
   const allPhotos = profile.photos || [];
@@ -154,6 +225,18 @@ export default function SwipeCard({
     ),
   }));
 
+  const leftArrowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: leftArrowScale.value }],
+  }));
+
+  const rightArrowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: rightArrowScale.value }],
+  }));
+
+  const tutorialStyle = useAnimatedStyle(() => ({
+    opacity: tutorialOpacity.value,
+  }));
+
   const distance = profile.hide_distance
     ? 'Nearby'
     : profile.distance
@@ -178,23 +261,90 @@ export default function SwipeCard({
               blurRadius={profile.photo_blur_enabled ? 30 : 0}
             />
 
-            {/* Photo Navigation Zones - Invisible tap areas */}
+            {/* Photo Navigation Zones with Visible Hints */}
             {allPhotos.length > 1 && (
               <>
                 {/* Left tap zone - previous photo */}
                 <TouchableOpacity
-                  activeOpacity={1}
+                  activeOpacity={0.7}
                   onPress={handlePreviousPhoto}
                   className="absolute left-0 top-0 bottom-0 w-1/3"
                   style={{ zIndex: 10 }}
-                />
+                >
+                  {currentPhotoIndex > 0 && showNavigationHints && (
+                    <LinearGradient
+                      colors={['rgba(0,0,0,0.3)', 'transparent']}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 60,
+                        justifyContent: 'center',
+                        alignItems: 'flex-start',
+                        paddingLeft: 8,
+                      }}
+                    >
+                      <Animated.View style={leftArrowStyle}>
+                        <View
+                          style={{
+                            backgroundColor: 'rgba(255,255,255,0.9)',
+                            borderRadius: 20,
+                            width: 40,
+                            height: 40,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
+                        </View>
+                      </Animated.View>
+                    </LinearGradient>
+                  )}
+                </TouchableOpacity>
+
                 {/* Right tap zone - next photo */}
                 <TouchableOpacity
-                  activeOpacity={1}
+                  activeOpacity={0.7}
                   onPress={handleNextPhoto}
                   className="absolute right-0 top-0 bottom-0 w-1/3"
                   style={{ zIndex: 10 }}
-                />
+                >
+                  {currentPhotoIndex < allPhotos.length - 1 && showNavigationHints && (
+                    <LinearGradient
+                      colors={['transparent', 'rgba(0,0,0,0.3)']}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      style={{
+                        position: 'absolute',
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 60,
+                        justifyContent: 'center',
+                        alignItems: 'flex-end',
+                        paddingRight: 8,
+                      }}
+                    >
+                      <Animated.View style={rightArrowStyle}>
+                        <View
+                          style={{
+                            backgroundColor: 'rgba(255,255,255,0.9)',
+                            borderRadius: 20,
+                            width: 40,
+                            height: 40,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <MaterialCommunityIcons name="chevron-right" size={28} color="#111827" />
+                        </View>
+                      </Animated.View>
+                    </LinearGradient>
+                  )}
+                </TouchableOpacity>
               </>
             )}
 
@@ -209,6 +359,34 @@ export default function SwipeCard({
                     }`}
                   />
                 ))}
+              </View>
+            )}
+
+            {/* Compatibility Badge - Top Right Corner */}
+            {profile.compatibility_score && (
+              <View className="absolute top-6 right-6" style={{ zIndex: 20 }}>
+                <LinearGradient
+                  colors={['#8B5CF6', '#EC4899']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 20,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 8,
+                  }}
+                >
+                  <View className="flex-row items-center gap-1">
+                    <MaterialCommunityIcons name="heart" size={18} color="white" />
+                    <Text className="text-white font-black text-lg">
+                      {profile.compatibility_score}%
+                    </Text>
+                  </View>
+                </LinearGradient>
               </View>
             )}
 
@@ -285,12 +463,180 @@ export default function SwipeCard({
                 </View>
               )}
 
+              {/* Compact Review Display */}
+              <ProfileReviewDisplay
+                profileId={profile.id}
+                compact={true}
+              />
+
               {profile.bio && (
                 <Text className="text-white/90 text-base line-clamp-2">
                   {profile.bio}
                 </Text>
               )}
             </TouchableOpacity>
+
+            {/* First-Time Tutorial Overlay */}
+            {showTutorial && allPhotos.length > 1 && (
+              <Animated.View
+                style={[
+                  tutorialStyle,
+                  {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.85)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 100,
+                  },
+                ]}
+              >
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={dismissTutorial}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                  }}
+                />
+                <View
+                  style={{
+                    backgroundColor: 'white',
+                    borderRadius: 24,
+                    padding: 24,
+                    marginHorizontal: 32,
+                    maxWidth: 320,
+                    alignItems: 'center',
+                  }}
+                >
+                  <MaterialCommunityIcons name="gesture-tap" size={48} color="#8B5CF6" />
+                  <Text
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 'bold',
+                      color: '#111827',
+                      marginTop: 16,
+                      marginBottom: 8,
+                      textAlign: 'center',
+                    }}
+                  >
+                    Browse Photos
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      color: '#6B7280',
+                      textAlign: 'center',
+                      lineHeight: 22,
+                      marginBottom: 20,
+                    }}
+                  >
+                    Tap the left or right side of the photo to see more pictures. Tap the center to view their full profile.
+                  </Text>
+
+                  {/* Visual Guide */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      gap: 12,
+                      marginBottom: 20,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <View style={{ alignItems: 'center' }}>
+                      <View
+                        style={{
+                          backgroundColor: '#F3F4F6',
+                          borderRadius: 12,
+                          padding: 12,
+                        }}
+                      >
+                        <MaterialCommunityIcons name="chevron-left" size={24} color="#8B5CF6" />
+                      </View>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: '#9CA3AF',
+                          marginTop: 4,
+                        }}
+                      >
+                        Previous
+                      </Text>
+                    </View>
+
+                    <View style={{ alignItems: 'center' }}>
+                      <View
+                        style={{
+                          backgroundColor: '#F3F4F6',
+                          borderRadius: 12,
+                          padding: 12,
+                        }}
+                      >
+                        <MaterialCommunityIcons name="account" size={24} color="#8B5CF6" />
+                      </View>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: '#9CA3AF',
+                          marginTop: 4,
+                        }}
+                      >
+                        Profile
+                      </Text>
+                    </View>
+
+                    <View style={{ alignItems: 'center' }}>
+                      <View
+                        style={{
+                          backgroundColor: '#F3F4F6',
+                          borderRadius: 12,
+                          padding: 12,
+                        }}
+                      >
+                        <MaterialCommunityIcons name="chevron-right" size={24} color="#8B5CF6" />
+                      </View>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: '#9CA3AF',
+                          marginTop: 4,
+                        }}
+                      >
+                        Next
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={dismissTutorial}
+                    style={{
+                      backgroundColor: '#8B5CF6',
+                      paddingVertical: 14,
+                      paddingHorizontal: 32,
+                      borderRadius: 16,
+                      width: '100%',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: 'white',
+                        fontSize: 16,
+                        fontWeight: '600',
+                        textAlign: 'center',
+                      }}
+                    >
+                      Got it!
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
+            )}
           </View>
         </View>
       </Animated.View>

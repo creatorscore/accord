@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.privyreviews.accord",
-      "buildNumber": "8",
+      "buildNumber": "17",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Accord needs access to your photos to upload profile pictures.",
         "NSCameraUsageDescription": "Accord needs access to your camera to take profile photos.",
@@ -46,6 +46,7 @@
         "backgroundColor": "#8B5CF6"
       },
       "package": "com.privyreviews.accord",
+      "versionCode": 17,
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.CAMERA",
@@ -54,7 +55,9 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json",
+      "useNextNotificationsApi": true
     },
     "web": {
       "bundler": "metro"
@@ -95,7 +98,7 @@
       "googleIosClientId": "609854216709-81grqvlc66iahvd56749ot511p9agh09.apps.googleusercontent.com",
       "googleWebClientId": "609854216709-ff54d58803kcbvpudv7aet8vo1bpq07g.apps.googleusercontent.com",
       "revenueCatAppleApiKey": "appl_enRnexAwhhNNHTGSZFUKzQBQefF",
-      "revenueCatGoogleApiKey": "YOUR_REVENUECAT_GOOGLE_API_KEY"
+      "revenueCatGoogleApiKey": "goog_mVpASFlCoMcDalaCseIhNnrnGto"
     },
     "owner": "vfranz"
   }

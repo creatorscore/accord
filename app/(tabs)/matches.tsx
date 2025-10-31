@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
@@ -34,6 +35,7 @@ interface Match {
 }
 
 export default function Matches() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { isPremium } = useSubscription();
   const insets = useSafeAreaInsets();
@@ -93,9 +95,33 @@ export default function Matches() {
 
       if (matchesError) throw matchesError;
 
+      // SAFETY: Filter out blocked users (bidirectional)
+      const { data: blockedByMe } = await supabase
+        .from('blocks')
+        .select('blocked_profile_id')
+        .eq('blocker_profile_id', currentProfileId);
+
+      const { data: blockedMe } = await supabase
+        .from('blocks')
+        .select('blocker_profile_id')
+        .eq('blocked_profile_id', currentProfileId);
+
+      const blockedProfileIds = new Set([
+        ...(blockedByMe?.map(b => b.blocked_profile_id) || []),
+        ...(blockedMe?.map(b => b.blocker_profile_id) || [])
+      ]);
+
+      // Filter out matches with blocked users
+      const filteredMatches = (matchesData || []).filter(match => {
+        const otherProfileId = match.profile1_id === currentProfileId
+          ? match.profile2_id
+          : match.profile1_id;
+        return !blockedProfileIds.has(otherProfileId);
+      });
+
       // For each match, get the other person's profile and last message
       const matchesWithProfiles = await Promise.all(
-        (matchesData || []).map(async (match) => {
+        filteredMatches.map(async (match) => {
           const otherProfileId = match.profile1_id === currentProfileId
             ? match.profile2_id
             : match.profile1_id;
@@ -179,8 +205,26 @@ export default function Matches() {
         matchesData?.flatMap(m => [m.profile1_id, m.profile2_id]) || []
       );
 
+      // SAFETY: Filter out blocked users from like count
+      const { data: blockedByMe } = await supabase
+        .from('blocks')
+        .select('blocked_profile_id')
+        .eq('blocker_profile_id', currentProfileId);
+
+      const { data: blockedMe } = await supabase
+        .from('blocks')
+        .select('blocker_profile_id')
+        .eq('blocked_profile_id', currentProfileId);
+
+      const blockedProfileIds = new Set([
+        ...(blockedByMe?.map(b => b.blocked_profile_id) || []),
+        ...(blockedMe?.map(b => b.blocker_profile_id) || [])
+      ]);
+
       const unmatchedLikesCount = likesData?.filter(
-        like => !matchedProfileIds.has(like.liker_profile_id)
+        like =>
+          !matchedProfileIds.has(like.liker_profile_id) &&
+          !blockedProfileIds.has(like.liker_profile_id)
       ).length || 0;
 
       setLikesCount(unmatchedLikesCount);
@@ -280,15 +324,15 @@ export default function Matches() {
 
   const handleUnmatch = (match: Match) => {
     Alert.alert(
-      'Unmatch',
-      `Are you sure you want to unmatch with ${match.profile.display_name}? This cannot be undone.`,
+      t('matches.unmatchDialog.title'),
+      t('matches.unmatchDialog.message', { name: match.profile.display_name }),
       [
         {
-          text: 'Cancel',
+          text: t('common.cancel'),
           style: 'cancel',
         },
         {
-          text: 'Unmatch',
+          text: t('matches.unmatchDialog.confirm'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -320,10 +364,10 @@ export default function Matches() {
               setMatches((prev) => prev.filter((m) => m.id !== match.id));
 
               // Show success message
-              Alert.alert('Unmatched', `You have unmatched with ${match.profile.display_name}`);
+              Alert.alert(t('matches.unmatchDialog.success'), t('matches.unmatchDialog.successMessage', { name: match.profile.display_name }));
             } catch (error: any) {
               console.error('Error unmatching:', error);
-              Alert.alert('Error', 'Failed to unmatch. Please try again.');
+              Alert.alert(t('common.error'), t('matches.unmatchDialog.error'));
             }
           },
         },
@@ -333,15 +377,15 @@ export default function Matches() {
 
   const handleBlock = (match: Match) => {
     Alert.alert(
-      'Block User',
-      `Are you sure you want to block ${match.profile.display_name}? They will no longer be able to see your profile or contact you.`,
+      t('matches.blockDialog.title'),
+      t('matches.blockDialog.message', { name: match.profile.display_name }),
       [
         {
-          text: 'Cancel',
+          text: t('common.cancel'),
           style: 'cancel',
         },
         {
-          text: 'Block',
+          text: t('matches.blockDialog.confirm'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -378,10 +422,10 @@ export default function Matches() {
               // Remove from local state
               setMatches((prev) => prev.filter((m) => m.id !== match.id));
 
-              Alert.alert('Blocked', `You have blocked ${match.profile.display_name}`);
+              Alert.alert(t('matches.blockDialog.success'), t('matches.blockDialog.successMessage', { name: match.profile.display_name }));
             } catch (error: any) {
               console.error('Error blocking user:', error);
-              Alert.alert('Error', 'Failed to block user. Please try again.');
+              Alert.alert(t('common.error'), t('matches.blockDialog.error'));
             }
           },
         },
@@ -391,18 +435,18 @@ export default function Matches() {
 
   const handleReport = (match: Match) => {
     Alert.prompt(
-      'Report User',
-      `Why are you reporting ${match.profile.display_name}?`,
+      t('matches.reportDialog.title'),
+      t('matches.reportDialog.message', { name: match.profile.display_name }),
       [
         {
-          text: 'Cancel',
+          text: t('common.cancel'),
           style: 'cancel',
         },
         {
-          text: 'Submit',
+          text: t('matches.reportDialog.submit'),
           onPress: async (reason) => {
             if (!reason || reason.trim() === '') {
-              Alert.alert('Error', 'Please provide a reason for reporting.');
+              Alert.alert(t('common.error'), t('matches.reportDialog.errorEmpty'));
               return;
             }
 
@@ -431,12 +475,12 @@ export default function Matches() {
               if (error) throw error;
 
               Alert.alert(
-                'Report Submitted',
-                'Thank you for helping keep Accord safe. Our team will review this report.'
+                t('matches.reportDialog.success'),
+                t('matches.reportDialog.successMessage')
               );
             } catch (error: any) {
               console.error('Error reporting user:', error);
-              Alert.alert('Error', 'Failed to submit report. Please try again.');
+              Alert.alert(t('common.error'), t('matches.reportDialog.error'));
             }
           },
         },
@@ -482,11 +526,11 @@ export default function Matches() {
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-    if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-    return `${Math.floor(seconds / 604800)}w ago`;
+    if (seconds < 60) return t('matches.timeAgo.justNow');
+    if (seconds < 3600) return t('matches.timeAgo.minutesAgo', { count: Math.floor(seconds / 60) });
+    if (seconds < 86400) return t('matches.timeAgo.hoursAgo', { count: Math.floor(seconds / 3600) });
+    if (seconds < 604800) return t('matches.timeAgo.daysAgo', { count: Math.floor(seconds / 86400) });
+    return t('matches.timeAgo.weeksAgo', { count: Math.floor(seconds / 604800) });
   };
 
   const renderLikesCard = () => {
@@ -516,19 +560,22 @@ export default function Matches() {
 
             {/* Content */}
             <View style={styles.likesContent}>
-              <Text style={styles.likesTitle}>See Who Likes You</Text>
+              <Text style={styles.likesTitle}>{t('matches.seeWhoLikesYou')}</Text>
               {isPremium ? (
                 <Text style={styles.likesSubtitle}>
                   {likesCount === 0
-                    ? 'No new likes yet'
-                    : `${likesCount} ${likesCount === 1 ? 'person has' : 'people have'} liked you`}
+                    ? t('matches.noNewLikes')
+                    : t('matches.likesCount', {
+                        count: likesCount,
+                        likes: likesCount === 1 ? t('matches.personHas') : t('matches.peopleHave')
+                      })}
                 </Text>
               ) : (
                 <View style={styles.likesBlurContainer}>
                   <BlurView intensity={20} tint="dark" style={styles.likesBlur}>
                     <MaterialCommunityIcons name="lock" size={16} color="white" />
                     <Text style={styles.likesBlurText}>
-                      {likesCount > 0 ? `${likesCount}+ likes` : 'Upgrade to see'}
+                      {likesCount > 0 ? t('matches.upgradeTo', { count: likesCount }) : t('matches.upgradeToSee')}
                     </Text>
                   </BlurView>
                   <MaterialCommunityIcons name="crown" size={16} color="#FFD700" style={styles.premiumIcon} />
@@ -599,7 +646,7 @@ export default function Matches() {
                   style={styles.compatibilityBadge}
                 >
                   <MaterialCommunityIcons name="heart" size={12} color="white" />
-                  <Text style={styles.compatibilityText}>{item.compatibility_score}% Match</Text>
+                  <Text style={styles.compatibilityText}>{t('matches.matchPercentage', { score: item.compatibility_score })}</Text>
                 </LinearGradient>
               </View>
             )}
@@ -615,13 +662,13 @@ export default function Matches() {
                 style={[styles.lastMessage, hasUnread && styles.lastMessageUnread]}
                 numberOfLines={1}
               >
-                {item.last_message.sender_profile_id === currentProfileId ? 'You: ' : ''}
+                {item.last_message.sender_profile_id === currentProfileId ? t('matches.youLabel') : ''}
                 {item.last_message.encrypted_content}
               </Text>
             ) : (
               <View style={styles.ctaRow}>
                 <MaterialCommunityIcons name="message-outline" size={14} color="#8B5CF6" />
-                <Text style={styles.ctaText}>Say hi! 👋</Text>
+                <Text style={styles.ctaText}>{t('matches.sayHi')}</Text>
               </View>
             )}
           </View>
@@ -639,13 +686,13 @@ export default function Matches() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Matches</Text>
-          <Text style={styles.headerSubtitle}>Your connections</Text>
+          <Text style={styles.headerTitle}>{t('matches.title')}</Text>
+          <Text style={styles.headerSubtitle}>{t('matches.subtitle')}</Text>
         </View>
 
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8B5CF6" />
-          <Text style={styles.loadingText}>Loading your matches...</Text>
+          <Text style={styles.loadingText}>{t('matches.loadingMatches')}</Text>
         </View>
       </View>
     );
@@ -657,8 +704,8 @@ export default function Matches() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Matches</Text>
-          <Text style={styles.headerSubtitle}>Your connections</Text>
+          <Text style={styles.headerTitle}>{t('matches.title')}</Text>
+          <Text style={styles.headerSubtitle}>{t('matches.subtitle')}</Text>
         </View>
 
         <View style={styles.emptyContainer}>
@@ -675,10 +722,9 @@ export default function Matches() {
                 <MaterialCommunityIcons name="heart-outline" size={48} color="white" />
               </LinearGradient>
             </View>
-            <Text style={styles.emptyTitle}>No matches yet</Text>
+            <Text style={styles.emptyTitle}>{t('matches.noMatchesYet')}</Text>
             <Text style={styles.emptyText}>
-              Keep swiping to find your perfect match!{'\n'}
-              Your connections will appear here.
+              {t('matches.noMatchesText')}
             </Text>
             <TouchableOpacity
               style={styles.emptyButton}
@@ -689,7 +735,7 @@ export default function Matches() {
                 style={styles.emptyButtonGradient}
               >
                 <MaterialCommunityIcons name="cards-heart" size={20} color="white" />
-                <Text style={styles.emptyButtonText}>Start Swiping</Text>
+                <Text style={styles.emptyButtonText}>{t('matches.startSwiping')}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </MotiView>
@@ -704,8 +750,12 @@ export default function Matches() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>Matches</Text>
-          <Text style={styles.headerSubtitle}>{matches.length} {matches.length === 1 ? 'connection' : 'connections'}</Text>
+          <Text style={styles.headerTitle}>{t('matches.title')}</Text>
+          <Text style={styles.headerSubtitle}>
+            {matches.length === 1
+              ? t('matches.connection', { count: matches.length })
+              : t('matches.connections', { count: matches.length })}
+          </Text>
         </View>
       </View>
 
@@ -756,7 +806,7 @@ export default function Matches() {
                 onPress={() => handleActionSelect('view_profile')}
               >
                 <MaterialCommunityIcons name="account" size={24} color="#6B7280" />
-                <Text style={styles.actionText}>View Profile</Text>
+                <Text style={styles.actionText}>{t('matches.actions.viewProfile')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
               </TouchableOpacity>
 
@@ -765,7 +815,7 @@ export default function Matches() {
                 onPress={() => handleActionSelect('send_message')}
               >
                 <MaterialCommunityIcons name="message-text" size={24} color="#6B7280" />
-                <Text style={styles.actionText}>Send Message</Text>
+                <Text style={styles.actionText}>{t('matches.actions.sendMessage')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
               </TouchableOpacity>
 
@@ -774,7 +824,7 @@ export default function Matches() {
                 onPress={() => handleActionSelect('report')}
               >
                 <MaterialCommunityIcons name="flag" size={24} color="#6B7280" />
-                <Text style={styles.actionText}>Report</Text>
+                <Text style={styles.actionText}>{t('matches.actions.report')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
               </TouchableOpacity>
 
@@ -783,7 +833,7 @@ export default function Matches() {
                 onPress={() => handleActionSelect('block')}
               >
                 <MaterialCommunityIcons name="block-helper" size={24} color="#EF4444" />
-                <Text style={[styles.actionText, styles.actionTextDanger]}>Block</Text>
+                <Text style={[styles.actionText, styles.actionTextDanger]}>{t('matches.actions.block')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
               </TouchableOpacity>
 
@@ -792,7 +842,7 @@ export default function Matches() {
                 onPress={() => handleActionSelect('unmatch')}
               >
                 <MaterialCommunityIcons name="heart-broken" size={24} color="#EF4444" />
-                <Text style={[styles.actionText, styles.actionTextDanger]}>Unmatch</Text>
+                <Text style={[styles.actionText, styles.actionTextDanger]}>{t('matches.actions.unmatch')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
               </TouchableOpacity>
             </View>
@@ -806,7 +856,7 @@ export default function Matches() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FAF7F0',
   },
   header: {
     backgroundColor: '#8B5CF6',

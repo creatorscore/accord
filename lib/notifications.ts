@@ -92,17 +92,11 @@ export async function registerForPushNotifications(): Promise<string | null> {
     // Request permissions first
     const hasPermission = await requestNotificationPermissions();
     if (!hasPermission) {
+      console.log('Push notification permissions not granted');
       return null;
     }
 
-    // Get the push token
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: '71ca414e-ff65-488b-97f6-9150455475a0',
-    });
-
-    const token = tokenData.data;
-
-    // Configure notification channel for Android
+    // Configure notification channel for Android FIRST
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Default',
@@ -112,9 +106,19 @@ export async function registerForPushNotifications(): Promise<string | null> {
       });
     }
 
+    // Get the push token (FCM will be used automatically if google-services.json exists)
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId: '71ca414e-ff65-488b-97f6-9150455475a0',
+    });
+
+    const token = tokenData.data;
+    console.log('Push token registered successfully');
+
     return token;
-  } catch (error) {
-    console.error('Error getting push token:', error);
+  } catch (error: any) {
+    // Log the error but don't crash the app
+    console.warn('Push notifications setup failed (this is OK for development):', error?.message || error);
+    // Return null so the app can continue without push notifications
     return null;
   }
 }
@@ -300,7 +304,9 @@ export async function sendMessageNotification(
 }
 
 /**
- * Send notification when someone likes your profile (Premium feature)
+ * Send notification when someone likes your profile
+ * Free users get FOMO notification to drive upgrades
+ * Premium users get full details
  */
 export async function sendLikeNotification(
   recipientProfileId: string,
@@ -308,7 +314,7 @@ export async function sendLikeNotification(
   likerProfileId: string
 ): Promise<void> {
   try {
-    // Check if recipient is premium (only premium users get like notifications)
+    // Get recipient's profile and subscription status
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('push_token, push_enabled, is_premium, is_platinum')
@@ -319,21 +325,35 @@ export async function sendLikeNotification(
       return;
     }
 
-    // Only send to premium/platinum users
-    if (!profile.is_premium && !profile.is_platinum) {
-      console.log('User is not premium - skipping like notification');
-      return;
+    const isPremium = profile.is_premium || profile.is_platinum;
+
+    // Different messaging based on subscription status
+    let title: string;
+    let body: string;
+    let screen: string;
+
+    if (isPremium) {
+      // Premium users: Show who liked them
+      title = `${likerName} likes you! 💜`;
+      body = 'See who liked you and match instantly.';
+      screen = 'likes';
+    } else {
+      // Free users: FOMO message to drive upgrades
+      title = 'Someone likes you! 💜';
+      body = 'Upgrade to Premium to see who liked you and match instantly.';
+      screen = 'likes'; // Will show paywall when they tap
     }
 
     // Send notification
     await sendPushNotification(
       profile.push_token,
-      `${likerName} likes you! 💜`,
-      'See who liked you and match instantly.',
+      title,
+      body,
       {
         type: 'new_like',
-        likerProfileId,
-        screen: 'likes',
+        likerProfileId: isPremium ? likerProfileId : undefined, // Only send ID to premium users
+        screen,
+        isPremium,
       }
     );
 
@@ -341,9 +361,13 @@ export async function sendLikeNotification(
     await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_like',
-      title: `${likerName} likes you! 💜`,
-      body: 'See who liked you and match instantly.',
-      data: { likerProfileId, type: 'new_like' },
+      title,
+      body,
+      data: {
+        likerProfileId: isPremium ? likerProfileId : undefined,
+        type: 'new_like',
+        isPremium,
+      },
     });
   } catch (error) {
     console.error('Error sending like notification:', error);

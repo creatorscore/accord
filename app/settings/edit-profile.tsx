@@ -215,6 +215,28 @@ const HOUSING_PREFERENCES = [
   'Other',
 ];
 
+const SMOKING_OPTIONS = [
+  { value: 'never', label: 'Never' },
+  { value: 'socially', label: 'Socially' },
+  { value: 'regularly', label: 'Regularly' },
+  { value: 'trying_to_quit', label: 'Trying to Quit' },
+];
+
+const DRINKING_OPTIONS = [
+  { value: 'never', label: 'Never' },
+  { value: 'socially', label: 'Socially' },
+  { value: 'regularly', label: 'Regularly' },
+  { value: 'prefer_not_to_say', label: 'Prefer Not to Say' },
+];
+
+const PETS_OPTIONS = [
+  { value: 'love_them', label: 'Love Them' },
+  { value: 'like_them', label: 'Like Them' },
+  { value: 'indifferent', label: 'Indifferent' },
+  { value: 'allergic', label: 'Allergic' },
+  { value: 'dont_like', label: "Don't Like" },
+];
+
 const PROMPT_OPTIONS = [
   "My ideal lavender marriage looks like...",
   "I'm looking for someone who...",
@@ -299,10 +321,10 @@ export default function EditProfile() {
   const [education, setEducation] = useState('');
   const [locationCity, setLocationCity] = useState('');
   const [locationState, setLocationState] = useState('');
-  const [gender, setGender] = useState('');
+  const [gender, setGender] = useState<string[]>([]);
   const [pronouns, setPronouns] = useState('');
-  const [ethnicity, setEthnicity] = useState('');
-  const [sexualOrientation, setSexualOrientation] = useState('');
+  const [ethnicity, setEthnicity] = useState<string[]>([]);
+  const [sexualOrientation, setSexualOrientation] = useState<string[]>([]);
   const [heightFeet, setHeightFeet] = useState('');
   const [heightInches, setHeightInches] = useState('');
   const [zodiac, setZodiac] = useState('');
@@ -313,6 +335,8 @@ export default function EditProfile() {
     { prompt: '', answer: '' },
     { prompt: '', answer: '' },
   ]);
+  const [showCustomPromptInput, setShowCustomPromptInput] = useState<number | null>(null);
+  const [customPromptText, setCustomPromptText] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
   const [newInterest, setNewInterest] = useState('');
   const [hobbies, setHobbies] = useState<string[]>([]);
@@ -332,9 +356,12 @@ export default function EditProfile() {
   const [primaryReason, setPrimaryReason] = useState('');
   const [relationshipType, setRelationshipType] = useState('');
   const [wantsChildren, setWantsChildren] = useState<boolean | null>(null);
-  const [childrenArrangement, setChildrenArrangement] = useState('');
-  const [financialArrangement, setFinancialArrangement] = useState('');
-  const [housingPreference, setHousingPreference] = useState('');
+  const [childrenArrangement, setChildrenArrangement] = useState<string[]>([]);
+  const [financialArrangement, setFinancialArrangement] = useState<string[]>([]);
+  const [housingPreference, setHousingPreference] = useState<string[]>([]);
+  const [smoking, setSmoking] = useState('');
+  const [drinking, setDrinking] = useState('');
+  const [pets, setPets] = useState('');
   const [ageMin, setAgeMin] = useState('25');
   const [ageMax, setAgeMax] = useState('45');
   const [maxDistance, setMaxDistance] = useState('50');
@@ -407,10 +434,10 @@ export default function EditProfile() {
         setEducation(profileData.education || '');
         setLocationCity(profileData.location_city || '');
         setLocationState(profileData.location_state || '');
-        setGender(profileData.gender || '');
+        setGender(Array.isArray(profileData.gender) ? profileData.gender : (profileData.gender ? [profileData.gender] : []));
         setPronouns(profileData.pronouns || '');
-        setEthnicity(profileData.ethnicity || '');
-        setSexualOrientation(profileData.sexual_orientation || '');
+        setEthnicity(Array.isArray(profileData.ethnicity) ? profileData.ethnicity : (profileData.ethnicity ? [profileData.ethnicity] : []));
+        setSexualOrientation(Array.isArray(profileData.sexual_orientation) ? profileData.sexual_orientation : (profileData.sexual_orientation ? [profileData.sexual_orientation] : []));
 
         // Convert height_inches to feet and inches
         if (profileData.height_inches) {
@@ -488,13 +515,20 @@ export default function EditProfile() {
             setPrimaryReason(prefsData.primary_reason || '');
             setRelationshipType(prefsData.relationship_type || '');
             setWantsChildren(prefsData.wants_children);
-            setChildrenArrangement(prefsData.children_arrangement || '');
-            setFinancialArrangement(prefsData.financial_arrangement || '');
-            setHousingPreference(prefsData.housing_preference || '');
+            setChildrenArrangement(Array.isArray(prefsData.children_arrangement) ? prefsData.children_arrangement : (prefsData.children_arrangement ? [prefsData.children_arrangement] : []));
+            setFinancialArrangement(Array.isArray(prefsData.financial_arrangement) ? prefsData.financial_arrangement : (prefsData.financial_arrangement ? [prefsData.financial_arrangement] : []));
+            setHousingPreference(Array.isArray(prefsData.housing_preference) ? prefsData.housing_preference : (prefsData.housing_preference ? [prefsData.housing_preference] : []));
             setAgeMin(prefsData.age_min?.toString() || '25');
             setAgeMax(prefsData.age_max?.toString() || '45');
             setMaxDistance(prefsData.max_distance_miles?.toString() || '50');
             setWillingToRelocate(prefsData.willing_to_relocate || false);
+
+            // Load lifestyle preferences
+            if (prefsData.lifestyle_preferences) {
+              setSmoking(prefsData.lifestyle_preferences.smoking || '');
+              setDrinking(prefsData.lifestyle_preferences.drinking || '');
+              setPets(prefsData.lifestyle_preferences.pets || '');
+            }
 
             if (prefsData.gender_preference && Array.isArray(prefsData.gender_preference)) {
               setGenderPreference(prefsData.gender_preference);
@@ -604,6 +638,19 @@ export default function EditProfile() {
     const updated = [...promptAnswers];
     updated[index] = { ...updated[index], [field]: value };
     setPromptAnswers(updated);
+  };
+
+  const saveCustomPrompt = () => {
+    if (showCustomPromptInput === null || !customPromptText.trim()) return;
+
+    if (customPromptText.trim().length < 10) {
+      Alert.alert('Error', 'Custom prompt must be at least 10 characters long.');
+      return;
+    }
+
+    updatePromptAnswer(showCustomPromptInput, 'prompt', customPromptText.trim());
+    setCustomPromptText('');
+    setShowCustomPromptInput(null);
   };
 
   const addInterest = () => {
@@ -921,14 +968,21 @@ export default function EditProfile() {
 
       // Save preferences
       if (finalProfileId) {
+        // Build lifestyle preferences object
+        const lifestylePreferences: any = {};
+        if (smoking) lifestylePreferences.smoking = smoking;
+        if (drinking) lifestylePreferences.drinking = drinking;
+        if (pets) lifestylePreferences.pets = pets;
+
         const preferencesPayload = {
           profile_id: finalProfileId,
           primary_reason: primaryReason || null,
           relationship_type: relationshipType || null,
           wants_children: wantsChildren,
-          children_arrangement: childrenArrangement || null,
-          financial_arrangement: financialArrangement || null,
-          housing_preference: housingPreference || null,
+          children_arrangement: childrenArrangement.length > 0 ? childrenArrangement : null,
+          financial_arrangement: financialArrangement.length > 0 ? financialArrangement : null,
+          housing_preference: housingPreference.length > 0 ? housingPreference : null,
+          lifestyle_preferences: Object.keys(lifestylePreferences).length > 0 ? lifestylePreferences : null,
           age_min: parseInt(ageMin) || 25,
           age_max: parseInt(ageMax) || 45,
           max_distance_miles: parseInt(maxDistance) || 50,
@@ -1232,23 +1286,35 @@ export default function EditProfile() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Gender</Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {GENDERS.map((g) => (
                 <TouchableOpacity
                   key={g}
                   style={[
                     styles.interestChip,
-                    gender === g && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    gender.includes(g) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
                   ]}
-                  onPress={() => setGender(g)}
+                  onPress={() => {
+                    if (gender.includes(g)) {
+                      setGender(gender.filter(item => item !== g));
+                    } else {
+                      setGender([...gender, g]);
+                    }
+                  }}
                 >
                   <Text style={[
                     styles.interestText,
-                    gender === g && { color: '#FFFFFF' }
+                    gender.includes(g) && { color: '#FFFFFF' }
                   ]}>{g}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+            {gender.length > 0 && (
+              <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+                Selected: {gender.join(', ')}
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -1274,45 +1340,68 @@ export default function EditProfile() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Ethnicity (Optional)</Text>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>This helps find cultural connections. Will display on your profile.</Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply. This helps find cultural connections.</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {ETHNICITIES.map((e) => (
                 <TouchableOpacity
                   key={e}
                   style={[
                     styles.interestChip,
-                    ethnicity === e && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    ethnicity.includes(e) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
                   ]}
-                  onPress={() => setEthnicity(e)}
+                  onPress={() => {
+                    if (ethnicity.includes(e)) {
+                      setEthnicity(ethnicity.filter(item => item !== e));
+                    } else {
+                      setEthnicity([...ethnicity, e]);
+                    }
+                  }}
                 >
                   <Text style={[
                     styles.interestText,
-                    ethnicity === e && { color: '#FFFFFF' }
+                    ethnicity.includes(e) && { color: '#FFFFFF' }
                   ]}>{e}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+            {ethnicity.length > 0 && (
+              <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+                Selected: {ethnicity.join(', ')}
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Sexual Orientation</Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {ORIENTATIONS.map((o) => (
                 <TouchableOpacity
                   key={o}
                   style={[
                     styles.interestChip,
-                    sexualOrientation === o && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    sexualOrientation.includes(o) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
                   ]}
-                  onPress={() => setSexualOrientation(o)}
+                  onPress={() => {
+                    if (sexualOrientation.includes(o)) {
+                      setSexualOrientation(sexualOrientation.filter(item => item !== o));
+                    } else {
+                      setSexualOrientation([...sexualOrientation, o]);
+                    }
+                  }}
                 >
                   <Text style={[
                     styles.interestText,
-                    sexualOrientation === o && { color: '#FFFFFF' }
+                    sexualOrientation.includes(o) && { color: '#FFFFFF' }
                   ]}>{o}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+            {sexualOrientation.length > 0 && (
+              <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+                Selected: {sexualOrientation.join(', ')}
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -1661,10 +1750,30 @@ export default function EditProfile() {
                   Alert.alert(
                     'Select a Prompt',
                     '',
-                    PROMPT_OPTIONS.map(prompt => ({
-                      text: prompt,
-                      onPress: () => updatePromptAnswer(index, 'prompt', prompt)
-                    }))
+                    [
+                      {
+                        text: '✨ Write your own prompt',
+                        onPress: () => setShowCustomPromptInput(index),
+                        style: 'default'
+                      },
+                      ...PROMPT_OPTIONS.map(prompt => ({
+                        text: prompt,
+                        onPress: () => updatePromptAnswer(index, 'prompt', prompt)
+                      })),
+                      ...(pa.prompt ? [{
+                        text: '🗑️ Clear this prompt',
+                        onPress: () => {
+                          const updated = [...promptAnswers];
+                          updated[index] = { prompt: '', answer: '' };
+                          setPromptAnswers(updated);
+                        },
+                        style: 'destructive' as const
+                      }] : []),
+                      {
+                        text: 'Cancel',
+                        style: 'cancel'
+                      }
+                    ]
                   );
                 }}
               >
@@ -1688,6 +1797,75 @@ export default function EditProfile() {
               )}
             </View>
           ))}
+        </View>
+
+        {/* Lifestyle Preferences Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Lifestyle Preferences</Text>
+          <Text style={styles.sectionSubtitle}>Your lifestyle choices and preferences</Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Smoking (optional)</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {SMOKING_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.interestChip,
+                    smoking === option.value && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                  ]}
+                  onPress={() => setSmoking(option.value)}
+                >
+                  <Text style={[
+                    styles.interestText,
+                    smoking === option.value && { color: '#FFFFFF' }
+                  ]}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Drinking (optional)</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {DRINKING_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.interestChip,
+                    drinking === option.value && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                  ]}
+                  onPress={() => setDrinking(option.value)}
+                >
+                  <Text style={[
+                    styles.interestText,
+                    drinking === option.value && { color: '#FFFFFF' }
+                  ]}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Pets (optional)</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {PETS_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.interestChip,
+                    pets === option.value && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                  ]}
+                  onPress={() => setPets(option.value)}
+                >
+                  <Text style={[
+                    styles.interestText,
+                    pets === option.value && { color: '#FFFFFF' }
+                  ]}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </View>
 
         {/* Partnership Preferences Section */}
@@ -1764,66 +1942,102 @@ export default function EditProfile() {
           {wantsChildren !== false && (
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Children Arrangement</Text>
+              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {CHILDREN_ARRANGEMENTS.map((arr) => (
                   <TouchableOpacity
                     key={arr}
                     style={[
                       styles.interestChip,
-                      childrenArrangement === arr && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                      childrenArrangement.includes(arr) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
                     ]}
-                    onPress={() => setChildrenArrangement(arr)}
+                    onPress={() => {
+                      if (childrenArrangement.includes(arr)) {
+                        setChildrenArrangement(childrenArrangement.filter(item => item !== arr));
+                      } else {
+                        setChildrenArrangement([...childrenArrangement, arr]);
+                      }
+                    }}
                   >
                     <Text style={[
                       styles.interestText,
-                      childrenArrangement === arr && { color: '#FFFFFF' }
+                      childrenArrangement.includes(arr) && { color: '#FFFFFF' }
                     ]}>{arr}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
+              {childrenArrangement.length > 0 && (
+                <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+                  Selected: {childrenArrangement.join(', ')}
+                </Text>
+              )}
             </View>
           )}
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Financial Arrangement</Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {FINANCIAL_ARRANGEMENTS.map((arr) => (
                 <TouchableOpacity
                   key={arr}
                   style={[
                     styles.interestChip,
-                    financialArrangement === arr && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    financialArrangement.includes(arr) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
                   ]}
-                  onPress={() => setFinancialArrangement(arr)}
+                  onPress={() => {
+                    if (financialArrangement.includes(arr)) {
+                      setFinancialArrangement(financialArrangement.filter(item => item !== arr));
+                    } else {
+                      setFinancialArrangement([...financialArrangement, arr]);
+                    }
+                  }}
                 >
                   <Text style={[
                     styles.interestText,
-                    financialArrangement === arr && { color: '#FFFFFF' }
+                    financialArrangement.includes(arr) && { color: '#FFFFFF' }
                   ]}>{arr}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+            {financialArrangement.length > 0 && (
+              <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+                Selected: {financialArrangement.join(', ')}
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Housing Preference</Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {HOUSING_PREFERENCES.map((pref) => (
                 <TouchableOpacity
                   key={pref}
                   style={[
                     styles.interestChip,
-                    housingPreference === pref && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    housingPreference.includes(pref) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
                   ]}
-                  onPress={() => setHousingPreference(pref)}
+                  onPress={() => {
+                    if (housingPreference.includes(pref)) {
+                      setHousingPreference(housingPreference.filter(item => item !== pref));
+                    } else {
+                      setHousingPreference([...housingPreference, pref]);
+                    }
+                  }}
                 >
                   <Text style={[
                     styles.interestText,
-                    housingPreference === pref && { color: '#FFFFFF' }
+                    housingPreference.includes(pref) && { color: '#FFFFFF' }
                   ]}>{pref}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+            {housingPreference.length > 0 && (
+              <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+                Selected: {housingPreference.join(', ')}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -2062,9 +2276,14 @@ export default function EditProfile() {
                 age_max: parseInt(ageMax) || 45,
                 max_distance_miles: parseInt(maxDistance) || 50,
                 willing_to_relocate: willingToRelocate,
-                gender_preference: genderPreference,
-                dealbreakers,
-                must_haves: mustHaves,
+                gender_preference: Array.isArray(genderPreference) ? genderPreference : [],
+                dealbreakers: Array.isArray(dealbreakers) ? dealbreakers : [],
+                must_haves: Array.isArray(mustHaves) ? mustHaves : [],
+                lifestyle_preferences: {
+                  smoking: smoking || null,
+                  drinking: drinking || null,
+                  pets: pets || null,
+                },
               },
             };
 
@@ -2085,6 +2304,63 @@ export default function EditProfile() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Custom Prompt Input Modal */}
+      <Modal
+        visible={showCustomPromptInput !== null}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowCustomPromptInput(null);
+          setCustomPromptText('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Write your own prompt</Text>
+
+            <TextInput
+              style={styles.customPromptInput}
+              value={customPromptText}
+              onChangeText={setCustomPromptText}
+              placeholder="Type your custom prompt..."
+              placeholderTextColor="#9CA3AF"
+              multiline
+              maxLength={100}
+              autoFocus
+            />
+
+            <Text style={styles.charCount}>{customPromptText.length}/100</Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => {
+                  setShowCustomPromptInput(null);
+                  setCustomPromptText('');
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.modalSaveButton,
+                  customPromptText.trim().length < 10 && styles.modalButtonDisabled
+                ]}
+                onPress={saveCustomPrompt}
+                disabled={customPromptText.trim().length < 10}
+              >
+                <Text style={[
+                  styles.modalSaveText,
+                  customPromptText.trim().length < 10 && styles.modalButtonDisabledText
+                ]}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -2361,5 +2637,75 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#8B5CF6',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  customPromptInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
+    color: '#111827',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  charCount: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    textAlign: 'right',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: '#F3F4F6',
+  },
+  modalSaveButton: {
+    backgroundColor: '#8B5CF6',
+  },
+  modalButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  modalSaveText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: 'white',
+  },
+  modalButtonDisabledText: {
+    color: '#9CA3AF',
   },
 });

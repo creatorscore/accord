@@ -3,8 +3,10 @@ import { View, Text, TextInput, TouchableOpacity, Alert, Platform } from 'react-
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
+import { useTranslation } from 'react-i18next';
 
 export default function SignIn() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,7 +24,7 @@ export default function SignIn() {
 
   const handleSignIn = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert(t('common.error'), t('auth.signIn.errorMissingFields'));
       return;
     }
 
@@ -33,7 +35,30 @@ export default function SignIn() {
       await new Promise(resolve => setTimeout(resolve, 300));
       router.replace('/');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to sign in');
+      const errorMessage = error.message || 'Failed to sign in';
+
+      // Check if the error is because they used OAuth instead
+      // Supabase returns "Invalid login credentials" when trying to sign in with password for an OAuth account
+      if (errorMessage.includes('Invalid login credentials')) {
+        Alert.alert(
+          t('auth.signIn.errorInvalidCredentials'),
+          t('auth.signIn.errorInvalidCredentialsMessage'),
+          [{ text: t('auth.signIn.gotIt') }]
+        );
+        return;
+      }
+
+      // Handle email not confirmed
+      if (errorMessage.includes('Email not confirmed')) {
+        Alert.alert(
+          t('auth.signIn.errorEmailNotConfirmed'),
+          t('auth.signIn.errorEmailNotConfirmedMessage'),
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      Alert.alert(t('common.error'), errorMessage);
     } finally {
       setLoading(false);
     }
@@ -52,7 +77,7 @@ export default function SignIn() {
       }
     } catch (error: any) {
       if (error.message !== 'User cancelled') {
-        Alert.alert('Error', error.message || 'Failed to sign in with Google');
+        Alert.alert(t('common.error'), error.message || 'Failed to sign in with Google');
       }
     } finally {
       setLoading(false);
@@ -69,7 +94,7 @@ export default function SignIn() {
         router.replace('/');
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to sign in with Apple');
+      Alert.alert(t('common.error'), error.message || 'Failed to sign in with Apple');
     } finally {
       setLoading(false);
     }
@@ -78,22 +103,22 @@ export default function SignIn() {
   return (
     <View className="flex-1 bg-cream px-6 pt-16">
       <TouchableOpacity onPress={() => router.back()} className="mb-8">
-        <Text className="text-primary-600 text-lg font-semibold">← Back</Text>
+        <Text className="text-primary-600 text-lg font-semibold">{t('auth.signIn.backButton')}</Text>
       </TouchableOpacity>
 
       <Text className="text-4xl font-bold text-charcoal mb-2">
-        Hey there! 💜
+        {t('auth.signIn.title')}
       </Text>
       <Text className="text-gray-600 text-lg mb-8">
-        Let's find your perfect arrangement
+        {t('auth.signIn.subtitle')}
       </Text>
 
       <View className="space-y-4">
         <View>
-          <Text className="text-gray-700 mb-2 font-medium">Email</Text>
+          <Text className="text-gray-700 mb-2 font-medium">{t('auth.signIn.email')}</Text>
           <TextInput
             className="border border-gray-300 rounded-lg px-4 py-3"
-            placeholder="your@email.com"
+            placeholder={t('auth.signIn.emailPlaceholder')}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -102,10 +127,10 @@ export default function SignIn() {
         </View>
 
         <View>
-          <Text className="text-gray-700 mb-2 font-medium">Password</Text>
+          <Text className="text-gray-700 mb-2 font-medium">{t('auth.signIn.password')}</Text>
           <TextInput
             className="border border-gray-300 rounded-lg px-4 py-3"
-            placeholder="••••••••"
+            placeholder={t('auth.signIn.passwordPlaceholder')}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -120,7 +145,7 @@ export default function SignIn() {
           disabled={loading}
         >
           <Text className="text-white font-bold text-lg">
-            {loading ? 'Signing In...' : 'Sign In'}
+            {loading ? t('auth.signIn.signingIn') : t('auth.signIn.signInButton')}
           </Text>
         </TouchableOpacity>
 
@@ -128,13 +153,13 @@ export default function SignIn() {
           className="items-center mt-4"
           onPress={() => router.push('/(auth)/forgot-password')}
         >
-          <Text className="text-primary-600">Forgot password?</Text>
+          <Text className="text-primary-600">{t('auth.signIn.forgotPassword')}</Text>
         </TouchableOpacity>
 
         {/* Divider */}
         <View className="flex-row items-center my-6">
           <View className="flex-1 h-px bg-gray-300" />
-          <Text className="mx-4 text-gray-500">or continue with</Text>
+          <Text className="mx-4 text-gray-500">{t('auth.signIn.orContinueWith')}</Text>
           <View className="flex-1 h-px bg-gray-300" />
         </View>
 
@@ -146,7 +171,7 @@ export default function SignIn() {
             disabled={loading}
           >
             <Text className="text-gray-700 font-semibold ml-2">
-              Continue with Google
+              {t('auth.signIn.continueWithGoogle')}
             </Text>
           </TouchableOpacity>
 
@@ -157,16 +182,16 @@ export default function SignIn() {
               disabled={loading}
             >
               <Text className="text-white font-semibold ml-2">
-                Continue with Apple
+                {t('auth.signIn.continueWithApple')}
               </Text>
             </TouchableOpacity>
           )}
         </View>
 
         <View className="flex-row justify-center items-center mt-6">
-          <Text className="text-gray-600">Don't have an account? </Text>
+          <Text className="text-gray-600">{t('auth.signIn.noAccount')}</Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/sign-up')}>
-            <Text className="text-primary-600 font-semibold">Sign Up</Text>
+            <Text className="text-primary-600 font-semibold">{t('auth.signIn.signUpLink')}</Text>
           </TouchableOpacity>
         </View>
       </View>

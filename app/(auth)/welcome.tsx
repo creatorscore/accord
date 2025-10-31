@@ -2,8 +2,10 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useTranslation } from 'react-i18next';
 
 export default function Welcome() {
+  const { t } = useTranslation();
   return (
     <LinearGradient
       colors={['#A78BFA', '#EC4899']}
@@ -16,9 +18,9 @@ export default function Welcome() {
       {/* Hero Section */}
       <View style={styles.hero}>
         <Text style={styles.emoji}>💜</Text>
-        <Text style={styles.title}>Accord</Text>
-        <Text style={styles.tagline}>Find your perfect arrangement.</Text>
-        <Text style={styles.subtitle}>The verified platform for lavender marriages</Text>
+        <Text style={styles.title}>{t('auth.welcome.title')}</Text>
+        <Text style={styles.tagline}>{t('auth.welcome.tagline')}</Text>
+        <Text style={styles.subtitle}>{t('auth.welcome.subtitle')}</Text>
       </View>
 
       {/* Value Props */}
@@ -28,28 +30,28 @@ export default function Welcome() {
             <View style={styles.iconBox}>
               <Text style={styles.icon}>🛡️</Text>
             </View>
-            <Text style={styles.propText}>Verified{'\n'}& Safe</Text>
+            <Text style={styles.propText}>{t('auth.welcome.verifiedSafe')}</Text>
           </View>
 
           <View style={styles.prop}>
             <View style={styles.iconBox}>
               <Text style={styles.icon}>💖</Text>
             </View>
-            <Text style={styles.propText}>Smart{'\n'}Matching</Text>
+            <Text style={styles.propText}>{t('auth.welcome.smartMatching')}</Text>
           </View>
 
           <View style={styles.prop}>
             <View style={styles.iconBox}>
               <Text style={styles.icon}>🔒</Text>
             </View>
-            <Text style={styles.propText}>Privacy{'\n'}First</Text>
+            <Text style={styles.propText}>{t('auth.welcome.privacyFirst')}</Text>
           </View>
         </View>
 
         {/* Trust Badge */}
         <View style={styles.trustBadge}>
           <Text style={styles.rainbow}>✊</Text>
-          <Text style={styles.trustText}>Together against the system</Text>
+          <Text style={styles.trustText}>{t('auth.welcome.trustBadge')}</Text>
         </View>
       </View>
 
@@ -60,7 +62,7 @@ export default function Welcome() {
           onPress={() => router.push('/(auth)/sign-up')}
           activeOpacity={0.9}
         >
-          <Text style={styles.primaryButtonText}>Get Started</Text>
+          <Text style={styles.primaryButtonText}>{t('auth.welcome.getStarted')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -68,11 +70,11 @@ export default function Welcome() {
           onPress={() => router.push('/(auth)/sign-in')}
           activeOpacity={0.9}
         >
-          <Text style={styles.secondaryButtonText}>Sign In</Text>
+          <Text style={styles.secondaryButtonText}>{t('auth.welcome.signIn')}</Text>
         </TouchableOpacity>
 
         <Text style={styles.footer}>
-          Your privacy is our priority. Your happiness is our mission.
+          {t('auth.welcome.footer')}
         </Text>
       </View>
     </LinearGradient>
@@ -83,14 +85,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 80,
+    paddingTop: 40,
     paddingBottom: 40,
   },
   hero: {
-    flex: 2,
+    flex: 1.2,
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 200,
+    minHeight: 160,
   },
   emoji: {
     fontSize: 64,
@@ -119,7 +121,7 @@ const styles = StyleSheet.create({
   },
   valueProps: {
     marginBottom: 24,
-    flex: 1,
+    flex: 0.8,
     justifyContent: 'center',
   },
   propRow: {

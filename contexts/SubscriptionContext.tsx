@@ -24,6 +24,7 @@ interface SubscriptionContextType {
   subscriptionTier: SubscriptionTier | null;
   refreshSubscription: () => Promise<void>;
   canUseFeature: (feature: string) => boolean;
+  syncWithDatabase: () => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -38,7 +39,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Check if we should use database-only mode (development only)
   const isDatabaseOnlyMode = process.env.EXPO_PUBLIC_APP_ENV === 'development';
 
-  // Load premium status from database (for development)
+  // Load premium status from database (for both dev and production as fallback)
   useEffect(() => {
     console.log('🔄 SubscriptionContext: useEffect triggered', {
       hasUser: !!user,
@@ -46,11 +47,11 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       appEnv: process.env.EXPO_PUBLIC_APP_ENV,
       isDatabaseOnlyMode
     });
-    if (user && isDatabaseOnlyMode) {
+    if (user) {
       console.log('📞 Calling loadDatabasePremiumStatus...');
       loadDatabasePremiumStatus();
     }
-  }, [user, isDatabaseOnlyMode]);
+  }, [user]);
 
   const loadDatabasePremiumStatus = async () => {
     console.log('🔍 Loading premium status from database for user:', user?.id);
@@ -94,8 +95,14 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setIsLoading(false);
         return;
       }
-      initializeRevenueCat(user.id);
-      loadSubscriptionStatus();
+
+      try {
+        initializeRevenueCat(user.id);
+        loadSubscriptionStatus();
+      } catch (error) {
+        console.error('Failed to initialize RevenueCat:', error);
+        setIsLoading(false);
+      }
     } else {
       setCustomerInfo(null);
       setIsLoading(false);
@@ -106,12 +113,24 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     if (!user || isDatabaseOnlyMode) return; // Skip in database-only mode
 
-    const listener = Purchases.addCustomerInfoUpdateListener((info) => {
-      setCustomerInfo(info);
-    });
+    let listener: { remove: () => void } | null = null;
+
+    try {
+      listener = Purchases.addCustomerInfoUpdateListener((info) => {
+        setCustomerInfo(info);
+      });
+    } catch (error) {
+      console.error('Failed to add RevenueCat listener:', error);
+    }
 
     return () => {
-      listener.remove();
+      if (listener && typeof listener.remove === 'function') {
+        try {
+          listener.remove();
+        } catch (error) {
+          console.error('Failed to remove RevenueCat listener:', error);
+        }
+      }
     };
   }, [user, isDatabaseOnlyMode]);
 
@@ -129,15 +148,90 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const refreshSubscription = useCallback(async () => {
     await loadSubscriptionStatus();
-  }, []);
+    // Also refresh database status in dev mode
+    if (isDatabaseOnlyMode) {
+      await loadDatabasePremiumStatus();
+    }
+  }, [isDatabaseOnlyMode]);
 
-  // In database-only mode, use database status; otherwise use RevenueCat
-  const isSubscribed = isDatabaseOnlyMode ? (dbPremiumStatus || dbPlatinumStatus) : hasActiveSubscription(customerInfo);
-  const isPremium = isDatabaseOnlyMode ? dbPremiumStatus : hasPremium(customerInfo);
-  const isPlatinum = isDatabaseOnlyMode ? dbPlatinumStatus : hasPlatinum(customerInfo);
+  /**
+   * Sync RevenueCat subscription status to database
+   * Called after purchase/restore to ensure DB is in sync
+   */
+  const syncWithDatabase = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      // Get current profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) {
+        console.error('Profile not found for sync');
+        return;
+      }
+
+      // In production, RevenueCat webhook handles this automatically
+      // But we sync manually after purchase for immediate UI updates
+      const premium = isPremium;
+      const platinum = isPlatinum;
+      const tier = subscriptionTier;
+
+      console.log('🔄 Syncing subscription to database:', {
+        profileId: profile.id,
+        isPremium: premium,
+        isPlatinum: platinum,
+        tier,
+      });
+
+      // Update profiles table
+      await supabase
+        .from('profiles')
+        .update({
+          is_premium: premium,
+          is_platinum: platinum,
+        })
+        .eq('id', profile.id);
+
+      // Update subscriptions table if active subscription
+      if (tier) {
+        await supabase.from('subscriptions').upsert(
+          {
+            profile_id: profile.id,
+            tier,
+            status: 'active',
+            auto_renew: true,
+          },
+          { onConflict: 'profile_id' }
+        );
+      }
+
+      console.log('✅ Subscription synced to database');
+    } catch (error) {
+      console.error('❌ Error syncing subscription to database:', error);
+    }
+  }, [user, isPremium, isPlatinum, subscriptionTier]);
+
+  // In database-only mode (dev), use database status exclusively
+  // In production, use RevenueCat OR database (database as fallback)
+  const isSubscribed = isDatabaseOnlyMode
+    ? (dbPremiumStatus || dbPlatinumStatus)
+    : (hasActiveSubscription(customerInfo) || dbPremiumStatus || dbPlatinumStatus);
+
+  const isPremium = isDatabaseOnlyMode
+    ? dbPremiumStatus
+    : (hasPremium(customerInfo) || dbPremiumStatus);
+
+  const isPlatinum = isDatabaseOnlyMode
+    ? dbPlatinumStatus
+    : (hasPlatinum(customerInfo) || dbPlatinumStatus);
+
   const subscriptionTier = isDatabaseOnlyMode
     ? (dbPlatinumStatus ? 'platinum' : dbPremiumStatus ? 'premium' : null)
-    : getSubscriptionTier(customerInfo);
+    : (getSubscriptionTier(customerInfo) || (dbPlatinumStatus ? 'platinum' : dbPremiumStatus ? 'premium' : null));
 
   // Debug log computed values
   console.log('💎 Subscription Status:', {
@@ -176,6 +270,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     subscriptionTier,
     refreshSubscription,
     canUseFeature: checkFeature,
+    syncWithDatabase,
   };
 
   return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;

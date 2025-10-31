@@ -48,3 +48,7 @@ eas.json
 # Supabase
 supabase/.branches
 supabase/.temp
+
+# Firebase
+google-services.json
+GoogleService-Info.plist

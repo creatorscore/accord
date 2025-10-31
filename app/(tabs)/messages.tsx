@@ -5,10 +5,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
+import { getPrivateKey, decryptMessage } from '@/lib/encryption';
 
 interface Conversation {
   match_id: string;
@@ -18,12 +20,14 @@ interface Conversation {
     age: number;
     photo_url?: string;
     is_verified?: boolean;
+    encryption_public_key?: string;
   };
   last_message?: {
     encrypted_content: string;
     created_at: string;
     sender_profile_id: string;
     read_at: string | null;
+    decrypted_content?: string;  // Add field for decrypted content
   };
   unread_count: number;
   is_muted?: boolean;
@@ -32,6 +36,7 @@ interface Conversation {
 }
 
 export default function Messages() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { isPremium } = useSubscription();
   const insets = useSafeAreaInsets();
@@ -84,13 +89,37 @@ export default function Messages() {
 
       if (matchesError) throw matchesError;
 
+      // SAFETY: Filter out blocked users (bidirectional)
+      const { data: blockedByMe } = await supabase
+        .from('blocks')
+        .select('blocked_profile_id')
+        .eq('blocker_profile_id', currentProfileId);
+
+      const { data: blockedMe } = await supabase
+        .from('blocks')
+        .select('blocker_profile_id')
+        .eq('blocked_profile_id', currentProfileId);
+
+      const blockedProfileIds = new Set([
+        ...(blockedByMe?.map(b => b.blocked_profile_id) || []),
+        ...(blockedMe?.map(b => b.blocker_profile_id) || [])
+      ]);
+
+      // Filter out matches with blocked users
+      const filteredMatches = (matches || []).filter(match => {
+        const otherProfileId = match.profile1_id === currentProfileId
+          ? match.profile2_id
+          : match.profile1_id;
+        return !blockedProfileIds.has(otherProfileId);
+      });
+
       // For each match, get last message and profile
       const conversationsData = await Promise.all(
-        (matches || []).map(async (match) => {
+        filteredMatches.map(async (match) => {
           const otherProfileId =
             match.profile1_id === currentProfileId ? match.profile2_id : match.profile1_id;
 
-          // Get profile
+          // Get profile with encryption key
           const { data: profile } = await supabase
             .from('profiles')
             .select(`
@@ -98,6 +127,7 @@ export default function Messages() {
               display_name,
               age,
               is_verified,
+              encryption_public_key,
               photos (
                 url,
                 is_primary,
@@ -127,6 +157,29 @@ export default function Messages() {
           const photos = profile?.photos?.sort((a: any, b: any) => a.display_order - b.display_order);
           const primaryPhoto = photos?.find((p: any) => p.is_primary) || photos?.[0];
 
+          // Decrypt last message if available
+          let decryptedContent = lastMessage?.encrypted_content;
+          if (lastMessage && profile?.encryption_public_key) {
+            try {
+              const privateKey = await getPrivateKey(user?.id || '');
+              if (privateKey) {
+                const senderKey = lastMessage.sender_profile_id === currentProfileId
+                  ? profile.encryption_public_key  // We sent it, use recipient's public key
+                  : profile.encryption_public_key; // They sent it, use their public key
+
+                decryptedContent = await decryptMessage(
+                  lastMessage.encrypted_content,
+                  privateKey,
+                  senderKey
+                );
+              }
+            } catch (error) {
+              console.log('Could not decrypt preview:', error);
+              // Fall back to showing encrypted content or placeholder
+              decryptedContent = t('messages.encryptedMessage');
+            }
+          }
+
           return {
             match_id: match.id,
             profile: {
@@ -135,8 +188,12 @@ export default function Messages() {
               age: profile?.age || 0,
               photo_url: primaryPhoto?.url,
               is_verified: profile?.is_verified,
+              encryption_public_key: profile?.encryption_public_key,
             },
-            last_message: lastMessage || undefined,
+            last_message: lastMessage ? {
+              ...lastMessage,
+              decrypted_content: decryptedContent
+            } : undefined,
             unread_count: unreadCount || 0,
             is_muted: match.is_muted || false,
             is_archived: match.is_archived || false,
@@ -209,15 +266,15 @@ export default function Messages() {
 
   const handleDeleteConversation = (conversation: Conversation) => {
     Alert.alert(
-      'Delete Conversation',
-      `Are you sure you want to delete your conversation with ${conversation.profile.display_name}? This will delete all messages in this thread.`,
+      t('messages.deleteDialog.title'),
+      t('messages.deleteDialog.message', { name: conversation.profile.display_name }),
       [
         {
-          text: 'Cancel',
+          text: t('common.cancel'),
           style: 'cancel',
         },
         {
-          text: 'Delete',
+          text: t('messages.deleteDialog.confirm'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -233,10 +290,10 @@ export default function Messages() {
               setConversations((prev) => prev.filter((c) => c.match_id !== conversation.match_id));
 
               // Show success message
-              Alert.alert('Deleted', 'Conversation has been deleted');
+              Alert.alert(t('messages.deleteDialog.success'), t('messages.deleteDialog.successMessage'));
             } catch (error: any) {
               console.error('Error deleting conversation:', error);
-              Alert.alert('Error', 'Failed to delete conversation. Please try again.');
+              Alert.alert(t('common.error'), t('messages.deleteDialog.error'));
             }
           },
         },
@@ -246,15 +303,15 @@ export default function Messages() {
 
   const handleBlock = (conversation: Conversation) => {
     Alert.alert(
-      'Block User',
-      `Are you sure you want to block ${conversation.profile.display_name}? They will no longer be able to see your profile or contact you.`,
+      t('messages.blockDialog.title'),
+      t('messages.blockDialog.message', { name: conversation.profile.display_name }),
       [
         {
-          text: 'Cancel',
+          text: t('common.cancel'),
           style: 'cancel',
         },
         {
-          text: 'Block',
+          text: t('messages.blockDialog.confirm'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -291,10 +348,10 @@ export default function Messages() {
               // Remove from local state
               setConversations((prev) => prev.filter((c) => c.match_id !== conversation.match_id));
 
-              Alert.alert('Blocked', `You have blocked ${conversation.profile.display_name}`);
+              Alert.alert(t('messages.blockDialog.success'), t('messages.blockDialog.successMessage', { name: conversation.profile.display_name }));
             } catch (error: any) {
               console.error('Error blocking user:', error);
-              Alert.alert('Error', 'Failed to block user. Please try again.');
+              Alert.alert(t('common.error'), t('messages.blockDialog.error'));
             }
           },
         },
@@ -304,18 +361,18 @@ export default function Messages() {
 
   const handleReport = (conversation: Conversation) => {
     Alert.prompt(
-      'Report User',
-      `Why are you reporting ${conversation.profile.display_name}?`,
+      t('messages.reportDialog.title'),
+      t('messages.reportDialog.message', { name: conversation.profile.display_name }),
       [
         {
-          text: 'Cancel',
+          text: t('common.cancel'),
           style: 'cancel',
         },
         {
-          text: 'Submit',
+          text: t('messages.reportDialog.submit'),
           onPress: async (reason) => {
             if (!reason || reason.trim() === '') {
-              Alert.alert('Error', 'Please provide a reason for reporting.');
+              Alert.alert(t('common.error'), t('messages.reportDialog.errorEmpty'));
               return;
             }
 
@@ -344,12 +401,12 @@ export default function Messages() {
               if (error) throw error;
 
               Alert.alert(
-                'Report Submitted',
-                'Thank you for helping keep Accord safe. Our team will review this report.'
+                t('messages.reportDialog.success'),
+                t('messages.reportDialog.successMessage')
               );
             } catch (error: any) {
               console.error('Error reporting user:', error);
-              Alert.alert('Error', 'Failed to submit report. Please try again.');
+              Alert.alert(t('common.error'), t('messages.reportDialog.error'));
             }
           },
         },
@@ -376,10 +433,13 @@ export default function Messages() {
         )
       );
 
-      Alert.alert('Success', `Notifications ${newMutedState ? 'muted' : 'unmuted'} for ${conversation.profile.display_name}`);
+      Alert.alert(t('common.success'), t('messages.muteSuccess', {
+        status: newMutedState ? t('messages.muted') : t('messages.unmuted'),
+        name: conversation.profile.display_name
+      }));
     } catch (error: any) {
       console.error('Error toggling mute:', error);
-      Alert.alert('Error', 'Failed to update mute status. Please try again.');
+      Alert.alert(t('common.error'), t('messages.markUnreadError'));
     }
   };
 
@@ -397,10 +457,12 @@ export default function Messages() {
       // Remove from current view immediately
       setConversations((prev) => prev.filter((c) => c.match_id !== conversation.match_id));
 
-      Alert.alert('Success', `Conversation ${newArchivedState ? 'archived' : 'unarchived'}`);
+      Alert.alert(t('common.success'), t('messages.archiveSuccess', {
+        status: newArchivedState ? t('messages.archived') : t('messages.unarchived')
+      }));
     } catch (error: any) {
       console.error('Error toggling archive:', error);
-      Alert.alert('Error', 'Failed to update archive status. Please try again.');
+      Alert.alert(t('common.error'), t('messages.markUnreadError'));
     }
   };
 
@@ -431,10 +493,12 @@ export default function Messages() {
         });
       });
 
-      Alert.alert('Success', `Conversation ${newPinnedState ? 'pinned' : 'unpinned'}`);
+      Alert.alert(t('common.success'), t('messages.pinSuccess', {
+        status: newPinnedState ? t('messages.pinned') : t('messages.unpinned')
+      }));
     } catch (error: any) {
       console.error('Error toggling pin:', error);
-      Alert.alert('Error', 'Failed to update pin status. Please try again.');
+      Alert.alert(t('common.error'), t('messages.markUnreadError'));
     }
   };
 
@@ -456,10 +520,10 @@ export default function Messages() {
       // Reload conversations to update unread count
       await loadConversations();
 
-      Alert.alert('Success', 'Marked as unread');
+      Alert.alert(t('common.success'), t('messages.markUnreadSuccess'));
     } catch (error: any) {
       console.error('Error marking as unread:', error);
-      Alert.alert('Error', 'Failed to mark as unread. Please try again.');
+      Alert.alert(t('common.error'), t('messages.markUnreadError'));
     }
   };
 
@@ -509,11 +573,11 @@ export default function Messages() {
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-    if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-    return `${Math.floor(seconds / 604800)}w ago`;
+    if (seconds < 60) return t('messages.timeAgo.justNow');
+    if (seconds < 3600) return t('messages.timeAgo.minutesAgo', { count: Math.floor(seconds / 60) });
+    if (seconds < 86400) return t('messages.timeAgo.hoursAgo', { count: Math.floor(seconds / 3600) });
+    if (seconds < 604800) return t('messages.timeAgo.daysAgo', { count: Math.floor(seconds / 86400) });
+    return t('messages.timeAgo.weeksAgo', { count: Math.floor(seconds / 604800) });
   };
 
   const renderUpgradeCard = () => {
@@ -541,7 +605,7 @@ export default function Messages() {
             <View style={styles.upgradeHeader}>
               <View style={styles.upgradeTitleRow}>
                 <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
-                <Text style={styles.upgradeTitle}>Upgrade Your Messages</Text>
+                <Text style={styles.upgradeTitle}>{t('messages.upgradeCard.title')}</Text>
               </View>
               <MaterialCommunityIcons name="close" size={20} color="rgba(255,255,255,0.8)" />
             </View>
@@ -549,9 +613,9 @@ export default function Messages() {
             {/* Features */}
             <View style={styles.upgradeFeatures}>
               {[
-                { icon: 'check-all', text: 'Read Receipts' },
-                { icon: 'microphone', text: 'Voice Messages' },
-                { icon: 'message-text', text: 'Intro Messages' },
+                { icon: 'check-all', text: t('messages.upgradeCard.readReceipts') },
+                { icon: 'microphone', text: t('messages.upgradeCard.voiceMessages') },
+                { icon: 'message-text', text: t('messages.upgradeCard.introMessages') },
               ].map((feature, i) => (
                 <View key={i} style={styles.upgradeFeatureRow}>
                   <MaterialCommunityIcons name={feature.icon as any} size={18} color="white" />
@@ -562,7 +626,7 @@ export default function Messages() {
 
             {/* CTA */}
             <View style={styles.upgradeCTA}>
-              <Text style={styles.upgradeCTAText}>Upgrade to Premium</Text>
+              <Text style={styles.upgradeCTAText}>{t('messages.upgradeCard.upgradeCta')}</Text>
               <MaterialCommunityIcons name="arrow-right" size={18} color="white" />
             </View>
           </LinearGradient>
@@ -626,8 +690,8 @@ export default function Messages() {
                   style={[styles.lastMessage, hasUnread && styles.lastMessageUnread]}
                   numberOfLines={2}
                 >
-                  {item.last_message.sender_profile_id === currentProfileId ? 'You: ' : ''}
-                  {item.last_message.encrypted_content}
+                  {item.last_message.sender_profile_id === currentProfileId ? t('matches.youLabel') : ''}
+                  {item.last_message.decrypted_content || item.last_message.encrypted_content}
                 </Text>
                 {isPremium && item.last_message.sender_profile_id === currentProfileId && (
                   <MaterialCommunityIcons
@@ -646,7 +710,7 @@ export default function Messages() {
             ) : (
               <View style={styles.ctaRow}>
                 <MaterialCommunityIcons name="chat-outline" size={14} color="#8B5CF6" />
-                <Text style={styles.ctaText}>Start the conversation</Text>
+                <Text style={styles.ctaText}>{t('messages.startConversation')}</Text>
               </View>
             )}
           </View>
@@ -664,13 +728,13 @@ export default function Messages() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Messages</Text>
-          <Text style={styles.headerSubtitle}>Your conversations</Text>
+          <Text style={styles.headerTitle}>{t('messages.title')}</Text>
+          <Text style={styles.headerSubtitle}>{t('messages.subtitle')}</Text>
         </View>
 
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8B5CF6" />
-          <Text style={styles.loadingText}>Loading messages...</Text>
+          <Text style={styles.loadingText}>{t('messages.loadingMessages')}</Text>
         </View>
       </View>
     );
@@ -682,8 +746,8 @@ export default function Messages() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Messages</Text>
-          <Text style={styles.headerSubtitle}>Your conversations</Text>
+          <Text style={styles.headerTitle}>{t('messages.title')}</Text>
+          <Text style={styles.headerSubtitle}>{t('messages.subtitle')}</Text>
         </View>
 
         <View style={styles.emptyContainer}>
@@ -697,10 +761,9 @@ export default function Messages() {
                 <MaterialCommunityIcons name="chat-outline" size={48} color="white" />
               </LinearGradient>
             </View>
-            <Text style={styles.emptyTitle}>No messages yet</Text>
+            <Text style={styles.emptyTitle}>{t('messages.noMessagesYet')}</Text>
             <Text style={styles.emptyText}>
-              Match with someone to start chatting!{'\n'}
-              Your conversations will appear here.
+              {t('messages.noMessagesText')}
             </Text>
             <TouchableOpacity
               style={styles.emptyButton}
@@ -708,7 +771,7 @@ export default function Messages() {
             >
               <LinearGradient colors={['#8B5CF6', '#EC4899']} style={styles.emptyButtonGradient}>
                 <MaterialCommunityIcons name="cards-heart" size={20} color="white" />
-                <Text style={styles.emptyButtonText}>Find Matches</Text>
+                <Text style={styles.emptyButtonText}>{t('messages.findMatches')}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </MotiView>
@@ -723,9 +786,14 @@ export default function Messages() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>Messages</Text>
+          <Text style={styles.headerTitle}>{t('messages.title')}</Text>
           <Text style={styles.headerSubtitle}>
-            {showArchived ? 'Archived conversations' : `${conversations.length} ${conversations.length === 1 ? 'conversation' : 'conversations'}`}
+            {showArchived
+              ? t('messages.archivedConversations')
+              : conversations.length === 1
+                ? t('messages.conversation', { count: conversations.length })
+                : t('messages.conversations', { count: conversations.length })
+            }
           </Text>
         </View>
         <TouchableOpacity
@@ -742,7 +810,7 @@ export default function Messages() {
             color="white"
           />
           <Text style={styles.archiveButtonText}>
-            {showArchived ? 'Active' : 'Archive'}
+            {showArchived ? t('messages.activeButton') : t('messages.archiveButton')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -802,7 +870,7 @@ export default function Messages() {
                 onPress={() => handleActionSelect('view_profile')}
               >
                 <MaterialCommunityIcons name="account" size={24} color="#6B7280" />
-                <Text style={styles.actionText}>View Profile</Text>
+                <Text style={styles.actionText}>{t('messages.actions.viewProfile')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
               </TouchableOpacity>
 
@@ -816,7 +884,7 @@ export default function Messages() {
                   color={selectedConversation?.is_pinned ? '#8B5CF6' : '#6B7280'}
                 />
                 <Text style={styles.actionText}>
-                  {selectedConversation?.is_pinned ? 'Unpin Conversation' : 'Pin Conversation'}
+                  {selectedConversation?.is_pinned ? t('messages.actions.unpinConversation') : t('messages.actions.pinConversation')}
                 </Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
               </TouchableOpacity>
@@ -831,7 +899,7 @@ export default function Messages() {
                   color="#6B7280"
                 />
                 <Text style={styles.actionText}>
-                  {selectedConversation?.is_muted ? 'Unmute Notifications' : 'Mute Notifications'}
+                  {selectedConversation?.is_muted ? t('messages.actions.unmuteNotifications') : t('messages.actions.muteNotifications')}
                 </Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
               </TouchableOpacity>
@@ -842,7 +910,7 @@ export default function Messages() {
                   onPress={() => handleActionSelect('mark_unread')}
                 >
                   <MaterialCommunityIcons name="email-mark-as-unread" size={24} color="#6B7280" />
-                  <Text style={styles.actionText}>Mark as Unread</Text>
+                  <Text style={styles.actionText}>{t('messages.actions.markAsUnread')}</Text>
                   <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
                 </TouchableOpacity>
               )}
@@ -857,7 +925,7 @@ export default function Messages() {
                   color="#6B7280"
                 />
                 <Text style={styles.actionText}>
-                  {showArchived ? 'Unarchive' : 'Archive'}
+                  {showArchived ? t('messages.actions.unarchive') : t('messages.actions.archive')}
                 </Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
               </TouchableOpacity>
@@ -867,7 +935,7 @@ export default function Messages() {
                 onPress={() => handleActionSelect('report')}
               >
                 <MaterialCommunityIcons name="flag" size={24} color="#6B7280" />
-                <Text style={styles.actionText}>Report</Text>
+                <Text style={styles.actionText}>{t('messages.actions.report')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
               </TouchableOpacity>
 
@@ -876,7 +944,7 @@ export default function Messages() {
                 onPress={() => handleActionSelect('block')}
               >
                 <MaterialCommunityIcons name="block-helper" size={24} color="#EF4444" />
-                <Text style={[styles.actionText, styles.actionTextDanger]}>Block</Text>
+                <Text style={[styles.actionText, styles.actionTextDanger]}>{t('messages.actions.block')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
               </TouchableOpacity>
 
@@ -885,7 +953,7 @@ export default function Messages() {
                 onPress={() => handleActionSelect('delete')}
               >
                 <MaterialCommunityIcons name="delete" size={24} color="#EF4444" />
-                <Text style={[styles.actionText, styles.actionTextDanger]}>Delete Conversation</Text>
+                <Text style={[styles.actionText, styles.actionTextDanger]}>{t('messages.actions.deleteConversation')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
               </TouchableOpacity>
             </View>
@@ -899,7 +967,7 @@ export default function Messages() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FAF7F0',
   },
   header: {
     backgroundColor: '#8B5CF6',

@@ -46,6 +46,8 @@ export default function Prompts() {
     { prompt: '', answer: '' },
   ]);
   const [showPromptPicker, setShowPromptPicker] = useState<number | null>(null);
+  const [showCustomPromptInput, setShowCustomPromptInput] = useState<number | null>(null);
+  const [customPromptText, setCustomPromptText] = useState('');
 
   useEffect(() => {
     loadProfile();
@@ -71,6 +73,32 @@ export default function Prompts() {
     newPrompts[index] = { prompt, answer: newPrompts[index].answer };
     setSelectedPrompts(newPrompts);
     setShowPromptPicker(null);
+  };
+
+  const handleCustomPrompt = () => {
+    if (showPromptPicker === null) return;
+    setShowPromptPicker(null);
+    setShowCustomPromptInput(showPromptPicker);
+  };
+
+  const saveCustomPrompt = () => {
+    if (showCustomPromptInput === null || !customPromptText.trim()) return;
+
+    // Validate custom prompt
+    const validation = validateContent(customPromptText, {
+      checkProfanity: true,
+      checkContactInfo: false,
+      fieldName: 'custom prompt',
+    });
+
+    if (!validation.isValid) {
+      Alert.alert('Inappropriate Content', validation.error);
+      return;
+    }
+
+    selectPrompt(showCustomPromptInput, customPromptText.trim());
+    setCustomPromptText('');
+    setShowCustomPromptInput(null);
   };
 
   const updateAnswer = (index: number, answer: string) => {
@@ -216,6 +244,18 @@ export default function Prompts() {
               </View>
 
               <ScrollView className="max-h-80">
+                {/* Write Your Own Option */}
+                <TouchableOpacity
+                  className="py-4 border-b-2 border-purple-300 bg-purple-50 rounded-xl mb-2 px-4 flex-row items-center"
+                  onPress={handleCustomPrompt}
+                >
+                  <MaterialCommunityIcons name="pencil-plus" size={24} color="#8B5CF6" />
+                  <Text className="text-purple-700 font-bold text-base ml-3">
+                    ✨ Write your own prompt
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Predefined Prompts */}
                 {availablePrompts.map((prompt) => (
                   <TouchableOpacity
                     key={prompt}
@@ -226,6 +266,60 @@ export default function Prompts() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+            </View>
+          </View>
+        )}
+
+        {/* Custom Prompt Input Modal */}
+        {showCustomPromptInput !== null && (
+          <View className="absolute inset-0 bg-black/50 items-center justify-center px-6 z-50">
+            <View className="bg-white rounded-3xl p-6 w-full">
+              <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-xl font-bold text-gray-900">
+                  Write your own prompt
+                </Text>
+                <TouchableOpacity onPress={() => {
+                  setShowCustomPromptInput(null);
+                  setCustomPromptText('');
+                }}>
+                  <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+
+              <Text className="text-gray-600 mb-4">
+                Create a unique question that helps showcase your personality! 💫
+              </Text>
+
+              <TextInput
+                className="bg-gray-100 rounded-2xl p-4 text-gray-900 text-base mb-2 min-h-24"
+                placeholder="e.g., What I'm most excited to share with a partner is..."
+                value={customPromptText}
+                onChangeText={setCustomPromptText}
+                multiline
+                textAlignVertical="top"
+                maxLength={100}
+                placeholderTextColor="#9CA3AF"
+                autoFocus
+              />
+              <Text className="text-xs text-gray-500 mb-4 text-right">
+                {customPromptText.length}/100
+              </Text>
+
+              <TouchableOpacity
+                className={`py-4 rounded-full ${
+                  customPromptText.trim().length < 10 ? 'bg-gray-300' : 'bg-purple-600'
+                }`}
+                onPress={saveCustomPrompt}
+                disabled={customPromptText.trim().length < 10}
+              >
+                <Text className="text-white text-center font-bold text-lg">
+                  Use This Prompt
+                </Text>
+              </TouchableOpacity>
+
+              <Text className="text-xs text-gray-500 text-center mt-3">
+                Minimum 10 characters
+              </Text>
             </View>
           </View>
         )}

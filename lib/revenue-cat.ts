@@ -1,10 +1,10 @@
 import Purchases, { PurchasesOffering, CustomerInfo, PurchasesPackage } from 'react-native-purchases';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// RevenueCat API Keys
-// TODO: Replace with actual keys from RevenueCat dashboard
-const REVENUECAT_API_KEY_IOS = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || '';
-const REVENUECAT_API_KEY_ANDROID = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || '';
+// RevenueCat API Keys from app.json extra config
+const REVENUECAT_API_KEY_IOS = Constants.expoConfig?.extra?.revenueCatAppleApiKey || process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || '';
+const REVENUECAT_API_KEY_ANDROID = Constants.expoConfig?.extra?.revenueCatGoogleApiKey || process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || '';
 
 // Track if RevenueCat is initialized
 let isInitialized = false;
@@ -24,8 +24,15 @@ export const initializeRevenueCat = async (userId?: string) => {
   try {
     const apiKey = Platform.OS === 'ios' ? REVENUECAT_API_KEY_IOS : REVENUECAT_API_KEY_ANDROID;
 
+    console.log('🔧 Initializing RevenueCat...', {
+      platform: Platform.OS,
+      hasApiKey: !!apiKey,
+      apiKeyPreview: apiKey ? `${apiKey.substring(0, 10)}...` : 'none',
+      userId: userId || 'anonymous',
+    });
+
     if (!apiKey) {
-      console.log('RevenueCat API key not configured - running in free mode');
+      console.warn('⚠️ RevenueCat API key not configured - running in free mode');
       isInitialized = false;
       return;
     }
@@ -38,9 +45,9 @@ export const initializeRevenueCat = async (userId?: string) => {
     }
 
     isInitialized = true;
-    console.log('RevenueCat initialized successfully');
+    console.log('✅ RevenueCat initialized successfully');
   } catch (error) {
-    console.log('RevenueCat initialization skipped:', error);
+    console.error('❌ RevenueCat initialization failed:', error);
     isInitialized = false;
   }
 };
@@ -71,19 +78,26 @@ export const getOfferings = async (): Promise<PurchasesOffering | null> => {
 export const purchasePackage = async (pkg: PurchasesPackage): Promise<CustomerInfo | null> => {
   if (!isInitialized) {
     console.log('RevenueCat not initialized - cannot make purchases');
-    return null;
+    throw new Error('RevenueCat not initialized. Please restart the app.');
   }
 
   try {
     const { customerInfo } = await Purchases.purchasePackage(pkg);
+    console.log('Purchase successful:', {
+      hasActiveSubscriptions: Object.keys(customerInfo.entitlements.active).length > 0,
+      activeEntitlements: Object.keys(customerInfo.entitlements.active),
+    });
     return customerInfo;
   } catch (error: any) {
     if (error.userCancelled) {
       console.log('User cancelled purchase');
+      // Return null for user cancellation (not an error)
+      return null;
     } else {
       console.error('Error purchasing package:', error);
+      // Re-throw the error so it can be caught by the caller
+      throw error;
     }
-    return null;
   }
 };
 

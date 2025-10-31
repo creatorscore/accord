@@ -13,12 +13,14 @@ import {
   Keyboard,
   Alert,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
@@ -30,6 +32,7 @@ import ReportModal from '@/components/safety/ReportModal';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import IntroMessages from '@/components/messaging/IntroMessages';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
+import ReviewPromptBanner from '@/components/reviews/ReviewPromptBanner';
 import { validateMessage, containsContactInfo, validateContent } from '@/lib/content-moderation';
 import { encryptMessage, decryptMessage, getPrivateKey } from '@/lib/encryption';
 import { getLastActiveText, isOnline, getOnlineStatusColor } from '@/lib/online-status';
@@ -37,6 +40,7 @@ import { getLastActiveText, isOnline, getOnlineStatusColor } from '@/lib/online-
 interface Message {
   id: string;
   encrypted_content: string;
+  decrypted_content?: string;  // Store decrypted content separately
   sender_profile_id: string;
   receiver_profile_id: string;
   created_at: string;
@@ -68,6 +72,7 @@ interface MatchStatus {
 }
 
 export default function Chat() {
+  const { t } = useTranslation();
   const { matchId } = useLocalSearchParams();
   const { user } = useAuth();
   const { isPremium } = useSubscription();
@@ -97,6 +102,7 @@ export default function Chat() {
   const soundRef = useRef<Audio.Sound | null>(null);
   const [showIntroMessages, setShowIntroMessages] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadCurrentProfile();
@@ -300,7 +306,7 @@ export default function Chat() {
       setMatchProfile(matchProfileData);
     } catch (error: any) {
       console.error('❌ Error loading match profile:', error);
-      Alert.alert('Error', 'Failed to load chat. Please try again.');
+      Alert.alert(t('common.error'), 'Failed to load chat. Please try again.');
       router.back();
     }
   };
@@ -334,7 +340,7 @@ export default function Chat() {
       }
     } catch (error: any) {
       console.error('CATCH Error loading messages:', error);
-      Alert.alert('Error', 'Failed to load messages: ' + error.message);
+      Alert.alert(t('common.error'), 'Failed to load messages: ' + error.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -362,7 +368,16 @@ export default function Chat() {
           const newMessage = payload.new as Message;
           const decryptedMessage = await decryptSingleMessage(newMessage);
 
-          setMessages((prev) => [...prev, decryptedMessage]);
+          setMessages((prev) => {
+            // Check if message already exists to avoid duplicates
+            const exists = prev.some(msg => msg.id === decryptedMessage.id);
+            if (exists) {
+              console.log('📭 Message already exists, skipping duplicate:', decryptedMessage.id);
+              return prev;
+            }
+            console.log('📬 Adding new message from realtime:', decryptedMessage.id);
+            return [...prev, decryptedMessage];
+          });
 
           // Mark as read if message is for current user
           if (newMessage.receiver_profile_id === currentProfileId) {
@@ -413,19 +428,12 @@ export default function Chat() {
       return message;
     }
 
-    const isDevelopment = process.env.EXPO_PUBLIC_APP_ENV === 'development' || __DEV__;
-
-    // Check if message is encrypted (our format is "iv:ciphertext")
-    // If it doesn't contain ":", it's likely unencrypted (development mode only)
-    if (!message.encrypted_content.includes(':')) {
-      if (isDevelopment) {
-        console.log('⚠️ Unencrypted message detected (development mode)');
-        return message;
-      } else {
-        // In production, this shouldn't happen
-        console.error('❌ Unencrypted message in production!');
-        return { ...message, encrypted_content: '[Error: Unencrypted message]' };
-      }
+    // Check if message appears to be encrypted or plain text
+    const encryptedParts = message.encrypted_content.split(':');
+    if (encryptedParts.length < 2) {
+      // Plain text message (no colon separators)
+      console.log('⚠️ Plain text message detected');
+      return { ...message, decrypted_content: message.encrypted_content };
     }
 
     try {
@@ -433,11 +441,8 @@ export default function Chat() {
       const recipientPrivateKey = await getPrivateKey(user?.id || '');
       if (!recipientPrivateKey) {
         console.error('❌ Private key not found for decryption');
-        if (isDevelopment) {
-          return message;
-        } else {
-          return { ...message, encrypted_content: '[Unable to decrypt - keys not found]' };
-        }
+        // Return the encrypted content as-is (might be plain text from development)
+        return { ...message, decrypted_content: message.encrypted_content };
       }
 
       // Get sender's public key
@@ -450,29 +455,23 @@ export default function Chat() {
 
       if (senderError || !senderProfile?.encryption_public_key) {
         console.error('❌ Sender public key not found');
-        if (isDevelopment) {
-          return message;
-        } else {
-          return { ...message, encrypted_content: '[Unable to decrypt - sender keys not found]' };
-        }
+        // Return the encrypted content as-is (might be plain text from development)
+        return { ...message, decrypted_content: message.encrypted_content };
       }
 
-      // Decrypt the message
+      // Decrypt the message (decryptMessage handles both encrypted and plain text)
       const decryptedContent = await decryptMessage(
         message.encrypted_content,
         recipientPrivateKey,
         senderProfile.encryption_public_key
       );
 
-      return { ...message, encrypted_content: decryptedContent };
+      // Store decrypted content in separate field, preserve encrypted content
+      return { ...message, decrypted_content: decryptedContent };
     } catch (error) {
       console.error('Error decrypting message:', error);
-      // In production, show error. In dev, return original (might be unencrypted)
-      if (isDevelopment) {
-        return message;
-      } else {
-        return { ...message, encrypted_content: '[Unable to decrypt message]' };
-      }
+      // Try to display the content anyway - might be plain text
+      return { ...message, decrypted_content: message.encrypted_content };
     }
   };
 
@@ -484,7 +483,7 @@ export default function Chat() {
 
     // Check if match is still active
     if (matchStatus?.status !== 'active') {
-      Alert.alert('Cannot Send Message', 'This conversation has ended.');
+      Alert.alert(t('chat.cannotSendMessage'), t('chat.conversationEnded'));
       return;
     }
 
@@ -508,7 +507,7 @@ export default function Chat() {
     if (!messageValidation.isValid) {
       setNewMessage(messageContent); // Restore message to input
       setSending(false);
-      Alert.alert('Inappropriate Content', messageValidation.error);
+      Alert.alert(t('chat.inappropriateContent'), messageValidation.error);
       return;
     }
 
@@ -519,25 +518,16 @@ export default function Chat() {
       console.log('Receiver ID:', matchProfile.id);
       console.log('Content:', messageContent);
 
-      // Check if we're in development mode
-      const isDevelopment = process.env.EXPO_PUBLIC_APP_ENV === 'development' || __DEV__;
-
-      // Try to encrypt the message, but fallback to unencrypted only in development
-      let encryptedContent = null;
+      let encryptedContent = messageContent; // Default to plain text
       let shouldEncrypt = false;
 
       // Get sender's private key for encryption
       const senderPrivateKey = await getPrivateKey(user.id);
 
       if (!senderPrivateKey) {
-        if (isDevelopment) {
-          console.warn('⚠️ Sender encryption keys not found. Sending unencrypted message (development mode).');
-        } else {
-          throw new Error('Encryption keys not set up. Please log out and log back in.');
-        }
-      }
-
-      if (senderPrivateKey) {
+        console.warn('⚠️ Sender encryption keys not found. Sending unencrypted message.');
+        // Continue with plain text
+      } else {
         // Get recipient's public key for encryption
         const { data: recipientProfile } = await supabase
           .from('profiles')
@@ -546,15 +536,10 @@ export default function Chat() {
           .single();
 
         if (!recipientProfile?.encryption_public_key) {
-          if (isDevelopment) {
-            console.warn('⚠️ Recipient encryption keys not found. Sending unencrypted message (development mode).');
-          } else {
-            throw new Error('Cannot send message. Recipient has not set up encryption keys yet.');
-          }
-        }
-
-        if (recipientProfile?.encryption_public_key) {
-          shouldEncrypt = true;
+          console.warn('⚠️ Recipient encryption keys not found. Sending unencrypted message.');
+          // Continue with plain text
+        } else {
+          // Both parties have keys - encrypt the message
           console.log('🔐 Encrypting message...');
           try {
             encryptedContent = await encryptMessage(
@@ -562,25 +547,24 @@ export default function Chat() {
               senderPrivateKey,
               recipientProfile.encryption_public_key
             );
+            shouldEncrypt = true;
             console.log('✅ Message encrypted successfully');
-          } catch (encryptError) {
+          } catch (encryptError: any) {
             console.error('❌ Encryption failed:', encryptError);
-            if (isDevelopment) {
-              console.warn('⚠️ Sending unencrypted (development mode)');
-              shouldEncrypt = false;
-            } else {
-              throw new Error('Failed to encrypt message. Please try again.');
-            }
+            console.warn('⚠️ Falling back to unencrypted message');
+            // Fall back to plain text
+            encryptedContent = messageContent;
+            shouldEncrypt = false;
           }
         }
       }
 
-      // Send message (encrypted in production, may be unencrypted in development)
+      // Send message (encrypted if possible, plain text otherwise)
       const { data, error } = await supabase.from('messages').insert({
         match_id: matchId,
         sender_profile_id: currentProfileId,
         receiver_profile_id: matchProfile.id,
-        encrypted_content: shouldEncrypt ? encryptedContent : messageContent,
+        encrypted_content: encryptedContent,
         content_type: 'text',
       }).select();
 
@@ -616,7 +600,7 @@ export default function Chat() {
     } catch (error: any) {
       console.error('Error sending message:', error);
       setNewMessage(messageContent); // Restore message on error
-      Alert.alert('Error', 'Failed to send message. Please try again.');
+      Alert.alert(t('common.error'), t('chat.sendMessageError'));
     } finally {
       setSending(false);
     }
@@ -628,9 +612,10 @@ export default function Chat() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsEditing: true, // Enable photo editing/cropping
+        aspect: [4, 3], // Standard photo aspect ratio
         quality: 0.8,
+        exif: false, // Don't include EXIF data for privacy
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -662,16 +647,54 @@ export default function Chat() {
             .getPublicUrl(filePath);
 
           // Send image message
-          const { error: messageError } = await supabase.from('messages').insert({
-            match_id: matchId,
-            sender_profile_id: currentProfileId,
-            receiver_profile_id: matchProfile.id,
-            encrypted_content: '[Photo]',
-            content_type: 'image',
-            media_url: publicUrl,
-          });
+          console.log('📤 Sending image message:', { publicUrl, matchId, currentProfileId });
 
-          if (messageError) throw messageError;
+          const { data: insertedMessage, error: messageError } = await supabase
+            .from('messages')
+            .insert({
+              match_id: matchId,
+              sender_profile_id: currentProfileId,
+              receiver_profile_id: matchProfile.id,
+              encrypted_content: '[Photo]',
+              content_type: 'image',
+              media_url: publicUrl,
+            })
+            .select()
+            .single();
+
+          if (messageError) {
+            console.error('❌ Message insert error:', messageError);
+            throw messageError;
+          }
+
+          console.log('✅ Image message inserted:', insertedMessage);
+
+          // Add message to local state immediately (realtime will handle duplicates)
+          if (insertedMessage) {
+            console.log('📝 Adding image message to state. Current messages:', messages.length);
+            setMessages((prev) => {
+              // Force a new array reference for React to detect the change
+              const newMessages = [...prev, insertedMessage as Message];
+              console.log('📝 New messages count:', newMessages.length);
+              console.log('📝 New message details:', {
+                id: insertedMessage.id,
+                content_type: insertedMessage.content_type,
+                media_url: insertedMessage.media_url
+              });
+              return newMessages;
+            });
+
+            // Force FlatList to scroll to bottom after state update
+            setTimeout(() => {
+              console.log('📜 Scrolling to end...');
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+
+            // Try again after a bit longer in case the render hasn't completed
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }, 500);
+          }
 
           // Send push notification (skip in Expo Go)
           try {
@@ -686,14 +709,14 @@ export default function Chat() {
           }
         } catch (uploadError: any) {
           console.error('Error uploading image:', uploadError);
-          Alert.alert('Error', 'Failed to send photo. Please try again.');
+          Alert.alert(t('common.error'), t('chat.sendPhotoError'));
         } finally {
           setSending(false);
         }
       }
     } catch (error: any) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick photo. Please try again.');
+      Alert.alert(t('common.error'), t('chat.pickPhotoError'));
     }
   };
 
@@ -710,7 +733,7 @@ export default function Chat() {
       // Request permissions
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please enable microphone access to send voice messages.');
+        Alert.alert(t('chat.permissionRequired'), t('chat.microphonePermission'));
         return;
       }
 
@@ -760,7 +783,7 @@ export default function Chat() {
       }, 120000);
     } catch (error: any) {
       console.error('Error starting recording:', error);
-      Alert.alert('Error', 'Failed to start recording. Please try again.');
+      Alert.alert(t('common.error'), t('chat.recordingError'));
     }
   };
 
@@ -781,7 +804,7 @@ export default function Chat() {
       setRecordingDuration(0);
 
       if (!uri) {
-        Alert.alert('Error', 'Failed to record voice message.');
+        Alert.alert(t('common.error'), 'Failed to record voice message. Please try again.');
         return;
       }
 
@@ -789,7 +812,7 @@ export default function Chat() {
       await handleVoiceSend(uri, duration);
     } catch (error: any) {
       console.error('Error stopping recording:', error);
-      Alert.alert('Error', 'Failed to stop recording. Please try again.');
+      Alert.alert(t('common.error'), t('chat.stopRecordingError'));
     }
   };
 
@@ -865,7 +888,7 @@ export default function Chat() {
       }
     } catch (error: any) {
       console.error('Error sending voice message:', error);
-      Alert.alert('Error', 'Failed to send voice message. Please try again.');
+      Alert.alert(t('common.error'), t('chat.sendVoiceError'));
     } finally {
       setSending(false);
     }
@@ -902,7 +925,7 @@ export default function Chat() {
       setPlayingVoiceId(message.id);
     } catch (error: any) {
       console.error('Error playing voice message:', error);
-      Alert.alert('Error', 'Failed to play voice message.');
+      Alert.alert(t('common.error'), t('chat.playVoiceError'));
     }
   };
 
@@ -922,12 +945,12 @@ export default function Chat() {
         .update({ status: 'blocked' })
         .eq('id', matchId);
 
-      Alert.alert('Blocked', `You have blocked ${matchProfile.display_name}`, [
+      Alert.alert(t('chat.blocked'), `You have blocked ${matchProfile.display_name}`, [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (error) {
       console.error('Error blocking user:', error);
-      Alert.alert('Error', 'Failed to block user. Please try again.');
+      Alert.alert(t('common.error'), 'Failed to block user. Please try again.');
     }
   };
 
@@ -946,7 +969,7 @@ export default function Chat() {
       Alert.alert('Report Submitted', 'Thank you for helping keep Accord safe. Our team will review this report.');
     } catch (error) {
       console.error('Error reporting user:', error);
-      Alert.alert('Error', 'Failed to submit report. Please try again.');
+      Alert.alert(t('common.error'), 'Failed to submit report. Please try again.');
     }
   };
 
@@ -957,17 +980,17 @@ export default function Chat() {
     }
 
     if (message.sender_profile_id !== currentProfileId) {
-      Alert.alert('Cannot Delete', 'You can only delete your own messages.');
+      Alert.alert(t('chat.cannotDelete'), t('chat.cannotDeleteMessage'));
       return;
     }
 
     Alert.alert(
-      'Delete Message',
-      'Are you sure you want to delete this message?',
+      t('chat.deleteMessage'),
+      t('chat.deleteMessageConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -982,7 +1005,7 @@ export default function Chat() {
               setMessages((prev) => prev.filter((m) => m.id !== message.id));
             } catch (error) {
               console.error('Error deleting message:', error);
-              Alert.alert('Error', 'Failed to delete message. Please try again.');
+              Alert.alert(t('common.error'), t('chat.deleteMessageError'));
             }
           },
         },
@@ -995,15 +1018,15 @@ export default function Chat() {
 
     setSelectedMessage(message);
     Alert.alert(
-      'Message Options',
+      t('chat.messageOptions'),
       'What would you like to do?',
       [
         {
-          text: 'Delete Message',
+          text: t('chat.deleteMessage'),
           style: 'destructive',
           onPress: () => handleDeleteMessage(message),
         },
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
       ]
     );
   };
@@ -1030,7 +1053,7 @@ export default function Chat() {
           style: 'destructive',
         },
         {
-          text: 'Cancel',
+          text: t('common.cancel'),
           style: 'cancel',
         },
       ]
@@ -1043,7 +1066,7 @@ export default function Chat() {
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
 
-    if (diffMins < 1) return 'Just now';
+    if (diffMins < 1) return t('chat.timeAgo.justNow');
     if (diffMins < 60) return `${diffMins}m`;
     if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h`;
 
@@ -1063,8 +1086,6 @@ export default function Chat() {
     }
 
     const isMine = item.sender_profile_id === currentProfileId;
-    const showAvatar = !isMine && (index === messages.length - 1 || messages[index + 1]?.sender_profile_id !== item.sender_profile_id);
-
     return (
       <TouchableOpacity
         activeOpacity={0.9}
@@ -1077,20 +1098,14 @@ export default function Chat() {
           transition={{ type: 'timing', duration: 300 }}
           style={[styles.messageRow, isMine && styles.messageRowMine]}
         >
-        {/* Avatar for received messages */}
-        {showAvatar && !isMine && (
-          <Image
-            source={{ uri: matchProfile?.photo_url || 'https://via.placeholder.com/36' }}
-            style={styles.messageAvatar}
-          />
-        )}
-        {!showAvatar && !isMine && <View style={styles.messageAvatarSpacer} />}
-
         {/* Message Bubble */}
         <View style={[styles.messageBubble, isMine ? styles.messageBubbleMine : styles.messageBubbleTheirs]}>
           {item.content_type === 'image' && item.media_url ? (
             // Image message
-            <View>
+            <TouchableOpacity
+              onPress={() => setViewingImageUrl(item.media_url || null)}
+              activeOpacity={0.9}
+            >
               {isMine ? (
                 <LinearGradient
                   colors={['#8B5CF6', '#EC4899']}
@@ -1124,7 +1139,7 @@ export default function Chat() {
                   />
                 )}
               </View>
-            </View>
+            </TouchableOpacity>
           ) : item.content_type === 'voice' && item.media_url ? (
             // Voice message
             <TouchableOpacity onPress={() => handleVoicePlay(item)} activeOpacity={0.7}>
@@ -1219,7 +1234,7 @@ export default function Chat() {
                   end={{ x: 1, y: 1 }}
                   style={styles.messageBubbleGradient}
                 >
-                  <Text style={styles.messageTextMine}>{item.encrypted_content}</Text>
+                  <Text style={styles.messageTextMine}>{item.decrypted_content || item.encrypted_content}</Text>
                   <View style={styles.messageFooter}>
                     <Text style={[styles.messageTime, styles.messageTimeMine]}>
                       {getTimeDisplay(item.created_at)}
@@ -1236,7 +1251,7 @@ export default function Chat() {
                 </LinearGradient>
               ) : (
                 <>
-                  <Text style={styles.messageTextTheirs}>{item.encrypted_content}</Text>
+                  <Text style={styles.messageTextTheirs}>{item.decrypted_content || item.encrypted_content}</Text>
                   <Text style={styles.messageTime}>
                     {getTimeDisplay(item.created_at)}
                   </Text>
@@ -1254,7 +1269,7 @@ export default function Chat() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#8B5CF6" />
-        <Text style={{ marginTop: 16, color: '#6B7280' }}>Loading chat...</Text>
+        <Text style={{ marginTop: 16, color: '#6B7280' }}>{t('chat.loadingChat')}</Text>
       </View>
     );
   }
@@ -1273,7 +1288,7 @@ export default function Chat() {
             <MaterialCommunityIcons name="chevron-left" size={28} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
-            {isBlocked ? 'Blocked' : 'Conversation Ended'}
+            {isBlocked ? t('chat.blocked') : t('chat.conversationEnded')}
           </Text>
           <View style={{ width: 40 }} />
         </View>
@@ -1294,21 +1309,21 @@ export default function Chat() {
             </View>
 
             <Text style={styles.unmatchedTitle}>
-              {isBlocked ? 'This user is blocked' : 'This conversation has ended'}
+              {isBlocked ? t('chat.thisUserIsBlocked') : t('chat.thisConversationHasEnded')}
             </Text>
 
             <Text style={styles.unmatchedMessage}>
               {isBlocked
-                ? 'You have blocked this user. You cannot send or receive messages.'
+                ? t('chat.blockedUserMessage')
                 : isUnmatched && wasUnmatchedByMe
-                  ? 'You unmatched with this person. This conversation is now closed.'
-                  : 'This match has been unmatched. This conversation is now closed.'
+                  ? t('chat.youUnmatchedMessage')
+                  : t('chat.matchUnmatchedMessage')
               }
             </Text>
 
             {isUnmatched && (
               <Text style={styles.unmatchedSubtext}>
-                Messages are preserved for safety purposes but neither party can access them.
+                {t('chat.messagesPreservedMessage')}
               </Text>
             )}
 
@@ -1317,7 +1332,7 @@ export default function Chat() {
               onPress={() => router.back()}
               activeOpacity={0.7}
             >
-              <Text style={styles.unmatchedButtonText}>Back to Matches</Text>
+              <Text style={styles.unmatchedButtonText}>{t('chat.backToMatches')}</Text>
             </TouchableOpacity>
           </MotiView>
         </View>
@@ -1329,7 +1344,7 @@ export default function Chat() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#8B5CF6" />
-        <Text style={{ marginTop: 16, color: '#6B7280' }}>Loading...</Text>
+        <Text style={{ marginTop: 16, color: '#6B7280' }}>{t('chat.loading')}</Text>
       </View>
     );
   }
@@ -1367,7 +1382,7 @@ export default function Chat() {
                 <View style={styles.onlineDot} />
               )}
               <Text style={styles.encryptionText}>
-                {getLastActiveText(matchProfile?.last_active_at || null, matchProfile?.hide_last_active) || 'Secure messaging'}
+                {getLastActiveText(matchProfile?.last_active_at || null, matchProfile?.hide_last_active) || t('chat.secureMessaging')}
               </Text>
             </View>
           </View>
@@ -1398,12 +1413,22 @@ export default function Chat() {
             <View style={styles.premiumBannerContent}>
               <MaterialCommunityIcons name="crown" size={20} color="#FFD700" />
               <Text style={styles.premiumBannerText}>
-                Unlock read receipts, voice messages & delete messages
+                {t('chat.unlockFeatures')}
               </Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color="rgba(255,255,255,0.8)" />
           </LinearGradient>
         </TouchableOpacity>
+      )}
+
+      {/* Review Prompt Banner */}
+      {matchProfile && (
+        <ReviewPromptBanner
+          matchId={matchId as string}
+          reviewerId={currentProfileId || ''}
+          revieweeId={matchProfile.id}
+          revieweeName={matchProfile.display_name}
+        />
       )}
 
       {/* Messages List */}
@@ -1436,10 +1461,10 @@ export default function Chat() {
                   <MaterialCommunityIcons name="message-text-outline" size={40} color="white" />
                 </LinearGradient>
               </View>
-              <Text style={styles.emptyTitle}>Say hello!</Text>
+              <Text style={styles.emptyTitle}>{t('chat.sayHello')}</Text>
               <Text style={styles.emptyText}>
-                You matched with {matchProfile?.display_name}. {'\n'}
-                Start the conversation!
+                {t('chat.youMatchedWith', { name: matchProfile?.display_name })} {'\n'}
+                {t('chat.startConversation')}
               </Text>
             </MotiView>
           </View>
@@ -1483,7 +1508,7 @@ export default function Chat() {
             <Text style={styles.recordingTime}>
               {Math.floor(recordingDuration / 60)}:{String(recordingDuration % 60).padStart(2, '0')}
             </Text>
-            <Text style={styles.recordingHint}>Slide to cancel</Text>
+            <Text style={styles.recordingHint}>{t('chat.slideToCancel')}</Text>
           </View>
 
           <TouchableOpacity style={styles.stopButton} onPress={handleVoiceRecordStop}>
@@ -1513,7 +1538,7 @@ export default function Chat() {
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.input}
-              placeholder="Type a message..."
+              placeholder={t('chat.typeMessage')}
               placeholderTextColor="#9CA3AF"
               value={newMessage}
               onChangeText={setNewMessage}
@@ -1564,6 +1589,31 @@ export default function Chat() {
         variant="premium"
         feature="messaging"
       />
+
+      {/* Image Viewer Modal */}
+      <Modal
+        visible={!!viewingImageUrl}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setViewingImageUrl(null)}
+      >
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity
+            style={styles.imageViewerCloseButton}
+            onPress={() => setViewingImageUrl(null)}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="close" size={32} color="#fff" />
+          </TouchableOpacity>
+          {viewingImageUrl && (
+            <Image
+              source={{ uri: viewingImageUrl }}
+              style={styles.imageViewerImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -1674,15 +1724,6 @@ const styles = StyleSheet.create({
   },
   messageRowMine: {
     justifyContent: 'flex-end',
-  },
-  messageAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E5E7EB',
-  },
-  messageAvatarSpacer: {
-    width: 32,
   },
   messageBubble: {
     maxWidth: '70%',
@@ -1982,5 +2023,27 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#10B981',
     marginRight: 2,
+  },
+  imageViewerContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerCloseButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerImage: {
+    width: '100%',
+    height: '100%',
   },
 });

@@ -15,7 +15,9 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
@@ -30,6 +32,7 @@ import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
 interface ProfileData {
   id: string;
   display_name: string;
+  birth_date?: string;
   age: number;
   bio?: string;
   occupation?: string;
@@ -37,16 +40,28 @@ interface ProfileData {
   location_city?: string;
   location_state?: string;
   gender?: string;
+  pronouns?: string;
+  ethnicity?: string;
   sexual_orientation?: string;
+  height_inches?: number;
+  zodiac_sign?: string;
+  personality_type?: string;
   is_verified: boolean;
   photos?: Array<{ url: string; is_primary?: boolean; display_order?: number; caption?: string }>;
   prompt_answers?: Array<{ prompt: string; answer: string }>;
   interests?: string[];
+  hobbies?: string[];
+  love_language?: string;
+  languages_spoken?: string[];
+  my_story?: string;
+  religion?: string;
+  political_views?: string;
   voice_intro_url?: string;
   voice_intro_duration?: number;
 }
 
 export default function Profile() {
+  const { t } = useTranslation();
   const { user, signOut } = useAuth();
   const { isPremium, isPlatinum, subscriptionTier, isLoading: subscriptionLoading } = useSubscription();
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -66,6 +81,15 @@ export default function Profile() {
     }
   }, [user]);
 
+  // Reload profile when screen comes into focus (fixes photo caching issue)
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        loadProfile();
+      }
+    }, [user?.id])
+  );
+
   const loadProfile = async () => {
     try {
       // Safety check: ensure user is loaded before querying
@@ -80,6 +104,7 @@ export default function Profile() {
         .select(`
           id,
           display_name,
+          birth_date,
           age,
           bio,
           occupation,
@@ -87,10 +112,21 @@ export default function Profile() {
           location_city,
           location_state,
           gender,
+          pronouns,
+          ethnicity,
           sexual_orientation,
+          height_inches,
+          zodiac_sign,
+          personality_type,
           is_verified,
           prompt_answers,
           interests,
+          hobbies,
+          love_language,
+          languages_spoken,
+          my_story,
+          religion,
+          political_views,
           voice_intro_url,
           voice_intro_duration,
           photos (
@@ -129,11 +165,11 @@ export default function Profile() {
     } catch (error: any) {
       console.error('Error loading profile:', error);
       Alert.alert(
-        'Error Loading Profile',
-        'There was a problem loading your profile. Please try again.',
+        t('profile.errorLoadingProfileTitle'),
+        t('profile.errorLoadingProfileMessage'),
         [
           {
-            text: 'Sign Out',
+            text: t('profile.signOut'),
             style: 'destructive',
             onPress: async () => {
               try {
@@ -144,7 +180,7 @@ export default function Profile() {
               }
             }
           },
-          { text: 'Retry', onPress: loadProfile }
+          { text: t('profile.retry'), onPress: loadProfile }
         ]
       );
     } finally {
@@ -154,19 +190,19 @@ export default function Profile() {
 
   const handleSignOut = async () => {
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
+      t('profile.signOut'),
+      t('profile.signOutConfirmation'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('profile.cancel'), style: 'cancel' },
         {
-          text: 'Sign Out',
+          text: t('profile.signOut'),
           style: 'destructive',
           onPress: async () => {
             try {
               await signOut();
               router.replace('/(auth)/welcome');
             } catch (error) {
-              Alert.alert('Error', 'Failed to sign out');
+              Alert.alert(t('profile.error'), t('profile.signOutError'));
             }
           },
         },
@@ -199,7 +235,7 @@ export default function Profile() {
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8B5CF6" />
-          <Text style={styles.loadingText}>Loading profile...</Text>
+          <Text style={styles.loadingText}>{t('profile.loadingProfile')}</Text>
         </View>
       </View>
     );
@@ -210,29 +246,29 @@ export default function Profile() {
   if (profile?.occupation) {
     quickFacts.push({
       emoji: '💼',
-      label: 'Work',
+      label: t('profile.work'),
       value: profile.occupation,
     });
   }
   if (profile?.location_city) {
     quickFacts.push({
       emoji: '📍',
-      label: 'Location',
+      label: t('profile.location'),
       value: profile.location_city,
     });
   }
   if (profile?.education) {
     quickFacts.push({
       emoji: '🎓',
-      label: 'Education',
+      label: t('profile.education'),
       value: profile.education,
     });
   }
   if (profile?.is_verified) {
     quickFacts.push({
       emoji: '✅',
-      label: 'Status',
-      value: 'Verified',
+      label: t('profile.status'),
+      value: t('profile.verified'),
     });
   }
 
@@ -259,7 +295,7 @@ export default function Profile() {
             >
               <View style={styles.placeholderPhotoContainer}>
                 <MaterialCommunityIcons name="camera-plus" size={40} color="white" />
-                <Text style={styles.placeholderText}>Add Photos</Text>
+                <Text style={styles.placeholderText}>{t('profile.addPhotos')}</Text>
               </View>
               <Text style={styles.placeholderName}>
                 {profile?.display_name}, {profile?.age}
@@ -291,7 +327,7 @@ export default function Profile() {
           {/* Bio Story Card */}
           {profile?.bio && (
             <ProfileStoryCard
-              title="My Story"
+              title={t('profile.myStory')}
               icon="book-open-variant"
               content={profile.bio}
               gradient={['#8B5CF6', '#EC4899']}
@@ -327,7 +363,7 @@ export default function Profile() {
                 fontWeight: 'bold',
                 color: '#111827',
                 marginBottom: 12,
-              }}>My Interests</Text>
+              }}>{t('profile.myInterests')}</Text>
               <View style={{
                 flexDirection: 'row',
                 flexWrap: 'wrap',
@@ -362,33 +398,33 @@ export default function Profile() {
           {/* About Section */}
           {(profile?.occupation || profile?.education || profile?.location_city || profile?.gender || profile?.sexual_orientation) && (
             <ProfileInteractiveSection
-              title="About Me"
+              title={t('profile.aboutMe')}
               expandable={false}
               items={[
                 ...(profile.occupation ? [{
                   icon: 'briefcase',
-                  label: 'Career',
+                  label: t('profile.career'),
                   value: profile.occupation,
                 }] : []),
                 ...(profile.education ? [{
                   icon: 'school',
-                  label: 'Education',
+                  label: t('profile.education'),
                   value: profile.education,
                 }] : []),
                 ...(profile.location_city ? [{
                   icon: 'map-marker',
-                  label: 'Location',
+                  label: t('profile.location'),
                   value: `${profile.location_city}${profile.location_state ? `, ${profile.location_state}` : ''}`,
                 }] : []),
                 ...(profile.gender ? [{
                   icon: 'gender-transgender',
-                  label: 'Gender',
-                  value: profile.gender,
+                  label: t('profile.gender'),
+                  value: Array.isArray(profile.gender) ? profile.gender.join(', ') : profile.gender,
                 }] : []),
                 ...(profile.sexual_orientation ? [{
                   icon: 'heart',
-                  label: 'Orientation',
-                  value: profile.sexual_orientation,
+                  label: t('profile.orientation'),
+                  value: Array.isArray(profile.sexual_orientation) ? profile.sexual_orientation.join(', ') : profile.sexual_orientation,
                 }] : []),
               ]}
             />
@@ -406,7 +442,7 @@ export default function Profile() {
               style={styles.editProfileGradient}
             >
               <MaterialCommunityIcons name="pencil" size={20} color="white" />
-              <Text style={styles.editProfileText}>Edit Your Profile</Text>
+              <Text style={styles.editProfileText}>{t('profile.editYourProfile')}</Text>
             </LinearGradient>
           </TouchableOpacity>
 
@@ -416,7 +452,7 @@ export default function Profile() {
             onPress={handlePreviewProfile}
           >
             <MaterialCommunityIcons name="eye-outline" size={20} color="#8B5CF6" />
-            <Text style={styles.previewProfileText}>Preview Profile</Text>
+            <Text style={styles.previewProfileText}>{t('profile.previewProfile')}</Text>
           </TouchableOpacity>
 
           {/* Premium Status */}
@@ -441,7 +477,7 @@ export default function Profile() {
                   color="white"
                 />
                 <Text style={styles.premiumTitle}>
-                  {isPlatinum ? 'Platinum Member' : 'Premium Member'}
+                  {isPlatinum ? t('profile.platinumMember') : t('profile.premiumMember')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -453,17 +489,17 @@ export default function Profile() {
 
             <Text style={styles.premiumSubtitle}>
               {isPlatinum
-                ? 'Enjoying all Platinum features'
-                : 'Enjoying all Premium features'}
+                ? t('profile.enjoyingPlatinumFeatures')
+                : t('profile.enjoyingPremiumFeatures')}
             </Text>
 
             {/* Premium Benefits */}
             <View style={styles.premiumBenefits}>
               {[
-                'Unlimited swipes',
-                'See who likes you',
-                isPlatinum ? 'Weekly profile boost' : '5 Super Likes/week',
-                isPlatinum ? 'Priority support' : 'Voice messages',
+                t('profile.unlimitedSwipes'),
+                t('profile.seeWhoLikesYou'),
+                isPlatinum ? t('profile.weeklyProfileBoost') : t('profile.superLikesPerWeek'),
+                isPlatinum ? t('profile.prioritySupport') : t('profile.voiceMessages'),
               ].map((benefit, i) => (
                 <View key={i} style={styles.benefitRow}>
                   <MaterialCommunityIcons name="check-circle" size={16} color="white" />
@@ -478,7 +514,7 @@ export default function Profile() {
                 onPress={() => setShowPaywall(true)}
               >
                 <MaterialCommunityIcons name="crown" size={16} color="#8B5CF6" />
-                <Text style={styles.upgradeToPlatinumText}>Upgrade to Platinum</Text>
+                <Text style={styles.upgradeToPlatinumText}>{t('profile.upgradeToPlatinum')}</Text>
               </TouchableOpacity>
             )}
           </LinearGradient>
@@ -504,17 +540,17 @@ export default function Profile() {
                 <MaterialCommunityIcons name="crown" size={40} color="white" />
               </View>
 
-              <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
+              <Text style={styles.upgradeTitle}>{t('profile.upgradeToPremium')}</Text>
               <Text style={styles.upgradeSubtitle}>
-                Get unlimited swipes, see who likes you, and more
+                {t('profile.upgradeToPremiumSubtitle')}
               </Text>
 
               <View style={styles.upgradeFeatures}>
                 {[
-                  'Unlimited swipes',
-                  'See who likes you',
-                  'Advanced filters',
-                  'Read receipts & voice messages',
+                  t('profile.unlimitedSwipes'),
+                  t('profile.seeWhoLikesYou'),
+                  t('profile.advancedFilters'),
+                  t('profile.readReceiptsAndVoice'),
                 ].map((feature, i) => (
                   <View key={i} style={styles.upgradeFeatureRow}>
                     <MaterialCommunityIcons name="check" size={18} color="white" />
@@ -524,7 +560,7 @@ export default function Profile() {
               </View>
 
               <View style={styles.upgradeCTA}>
-                <Text style={styles.upgradeCTAText}>Unlock Premium Features</Text>
+                <Text style={styles.upgradeCTAText}>{t('profile.unlockPremiumFeatures')}</Text>
                 <MaterialCommunityIcons name="arrow-right" size={20} color="#8B5CF6" />
               </View>
             </LinearGradient>
@@ -534,7 +570,7 @@ export default function Profile() {
 
           {/* Menu Items */}
           <View style={styles.menuSection}>
-        <Text style={styles.menuSectionTitle}>Account</Text>
+        <Text style={styles.menuSectionTitle}>{t('profile.account')}</Text>
 
         <TouchableOpacity
           style={styles.menuItem}
@@ -542,34 +578,82 @@ export default function Profile() {
         >
           <View style={styles.menuItemLeft}>
             <MaterialCommunityIcons name="cog-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Settings & Privacy</Text>
+            <Text style={styles.menuItemText}>{t('profile.settingsPrivacy')}</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.menuItem}
-          onPress={() => Alert.alert('Verification', 'Verification coming soon')}
+          onPress={() => router.push('/settings/matching-preferences')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="shield-check-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Identity Verification</Text>
+            <MaterialCommunityIcons name="heart-cog" size={24} color="#8B5CF6" />
+            <Text style={[styles.menuItemText, { color: '#8B5CF6', fontWeight: '600' }]}>{t('profile.matchingPreferences')}</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#8B5CF6" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push('/settings/language')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="translate" size={24} color="#6B7280" />
+            <Text style={styles.menuItemText}>{t('profile.language')}</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
         </TouchableOpacity>
 
-        {isPremium && (
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => router.push('/settings/subscription')}
-          >
-            <View style={styles.menuItemLeft}>
-              <MaterialCommunityIcons name="credit-card-outline" size={24} color="#6B7280" />
-              <Text style={styles.menuItemText}>Manage Subscription</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push('/reviews/my-reviews')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="star-outline" size={24} color="#6B7280" />
+            <Text style={styles.menuItemText}>{t('profile.myReviews')}</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push('/settings/review-settings')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="star-settings-outline" size={24} color="#6B7280" />
+            <Text style={styles.menuItemText}>{t('profile.reviewSettings')}</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => Alert.alert(t('profile.verification'), t('profile.verificationComingSoon'))}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="shield-check-outline" size={24} color="#6B7280" />
+            <Text style={styles.menuItemText}>{t('profile.identityVerification')}</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push('/settings/subscription')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons
+              name={isPremium ? "credit-card-outline" : "crown-outline"}
+              size={24}
+              color={isPremium ? "#6B7280" : "#8B5CF6"}
+            />
+            <Text style={[styles.menuItemText, !isPremium && { color: '#8B5CF6', fontWeight: '600' }]}>
+              {isPremium ? t('profile.manageSubscription') : t('profile.upgradeToPremium')}
+            </Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color={isPremium ? "#D1D5DB" : "#8B5CF6"} />
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.menuItem}
@@ -577,7 +661,7 @@ export default function Profile() {
         >
           <View style={styles.menuItemLeft}>
             <MaterialCommunityIcons name="shield-check-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Safety Center</Text>
+            <Text style={styles.menuItemText}>{t('profile.safetyCenter')}</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
         </TouchableOpacity>
@@ -588,7 +672,7 @@ export default function Profile() {
         >
           <View style={styles.menuItemLeft}>
             <MaterialCommunityIcons name="cancel" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Blocked Users</Text>
+            <Text style={styles.menuItemText}>{t('profile.blockedUsers')}</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
         </TouchableOpacity>
@@ -601,7 +685,7 @@ export default function Profile() {
         >
           <View style={styles.menuItemLeft}>
             <MaterialCommunityIcons name="help-circle-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Help & Support</Text>
+            <Text style={styles.menuItemText}>{t('profile.helpSupport')}</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
         </TouchableOpacity>
@@ -609,7 +693,7 @@ export default function Profile() {
 
           {/* Danger Zone */}
           <View style={styles.menuSection}>
-        <Text style={styles.menuSectionTitle}>Danger Zone</Text>
+        <Text style={styles.menuSectionTitle}>{t('profile.dangerZone')}</Text>
 
         <TouchableOpacity
           style={[styles.menuItem, { borderColor: '#FEE2E2', borderWidth: 1 }]}
@@ -617,7 +701,7 @@ export default function Profile() {
         >
           <View style={styles.menuItemLeft}>
             <MaterialCommunityIcons name="delete-forever" size={24} color="#EF4444" />
-            <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Delete Account</Text>
+            <Text style={[styles.menuItemText, { color: '#EF4444' }]}>{t('profile.deleteAccount')}</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
         </TouchableOpacity>
@@ -629,11 +713,11 @@ export default function Profile() {
             onPress={handleSignOut}
           >
             <MaterialCommunityIcons name="logout" size={20} color="#EF4444" />
-            <Text style={styles.signOutText}>Sign Out</Text>
+            <Text style={styles.signOutText}>{t('profile.signOut')}</Text>
           </TouchableOpacity>
 
           {/* App Info */}
-          <Text style={styles.appVersion}>Accord v1.0.0</Text>
+          <Text style={styles.appVersion}>{t('profile.appVersion')}</Text>
 
           {/* Spacing */}
           <View style={{ height: 40 }} />
@@ -686,7 +770,7 @@ export default function Profile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FAF7F0',
   },
   content: {
     paddingHorizontal: 20,

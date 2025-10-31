@@ -70,306 +70,374 @@ Accord is a native mobile dating application (iOS + Android) designed specifical
 
 -- User Profiles
 CREATE TABLE profiles (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
-  display_name VARCHAR(100) NOT NULL,
-  age INTEGER NOT NULL,
-  gender VARCHAR(50), -- 'man', 'woman', 'non-binary', 'trans-man', 'trans-woman', 'other'
-  sexual_orientation VARCHAR(50), -- 'lesbian', 'gay', 'bisexual', 'queer', 'asexual', 'other'
-  location_city VARCHAR(100),
-  location_state VARCHAR(50),
-  location_country VARCHAR(50) DEFAULT 'US',
-  latitude DECIMAL(10, 8),
-  longitude DECIMAL(11, 8),
-  bio TEXT,
-  occupation VARCHAR(100),
-  education VARCHAR(100),
-  height_cm INTEGER,
+
+  -- Basic Info
+  display_name VARCHAR NOT NULL,
+  age INTEGER NOT NULL CHECK (age >= 18 AND age <= 100),
+  birth_date DATE, -- Auto-calculates age
+  gender VARCHAR, -- Man, Woman, Non-binary, Trans Man, Trans Woman, Other
+  pronouns VARCHAR, -- she/her, he/him, they/them, she/they, he/they, any pronouns, ask me, prefer not to say
+  ethnicity VARCHAR, -- Asian, Black/African, Hispanic/Latinx, Indigenous/Native, Middle Eastern/North African, Pacific Islander, South Asian, White/Caucasian, Multiracial, Other, Prefer not to say
+  sexual_orientation VARCHAR, -- Straight, Lesbian, Gay, Bisexual, Queer, Asexual, Pansexual, Other
+
+  -- Location
+  location_city VARCHAR,
+  location_state VARCHAR,
+  location_country VARCHAR DEFAULT 'US',
+  latitude NUMERIC,
+  longitude NUMERIC,
+
+  -- Profile Content
+  bio TEXT, -- Short bio/tagline
+  my_story TEXT, -- Longer narrative (100-1000 characters)
+  occupation VARCHAR,
+  education VARCHAR,
+  height_inches INTEGER, -- Height in inches (e.g., 5'10" = 70 inches)
+
+  -- Personality & Interests
+  zodiac_sign VARCHAR, -- Aries, Taurus, Gemini, Cancer, Leo, Virgo, Libra, Scorpio, Sagittarius, Capricorn, Aquarius, Pisces
+  personality_type VARCHAR, -- MBTI (e.g., ENFJ, INTJ, ISFP)
+  love_language VARCHAR, -- Words of Affirmation, Quality Time, Receiving Gifts, Acts of Service, Physical Touch
+  languages_spoken TEXT[], -- Array of languages
+  religion VARCHAR, -- Christian, Muslim, Jewish, Hindu, Buddhist, Atheist, Agnostic, Spiritual but not religious, Prefer not to say
+  political_views VARCHAR, -- Liberal, Conservative, Moderate, Progressive, Libertarian, Apolitical, Prefer not to say
+  hobbies TEXT[], -- Array of hobby tags
+  interests JSONB DEFAULT '{}'::jsonb, -- {movies: [], music: [], books: [], tv_shows: []}
+  prompt_answers JSONB DEFAULT '[]'::jsonb, -- Array of {prompt, answer} objects
+
+  -- Voice Intro
+  voice_intro_url TEXT, -- 30 second voice introduction from Supabase Storage
+  voice_intro_duration INTEGER, -- Duration in seconds
+
+  -- Verification & Status
   is_verified BOOLEAN DEFAULT false,
-  verification_status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
   is_premium BOOLEAN DEFAULT false,
   is_platinum BOOLEAN DEFAULT false,
-  is_active BOOLEAN DEFAULT true,
-  last_active_at TIMESTAMP DEFAULT NOW(),
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  is_admin BOOLEAN DEFAULT false,
+  verification_status VARCHAR DEFAULT 'pending', -- pending, approved, rejected
+  profile_complete BOOLEAN DEFAULT false,
+  onboarding_step INTEGER DEFAULT 0,
+
+  -- Privacy Settings
+  photo_blur_enabled BOOLEAN DEFAULT false, -- Blur photos until matched
+  incognito_mode BOOLEAN DEFAULT false, -- Hide from discovery
+  hide_last_active BOOLEAN DEFAULT false,
+  hide_distance BOOLEAN DEFAULT false, -- Show "nearby" instead of exact distance
+
+  -- Encryption
+  encryption_public_key TEXT, -- Public key for E2E encrypted messaging
+  public_key TEXT, -- Deprecated, use encryption_public_key
+
+  -- Push Notifications
+  push_token TEXT, -- Expo Push Notification token
+  push_enabled BOOLEAN DEFAULT true,
+
+  -- Premium Features
+  super_likes_count INTEGER DEFAULT 0, -- Used this week
+  super_likes_reset_date TIMESTAMP DEFAULT now(), -- Resets every Sunday
+  last_boost_at TIMESTAMP,
+  boost_count INTEGER DEFAULT 0,
+
+  -- Reviews System
+  review_aggregate_score NUMERIC, -- Average of all visible reviews (null if <5 reviews)
+  review_count INTEGER DEFAULT 0, -- Total number of visible reviews
+  show_reviews BOOLEAN DEFAULT true, -- Quick toggle for showing/hiding reviews
+  seeking_gender TEXT, -- What gender seeking in matches
+
+  -- Timestamps
+  last_active_at TIMESTAMPTZ DEFAULT now(),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Profile Photos
 CREATE TABLE photos (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  storage_path TEXT NOT NULL, -- Supabase storage path
-  position INTEGER NOT NULL, -- Order in profile (1-6)
+  storage_path VARCHAR NOT NULL, -- Supabase storage path
+  url TEXT NOT NULL, -- Public URL
+  display_order INTEGER DEFAULT 0, -- Order in profile (0-5)
   is_primary BOOLEAN DEFAULT false,
-  is_public BOOLEAN DEFAULT true, -- Can be blurred for privacy
-  created_at TIMESTAMP DEFAULT NOW()
+  moderation_status VARCHAR DEFAULT 'pending', -- pending, approved, rejected
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Marriage Preferences & Expectations
 CREATE TABLE preferences (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE UNIQUE,
 
-  -- Location preferences
+  -- Location Preferences
   max_distance_miles INTEGER DEFAULT 50,
   willing_to_relocate BOOLEAN DEFAULT false,
-  preferred_cities TEXT[], -- Array of preferred cities
+  search_globally BOOLEAN DEFAULT false, -- Search anywhere in the world
 
-  -- Marriage goals
-  primary_reason VARCHAR(100), -- 'financial', 'immigration', 'family_pressure', 'legal_benefits', 'companionship'
-  relationship_type VARCHAR(50), -- 'platonic', 'romantic', 'open'
+  -- Marriage Goals
+  primary_reason VARCHAR NOT NULL, -- financial, immigration, family_pressure, legal_benefits, companionship, safety, other
+  relationship_type VARCHAR NOT NULL, -- platonic, romantic, open
   wants_children BOOLEAN,
-  children_timeline VARCHAR(50), -- 'soon', '1-3_years', '3-5_years', 'open', 'never'
+  children_arrangement VARCHAR, -- How children would be handled
 
-  -- Financial expectations
-  income_level VARCHAR(50), -- '<50k', '50k-100k', '100k-200k', '200k+'
-  financial_arrangement VARCHAR(100), -- 'separate', 'joint', 'prenup_required'
-  housing_preference VARCHAR(50), -- 'separate_spaces', 'roommates', 'shared_bedroom'
+  -- Financial & Living
+  financial_arrangement VARCHAR, -- separate, shared_expenses, joint, prenup_required, flexible
+  housing_preference VARCHAR, -- separate_spaces, roommates, separate_homes, shared_bedroom, flexible
 
   -- Lifestyle
-  religion VARCHAR(50),
-  political_views VARCHAR(50),
-  smoking VARCHAR(50), -- 'never', 'socially', 'regularly'
-  drinking VARCHAR(50),
-  pets VARCHAR(50), -- 'love_them', 'okay_with_them', 'allergic', 'no_pets'
+  lifestyle_preferences JSONB, -- {smoking, drinking, pets, etc.}
 
-  -- Visibility preferences
-  public_relationship BOOLEAN, -- Appear as couple publicly?
-  family_involvement VARCHAR(50), -- 'very_involved', 'somewhat', 'minimal', 'none'
+  -- Matching Preferences
+  age_min INTEGER DEFAULT 25,
+  age_max INTEGER DEFAULT 45,
+  gender_preference VARCHAR[] DEFAULT ARRAY[]::VARCHAR[], -- Array of acceptable genders
 
-  -- Matching preferences
-  age_min INTEGER DEFAULT 22,
-  age_max INTEGER DEFAULT 50,
-  gender_preference TEXT[], -- Array: ['man', 'woman', 'non-binary']
+  -- Dealbreakers & Must-Haves
+  dealbreakers TEXT[], -- Array of dealbreakers
+  must_haves TEXT[], -- Array of must-haves
 
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- Dealbreakers (hard filters)
-CREATE TABLE dealbreakers (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  dealbreaker_type VARCHAR(100) NOT NULL, -- 'must_want_children', 'no_smoking', 'same_city_only', etc.
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Matches (bidirectional connections)
-CREATE TABLE matches (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  profile1_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  profile2_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  initiated_by UUID REFERENCES profiles(id), -- Who liked first
-  matched_at TIMESTAMP DEFAULT NOW(),
-  status VARCHAR(50) DEFAULT 'active', -- 'active', 'unmatched', 'blocked'
-  compatibility_score NUMERIC(5, 2), -- 0-100 calculated by algorithm
-  unmatch_reason TEXT,
-  unmatched_at TIMESTAMP,
-  CONSTRAINT unique_match UNIQUE (profile1_id, profile2_id),
-  CHECK (profile1_id < profile2_id) -- Ensure ordered pair
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Likes (swipe right)
 CREATE TABLE likes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  from_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  to_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  like_type VARCHAR(50) DEFAULT 'standard', -- 'standard', 'super_like'
-  message TEXT, -- Optional intro message
-  created_at TIMESTAMP DEFAULT NOW(),
-  CONSTRAINT unique_like UNIQUE (from_profile_id, to_profile_id)
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  liker_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  liked_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  like_type VARCHAR DEFAULT 'standard', -- standard, super
+  message TEXT, -- Optional intro message for super likes
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(liker_profile_id, liked_profile_id)
 );
 
 -- Passes (swipe left)
 CREATE TABLE passes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  from_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  to_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  created_at TIMESTAMP DEFAULT NOW(),
-  CONSTRAINT unique_pass UNIQUE (from_profile_id, to_profile_id)
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  passer_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  passed_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(passer_profile_id, passed_profile_id)
 );
 
--- Messages
+-- Matches (bidirectional connections)
+CREATE TABLE matches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile1_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  profile2_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  initiated_by UUID REFERENCES profiles(id), -- Who liked first
+  compatibility_score INTEGER DEFAULT 0, -- 0-100
+  status VARCHAR DEFAULT 'active', -- active, unmatched, blocked
+  matched_at TIMESTAMPTZ DEFAULT now(),
+  unmatched_by UUID REFERENCES profiles(id), -- Who initiated unmatch
+  unmatched_at TIMESTAMPTZ,
+  unmatch_reason TEXT,
+  is_muted BOOLEAN DEFAULT false,
+  is_archived BOOLEAN DEFAULT false,
+  is_pinned BOOLEAN DEFAULT false,
+  UNIQUE(profile1_id, profile2_id),
+  CHECK (profile1_id < profile2_id) -- Ensure ordered pair
+);
+
+-- Messages (end-to-end encrypted)
 CREATE TABLE messages (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
-  sender_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  receiver_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  content TEXT, -- Encrypted content
-  message_type VARCHAR(50) DEFAULT 'text', -- 'text', 'image', 'video', 'voice'
-  media_url TEXT, -- Supabase Storage URL for media messages
-  encryption_key TEXT, -- Public key used for E2E encryption
-  is_read BOOLEAN DEFAULT false,
-  read_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
+  sender_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  receiver_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  encrypted_content TEXT NOT NULL, -- Encrypted message content
+  content_type VARCHAR DEFAULT 'text', -- text, image, video, voice
+  media_url TEXT, -- For image/video/voice messages
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
-CREATE INDEX idx_messages_unread ON messages(receiver_id, is_read) WHERE is_read = false;
+CREATE INDEX idx_messages_unread ON messages(receiver_profile_id, read_at) WHERE read_at IS NULL;
 
--- Verification Records
-CREATE TABLE verifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  verification_type VARCHAR(50) NOT NULL, -- 'identity', 'video_selfie', 'background_check'
-  status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
-  provider VARCHAR(50), -- 'persona', 'jumio'
-  provider_verification_id TEXT,
-  verification_data JSONB, -- Store provider response
-  submitted_at TIMESTAMP DEFAULT NOW(),
-  completed_at TIMESTAMP,
-  notes TEXT
+-- Subscriptions (synced from RevenueCat)
+CREATE TABLE subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE UNIQUE,
+  tier VARCHAR NOT NULL, -- premium, platinum
+  revenuecat_customer_id VARCHAR,
+  status VARCHAR DEFAULT 'active', -- active, cancelled, expired, trial
+  started_at TIMESTAMPTZ DEFAULT now(),
+  expires_at TIMESTAMPTZ,
+  auto_renew BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Blocks & Reports
 CREATE TABLE blocks (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  blocker_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  blocked_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  reason TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  CONSTRAINT unique_block UNIQUE (blocker_id, blocked_id)
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  blocker_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  blocked_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(blocker_profile_id, blocked_profile_id)
 );
 
 CREATE TABLE reports (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  reporter_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  reported_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  report_type VARCHAR(100), -- 'harassment', 'fake_profile', 'inappropriate_content', 'scam', 'other'
-  description TEXT NOT NULL,
-  status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'reviewing', 'resolved', 'dismissed'
-  resolution_notes TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  resolved_at TIMESTAMP
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reporter_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  reported_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  reason VARCHAR NOT NULL, -- harassment, fake_profile, inappropriate_content, scam, other
+  details TEXT,
+  status VARCHAR DEFAULT 'pending', -- pending, reviewing, resolved, dismissed
+  reviewed_by UUID,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Subscriptions (synced from RevenueCat)
-CREATE TABLE subscriptions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  revenue_cat_customer_id VARCHAR(255) UNIQUE,
-  subscription_tier VARCHAR(50), -- 'premium', 'platinum'
-  status VARCHAR(50), -- 'active', 'cancelled', 'expired', 'trial'
-  platform VARCHAR(50), -- 'ios', 'android'
-  product_id VARCHAR(255),
-  original_purchase_date TIMESTAMP,
-  expiration_date TIMESTAMP,
-  will_renew BOOLEAN,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- One-time Purchases
-CREATE TABLE purchases (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  product_id VARCHAR(255) NOT NULL, -- 'verification_badge', 'profile_boost', 'super_like_bundle'
-  platform VARCHAR(50), -- 'ios', 'android'
-  revenue_cat_transaction_id VARCHAR(255),
-  price_usd DECIMAL(10, 2),
-  purchased_at TIMESTAMP DEFAULT NOW()
-);
-
--- Profile Boosts (visibility increase)
+-- Profile Boosts (visibility increases)
 CREATE TABLE boosts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  boost_type VARCHAR DEFAULT 'standard', -- standard, super
+  duration_minutes INTEGER DEFAULT 30,
+  started_at TIMESTAMP DEFAULT now(),
+  expires_at TIMESTAMP NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT now()
+);
+
+-- Push Notifications Log
+CREATE TABLE push_notifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  boost_type VARCHAR(50) DEFAULT 'standard', -- 'standard', 'super'
-  duration_minutes INTEGER DEFAULT 60,
-  started_at TIMESTAMP DEFAULT NOW(),
-  expires_at TIMESTAMP,
-  purchase_id UUID REFERENCES purchases(id)
-);
-
--- Analytics Events
-CREATE TABLE analytics_events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  event_type VARCHAR(100) NOT NULL, -- 'profile_view', 'swipe_left', 'swipe_right', 'message_sent', etc.
-  event_data JSONB,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX idx_analytics_user ON analytics_events(user_id, created_at DESC);
-CREATE INDEX idx_analytics_type ON analytics_events(event_type, created_at DESC);
-
--- Notifications
-CREATE TABLE notifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  notification_type VARCHAR(100), -- 'new_match', 'new_message', 'profile_liked', 'verification_complete'
-  title VARCHAR(255),
-  body TEXT,
-  data JSONB,
+  notification_type VARCHAR NOT NULL, -- new_match, new_message, profile_liked, etc.
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  data JSONB, -- Additional data payload
   is_read BOOLEAN DEFAULT false,
   read_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
+  sent_at TIMESTAMP DEFAULT now(),
+  created_at TIMESTAMP DEFAULT now()
 );
 
-CREATE INDEX idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = false;
-
--- Background Jobs Queue
-CREATE TABLE job_queue (
+-- Notification Queue (for background processing)
+CREATE TABLE notification_queue (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  job_type VARCHAR(100) NOT NULL, -- 'calculate_compatibility', 'send_notification', 'expire_boost'
-  payload JSONB,
-  status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'processing', 'completed', 'failed'
+  recipient_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  notification_type VARCHAR NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  data JSONB,
+  status VARCHAR DEFAULT 'pending', -- pending, sent, failed
   attempts INTEGER DEFAULT 0,
-  max_attempts INTEGER DEFAULT 3,
   error TEXT,
-  scheduled_for TIMESTAMP DEFAULT NOW(),
-  started_at TIMESTAMP,
-  completed_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT now(),
+  processed_at TIMESTAMP
 );
 
-CREATE INDEX idx_jobs_pending ON job_queue(status, scheduled_for) WHERE status = 'pending';
+-- Reviews System (Airbnb-style mutual reviews)
+CREATE TABLE reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
+  reviewer_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  reviewee_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+
+  -- 5 Category Ratings (1-5 stars each)
+  communication_responsiveness INTEGER NOT NULL CHECK (communication_responsiveness >= 1 AND communication_responsiveness <= 5),
+  honesty_authenticity INTEGER NOT NULL CHECK (honesty_authenticity >= 1 AND honesty_authenticity <= 5),
+  respect_boundaries INTEGER NOT NULL CHECK (respect_boundaries >= 1 AND respect_boundaries <= 5),
+  compatibility_intent INTEGER NOT NULL CHECK (compatibility_intent >= 1 AND compatibility_intent <= 5),
+  reliability_followthrough INTEGER NOT NULL CHECK (reliability_followthrough >= 1 AND reliability_followthrough <= 5),
+
+  overall_rating NUMERIC, -- Calculated average
+  feedback_text TEXT, -- Optional written feedback
+
+  -- Visibility & Moderation
+  is_visible BOOLEAN DEFAULT false, -- Whether shown publicly
+  is_revealed BOOLEAN DEFAULT false, -- Whether revealed to reviewee
+  revealed_at TIMESTAMPTZ,
+  review_window_expires_at TIMESTAMPTZ DEFAULT (now() + INTERVAL '3 days'), -- Auto-reveal after 3 days
+
+  is_flagged BOOLEAN DEFAULT false,
+  flag_reason TEXT,
+
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Review Prompts (manages review timing)
+CREATE TABLE review_prompts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  match_id UUID REFERENCES matches(id) ON DELETE CASCADE UNIQUE,
+  profile1_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  profile2_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+
+  trigger_date TIMESTAMPTZ NOT NULL, -- 7 days after match
+  window_expires_at TIMESTAMPTZ NOT NULL, -- trigger + 3 days
+
+  profile1_reviewed BOOLEAN DEFAULT false,
+  profile2_reviewed BOOLEAN DEFAULT false,
+  profile1_notified BOOLEAN DEFAULT false,
+  profile2_notified BOOLEAN DEFAULT false,
+  reminder_sent BOOLEAN DEFAULT false,
+  reviews_revealed BOOLEAN DEFAULT false,
+
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Profile Review Settings
+CREATE TABLE profile_review_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE UNIQUE,
+
+  reviews_enabled BOOLEAN DEFAULT true, -- Master toggle
+  auto_disabled_by_location BOOLEAN DEFAULT false, -- Auto-disabled in high-risk countries
+  disabled_reason TEXT,
+
+  show_aggregate_publicly BOOLEAN DEFAULT true,
+  show_detailed_after_match BOOLEAN DEFAULT true,
+  minimum_reviews_threshold INTEGER DEFAULT 5,
+  allow_new_reviews BOOLEAN DEFAULT true,
+
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Waitlist (pre-launch)
+CREATE TABLE waitlist (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  notified BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT timezone('utc', now())
+);
 ```
 
 ### Row Level Security (RLS) Policies
 
+All tables have RLS enabled for security. Key policies:
+
 ```sql
--- Enable RLS on all tables
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE photos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE preferences ENABLE ROW LEVEL SECURITY;
-ALTER TABLE matches ENABLE ROW LEVEL SECURITY;
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE passes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE blocks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
-ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+-- Profiles: Users can read their own + active profiles
+CREATE POLICY "Users view own profile" ON profiles FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users update own profile" ON profiles FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users view active profiles" ON profiles FOR SELECT USING (is_active = true AND incognito_mode = false);
 
--- Profiles: Users can read their own profile, read active profiles (for matching)
-CREATE POLICY "Users can view their own profile" ON profiles FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can update their own profile" ON profiles FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can view active profiles" ON profiles FOR SELECT USING (is_active = true);
-
--- Photos: Users can manage their own, view public photos of active users
-CREATE POLICY "Users can manage their own photos" ON photos FOR ALL USING (
+-- Photos: Users manage their own, view public photos
+CREATE POLICY "Users manage own photos" ON photos FOR ALL USING (
   profile_id IN (SELECT id FROM profiles WHERE user_id = auth.uid())
 );
-CREATE POLICY "Users can view public photos" ON photos FOR SELECT USING (is_public = true);
+CREATE POLICY "Users view public photos" ON photos FOR SELECT USING (moderation_status = 'approved');
 
--- Messages: Users can only read messages they're part of
-CREATE POLICY "Users can view their messages" ON messages FOR SELECT USING (
-  sender_id IN (SELECT id FROM profiles WHERE user_id = auth.uid()) OR
-  receiver_id IN (SELECT id FROM profiles WHERE user_id = auth.uid())
-);
-CREATE POLICY "Users can send messages" ON messages FOR INSERT WITH CHECK (
-  sender_id IN (SELECT id FROM profiles WHERE user_id = auth.uid())
+-- Messages: Users only see their own messages
+CREATE POLICY "Users view their messages" ON messages FOR SELECT USING (
+  sender_profile_id IN (SELECT id FROM profiles WHERE user_id = auth.uid()) OR
+  receiver_profile_id IN (SELECT id FROM profiles WHERE user_id = auth.uid())
 );
 
--- Matches: Users can view their own matches
-CREATE POLICY "Users can view their matches" ON matches FOR SELECT USING (
+-- Matches: Users view their own matches
+CREATE POLICY "Users view their matches" ON matches FOR SELECT USING (
   profile1_id IN (SELECT id FROM profiles WHERE user_id = auth.uid()) OR
   profile2_id IN (SELECT id FROM profiles WHERE user_id = auth.uid())
 );
 
--- Subscriptions: Users can only view their own subscription
-CREATE POLICY "Users can view their subscription" ON subscriptions FOR SELECT USING (auth.uid() = user_id);
+-- Subscriptions: Users view their own subscription
+CREATE POLICY "Users view own subscription" ON subscriptions FOR SELECT USING (
+  profile_id IN (SELECT id FROM profiles WHERE user_id = auth.uid())
+);
 ```
 
 ## API Architecture

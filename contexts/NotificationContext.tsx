@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { useAuth } from './AuthContext';
 import {
@@ -25,11 +24,11 @@ export function useNotifications() {
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const router = useRouter();
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const notificationListener = useRef<Notifications.Subscription>();
   const responseListener = useRef<Notifications.Subscription>();
+  const pendingNavigation = useRef<any>(null);
 
   useEffect(() => {
     if (user) {
@@ -93,33 +92,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const handleNotificationResponse = (data: any) => {
     if (!data || !data.type) return;
 
-    // Route user to appropriate screen based on notification type
-    switch (data.type) {
-      case 'new_match':
-        if (data.matchId) {
-          router.push(`/chat/${data.matchId}`);
-        } else {
-          router.push('/(tabs)/matches');
-        }
-        break;
+    // Store the navigation data for the app to handle
+    // Navigation will be handled by individual screens using useEffect
+    // to check for pending notifications after mounting
+    pendingNavigation.current = data;
 
-      case 'new_message':
-        if (data.matchId) {
-          router.push(`/chat/${data.matchId}`);
-        } else {
-          router.push('/(tabs)/messages');
-        }
-        break;
-
-      case 'new_like':
-        // Navigate to "Who Liked You" screen (premium feature)
-        router.push('/likes');
-        break;
-
-      default:
-        // Default to home screen
-        router.push('/(tabs)/discover');
-    }
+    console.log('Notification tapped:', data.type);
+    // Navigation is now handled by screens checking pendingNavigation
+    // This avoids router context issues during app initialization
   };
 
   return (

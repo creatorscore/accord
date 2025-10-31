@@ -8,6 +8,7 @@ import { GradientButton } from '@/components/shared/GradientButton';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { validateDisplayName, getModerationErrorMessage } from '@/lib/content-moderation';
 import { initializeEncryption } from '@/lib/encryption';
+import { useTranslation } from 'react-i18next';
 
 const GENDERS = [
   'Man',
@@ -114,6 +115,7 @@ const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 100 }, (_, i) => currentYear - 18 - i); // Start from 18 years ago
 
 export default function BasicInfo() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
   const [displayName, setDisplayName] = useState('');
@@ -125,10 +127,10 @@ export default function BasicInfo() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
-  const [gender, setGender] = useState('');
+  const [gender, setGender] = useState<string[]>([]);
   const [pronouns, setPronouns] = useState('');
-  const [ethnicity, setEthnicity] = useState('');
-  const [orientation, setOrientation] = useState('');
+  const [ethnicity, setEthnicity] = useState<string[]>([]);
+  const [orientation, setOrientation] = useState<string[]>([]);
   const [locationCity, setLocationCity] = useState('');
   const [locationState, setLocationState] = useState('');
   const [locationCountry, setLocationCountry] = useState('');
@@ -148,6 +150,31 @@ export default function BasicInfo() {
     if (!currentUser) {
       Alert.alert('Not Authenticated', 'Please sign in to continue');
       router.replace('/(auth)/welcome');
+    }
+  };
+
+  // Toggle functions for multi-select fields
+  const toggleGender = (g: string) => {
+    if (gender.includes(g)) {
+      setGender(gender.filter(item => item !== g));
+    } else {
+      setGender([...gender, g]);
+    }
+  };
+
+  const toggleEthnicity = (e: string) => {
+    if (ethnicity.includes(e)) {
+      setEthnicity(ethnicity.filter(item => item !== e));
+    } else {
+      setEthnicity([...ethnicity, e]);
+    }
+  };
+
+  const toggleOrientation = (o: string) => {
+    if (orientation.includes(o)) {
+      setOrientation(orientation.filter(item => item !== o));
+    } else {
+      setOrientation([...orientation, o]);
     }
   };
 
@@ -178,10 +205,10 @@ export default function BasicInfo() {
           setSelectedDay(date.getDate());
           setSelectedYear(date.getFullYear());
         }
-        if (profile.gender) setGender(profile.gender);
+        if (profile.gender) setGender(Array.isArray(profile.gender) ? profile.gender : [profile.gender]);
         if (profile.pronouns) setPronouns(profile.pronouns);
-        if (profile.ethnicity) setEthnicity(profile.ethnicity);
-        if (profile.sexual_orientation) setOrientation(profile.sexual_orientation);
+        if (profile.ethnicity) setEthnicity(Array.isArray(profile.ethnicity) ? profile.ethnicity : [profile.ethnicity]);
+        if (profile.sexual_orientation) setOrientation(Array.isArray(profile.sexual_orientation) ? profile.sexual_orientation : [profile.sexual_orientation]);
         if (profile.location_city) setLocationCity(profile.location_city);
         if (profile.location_state) setLocationState(profile.location_state);
         if (profile.location_country) setLocationCountry(profile.location_country);
@@ -273,8 +300,8 @@ export default function BasicInfo() {
       return;
     }
 
-    if (!gender) {
-      Alert.alert('Required', 'Please select your gender');
+    if (gender.length === 0) {
+      Alert.alert('Required', 'Please select at least one gender');
       return;
     }
 
@@ -283,8 +310,8 @@ export default function BasicInfo() {
       return;
     }
 
-    if (!orientation) {
-      Alert.alert('Required', 'Please select your sexual orientation');
+    if (orientation.length === 0) {
+      Alert.alert('Required', 'Please select at least one sexual orientation');
       return;
     }
 
@@ -342,10 +369,10 @@ export default function BasicInfo() {
           birth_date: birthDate.toISOString().split('T')[0], // Store as YYYY-MM-DD
           age, // Calculated age
           zodiac_sign, // Calculated zodiac
-          gender,
+          gender: gender.length === 1 ? gender[0] : gender, // Single value as string, multiple as array
           pronouns,
-          ethnicity: ethnicity || null,
-          sexual_orientation: orientation,
+          ethnicity: ethnicity && ethnicity.length === 1 ? ethnicity[0] : (ethnicity.length > 1 ? ethnicity : null),
+          sexual_orientation: orientation.length === 1 ? orientation[0] : orientation, // Single value as string, multiple as array
           location_city: locationCity,
           location_state: locationState,
           location_country: locationCountry || null,
@@ -408,10 +435,10 @@ export default function BasicInfo() {
         <View className="space-y-6">
           {/* Name */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">Display Name</Text>
+            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.displayName')}</Text>
             <TextInput
               className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-              placeholder="What should we call you?"
+              placeholder={t('onboarding.displayNamePlaceholder')}
               value={displayName}
               onChangeText={setDisplayName}
               maxLength={50}
@@ -420,7 +447,7 @@ export default function BasicInfo() {
 
           {/* Birth Date */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">Birth Date</Text>
+            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.birthDate')}</Text>
             <TouchableOpacity
               className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 flex-row items-center justify-between"
               onPress={() => setShowDatePicker(true)}
@@ -570,21 +597,22 @@ export default function BasicInfo() {
 
           {/* Gender */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">Gender</Text>
+            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.gender')}</Text>
+            <Text className="text-xs text-gray-500 mb-2">Select all that apply</Text>
             <View className="flex-row flex-wrap gap-2">
               {GENDERS.map((g) => (
                 <TouchableOpacity
                   key={g}
                   className={`px-4 py-2 rounded-full border ${
-                    gender === g
+                    gender.includes(g)
                       ? 'bg-primary-500 border-primary-500'
                       : 'bg-white border-gray-300'
                   }`}
-                  onPress={() => setGender(g)}
+                  onPress={() => toggleGender(g)}
                 >
                   <Text
                     className={`${
-                      gender === g ? 'text-white' : 'text-gray-700'
+                      gender.includes(g) ? 'text-white' : 'text-gray-700'
                     } font-medium`}
                   >
                     {g}
@@ -592,11 +620,16 @@ export default function BasicInfo() {
                 </TouchableOpacity>
               ))}
             </View>
+            {gender.length > 0 && (
+              <Text className="text-xs text-primary-600 mt-2">
+                Selected: {gender.join(', ')}
+              </Text>
+            )}
           </View>
 
           {/* Pronouns */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">Pronouns</Text>
+            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.pronouns')}</Text>
             <View className="flex-row flex-wrap gap-2">
               {PRONOUNS.map((p) => (
                 <TouchableOpacity
@@ -622,22 +655,22 @@ export default function BasicInfo() {
 
           {/* Ethnicity */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">Ethnicity (Optional)</Text>
-            <Text className="text-xs text-gray-500 mb-2">This helps find cultural connections. You can hide this later in settings.</Text>
+            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.ethnicity')}</Text>
+            <Text className="text-xs text-gray-500 mb-2">{t('onboarding.ethnicityHelp')}</Text>
             <View className="flex-row flex-wrap gap-2">
               {ETHNICITIES.map((e) => (
                 <TouchableOpacity
                   key={e}
                   className={`px-4 py-2 rounded-full border ${
-                    ethnicity === e
+                    ethnicity.includes(e)
                       ? 'bg-primary-500 border-primary-500'
                       : 'bg-white border-gray-300'
                   }`}
-                  onPress={() => setEthnicity(e)}
+                  onPress={() => toggleEthnicity(e)}
                 >
                   <Text
                     className={`${
-                      ethnicity === e ? 'text-white' : 'text-gray-700'
+                      ethnicity.includes(e) ? 'text-white' : 'text-gray-700'
                     } font-medium`}
                   >
                     {e}
@@ -645,25 +678,31 @@ export default function BasicInfo() {
                 </TouchableOpacity>
               ))}
             </View>
+            {ethnicity.length > 0 && (
+              <Text className="text-xs text-primary-600 mt-2">
+                Selected: {ethnicity.join(', ')}
+              </Text>
+            )}
           </View>
 
           {/* Sexual Orientation */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">Sexual Orientation</Text>
+            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.sexualOrientation')}</Text>
+            <Text className="text-xs text-gray-500 mb-2">Select all that apply</Text>
             <View className="flex-row flex-wrap gap-2">
               {ORIENTATIONS.map((o) => (
                 <TouchableOpacity
                   key={o}
                   className={`px-4 py-2 rounded-full border ${
-                    orientation === o
+                    orientation.includes(o)
                       ? 'bg-primary-500 border-primary-500'
                       : 'bg-white border-gray-300'
                   }`}
-                  onPress={() => setOrientation(o)}
+                  onPress={() => toggleOrientation(o)}
                 >
                   <Text
                     className={`${
-                      orientation === o ? 'text-white' : 'text-gray-700'
+                      orientation.includes(o) ? 'text-white' : 'text-gray-700'
                     } font-medium`}
                   >
                     {o}
@@ -671,40 +710,59 @@ export default function BasicInfo() {
                 </TouchableOpacity>
               ))}
             </View>
+            {orientation.length > 0 && (
+              <Text className="text-xs text-primary-600 mt-2">
+                Selected: {orientation.join(', ')}
+              </Text>
+            )}
           </View>
 
           {/* Location */}
           <View>
             <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-sm font-medium text-gray-700">Location</Text>
+              <Text className="text-sm font-medium text-gray-700">{t('onboarding.location')}</Text>
               <TouchableOpacity onPress={handleGetLocation} disabled={gettingLocation}>
                 <Text className="text-primary-600 font-medium">
-                  {gettingLocation ? 'Getting location...' : 'Use my location'}
+                  {gettingLocation ? t('onboarding.gettingLocation') : t('onboarding.useMyLocation')}
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {/* City */}
+            <TextInput
+              className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900 mb-2"
+              placeholder={t('onboarding.city')}
+              value={locationCity}
+              onChangeText={(text) => {
+                setLocationCity(text);
+                // Clear stored coordinates when user manually edits location
+                setLocationCoords(null);
+              }}
+            />
+
+            {/* State/Province and Country */}
             <View className="flex-row gap-2">
               <TextInput
                 className="flex-1 bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                placeholder="City"
-                value={locationCity}
-                onChangeText={(text) => {
-                  setLocationCity(text);
-                  // Clear stored coordinates when user manually edits location
-                  setLocationCoords(null);
-                }}
-              />
-              <TextInput
-                className="w-20 bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                placeholder="State"
+                placeholder={t('onboarding.state')}
                 value={locationState}
                 onChangeText={(text) => {
                   setLocationState(text);
                   // Clear stored coordinates when user manually edits location
                   setLocationCoords(null);
                 }}
-                maxLength={2}
-                autoCapitalize="characters"
+                autoCapitalize="words"
+              />
+              <TextInput
+                className="flex-1 bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+                placeholder={t('onboarding.country')}
+                value={locationCountry}
+                onChangeText={(text) => {
+                  setLocationCountry(text);
+                  // Clear stored coordinates when user manually edits location
+                  setLocationCoords(null);
+                }}
+                autoCapitalize="words"
               />
             </View>
           </View>
@@ -712,7 +770,7 @@ export default function BasicInfo() {
 
         {/* Continue Button */}
         <GradientButton
-          title={loading ? 'Saving...' : 'Continue'}
+          title={loading ? t('common.loading') : t('common.continue')}
           onPress={handleContinue}
           loading={loading}
           className="mt-8"

@@ -34,6 +34,11 @@ export default function Index() {
       if (error && error.code !== 'PGRST116') {
         // PGRST116 = no rows returned (new user)
         console.error('Error checking profile:', error);
+        // If there's an error, default to onboarding
+        setOnboardingStep(0);
+        setProfileComplete(false);
+        setChecking(false);
+        return;
       }
 
       // Store onboarding step for redirect
@@ -41,6 +46,9 @@ export default function Index() {
       setProfileComplete(profile?.profile_complete || false);
     } catch (error) {
       console.error('Error in checkUserStatus:', error);
+      // On error, send to onboarding
+      setOnboardingStep(0);
+      setProfileComplete(false);
     } finally {
       setChecking(false);
     }

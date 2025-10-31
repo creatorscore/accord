@@ -29,9 +29,10 @@ interface Profile {
   id: string;
   display_name: string;
   age: number;
-  gender?: string;
+  gender?: string | string[]; // Can be single or array for multi-select
   pronouns?: string;
-  ethnicity?: string;
+  ethnicity?: string | string[]; // Can be single or array for multi-select
+  sexual_orientation?: string | string[]; // Can be single or array for multi-select
   location_city?: string;
   location_state?: string;
   location_country?: string;
@@ -48,7 +49,7 @@ interface Profile {
   height_inches?: number;
   zodiac_sign?: string;
   personality_type?: string;
-  love_language?: string;
+  love_language?: string | string[]; // Can be single or array for multi-select
   languages_spoken?: string[];
   my_story?: string;
   religion?: string;
@@ -69,9 +70,9 @@ interface Preferences {
   primary_reason?: string;
   relationship_type?: string;
   wants_children?: boolean;
-  children_arrangement?: string;
-  housing_preference?: string;
-  financial_arrangement?: string;
+  children_arrangement?: string | string[]; // Can be single or array for multi-select
+  housing_preference?: string | string[]; // Can be single or array for multi-select
+  financial_arrangement?: string | string[]; // Can be single or array for multi-select
   income_level?: string;
   religion?: string;
   political_views?: string;
@@ -98,6 +99,15 @@ interface ImmersiveProfileCardProps {
   onBlock?: () => void; // Block user
   onReport?: () => void; // Report user
 }
+
+// Helper function to format array or string values for display
+const formatArrayOrString = (value?: string | string[]): string => {
+  if (!value) return '';
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  return value;
+};
 
 export default function ImmersiveProfileCard({
   profile,
@@ -249,9 +259,9 @@ export default function ImmersiveProfileCard({
               <View style={styles.heroIdentity}>
                 <Text style={styles.heroIdentityText}>
                   {[
-                    profile.gender,
+                    formatArrayOrString(profile.gender),
                     profile.pronouns,
-                    profile.ethnicity && profile.ethnicity !== 'Prefer not to say' ? profile.ethnicity : null
+                    profile.ethnicity && (Array.isArray(profile.ethnicity) ? !profile.ethnicity.includes('Prefer not to say') : profile.ethnicity !== 'Prefer not to say') ? formatArrayOrString(profile.ethnicity) : null
                   ].filter(Boolean).join(' • ')}
                 </Text>
               </View>
@@ -374,7 +384,7 @@ export default function ImmersiveProfileCard({
               <View style={styles.criticalItem}>
                 <Text style={styles.criticalLabel}>Children</Text>
                 <Text style={styles.criticalValue}>
-                  {preferences.wants_children === true ? `Yes${preferences.children_arrangement ? ` - ${preferences.children_arrangement}` : ''}` :
+                  {preferences.wants_children === true ? `Yes${preferences.children_arrangement ? ` - ${formatArrayOrString(preferences.children_arrangement)}` : ''}` :
                    preferences.wants_children === false ? 'No children' :
                    'Maybe/Open to discussion'}
                 </Text>
@@ -428,14 +438,14 @@ export default function ImmersiveProfileCard({
             {preferences?.financial_arrangement && (
               <View style={styles.criticalItem}>
                 <Text style={styles.criticalLabel}>Financial arrangement</Text>
-                <Text style={styles.criticalValue}>{preferences.financial_arrangement}</Text>
+                <Text style={styles.criticalValue}>{formatArrayOrString(preferences.financial_arrangement)}</Text>
               </View>
             )}
 
             {preferences?.housing_preference && (
               <View style={styles.criticalItem}>
                 <Text style={styles.criticalLabel}>Living situation</Text>
-                <Text style={styles.criticalValue}>{preferences.housing_preference}</Text>
+                <Text style={styles.criticalValue}>{formatArrayOrString(preferences.housing_preference)}</Text>
               </View>
             )}
           </View>
@@ -450,13 +460,16 @@ export default function ImmersiveProfileCard({
             <Text style={styles.sectionTitle}>Lifestyle & Values</Text>
             <View style={styles.lifestyleGrid}>
               {profile.gender && (
-                <LifestyleItem icon="gender-male-female" label="Gender" value={profile.gender} />
+                <LifestyleItem icon="gender-male-female" label="Gender" value={formatArrayOrString(profile.gender)} />
               )}
               {profile.pronouns && (
                 <LifestyleItem icon="account" label="Pronouns" value={profile.pronouns} />
               )}
-              {profile.ethnicity && profile.ethnicity !== 'Prefer not to say' && (
-                <LifestyleItem icon="earth" label="Ethnicity" value={profile.ethnicity} />
+              {profile.sexual_orientation && (
+                <LifestyleItem icon="heart-multiple" label="Orientation" value={formatArrayOrString(profile.sexual_orientation)} />
+              )}
+              {profile.ethnicity && (Array.isArray(profile.ethnicity) ? !profile.ethnicity.includes('Prefer not to say') : profile.ethnicity !== 'Prefer not to say') && (
+                <LifestyleItem icon="earth" label="Ethnicity" value={formatArrayOrString(profile.ethnicity)} />
               )}
               {profile.occupation && (
                 <LifestyleItem icon="briefcase" label="Work" value={profile.occupation} />
@@ -478,7 +491,7 @@ export default function ImmersiveProfileCard({
                 <LifestyleItem icon="brain" label="Personality" value={profile.personality_type} />
               )}
               {profile.love_language && (
-                <LifestyleItem icon="heart" label="Love Language" value={profile.love_language} />
+                <LifestyleItem icon="heart" label="Love Language" value={formatArrayOrString(profile.love_language)} />
               )}
               {profile.languages_spoken && profile.languages_spoken.length > 0 && (
                 <LifestyleItem icon="translate" label="Languages" value={profile.languages_spoken.join(', ')} />

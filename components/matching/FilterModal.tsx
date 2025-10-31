@@ -9,16 +9,16 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
+import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 
 export interface FilterOptions {
   ageMin: number;
   ageMax: number;
   maxDistance: number;
-  genderPreference: string[];
-  relationshipType: string[];
-  wantsChildren: boolean | null;
   religion: string[];
   politicalViews: string[];
+  housingPreference: string[];
   financialArrangement: string[];
 }
 
@@ -31,10 +31,9 @@ interface FilterModalProps {
   onUpgrade: () => void;
 }
 
-const GENDERS = ['Man', 'Woman', 'Non-binary'];
-const RELATIONSHIP_TYPES = ['Platonic', 'Romantic', 'Open'];
 const RELIGIONS = ['Christian', 'Catholic', 'Muslim', 'Jewish', 'Hindu', 'Buddhist', 'Atheist', 'Agnostic', 'Spiritual', 'Other'];
 const POLITICAL_VIEWS = ['Liberal', 'Progressive', 'Moderate', 'Conservative', 'Libertarian', 'Other'];
+const HOUSING_PREFERENCES = ['Separate Homes', 'Separate Spaces', 'Roommates', 'Shared Bedroom', 'Flexible'];
 const FINANCIAL_ARRANGEMENTS = ['Separate', 'Shared Expenses', 'Joint', 'Prenup Required', 'Flexible'];
 
 export default function FilterModal({
@@ -45,6 +44,7 @@ export default function FilterModal({
   isPremium,
   onUpgrade,
 }: FilterModalProps) {
+  const { t } = useTranslation();
   const [filters, setFilters] = useState<FilterOptions>(currentFilters);
 
   useEffect(() => {
@@ -61,11 +61,9 @@ export default function FilterModal({
       ageMin: 22,
       ageMax: 50,
       maxDistance: 100,
-      genderPreference: [],
-      relationshipType: [],
-      wantsChildren: null,
       religion: [],
       politicalViews: [],
+      housingPreference: [],
       financialArrangement: [],
     };
     setFilters(defaultFilters);
@@ -87,16 +85,16 @@ export default function FilterModal({
           <TouchableOpacity onPress={onClose}>
             <MaterialCommunityIcons name="close" size={24} color="#1F2937" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Filters</Text>
+          <Text style={styles.headerTitle}>{t('filters.title')}</Text>
           <TouchableOpacity onPress={handleReset}>
-            <Text style={styles.resetButton}>Reset</Text>
+            <Text style={styles.resetButton}>{t('filters.reset')}</Text>
           </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Age Range */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Age Range</Text>
+            <Text style={styles.sectionTitle}>{t('filters.ageRange')}</Text>
             <View style={styles.rangeValues}>
               <Text style={styles.rangeText}>{filters.ageMin}</Text>
               <Text style={styles.rangeText}>{filters.ageMax}</Text>
@@ -127,8 +125,8 @@ export default function FilterModal({
 
           {/* Distance */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Maximum Distance</Text>
-            <Text style={styles.rangeText}>{filters.maxDistance} miles</Text>
+            <Text style={styles.sectionTitle}>{t('filters.maxDistance')}</Text>
+            <Text style={styles.rangeText}>{t('filters.miles', { count: filters.maxDistance })}</Text>
             <Slider
               style={styles.slider}
               minimumValue={5}
@@ -141,120 +139,52 @@ export default function FilterModal({
             />
           </View>
 
+          {/* Compatibility Note */}
+          <View style={styles.infoBox}>
+            <MaterialCommunityIcons name="information" size={20} color="#8B5CF6" />
+            <Text style={styles.infoText}>
+              {t('filters.dealbreakersInfo')}
+            </Text>
+          </View>
+
+          {/* Edit Preferences Button */}
+          <TouchableOpacity
+            style={styles.editPreferencesButton}
+            onPress={() => {
+              onClose();
+              router.push('/settings/matching-preferences');
+            }}
+          >
+            <View style={styles.editPreferencesContent}>
+              <View style={styles.editPreferencesIcon}>
+                <MaterialCommunityIcons name="heart-cog" size={24} color="#8B5CF6" />
+              </View>
+              <View style={styles.editPreferencesText}>
+                <Text style={styles.editPreferencesTitle}>{t('filters.editPreferences')}</Text>
+                <Text style={styles.editPreferencesDescription}>
+                  {t('filters.editPreferencesDesc')}
+                </Text>
+              </View>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={24} color="#8B5CF6" />
+          </TouchableOpacity>
+
           {/* Premium Filters */}
           {!isPremium && (
             <TouchableOpacity style={styles.premiumBanner} onPress={onUpgrade}>
               <View style={styles.premiumBannerContent}>
                 <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
                 <Text style={styles.premiumBannerText}>
-                  Upgrade to Premium for Advanced Filters
+                  {t('filters.upgradePremium')}
                 </Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={24} color="#8B5CF6" />
             </TouchableOpacity>
           )}
 
-          {/* Gender Preference */}
-          <View style={[styles.section, !isPremium && styles.disabledSection]}>
-            <Text style={styles.sectionTitle}>Gender Preference</Text>
-            <View style={styles.chipContainer}>
-              {GENDERS.map((gender) => (
-                <TouchableOpacity
-                  key={gender}
-                  disabled={!isPremium}
-                  style={[
-                    styles.chip,
-                    filters.genderPreference.includes(gender) && styles.chipSelected,
-                    !isPremium && styles.chipDisabled,
-                  ]}
-                  onPress={() =>
-                    setFilters({
-                      ...filters,
-                      genderPreference: toggleArrayFilter(filters.genderPreference, gender),
-                    })
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      filters.genderPreference.includes(gender) && styles.chipTextSelected,
-                    ]}
-                  >
-                    {gender}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Relationship Type */}
-          <View style={[styles.section, !isPremium && styles.disabledSection]}>
-            <Text style={styles.sectionTitle}>Relationship Type</Text>
-            <View style={styles.chipContainer}>
-              {RELATIONSHIP_TYPES.map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  disabled={!isPremium}
-                  style={[
-                    styles.chip,
-                    filters.relationshipType.includes(type) && styles.chipSelected,
-                    !isPremium && styles.chipDisabled,
-                  ]}
-                  onPress={() =>
-                    setFilters({
-                      ...filters,
-                      relationshipType: toggleArrayFilter(filters.relationshipType, type),
-                    })
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      filters.relationshipType.includes(type) && styles.chipTextSelected,
-                    ]}
-                  >
-                    {type}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Wants Children */}
-          <View style={[styles.section, !isPremium && styles.disabledSection]}>
-            <Text style={styles.sectionTitle}>Wants Children</Text>
-            <View style={styles.chipContainer}>
-              {[
-                { label: 'Yes', value: true },
-                { label: 'No', value: false },
-                { label: 'Any', value: null },
-              ].map((option) => (
-                <TouchableOpacity
-                  key={option.label}
-                  disabled={!isPremium}
-                  style={[
-                    styles.chip,
-                    filters.wantsChildren === option.value && styles.chipSelected,
-                    !isPremium && styles.chipDisabled,
-                  ]}
-                  onPress={() => setFilters({ ...filters, wantsChildren: option.value })}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      filters.wantsChildren === option.value && styles.chipTextSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
           {/* Religion */}
           <View style={[styles.section, !isPremium && styles.disabledSection]}>
-            <Text style={styles.sectionTitle}>Religion</Text>
+            <Text style={styles.sectionTitle}>{t('filters.religion')}</Text>
             <View style={styles.chipContainer}>
               {RELIGIONS.map((religion) => (
                 <TouchableOpacity
@@ -287,7 +217,7 @@ export default function FilterModal({
 
           {/* Political Views */}
           <View style={[styles.section, !isPremium && styles.disabledSection]}>
-            <Text style={styles.sectionTitle}>Political Views</Text>
+            <Text style={styles.sectionTitle}>{t('filters.politicalViews')}</Text>
             <View style={styles.chipContainer}>
               {POLITICAL_VIEWS.map((view) => (
                 <TouchableOpacity
@@ -318,9 +248,42 @@ export default function FilterModal({
             </View>
           </View>
 
+          {/* Housing Preference */}
+          <View style={[styles.section, !isPremium && styles.disabledSection]}>
+            <Text style={styles.sectionTitle}>{t('filters.housingPreference')}</Text>
+            <View style={styles.chipContainer}>
+              {HOUSING_PREFERENCES.map((housing) => (
+                <TouchableOpacity
+                  key={housing}
+                  disabled={!isPremium}
+                  style={[
+                    styles.chip,
+                    filters.housingPreference.includes(housing) && styles.chipSelected,
+                    !isPremium && styles.chipDisabled,
+                  ]}
+                  onPress={() =>
+                    setFilters({
+                      ...filters,
+                      housingPreference: toggleArrayFilter(filters.housingPreference, housing),
+                    })
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      filters.housingPreference.includes(housing) && styles.chipTextSelected,
+                    ]}
+                  >
+                    {housing}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           {/* Financial Arrangement */}
           <View style={[styles.section, !isPremium && styles.disabledSection]}>
-            <Text style={styles.sectionTitle}>Financial Arrangement</Text>
+            <Text style={styles.sectionTitle}>{t('filters.financialArrangement')}</Text>
             <View style={styles.chipContainer}>
               {FINANCIAL_ARRANGEMENTS.map((arrangement) => (
                 <TouchableOpacity
@@ -360,7 +323,7 @@ export default function FilterModal({
         {/* Apply Button */}
         <View style={styles.footer}>
           <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
-            <Text style={styles.applyButtonText}>Apply Filters</Text>
+            <Text style={styles.applyButtonText}>{t('filters.applyFilters')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -454,6 +417,66 @@ const styles = StyleSheet.create({
   },
   chipTextSelected: {
     color: 'white',
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#F3E8FF',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#6B21A8',
+    lineHeight: 20,
+  },
+  editPreferencesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 2,
+    borderColor: '#8B5CF6',
+  },
+  editPreferencesContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  editPreferencesIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F3E8FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editPreferencesText: {
+    flex: 1,
+  },
+  editPreferencesTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8B5CF6',
+    marginBottom: 2,
+  },
+  editPreferencesDescription: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
   },
   premiumBanner: {
     flexDirection: 'row',

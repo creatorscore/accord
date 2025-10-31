@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { initializeEncryption, hasEncryptionKeys } from '@/lib/encryption';
+import { setUser as setSentryUser } from '@/lib/sentry';
+import { identifyUser, resetUser, trackUserAction } from '@/lib/analytics';
 
 interface AuthContextType {
   user: User | null;
@@ -48,6 +50,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+
+      // Update user identity in Sentry and PostHog
+      if (session?.user) {
+        setSentryUser({ id: session.user.id });
+        identifyUser(session.user.id, {
+          email: session.user.email,
+        });
+      } else {
+        setSentryUser(null);
+        resetUser();
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -98,6 +111,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       password,
     });
     if (error) throw error;
+
+    // Track sign in
+    trackUserAction.signIn('email');
   };
 
   const signUp = async (email: string, password: string) => {
@@ -110,6 +126,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     });
     if (error) throw error;
 
+    // Track sign up
+    trackUserAction.signUp('email');
+
     // Return data so caller can check if email confirmation is needed
     return data;
   };
@@ -117,6 +136,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+
+    // Track sign out
+    trackUserAction.signOut();
   };
 
   const sendPasswordResetEmail = async (email: string) => {

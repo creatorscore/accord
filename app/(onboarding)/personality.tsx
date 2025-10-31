@@ -53,7 +53,7 @@ export default function Personality() {
   const [heightFeet, setHeightFeet] = useState('');
   const [heightInches, setHeightInches] = useState('');
   const [personalityType, setPersonalityType] = useState('');
-  const [loveLanguage, setLoveLanguage] = useState('');
+  const [loveLanguage, setLoveLanguage] = useState<string[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [religion, setReligion] = useState('');
   const [politicalViews, setPoliticalViews] = useState('');
@@ -88,9 +88,17 @@ export default function Personality() {
     }
   };
 
+  const toggleLoveLanguage = (lang: string) => {
+    if (loveLanguage.includes(lang)) {
+      setLoveLanguage(loveLanguage.filter(l => l !== lang));
+    } else {
+      setLoveLanguage([...loveLanguage, lang]);
+    }
+  };
+
   const handleContinue = async () => {
     // Validation - at least some fields should be filled
-    if (!zodiacSign && !heightFeet && !personalityType && !loveLanguage && selectedLanguages.length === 0) {
+    if (!zodiacSign && !heightFeet && !personalityType && loveLanguage.length === 0 && selectedLanguages.length === 0) {
       Alert.alert('Required', 'Please fill in at least a few fields to continue');
       return;
     }
@@ -126,13 +134,13 @@ export default function Personality() {
         totalHeightInches = (feet * 12) + inches;
       }
 
-      const { error } = await supabase
+      const { error} = await supabase
         .from('profiles')
         .update({
           zodiac_sign: zodiacSign || null,
           height_inches: totalHeightInches,
           personality_type: personalityType || null,
-          love_language: loveLanguage || null,
+          love_language: loveLanguage.length > 0 ? loveLanguage : null,
           languages_spoken: selectedLanguages.length > 0 ? selectedLanguages : null,
           religion: religion || null,
           political_views: politicalViews || null,
@@ -273,20 +281,21 @@ export default function Personality() {
             <Text className="text-sm font-medium text-gray-700 mb-2">
               Love Language <Text className="text-gray-400">(optional)</Text>
             </Text>
+            <Text className="text-xs text-gray-500 mb-2">Select all that apply - most people have 2-3</Text>
             <View className="flex-row flex-wrap gap-2">
               {LOVE_LANGUAGES.map((language) => (
                 <TouchableOpacity
                   key={language}
                   className={`px-4 py-2 rounded-full border ${
-                    loveLanguage === language
+                    loveLanguage.includes(language)
                       ? 'bg-primary-500 border-primary-500'
                       : 'bg-white border-gray-300'
                   }`}
-                  onPress={() => setLoveLanguage(language)}
+                  onPress={() => toggleLoveLanguage(language)}
                 >
                   <Text
                     className={`${
-                      loveLanguage === language ? 'text-white' : 'text-gray-700'
+                      loveLanguage.includes(language) ? 'text-white' : 'text-gray-700'
                     } font-medium text-sm`}
                   >
                     {language}
@@ -294,6 +303,11 @@ export default function Personality() {
                 </TouchableOpacity>
               ))}
             </View>
+            {loveLanguage.length > 0 && (
+              <Text className="text-xs text-primary-600 mt-2">
+                Selected: {loveLanguage.join(', ')}
+              </Text>
+            )}
           </View>
 
           {/* Languages Spoken */}

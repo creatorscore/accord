@@ -13,6 +13,7 @@ import ProfileInteractiveSection from '@/components/profile/ProfileInteractiveSe
 import ProfileQuickFacts from '@/components/profile/ProfileQuickFacts';
 import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
+import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -32,8 +33,10 @@ interface Profile {
   id: string;
   display_name: string;
   age: number;
-  gender?: string;
-  sexual_orientation?: string;
+  gender?: string | string[]; // Multi-select support
+  pronouns?: string;
+  ethnicity?: string | string[]; // Multi-select support
+  sexual_orientation?: string | string[]; // Multi-select support
   location_city?: string;
   location_state?: string;
   bio?: string;
@@ -48,8 +51,14 @@ interface Profile {
   languages?: string[];
   zodiac_sign?: string;
   personality_type?: string;
-  love_language?: string;
-  interests?: string[];
+  love_language?: string | string[]; // Multi-select support
+  hobbies?: string[];
+  interests?: {
+    movies?: string[];
+    music?: string[];
+    books?: string[];
+    tv_shows?: string[];
+  };
   voice_intro_url?: string;
   voice_intro_duration?: number;
   my_story?: string;
@@ -61,8 +70,9 @@ interface Preferences {
   primary_reason?: string;
   relationship_type?: string;
   wants_children?: boolean;
-  housing_preference?: string;
-  financial_arrangement?: string;
+  housing_preference?: string | string[]; // Multi-select support
+  financial_arrangement?: string | string[]; // Multi-select support
+  children_arrangement?: string | string[]; // Multi-select support
   religion?: string;
   political_views?: string;
   smoking?: string;
@@ -73,7 +83,18 @@ interface Preferences {
   children_timeline?: string;
   income_level?: string;
   willing_to_relocate?: boolean;
+  search_globally?: boolean;
+  preferred_cities?: string[];
 }
+
+// Helper function to format arrays or strings
+const formatArrayOrString = (value?: string | string[]): string => {
+  if (!value) return '';
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  return value;
+};
 
 export default function ProfileView() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -159,6 +180,8 @@ export default function ProfileView() {
           display_name,
           age,
           gender,
+          pronouns,
+          ethnicity,
           sexual_orientation,
           location_city,
           location_state,
@@ -397,7 +420,7 @@ export default function ProfileView() {
     quickFacts.push({
       emoji: '💖',
       label: 'Love Language',
-      value: profile.love_language,
+      value: formatArrayOrString(profile.love_language),
     });
   }
   if (profile.languages?.length) {
@@ -439,6 +462,61 @@ export default function ProfileView() {
           distance={profile.distance}
           compatibilityScore={profile.compatibility_score}
         />
+
+        {/* Location Intent Badges */}
+        {preferences && (preferences.search_globally || (preferences.preferred_cities && preferences.preferred_cities.length > 0)) && (
+          <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+            <MotiView
+              from={{ opacity: 0, translateY: 20 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'spring', delay: 100 }}
+            >
+              {preferences.search_globally && (
+                <View style={{
+                  backgroundColor: '#EDE9FE',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 8,
+                  borderWidth: 1,
+                  borderColor: '#C4B5FD',
+                }}>
+                  <MaterialCommunityIcons name="earth" size={20} color="#7C3AED" />
+                  <Text style={{
+                    color: '#7C3AED',
+                    fontWeight: '600',
+                    fontSize: 14,
+                  }}>Open to matching anywhere</Text>
+                </View>
+              )}
+
+              {preferences.preferred_cities && preferences.preferred_cities.length > 0 && (
+                <View style={{
+                  backgroundColor: '#DBEAFE',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  borderWidth: 1,
+                  borderColor: '#BFDBFE',
+                }}>
+                  <MaterialCommunityIcons name="map-marker-multiple" size={20} color="#2563EB" />
+                  <Text style={{
+                    color: '#2563EB',
+                    fontWeight: '600',
+                    fontSize: 14,
+                    flex: 1,
+                  }}>Looking in: {preferences.preferred_cities.join(', ')}</Text>
+                </View>
+              )}
+            </MotiView>
+          </View>
+        )}
 
         {/* Quick Facts Carousel */}
         {quickFacts.length > 0 && (
@@ -504,12 +582,17 @@ export default function ProfileView() {
               ...(profile.gender ? [{
                 icon: 'gender-transgender',
                 label: 'Gender',
-                value: profile.gender,
+                value: formatArrayOrString(profile.gender),
               }] : []),
               ...(profile.sexual_orientation ? [{
                 icon: 'heart',
                 label: 'Orientation',
-                value: profile.sexual_orientation,
+                value: formatArrayOrString(profile.sexual_orientation),
+              }] : []),
+              ...(profile.ethnicity ? [{
+                icon: 'account-group',
+                label: 'Ethnicity',
+                value: formatArrayOrString(profile.ethnicity),
               }] : []),
               ...(profile.languages?.length ? [{
                 icon: 'translate',
@@ -570,17 +653,25 @@ export default function ProfileView() {
                   label: 'Children',
                   value: preferences.wants_children === true ? 'Yes, definitely' :
                          preferences.wants_children === false ? 'No children' : 'Open to discussion',
-                  detail: preferences.children_arrangement ? formatLabel(preferences.children_arrangement) : undefined
+                  detail: preferences.children_arrangement ? (
+                    Array.isArray(preferences.children_arrangement)
+                      ? preferences.children_arrangement.map(formatLabel).join(', ')
+                      : formatLabel(preferences.children_arrangement)
+                  ) : undefined
                 }] : []),
                 ...(preferences.housing_preference ? [{
                   emoji: '🏠',
                   label: 'Living Arrangement',
-                  value: formatLabel(preferences.housing_preference),
+                  value: Array.isArray(preferences.housing_preference)
+                    ? preferences.housing_preference.map(formatLabel).join(', ')
+                    : formatLabel(preferences.housing_preference),
                 }] : []),
                 ...(preferences.financial_arrangement ? [{
                   emoji: '💰',
                   label: 'Finances',
-                  value: formatLabel(preferences.financial_arrangement),
+                  value: Array.isArray(preferences.financial_arrangement)
+                    ? preferences.financial_arrangement.map(formatLabel).join(', ')
+                    : formatLabel(preferences.financial_arrangement),
                 }] : []),
                 ...(preferences.willing_to_relocate ? [{
                   emoji: '✈️',
@@ -637,66 +728,186 @@ export default function ProfileView() {
             </View>
           )}
 
-          {/* Interests Section */}
-          {profile.interests && profile.interests.length > 0 && (
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{
-                fontSize: 20,
-                fontWeight: 'bold',
-                color: '#111827',
-                marginBottom: 12,
-                paddingHorizontal: 4
-              }}>Interests & Favorites</Text>
-              <View style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                gap: 8,
-              }}>
-                {profile.interests.map((interest, index) => (
-                  <MotiView
-                    key={index}
-                    from={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ type: 'spring', delay: index * 50 }}
-                    style={{
-                      backgroundColor: index % 3 === 0 ? '#EDE9FE' :
-                                       index % 3 === 1 ? '#FEF3C7' : '#DBEAFE',
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 20,
-                    }}
-                  >
-                    <Text style={{
-                      color: index % 3 === 0 ? '#7C3AED' :
-                             index % 3 === 1 ? '#F59E0B' : '#3B82F6',
-                      fontWeight: '600',
-                      fontSize: 14,
-                    }}>{interest}</Text>
-                  </MotiView>
-                ))}
-              </View>
-            </View>
+          {/* Interests Section - Movies, Music, Books, TV Shows */}
+          {profile.interests && typeof profile.interests === 'object' && (
+            <>
+              {/* Movies */}
+              {profile.interests.movies && profile.interests.movies.length > 0 && (
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: 'bold',
+                    color: '#111827',
+                    marginBottom: 12,
+                    paddingHorizontal: 4
+                  }}>🎬 Favorite Movies</Text>
+                  <View style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                  }}>
+                    {profile.interests.movies.map((movie, index) => (
+                      <MotiView
+                        key={index}
+                        from={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: 'spring', delay: index * 50 }}
+                        style={{
+                          backgroundColor: '#EDE9FE',
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          borderRadius: 20,
+                        }}
+                      >
+                        <Text style={{
+                          color: '#7C3AED',
+                          fontWeight: '600',
+                          fontSize: 14,
+                        }}>{movie}</Text>
+                      </MotiView>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Music */}
+              {profile.interests.music && profile.interests.music.length > 0 && (
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: 'bold',
+                    color: '#111827',
+                    marginBottom: 12,
+                    paddingHorizontal: 4
+                  }}>🎵 Favorite Music</Text>
+                  <View style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                  }}>
+                    {profile.interests.music.map((music, index) => (
+                      <MotiView
+                        key={index}
+                        from={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: 'spring', delay: index * 50 }}
+                        style={{
+                          backgroundColor: '#FEF3C7',
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          borderRadius: 20,
+                        }}
+                      >
+                        <Text style={{
+                          color: '#F59E0B',
+                          fontWeight: '600',
+                          fontSize: 14,
+                        }}>{music}</Text>
+                      </MotiView>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Books */}
+              {profile.interests.books && profile.interests.books.length > 0 && (
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: 'bold',
+                    color: '#111827',
+                    marginBottom: 12,
+                    paddingHorizontal: 4
+                  }}>📚 Favorite Books</Text>
+                  <View style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                  }}>
+                    {profile.interests.books.map((book, index) => (
+                      <MotiView
+                        key={index}
+                        from={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: 'spring', delay: index * 50 }}
+                        style={{
+                          backgroundColor: '#DBEAFE',
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          borderRadius: 20,
+                        }}
+                      >
+                        <Text style={{
+                          color: '#3B82F6',
+                          fontWeight: '600',
+                          fontSize: 14,
+                        }}>{book}</Text>
+                      </MotiView>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* TV Shows */}
+              {profile.interests.tv_shows && profile.interests.tv_shows.length > 0 && (
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: 'bold',
+                    color: '#111827',
+                    marginBottom: 12,
+                    paddingHorizontal: 4
+                  }}>📺 Favorite TV Shows</Text>
+                  <View style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                  }}>
+                    {profile.interests.tv_shows.map((show, index) => (
+                      <MotiView
+                        key={index}
+                        from={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: 'spring', delay: index * 50 }}
+                        style={{
+                          backgroundColor: '#D1FAE5',
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          borderRadius: 20,
+                        }}
+                      >
+                        <Text style={{
+                          color: '#059669',
+                          fontWeight: '600',
+                          fontSize: 14,
+                        }}>{show}</Text>
+                      </MotiView>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </>
           )}
 
           {/* Lifestyle - Interactive Section */}
-          {preferences && preferences.lifestyle_preferences && (
+          {preferences && (preferences.smoking || preferences.drinking || preferences.pets) && (
             <ProfileInteractiveSection
               title="Lifestyle & Values"
               items={[
-                ...(preferences.lifestyle_preferences.smoking ? [{
+                ...(preferences.smoking ? [{
                   emoji: '🚬',
                   label: 'Smoking',
-                  value: formatLabel(preferences.lifestyle_preferences.smoking),
+                  value: formatLabel(preferences.smoking),
                 }] : []),
-                ...(preferences.lifestyle_preferences.drinking ? [{
+                ...(preferences.drinking ? [{
                   emoji: '🍷',
                   label: 'Drinking',
-                  value: formatLabel(preferences.lifestyle_preferences.drinking),
+                  value: formatLabel(preferences.drinking),
                 }] : []),
-                ...(preferences.lifestyle_preferences.pets ? [{
+                ...(preferences.pets ? [{
                   emoji: '🐾',
                   label: 'Pets',
-                  value: formatLabel(preferences.lifestyle_preferences.pets),
+                  value: formatLabel(preferences.pets),
                 }] : []),
               ]}
             />
@@ -822,6 +1033,13 @@ export default function ProfileView() {
               delay={400}
             />
           )}
+
+          {/* Reviews Section */}
+          <ProfileReviewDisplay
+            profileId={id}
+            isMatched={isMatched}
+            compact={false}
+          />
         </View>
       </ScrollView>
 

@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
-import * as TrackingTransparency from 'expo-tracking-transparency';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as TrackingTransparency from 'expo-tracking-transparency';
 
 const TRACKING_PERMISSION_KEY = '@accord_tracking_permission';
 
@@ -12,9 +12,9 @@ export type TrackingStatus = 'granted' | 'denied' | 'restricted' | 'undetermined
  * Only shows on iOS 14.5+ and only once per user
  */
 export async function requestTrackingPermission(): Promise<TrackingStatus> {
-  // Only applicable to iOS
+  // Only applicable to iOS (not web or Android)
   if (Platform.OS !== 'ios') {
-    return 'granted'; // Android doesn't require ATT
+    return 'granted'; // Web/Android doesn't require ATT
   }
 
   try {

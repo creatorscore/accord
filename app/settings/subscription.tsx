@@ -15,6 +15,7 @@ export default function SubscriptionManagement() {
   const [restoring, setRestoring] = useState(false);
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [loadingOfferings, setLoadingOfferings] = useState(true);
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annual'>('annual'); // Default to annual (best value)
 
   // Check if in development mode
   const isDevelopmentMode = process.env.EXPO_PUBLIC_APP_ENV === 'development' || __DEV__;
@@ -113,15 +114,7 @@ export default function SubscriptionManagement() {
   };
 
   const getSubscriptionStatus = () => {
-    if (!customerInfo || !isSubscribed) {
-      return {
-        title: 'Free Plan',
-        description: 'Limited features',
-        icon: 'account-outline',
-        color: '#6B7280',
-      };
-    }
-
+    // Check subscription status - use the context values which handle both RevenueCat and DB
     if (isPlatinum) {
       return {
         title: 'Platinum Member',
@@ -211,45 +204,236 @@ export default function SubscriptionManagement() {
           </LinearGradient>
         </View>
 
-        {/* Available Packages */}
+        {/* Subscription Plans */}
         {!isSubscribed && offerings && !loadingOfferings && (
           <View className="mb-6">
-            <Text className="text-xl font-bold text-gray-900 mb-4">Upgrade Your Experience</Text>
+            <Text className="text-xl font-bold text-gray-900 mb-4">Choose Your Plan</Text>
 
-            {offerings.availablePackages.map((pkg) => (
+            {/* Billing Period Toggle */}
+            <View className="flex-row bg-gray-100 rounded-full p-1 mb-6">
               <TouchableOpacity
-                key={pkg.identifier}
-                onPress={() => handlePurchasePackage(pkg)}
-                disabled={loading}
-                className="mb-4"
+                onPress={() => setBillingPeriod('monthly')}
+                className="flex-1"
               >
-                <LinearGradient
-                  colors={['#8B5CF6', '#EC4899']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  className="rounded-3xl p-6"
-                >
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-1">
-                      <Text className="text-white text-xl font-bold">
-                        {pkg.product.title}
-                      </Text>
-                      <Text className="text-white/90 text-sm mt-1">
-                        {pkg.product.description}
-                      </Text>
+                <View className={`py-3 rounded-full ${billingPeriod === 'monthly' ? 'bg-purple-600' : 'bg-transparent'}`}>
+                  <Text className={`text-center font-bold ${billingPeriod === 'monthly' ? 'text-white' : 'text-gray-600'}`}>
+                    Monthly
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setBillingPeriod('annual')}
+                className="flex-1"
+              >
+                <View className={`py-3 rounded-full ${billingPeriod === 'annual' ? 'bg-purple-600' : 'bg-transparent'}`}>
+                  <Text className={`text-center font-bold ${billingPeriod === 'annual' ? 'text-white' : 'text-gray-600'}`}>
+                    Annual
+                    <Text className="text-xs"> (Save 33%)</Text>
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Premium Plan */}
+            <View className="mb-6">
+              <View className="flex-row items-center mb-3">
+                <MaterialCommunityIcons name="star" size={24} color="#8B5CF6" />
+                <Text className="text-lg font-bold text-gray-900 ml-2">Premium</Text>
+              </View>
+
+              {(() => {
+                // Log all available packages for debugging
+                console.log('🔍 Available packages:', offerings.availablePackages.map(pkg => ({
+                  identifier: pkg.identifier,
+                  productId: pkg.product.identifier,
+                })));
+
+                // Try to find premium package for current billing period
+                // Check for various naming patterns: premium_monthly, premium-monthly, monthly_premium, etc.
+                const premiumPackage = offerings.availablePackages.find(pkg => {
+                  const id = pkg.identifier.toLowerCase();
+                  const productId = pkg.product.identifier.toLowerCase();
+                  const isPremium = id.includes('premium') || productId.includes('premium');
+
+                  // Check if package matches billing period
+                  const isMonthly = id.includes('month') || productId.includes('month') || id.includes('1m') || productId.includes('1m');
+                  const isAnnual = id.includes('annual') || productId.includes('annual') || id.includes('year') || productId.includes('year') || id.includes('12m') || productId.includes('12m');
+
+                  if (billingPeriod === 'monthly') {
+                    return isPremium && isMonthly;
+                  } else {
+                    return isPremium && isAnnual;
+                  }
+                });
+
+                console.log('🎯 Found premium package:', premiumPackage?.identifier);
+
+                // If no package found for specific billing period, try to find ANY premium package
+                const displayPackage = premiumPackage || offerings.availablePackages.find(pkg => {
+                  const id = pkg.identifier.toLowerCase();
+                  const productId = pkg.product.identifier.toLowerCase();
+                  return id.includes('premium') || productId.includes('premium');
+                });
+
+                if (!displayPackage) {
+                  console.warn(`⚠️ No premium package found at all`);
+                  return (
+                    <View className="bg-yellow-50 border border-yellow-300 rounded-2xl p-6">
+                      <Text className="text-yellow-800 text-center">Premium {billingPeriod} plan not available in RevenueCat</Text>
                     </View>
-                    <View className="ml-4">
-                      <Text className="text-white text-2xl font-bold">
-                        {pkg.product.priceString}
-                      </Text>
-                      <Text className="text-white/80 text-xs text-right">
-                        {pkg.packageType}
-                      </Text>
+                  );
+                }
+
+                return (
+                  <TouchableOpacity
+                    key={displayPackage.identifier}
+                    onPress={() => handlePurchasePackage(displayPackage)}
+                    disabled={loading}
+                  >
+                    <View className="bg-white border-2 border-purple-300 rounded-2xl p-6">
+                      {billingPeriod === 'annual' && (
+                        <View className="absolute -top-2 right-4 bg-green-500 px-3 py-1 rounded-full">
+                          <Text className="text-white text-xs font-bold">SAVE 33%</Text>
+                        </View>
+                      )}
+                      <View className="flex-row items-baseline mb-3">
+                        <Text className="text-4xl font-bold text-purple-600">
+                          {displayPackage.product.priceString}
+                        </Text>
+                        <Text className="text-gray-600 ml-2">
+                          /{billingPeriod === 'monthly' ? 'month' : 'year'}
+                        </Text>
+                      </View>
+                      <View className="bg-purple-600 rounded-xl py-4 mb-4">
+                        <Text className="text-white text-center text-lg font-bold">
+                          {loading ? 'Processing...' : 'Subscribe to Premium'}
+                        </Text>
+                      </View>
+                      <View className="bg-purple-50 rounded-xl p-4">
+                        <Text className="text-xs text-gray-700 font-semibold mb-2">Premium includes:</Text>
+                        <Text className="text-xs text-gray-600 leading-5">
+                          • Unlimited swipes{'\n'}
+                          • See who liked you{'\n'}
+                          • 5 Super Likes/week{'\n'}
+                          • Voice messages{'\n'}
+                          • Read receipts{'\n'}
+                          • Advanced filters{'\n'}
+                          • Rewind
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })()}
+            </View>
+
+            {/* Platinum Plan */}
+            {(() => {
+              // Try to find platinum package for current billing period
+              const platinumPackage = offerings.availablePackages.find(pkg => {
+                const id = pkg.identifier.toLowerCase();
+                const productId = pkg.product.identifier.toLowerCase();
+                const isPlatinum = id.includes('platinum') || productId.includes('platinum');
+
+                // Check if package matches billing period
+                const isMonthly = id.includes('month') || productId.includes('month') || id.includes('1m') || productId.includes('1m');
+                const isAnnual = id.includes('annual') || productId.includes('annual') || id.includes('year') || productId.includes('year') || id.includes('12m') || productId.includes('12m');
+
+                if (billingPeriod === 'monthly') {
+                  return isPlatinum && isMonthly;
+                } else {
+                  return isPlatinum && isAnnual;
+                }
+              });
+
+              console.log('🎯 Found platinum package:', platinumPackage?.identifier);
+
+              // If no platinum package found, show "Coming Soon"
+              if (!platinumPackage) {
+                return (
+                  <View className="mb-6">
+                    <View className="flex-row items-center mb-3">
+                      <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
+                      <Text className="text-lg font-bold text-gray-900 ml-2">Platinum</Text>
+                      <View className="bg-blue-100 px-2 py-0.5 rounded-full ml-2">
+                        <Text className="text-blue-700 text-xs font-bold">COMING SOON</Text>
+                      </View>
+                    </View>
+
+                    <View className="bg-gradient-to-br from-yellow-100 to-orange-100 border-2 border-yellow-300 rounded-2xl p-6 opacity-75">
+                      <View className="flex-row items-baseline mb-3">
+                        <Text className="text-4xl font-bold text-gray-400">
+                          {billingPeriod === 'monthly' ? '$24.99' : '$199.99'}
+                        </Text>
+                        <Text className="text-gray-500 ml-2">
+                          /{billingPeriod === 'monthly' ? 'month' : 'year'}
+                        </Text>
+                      </View>
+                      <View className="bg-gray-300 rounded-xl py-4 mb-4">
+                        <Text className="text-gray-600 text-center text-lg font-bold">Coming Soon</Text>
+                      </View>
+                      <View className="bg-white/50 rounded-xl p-4">
+                        <Text className="text-xs text-gray-700 font-semibold mb-2">Everything in Premium, plus:</Text>
+                        <Text className="text-xs text-gray-600 leading-5">
+                          • Weekly profile boost{'\n'}
+                          • Background checks{'\n'}
+                          • Legal resources{'\n'}
+                          • Priority support
+                        </Text>
+                        <Text className="text-xs text-gray-500 italic mt-2">
+                          Stay tuned! Platinum tier launching soon.
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
+                );
+              }
+
+              // Platinum package exists - render purchasable card
+              return (
+                <View className="mb-6">
+                  <View className="flex-row items-center mb-3">
+                    <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
+                    <Text className="text-lg font-bold text-gray-900 ml-2">Platinum</Text>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => handlePurchasePackage(platinumPackage)}
+                    disabled={loading}
+                  >
+                    <View className="bg-white border-2 border-yellow-300 rounded-2xl p-6">
+                      {billingPeriod === 'annual' && (
+                        <View className="absolute -top-2 right-4 bg-green-500 px-3 py-1 rounded-full">
+                          <Text className="text-white text-xs font-bold">SAVE 33%</Text>
+                        </View>
+                      )}
+                      <View className="flex-row items-baseline mb-3">
+                        <Text className="text-4xl font-bold text-yellow-600">
+                          {platinumPackage.product.priceString}
+                        </Text>
+                        <Text className="text-gray-600 ml-2">
+                          /{billingPeriod === 'monthly' ? 'month' : 'year'}
+                        </Text>
+                      </View>
+                      <View className="bg-yellow-500 rounded-xl py-4 mb-4">
+                        <Text className="text-white text-center text-lg font-bold">
+                          {loading ? 'Processing...' : 'Subscribe to Platinum'}
+                        </Text>
+                      </View>
+                      <View className="bg-yellow-50 rounded-xl p-4">
+                        <Text className="text-xs text-gray-700 font-semibold mb-2">Everything in Premium, plus:</Text>
+                        <Text className="text-xs text-gray-600 leading-5">
+                          • Weekly profile boost{'\n'}
+                          • Background checks{'\n'}
+                          • Legal resources{'\n'}
+                          • Priority support
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
           </View>
         )}
 
@@ -257,6 +441,35 @@ export default function SubscriptionManagement() {
           <View className="py-8 items-center">
             <ActivityIndicator size="large" color="#8B5CF6" />
             <Text className="text-gray-600 mt-2">Loading plans...</Text>
+          </View>
+        )}
+
+        {/* Show error if offerings failed to load and not in development mode */}
+        {!loadingOfferings && !offerings && !isSubscribed && !isDevelopmentMode && (
+          <View className="mb-6 bg-red-50 border-2 border-red-200 rounded-2xl p-6">
+            <View className="flex-row items-start">
+              <MaterialCommunityIcons name="alert-circle" size={24} color="#DC2626" />
+              <View className="flex-1 ml-3">
+                <Text className="text-red-900 font-bold text-lg mb-2">
+                  Unable to Load Subscription Options
+                </Text>
+                <Text className="text-red-800 text-sm mb-3">
+                  We're having trouble loading subscription plans. This could be because:
+                </Text>
+                <Text className="text-red-800 text-sm ml-2 mb-1">• Offerings not configured in RevenueCat</Text>
+                <Text className="text-red-800 text-sm ml-2 mb-1">• Network connection issue</Text>
+                <Text className="text-red-800 text-sm ml-2 mb-3">• RevenueCat service temporarily unavailable</Text>
+                <TouchableOpacity
+                  onPress={loadOfferings}
+                  className="bg-red-600 rounded-full py-3 px-4 mt-2"
+                >
+                  <View className="flex-row items-center justify-center">
+                    <MaterialCommunityIcons name="refresh" size={20} color="white" />
+                    <Text className="text-white font-bold ml-2">Try Again</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         )}
 

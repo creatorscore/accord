@@ -4,8 +4,10 @@ import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
 import { supabase } from '@/lib/supabase';
+import { useTranslation } from 'react-i18next';
 
 export default function SignUp() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -30,27 +32,27 @@ export default function SignUp() {
 
     if (!email || !password || !confirmPassword) {
       if (Platform.OS === 'web') {
-        alert('Please fill in all fields');
+        alert(t('auth.signUp.errorMissingFields'));
       } else {
-        Alert.alert('Error', 'Please fill in all fields');
+        Alert.alert(t('common.error'), t('auth.signUp.errorMissingFields'));
       }
       return;
     }
 
     if (password !== confirmPassword) {
       if (Platform.OS === 'web') {
-        alert('Passwords do not match');
+        alert(t('auth.signUp.errorPasswordMismatch'));
       } else {
-        Alert.alert('Error', 'Passwords do not match');
+        Alert.alert(t('common.error'), t('auth.signUp.errorPasswordMismatch'));
       }
       return;
     }
 
     if (password.length < 8) {
       if (Platform.OS === 'web') {
-        alert('Password must be at least 8 characters');
+        alert(t('auth.signUp.errorPasswordTooShort'));
       } else {
-        Alert.alert('Error', 'Password must be at least 8 characters');
+        Alert.alert(t('common.error'), t('auth.signUp.errorPasswordTooShort'));
       }
       return;
     }
@@ -87,10 +89,26 @@ export default function SignUp() {
       }
     } catch (error: any) {
       console.error('Sign up error:', error);
+      const errorMessage = error.message || 'Failed to sign up';
+
+      // Check if user already exists (signed up with OAuth)
+      if (errorMessage.includes('User already registered') || errorMessage.includes('already been registered')) {
+        if (Platform.OS === 'web') {
+          alert(t('auth.signUp.errorAccountExistsMessage'));
+        } else {
+          Alert.alert(
+            t('auth.signUp.errorAccountExists'),
+            t('auth.signUp.errorAccountExistsMessage'),
+            [{ text: t('auth.signIn.gotIt') }]
+          );
+        }
+        return;
+      }
+
       if (Platform.OS === 'web') {
-        alert(error.message || 'Failed to sign up');
+        alert(errorMessage);
       } else {
-        Alert.alert('Error', error.message || 'Failed to sign up');
+        Alert.alert(t('common.error'), errorMessage);
       }
     } finally {
       setLoading(false);
@@ -107,11 +125,11 @@ export default function SignUp() {
           router.replace('/(onboarding)/basic-info');
         }, 500);
       } else {
-        Alert.alert('Error', 'Google sign-in was cancelled or failed');
+        Alert.alert(t('common.error'), 'Google sign-in was cancelled or failed');
       }
     } catch (error: any) {
       if (error.message !== 'User cancelled') {
-        Alert.alert('Error', error.message || 'Failed to sign up with Google');
+        Alert.alert(t('common.error'), error.message || 'Failed to sign up with Google');
       }
       console.error('Google sign-up error:', error);
     } finally {
@@ -127,7 +145,7 @@ export default function SignUp() {
         router.replace('/(onboarding)/basic-info');
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to sign up with Apple');
+      Alert.alert(t('common.error'), error.message || 'Failed to sign up with Apple');
     } finally {
       setLoading(false);
     }
@@ -139,16 +157,16 @@ export default function SignUp() {
         <View className="items-center">
           <Text className="text-6xl mb-6">📧</Text>
           <Text className="text-3xl font-bold text-charcoal mb-4 text-center">
-            Check Your Email!
+            {t('auth.signUp.verificationTitle')}
           </Text>
           <Text className="text-gray-600 text-lg text-center mb-2">
-            We've sent a confirmation email to:
+            {t('auth.signUp.verificationMessage')}
           </Text>
           <Text className="text-primary-600 font-semibold text-lg mb-6">
             {userEmail}
           </Text>
           <Text className="text-gray-600 text-center mb-8 px-4">
-            Please click the link in the email to verify your account and continue setting up your profile.
+            {t('auth.signUp.verificationInstructions')}
           </Text>
 
           <TouchableOpacity
@@ -156,7 +174,7 @@ export default function SignUp() {
             onPress={() => router.replace('/(auth)/sign-in')}
           >
             <Text className="text-white font-bold text-lg">
-              Go to Sign In
+              {t('auth.signUp.goToSignIn')}
             </Text>
           </TouchableOpacity>
 
@@ -164,7 +182,7 @@ export default function SignUp() {
             onPress={() => setShowVerificationMessage(false)}
           >
             <Text className="text-primary-600 font-semibold">
-              Use Different Email
+              {t('auth.signUp.useDifferentEmail')}
             </Text>
           </TouchableOpacity>
 
@@ -176,14 +194,14 @@ export default function SignUp() {
                   type: 'signup',
                   email: userEmail,
                 });
-                Alert.alert('Success', 'Verification email resent!');
+                Alert.alert(t('common.success'), t('auth.signUp.verificationEmailResent'));
               } catch (error) {
-                Alert.alert('Error', 'Could not resend email. Please try again.');
+                Alert.alert(t('common.error'), t('auth.signUp.resendError'));
               }
             }}
           >
             <Text className="text-gray-500 underline">
-              Resend verification email
+              {t('auth.signUp.resendVerificationEmail')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -194,22 +212,22 @@ export default function SignUp() {
   return (
     <View className="flex-1 bg-cream px-6 pt-16">
       <TouchableOpacity onPress={() => router.back()} className="mb-8">
-        <Text className="text-primary-600 text-lg font-semibold">← Back</Text>
+        <Text className="text-primary-600 text-lg font-semibold">{t('auth.signUp.backButton')}</Text>
       </TouchableOpacity>
 
       <Text className="text-4xl font-bold text-charcoal mb-2">
-        Let's do this! ✨
+        {t('auth.signUp.title')}
       </Text>
       <Text className="text-gray-600 text-lg mb-8">
-        Your perfect arrangement awaits
+        {t('auth.signUp.subtitle')}
       </Text>
 
       <View className="space-y-4">
         <View>
-          <Text className="text-gray-700 mb-2 font-medium">Email</Text>
+          <Text className="text-gray-700 mb-2 font-medium">{t('auth.signUp.email')}</Text>
           <TextInput
             className="border border-gray-300 rounded-lg px-4 py-3"
-            placeholder="your@email.com"
+            placeholder={t('auth.signUp.emailPlaceholder')}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -218,26 +236,26 @@ export default function SignUp() {
         </View>
 
         <View>
-          <Text className="text-gray-700 mb-2 font-medium">Password</Text>
+          <Text className="text-gray-700 mb-2 font-medium">{t('auth.signUp.password')}</Text>
           <TextInput
             className="border border-gray-300 rounded-lg px-4 py-3"
-            placeholder="••••••••"
+            placeholder={t('auth.signUp.passwordPlaceholder')}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
           />
           <Text className="text-gray-500 text-sm mt-1">
-            At least 8 characters
+            {t('auth.signUp.passwordHint')}
           </Text>
         </View>
 
         <View>
           <Text className="text-gray-700 mb-2 font-medium">
-            Confirm Password
+            {t('auth.signUp.confirmPassword')}
           </Text>
           <TextInput
             className="border border-gray-300 rounded-lg px-4 py-3"
-            placeholder="••••••••"
+            placeholder={t('auth.signUp.passwordPlaceholder')}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
@@ -252,20 +270,21 @@ export default function SignUp() {
           disabled={loading}
         >
           <Text className="text-white font-bold text-lg">
-            {loading ? 'Creating Account...' : 'Create Account'}
+            {loading ? t('auth.signUp.creatingAccount') : t('auth.signUp.createAccountButton')}
           </Text>
         </TouchableOpacity>
 
         <Text className="text-gray-500 text-xs text-center mt-4">
-          By creating an account, you agree to our{' '}
-          <Text className="text-primary-600">Terms of Service</Text> and{' '}
-          <Text className="text-primary-600">Privacy Policy</Text>
+          {t('auth.signUp.termsAgree')}
+          <Text className="text-primary-600">{t('auth.signUp.termsOfService')}</Text>
+          {t('auth.signUp.and')}
+          <Text className="text-primary-600">{t('auth.signUp.privacyPolicy')}</Text>
         </Text>
 
         {/* Divider */}
         <View className="flex-row items-center my-6">
           <View className="flex-1 h-px bg-gray-300" />
-          <Text className="mx-4 text-gray-500">or sign up with</Text>
+          <Text className="mx-4 text-gray-500">{t('auth.signUp.orSignUpWith')}</Text>
           <View className="flex-1 h-px bg-gray-300" />
         </View>
 
@@ -277,7 +296,7 @@ export default function SignUp() {
             disabled={loading}
           >
             <Text className="text-gray-700 font-semibold ml-2">
-              Continue with Google
+              {t('auth.signUp.continueWithGoogle')}
             </Text>
           </TouchableOpacity>
 
@@ -288,16 +307,16 @@ export default function SignUp() {
               disabled={loading}
             >
               <Text className="text-white font-semibold ml-2">
-                Continue with Apple
+                {t('auth.signUp.continueWithApple')}
               </Text>
             </TouchableOpacity>
           )}
         </View>
 
         <View className="flex-row justify-center items-center mt-6">
-          <Text className="text-gray-600">Already have an account? </Text>
+          <Text className="text-gray-600">{t('auth.signUp.haveAccount')}</Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/sign-in')}>
-            <Text className="text-primary-600 font-semibold">Sign In</Text>
+            <Text className="text-primary-600 font-semibold">{t('auth.signUp.signInLink')}</Text>
           </TouchableOpacity>
         </View>
       </View>
