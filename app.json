@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.privyreviews.accord",
-      "buildNumber": "17",
+      "buildNumber": "18",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Accord needs access to your photos to upload profile pictures.",
         "NSCameraUsageDescription": "Accord needs access to your camera to take profile photos.",
@@ -46,7 +46,7 @@
         "backgroundColor": "#8B5CF6"
       },
       "package": "com.privyreviews.accord",
-      "versionCode": 17,
+      "versionCode": 18,
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.CAMERA",
