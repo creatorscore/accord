@@ -24,7 +24,7 @@ interface SubscriptionContextType {
   subscriptionTier: SubscriptionTier | null;
   refreshSubscription: () => Promise<void>;
   canUseFeature: (feature: string) => boolean;
-  syncWithDatabase: () => Promise<void>;
+  syncWithDatabase: (freshCustomerInfo?: CustomerInfo) => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -157,8 +157,11 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   /**
    * Sync RevenueCat subscription status to database
    * Called after purchase/restore to ensure DB is in sync
+   *
+   * @param freshCustomerInfo - Optional fresh CustomerInfo from purchase/restore
+   *                            If provided, uses this instead of context state
    */
-  const syncWithDatabase = useCallback(async () => {
+  const syncWithDatabase = useCallback(async (freshCustomerInfo?: CustomerInfo) => {
     if (!user) return;
 
     try {
@@ -174,17 +177,18 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return;
       }
 
-      // In production, RevenueCat webhook handles this automatically
-      // But we sync manually after purchase for immediate UI updates
-      const premium = isPremium;
-      const platinum = isPlatinum;
-      const tier = subscriptionTier;
+      // Use fresh CustomerInfo if provided (from purchase), otherwise use context state
+      // This ensures we sync the LATEST subscription status, not stale context state
+      const premium = freshCustomerInfo ? hasPremium(freshCustomerInfo) : isPremium;
+      const platinum = freshCustomerInfo ? hasPlatinum(freshCustomerInfo) : isPlatinum;
+      const tier = freshCustomerInfo ? getSubscriptionTier(freshCustomerInfo) : subscriptionTier;
 
       console.log('🔄 Syncing subscription to database:', {
         profileId: profile.id,
         isPremium: premium,
         isPlatinum: platinum,
         tier,
+        usingFreshData: !!freshCustomerInfo,
       });
 
       // Update profiles table
@@ -195,6 +199,10 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           is_platinum: platinum,
         })
         .eq('id', profile.id);
+
+      // Immediately update local database status for instant UI update
+      setDbPremiumStatus(premium);
+      setDbPlatinumStatus(platinum);
 
       // Update subscriptions table if active subscription
       if (tier) {

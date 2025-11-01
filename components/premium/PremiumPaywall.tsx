@@ -214,7 +214,7 @@ export default function PremiumPaywall({
                   const customerInfo = await purchasePackage(fallbackPkg);
                   if (customerInfo) {
                     await refreshSubscription();
-                    await syncWithDatabase();
+                    await syncWithDatabase(customerInfo); // Pass fresh customerInfo
                     Alert.alert('🎉 Success!', 'Welcome to Accord Premium!', [
                       { text: 'Let\'s Go!', onPress: onClose }
                     ]);
@@ -235,7 +235,7 @@ export default function PremiumPaywall({
       if (customerInfo) {
         // Purchase successful - sync to database and refresh
         await refreshSubscription();
-        await syncWithDatabase(); // Sync immediately for instant UI update
+        await syncWithDatabase(customerInfo); // Pass fresh customerInfo for instant UI update
         Alert.alert(
           '🎉 Success!',
           `Welcome to Accord ${isPlatinum ? 'Platinum' : 'Premium'}!`,
@@ -283,7 +283,7 @@ export default function PremiumPaywall({
 
       if (customerInfo) {
         await refreshSubscription();
-        await syncWithDatabase(); // Sync restored purchases to database
+        await syncWithDatabase(customerInfo); // Pass fresh customerInfo from restore
         Alert.alert('Success', 'Your purchases have been restored!', [{ text: 'OK', onPress: onClose }]);
       } else {
         Alert.alert('No Purchases', 'We couldn\'t find any purchases to restore.');
