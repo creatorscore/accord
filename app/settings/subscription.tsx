@@ -9,7 +9,7 @@ import { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 
 export default function SubscriptionManagement() {
   const router = useRouter();
-  const { customerInfo, isSubscribed, isPremium, isPlatinum, subscriptionTier, refreshSubscription } = useSubscription();
+  const { customerInfo, isSubscribed, isPremium, isPlatinum, subscriptionTier, refreshSubscription, syncWithDatabase } = useSubscription();
 
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -47,10 +47,14 @@ export default function SubscriptionManagement() {
       const restored = await restorePurchases();
 
       if (restored && restored.entitlements.active && Object.keys(restored.entitlements.active).length > 0) {
+        // Sync restored purchase with database
+        await syncWithDatabase(restored);
+        await refreshSubscription();
+
         Alert.alert(
           'Success!',
           'Your purchases have been restored successfully.',
-          [{ text: 'OK', onPress: () => refreshSubscription() }]
+          [{ text: 'OK' }]
         );
       } else {
         Alert.alert(
@@ -98,10 +102,14 @@ export default function SubscriptionManagement() {
       const info = await purchasePackage(pkg);
 
       if (info) {
+        // Sync purchase with database immediately
+        await syncWithDatabase(info);
+        await refreshSubscription();
+
         Alert.alert(
           'Success!',
           'Your subscription has been activated.',
-          [{ text: 'OK', onPress: () => refreshSubscription() }]
+          [{ text: 'OK' }]
         );
       }
     } catch (error: any) {

@@ -149,29 +149,40 @@ export default function Discover() {
         .single();
 
       if (error) throw error;
-      setCurrentProfileId(data.id);
-      setCurrentUserName(data.display_name);
-      setCurrentUserGender(data.gender || null);
+
+      const profileId = data.id;
+      const displayName = data.display_name;
+      const userGender = data.gender || null;
 
       // Get primary photo or first photo
       const photos = data.photos?.sort((a: any, b: any) => a.display_order - b.display_order);
       const primaryPhoto = photos?.find((p: any) => p.is_primary) || photos?.[0];
-      setCurrentUserPhoto(primaryPhoto?.url || null);
+      const photoUrl = primaryPhoto?.url || null;
 
       // Initialize filters from user's database preferences
-      if (data.preferences) {
-        setFilters({
-          ageMin: data.preferences.age_min || 22,
-          ageMax: data.preferences.age_max || 50,
-          maxDistance: data.preferences.max_distance_miles || 100,
-          religion: [],
-          politicalViews: [],
-          housingPreference: [],
-          financialArrangement: [],
-        });
-      }
+      const initialFilters = data.preferences ? {
+        ageMin: data.preferences.age_min || 22,
+        ageMax: data.preferences.age_max || 50,
+        maxDistance: data.preferences.max_distance_miles || 100,
+        religion: [],
+        politicalViews: [],
+        housingPreference: [],
+        financialArrangement: [],
+      } : filters;
+
+      // Update all state at once to prevent multiple re-renders
+      setCurrentProfileId(profileId);
+      setCurrentUserName(displayName);
+      setCurrentUserGender(userGender);
+      setCurrentUserPhoto(photoUrl);
+      setFilters(initialFilters);
+
+      // Immediately start loading profiles to reduce perceived lag
+      // Don't wait for next render cycle
+      setLoading(false); // Remove initial loading state immediately
     } catch (error: any) {
       Alert.alert(t('common.error'), 'Failed to load your profile');
+      setLoading(false);
     }
   };
 
@@ -1257,11 +1268,11 @@ export default function Discover() {
         {/* Header with Search/Filter Controls */}
         <View className="bg-primary-500 pb-4 px-6" style={{ paddingTop: insets.top + 16 }}>
           <View className="flex-row justify-between items-center mb-3">
-            <View className="flex-1">
-              <Text className="text-4xl font-bold text-white mb-1">
+            <View className="flex-1 mr-2">
+              <Text className="text-4xl font-bold text-white mb-1" numberOfLines={1} adjustsFontSizeToFit>
                 {t('discover.title')}
               </Text>
-              <Text className="text-white/90 text-base">
+              <Text className="text-white/90 text-base" numberOfLines={1}>
                 {isSearchMode ? `Search for "${searchKeyword}"` : 'No more profiles to show'}
               </Text>
             </View>
@@ -1423,11 +1434,11 @@ export default function Discover() {
       {/* Header */}
       <View className="bg-primary-500 pb-4 px-6" style={{ paddingTop: insets.top + 16 }}>
         <View className="flex-row justify-between items-center mb-3">
-          <View className="flex-1">
-            <Text className="text-4xl font-bold text-white mb-1">
+          <View className="flex-1 mr-2">
+            <Text className="text-4xl font-bold text-white mb-1" numberOfLines={1} adjustsFontSizeToFit>
               {t('discover.title')}
             </Text>
-            <Text className="text-white/90 text-base">
+            <Text className="text-white/90 text-base" numberOfLines={1}>
               {isSearchMode ? `${profiles.length - currentIndex} matches for "${searchKeyword}"` : t('discover.profilesToExplore', { count: profiles.length - currentIndex })}
             </Text>
           </View>

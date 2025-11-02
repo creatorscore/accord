@@ -73,14 +73,14 @@ export default function SignUp() {
         // Direct sign in successful (email confirmation disabled)
         console.log('Direct sign in successful');
         setTimeout(() => {
-          router.replace('/(onboarding)/basic-info');
+          router.replace('/(onboarding)/language');
         }, 500);
       } else if (result.user) {
         // User created but no session - try to sign in
         console.log('User created, attempting sign in...');
         try {
           await signIn(email, password);
-          router.replace('/(onboarding)/basic-info');
+          router.replace('/(onboarding)/language');
         } catch (signInError) {
           // Email confirmation is likely required
           setUserEmail(email);
@@ -122,7 +122,7 @@ export default function SignUp() {
       if (result) {
         // Wait for auth state to update
         setTimeout(() => {
-          router.replace('/(onboarding)/basic-info');
+          router.replace('/(onboarding)/language');
         }, 500);
       } else {
         Alert.alert(t('common.error'), 'Google sign-in was cancelled or failed');
@@ -142,7 +142,7 @@ export default function SignUp() {
     try {
       const result = await signInWithApple();
       if (result) {
-        router.replace('/(onboarding)/basic-info');
+        router.replace('/(onboarding)/language');
       }
     } catch (error: any) {
       Alert.alert(t('common.error'), error.message || 'Failed to sign up with Apple');

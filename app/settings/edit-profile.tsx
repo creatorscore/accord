@@ -377,6 +377,37 @@ export default function EditProfile() {
   }, []);
 
   const loadProfile = async () => {
+    // Helper function to safely parse array fields and prevent nested array corruption
+    const safeParseArray = (value: any): string[] => {
+      if (!value) return [];
+
+      // If it's already a clean array, return it
+      if (Array.isArray(value)) {
+        // Check if array contains nested stringified arrays (corruption detection)
+        const filtered = value.filter(item => typeof item === 'string' && !item.startsWith('["'));
+        return filtered.length > 0 ? filtered : value;
+      }
+
+      // If it's a string, try to parse it as JSON first
+      if (typeof value === 'string') {
+        // Check if it looks like a JSON array
+        if (value.startsWith('[') && value.endsWith(']')) {
+          try {
+            const parsed = JSON.parse(value);
+            if (Array.isArray(parsed)) {
+              return parsed.filter(item => typeof item === 'string');
+            }
+          } catch (e) {
+            console.warn('Failed to parse array string:', value);
+          }
+        }
+        // If not JSON or parsing failed, treat as single value
+        return [value];
+      }
+
+      return [];
+    };
+
     try {
       // Load profile data
       const { data: profileData, error: profileError} = await supabase
@@ -434,10 +465,11 @@ export default function EditProfile() {
         setEducation(profileData.education || '');
         setLocationCity(profileData.location_city || '');
         setLocationState(profileData.location_state || '');
-        setGender(Array.isArray(profileData.gender) ? profileData.gender : (profileData.gender ? [profileData.gender] : []));
+
+        setGender(safeParseArray(profileData.gender));
         setPronouns(profileData.pronouns || '');
-        setEthnicity(Array.isArray(profileData.ethnicity) ? profileData.ethnicity : (profileData.ethnicity ? [profileData.ethnicity] : []));
-        setSexualOrientation(Array.isArray(profileData.sexual_orientation) ? profileData.sexual_orientation : (profileData.sexual_orientation ? [profileData.sexual_orientation] : []));
+        setEthnicity(safeParseArray(profileData.ethnicity));
+        setSexualOrientation(safeParseArray(profileData.sexual_orientation));
 
         // Convert height_inches to feet and inches
         if (profileData.height_inches) {
@@ -515,9 +547,9 @@ export default function EditProfile() {
             setPrimaryReason(prefsData.primary_reason || '');
             setRelationshipType(prefsData.relationship_type || '');
             setWantsChildren(prefsData.wants_children);
-            setChildrenArrangement(Array.isArray(prefsData.children_arrangement) ? prefsData.children_arrangement : (prefsData.children_arrangement ? [prefsData.children_arrangement] : []));
-            setFinancialArrangement(Array.isArray(prefsData.financial_arrangement) ? prefsData.financial_arrangement : (prefsData.financial_arrangement ? [prefsData.financial_arrangement] : []));
-            setHousingPreference(Array.isArray(prefsData.housing_preference) ? prefsData.housing_preference : (prefsData.housing_preference ? [prefsData.housing_preference] : []));
+            setChildrenArrangement(safeParseArray(prefsData.children_arrangement));
+            setFinancialArrangement(safeParseArray(prefsData.financial_arrangement));
+            setHousingPreference(safeParseArray(prefsData.housing_preference));
             setAgeMin(prefsData.age_min?.toString() || '25');
             setAgeMax(prefsData.age_max?.toString() || '45');
             setMaxDistance(prefsData.max_distance_miles?.toString() || '50');
