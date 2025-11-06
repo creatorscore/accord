@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accord Admin Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f9fafb;
+      color: #111827;
+    }
+
+    /* Login Screen */
+    .login-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+    }
+
+    .login-card {
+      background: white;
+      padding: 48px;
+      border-radius: 16px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+      width: 90%;
+    }
+
+    .login-card h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      color: #111827;
+    }
+
+    .login-card p {
+      color: #6b7280;
+      margin-bottom: 32px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #8B5CF6;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 15px -3px rgba(139, 92, 246, 0.3);
+    }
+
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #e5e7eb;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-success {
+      background: #10b981;
+      color: white;
+    }
+
+    .btn-small {
+      width: auto;
+      padding: 8px 16px;
+      font-size: 14px;
+    }
+
+    .error-message {
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    /* Dashboard */
+    .dashboard {
+      display: none;
+    }
+
+    .dashboard.active {
+      display: block;
+    }
+
+    .header {
+      background: white;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 16px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      color: #111827;
+    }
+
+    .header .user-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header .user-email {
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .stat-card .stat-label {
+      color: #6b7280;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .stat-card .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: #111827;
+    }
+
+    .stat-card.pending .stat-value {
+      color: #f59e0b;
+    }
+
+    .stat-card.resolved .stat-value {
+      color: #10b981;
+    }
+
+    .stat-card.dismissed .stat-value {
+      color: #6b7280;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .tab {
+      padding: 12px 24px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 500;
+      color: #6b7280;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+    }
+
+    .tab.active {
+      color: #8B5CF6;
+      border-bottom-color: #8B5CF6;
+    }
+
+    .reports-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .report-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .report-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 16px;
+    }
+
+    .report-info h3 {
+      font-size: 18px;
+      margin-bottom: 8px;
+      color: #111827;
+    }
+
+    .report-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge.pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .badge.reviewing {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .badge.resolved {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .badge.dismissed {
+      background: #f3f4f6;
+      color: #374151;
+    }
+
+    .report-reason {
+      background: #f9fafb;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      border-left: 4px solid #8B5CF6;
+    }
+
+    .report-reason h4 {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    .report-reason p {
+      color: #111827;
+      line-height: 1.5;
+    }
+
+    .report-profiles {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .profile-mini {
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+    }
+
+    .profile-mini h5 {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    .profile-mini p {
+      font-size: 14px;
+      color: #111827;
+      font-weight: 500;
+    }
+
+    .report-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 48px;
+      color: #6b7280;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 64px 32px;
+      color: #6b7280;
+    }
+
+    .empty-state h3 {
+      font-size: 18px;
+      margin-bottom: 8px;
+      color: #111827;
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 32px;
+    }
+
+    .modal-content h2 {
+      margin-bottom: 24px;
+      color: #111827;
+    }
+
+    .profile-details {
+      display: grid;
+      gap: 16px;
+    }
+
+    .profile-field {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 12px;
+    }
+
+    .profile-field label {
+      font-weight: 600;
+      color: #6b7280;
+    }
+
+    .profile-field value {
+      color: #111827;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Login Screen -->
+  <div id="loginScreen" class="login-container">
+    <div class="login-card">
+      <h1>🔐 Admin Dashboard</h1>
+      <p>Sign in to manage Accord reports</p>
+
+      <div id="loginError" class="error-message" style="display: none;"></div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="dashboard">
+    <div class="header">
+      <h1>📊 Accord Admin Dashboard</h1>
+      <div class="user-info">
+        <span class="user-email" id="userEmail"></span>
+        <button class="btn btn-secondary btn-small" onclick="handleLogout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card pending">
+          <div class="stat-label">Pending Reports</div>
+          <div class="stat-value" id="statPending">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Under Review</div>
+          <div class="stat-value" id="statReviewing">0</div>
+        </div>
+        <div class="stat-card resolved">
+          <div class="stat-label">Resolved</div>
+          <div class="stat-value" id="statResolved">0</div>
+        </div>
+        <div class="stat-card dismissed">
+          <div class="stat-label">Dismissed</div>
+          <div class="stat-value" id="statDismissed">0</div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('pending')">Pending</button>
+        <button class="tab" onclick="switchTab('reviewing')">Under Review</button>
+        <button class="tab" onclick="switchTab('resolved')">Resolved</button>
+        <button class="tab" onclick="switchTab('dismissed')">Dismissed</button>
+      </div>
+
+      <!-- Reports List -->
+      <div id="reportsList" class="reports-list">
+        <div class="loading">Loading reports...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile Modal -->
+  <div id="profileModal" class="modal">
+    <div class="modal-content">
+      <h2>User Profile Details</h2>
+      <div id="profileDetails"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-small" onclick="closeProfileModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // IMPORTANT: Replace these with your actual Supabase credentials
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let currentUser = null;
+    let currentTab = 'pending';
+    let allReports = [];
+
+    // Check if user is already logged in
+    async function checkAuth() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Check if user is admin
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_admin, user_id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (profile && profile.is_admin) {
+          currentUser = user;
+          showDashboard();
+          return true;
+        } else {
+          showError('You do not have admin privileges');
+          await supabase.auth.signOut();
+        }
+      }
+      return false;
+    }
+
+    // Login
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        showError(error.message);
+        return;
+      }
+
+      // Check admin status
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('user_id', data.user.id)
+        .single();
+
+      if (!profile || !profile.is_admin) {
+        showError('You do not have admin privileges');
+        await supabase.auth.signOut();
+        return;
+      }
+
+      currentUser = data.user;
+      showDashboard();
+    });
+
+    function showError(message) {
+      const errorDiv = document.getElementById('loginError');
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+    }
+
+    function showDashboard() {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('dashboard').classList.add('active');
+      document.getElementById('userEmail').textContent = currentUser.email;
+      loadReports();
+    }
+
+    async function handleLogout() {
+      await supabase.auth.signOut();
+      location.reload();
+    }
+
+    // Load reports
+    async function loadReports() {
+      try {
+        const { data: reports, error } = await supabase
+          .from('reports')
+          .select(`
+            *,
+            reporter:reporter_profile_id(id, display_name, email),
+            reported:reported_profile_id(id, display_name, email, is_verified)
+          `)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        allReports = reports || [];
+        updateStats();
+        renderReports();
+      } catch (error) {
+        console.error('Error loading reports:', error);
+        document.getElementById('reportsList').innerHTML = '<div class="empty-state"><h3>Error loading reports</h3><p>' + error.message + '</p></div>';
+      }
+    }
+
+    function updateStats() {
+      const stats = {
+        pending: 0,
+        reviewing: 0,
+        resolved: 0,
+        dismissed: 0
+      };
+
+      allReports.forEach(report => {
+        if (stats.hasOwnProperty(report.status)) {
+          stats[report.status]++;
+        }
+      });
+
+      document.getElementById('statPending').textContent = stats.pending;
+      document.getElementById('statReviewing').textContent = stats.reviewing;
+      document.getElementById('statResolved').textContent = stats.resolved;
+      document.getElementById('statDismissed').textContent = stats.dismissed;
+    }
+
+    function renderReports() {
+      const filtered = allReports.filter(r => r.status === currentTab);
+      const container = document.getElementById('reportsList');
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state"><h3>No reports</h3><p>No ' + currentTab + ' reports at this time.</p></div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(report => `
+        <div class="report-card">
+          <div class="report-header">
+            <div class="report-info">
+              <h3>Report #${report.id.substring(0, 8)}</h3>
+              <div class="report-meta">
+                <span>📅 ${new Date(report.created_at).toLocaleString()}</span>
+                <span class="badge ${report.status}">${report.status}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="report-reason">
+            <h4>Reason for Report</h4>
+            <p>${report.reason || 'No reason provided'}</p>
+          </div>
+
+          <div class="report-profiles">
+            <div class="profile-mini">
+              <h5>Reported By</h5>
+              <p>${report.reporter?.display_name || 'Unknown'}</p>
+              <p style="font-size: 12px; color: #6b7280;">${report.reporter?.email || ''}</p>
+            </div>
+            <div class="profile-mini">
+              <h5>Reported User</h5>
+              <p>${report.reported?.display_name || 'Unknown'} ${report.reported?.is_verified ? '✓' : ''}</p>
+              <p style="font-size: 12px; color: #6b7280;">${report.reported?.email || ''}</p>
+            </div>
+          </div>
+
+          <div class="report-actions">
+            <button class="btn btn-secondary btn-small" onclick="viewProfile('${report.reported_profile_id}')">View Profile</button>
+            ${currentTab === 'pending' ? `
+              <button class="btn btn-secondary btn-small" onclick="updateReportStatus('${report.id}', 'reviewing')">Mark Reviewing</button>
+              <button class="btn btn-success btn-small" onclick="updateReportStatus('${report.id}', 'resolved')">Resolve</button>
+              <button class="btn btn-secondary btn-small" onclick="updateReportStatus('${report.id}', 'dismissed')">Dismiss</button>
+            ` : ''}
+            ${currentTab === 'reviewing' ? `
+              <button class="btn btn-success btn-small" onclick="updateReportStatus('${report.id}', 'resolved')">Resolve</button>
+              <button class="btn btn-secondary btn-small" onclick="updateReportStatus('${report.id}', 'dismissed')">Dismiss</button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+
+      // Update tab UI
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+
+      renderReports();
+    }
+
+    async function updateReportStatus(reportId, newStatus) {
+      try {
+        const { error } = await supabase
+          .from('reports')
+          .update({
+            status: newStatus,
+            resolved_at: newStatus === 'resolved' || newStatus === 'dismissed' ? new Date().toISOString() : null
+          })
+          .eq('id', reportId);
+
+        if (error) throw error;
+
+        await loadReports();
+      } catch (error) {
+        alert('Error updating report: ' + error.message);
+      }
+    }
+
+    async function viewProfile(profileId) {
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', profileId)
+          .single();
+
+        if (error) throw error;
+
+        const detailsHtml = `
+          <div class="profile-details">
+            <div class="profile-field"><label>Name:</label><value>${profile.display_name || 'N/A'}</value></div>
+            <div class="profile-field"><label>Age:</label><value>${profile.age || 'N/A'}</value></div>
+            <div class="profile-field"><label>Gender:</label><value>${profile.gender || 'N/A'}</value></div>
+            <div class="profile-field"><label>Location:</label><value>${profile.location_city || 'N/A'}, ${profile.location_state || 'N/A'}</value></div>
+            <div class="profile-field"><label>Verified:</label><value>${profile.is_verified ? '✅ Yes' : '❌ No'}</value></div>
+            <div class="profile-field"><label>Bio:</label><value>${profile.bio || 'N/A'}</value></div>
+            <div class="profile-field"><label>Occupation:</label><value>${profile.occupation || 'N/A'}</value></div>
+            <div class="profile-field"><label>Created:</label><value>${new Date(profile.created_at).toLocaleDateString()}</value></div>
+          </div>
+        `;
+
+        document.getElementById('profileDetails').innerHTML = detailsHtml;
+        document.getElementById('profileModal').classList.add('active');
+      } catch (error) {
+        alert('Error loading profile: ' + error.message);
+      }
+    }
+
+    function closeProfileModal() {
+      document.getElementById('profileModal').classList.remove('active');
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('profileModal').addEventListener('click', (e) => {
+      if (e.target.id === 'profileModal') {
+        closeProfileModal();
+      }
+    });
+
+    // Initialize
+    checkAuth();
+  </script>
+
+</body>
+</html>

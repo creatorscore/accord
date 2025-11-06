@@ -1,0 +1,54 @@
+# Expo
+.expo/
+dist/
+web-build/
+
+# Node
+node_modules/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+*.pem
+
+# TypeScript
+*.tsbuildinfo
+
+# VS Code
+.vscode/
+
+# IDE
+.idea/
+
+# Logs
+logs
+*.log
+
+# EAS
+eas.json
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# Build artifacts
+*.ipa
+*.apk
+*.aab
+
+# Supabase
+supabase/.branches
+supabase/.temp
+
+# Firebase
+google-services.json
+GoogleService-Info.plist
