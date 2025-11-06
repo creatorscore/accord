@@ -60,7 +60,7 @@ export default function AuthCallback() {
 
   return (
     <View className="flex-1 items-center justify-center bg-cream">
-      <ActivityIndicator size="large" color="#8B5CF6" />
+      <ActivityIndicator size="large" color="#9B87CE" />
       <Text className="text-gray-600 mt-4">Completing sign in...</Text>
     </View>
   );

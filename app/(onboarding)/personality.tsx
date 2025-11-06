@@ -166,7 +166,7 @@ export default function Personality() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 4 of 9</Text>
-            <Text className="text-sm text-accent-500 font-bold">44%</Text>
+            <Text className="text-sm text-primary-400 font-bold">44%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
@@ -304,7 +304,7 @@ export default function Personality() {
               ))}
             </View>
             {loveLanguage.length > 0 && (
-              <Text className="text-xs text-primary-600 mt-2">
+              <Text className="text-xs text-primary-500 mt-2">
                 Selected: {loveLanguage.join(', ')}
               </Text>
             )}

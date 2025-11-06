@@ -15,7 +15,11 @@ import { ActivityTracker } from '@/components/shared/ActivityTracker';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { initI18n, isRTL } from '@/lib/i18n';
 import { initializeSentry } from '@/lib/sentry';
-import { initializePostHog } from '@/lib/analytics';
+import { initializePostHog, trackAppLifecycle } from '@/lib/analytics';
+import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Application from 'expo-application';
+import { Platform } from 'react-native';
 import '../global.css';
 
 // Initialize Sentry before anything else (with error handling)
@@ -29,13 +33,31 @@ export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
   const [i18nInitialized, setI18nInitialized] = useState(false);
 
+  // Enable screenshot protection app-wide
+  useScreenCaptureProtection(true);
+
   useEffect(() => {
     async function initialize() {
       try {
+        // Check if this is first launch
+        const hasLaunchedBefore = await AsyncStorage.getItem('has_launched_before');
+        const isFirstLaunch = !hasLaunchedBefore;
+
         // Initialize analytics (don't await, let it run in background)
         initializePostHog().catch(err => {
           console.error('PostHog initialization error:', err);
         });
+
+        // Track app install/launch
+        if (isFirstLaunch) {
+          const version = Application.nativeApplicationVersion || '1.0.0';
+          const platform = Platform.OS as 'ios' | 'android';
+          trackAppLifecycle.appInstalled(platform, version);
+          await AsyncStorage.setItem('has_launched_before', 'true');
+        }
+
+        // Track app started
+        trackAppLifecycle.appStarted(isFirstLaunch);
 
         // Initialize i18n
         await initI18n();

@@ -56,7 +56,7 @@ export default function ForgotPassword() {
     return (
       <View className="flex-1 bg-white px-6 pt-16">
         <TouchableOpacity onPress={() => router.back()} className="mb-8">
-          <Text className="text-primary-600 text-lg">← Back</Text>
+          <Text className="text-primary-500 text-lg">← Back</Text>
         </TouchableOpacity>
 
         <View className="items-center justify-center flex-1 -mt-20">
@@ -73,13 +73,13 @@ export default function ForgotPassword() {
           </Text>
 
           <TouchableOpacity
-            className={`border-2 border-primary-600 rounded-full py-3 px-8 mb-4 ${
+            className={`border-2 border-primary-500 rounded-full py-3 px-8 mb-4 ${
               resendCooldown > 0 || loading ? 'opacity-50' : ''
             }`}
             onPress={handleResend}
             disabled={resendCooldown > 0 || loading}
           >
-            <Text className="text-primary-600 font-semibold">
+            <Text className="text-primary-500 font-semibold">
               {resendCooldown > 0
                 ? `Resend in ${resendCooldown}s`
                 : loading
@@ -89,7 +89,7 @@ export default function ForgotPassword() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            className="bg-primary-600 rounded-full py-3 px-8"
+            className="bg-primary-500 rounded-full py-3 px-8"
             onPress={() => router.push('/(auth)/sign-in')}
           >
             <Text className="text-white font-semibold">Back to Sign In</Text>
@@ -102,7 +102,7 @@ export default function ForgotPassword() {
   return (
     <View className="flex-1 bg-white px-6 pt-16">
       <TouchableOpacity onPress={() => router.back()} className="mb-8">
-        <Text className="text-primary-600 text-lg">← Back</Text>
+        <Text className="text-primary-500 text-lg">← Back</Text>
       </TouchableOpacity>
 
       <Text className="text-3xl font-bold text-gray-900 mb-2">
@@ -127,7 +127,7 @@ export default function ForgotPassword() {
         </View>
 
         <TouchableOpacity
-          className={`bg-primary-600 rounded-full py-4 items-center mt-4 ${
+          className={`bg-primary-500 rounded-full py-4 items-center mt-4 ${
             loading ? 'opacity-50' : ''
           }`}
           onPress={handleResetPassword}
@@ -141,7 +141,7 @@ export default function ForgotPassword() {
         <View className="flex-row justify-center items-center mt-6">
           <Text className="text-gray-600">Remember your password? </Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/sign-in')}>
-            <Text className="text-primary-600 font-semibold">Sign In</Text>
+            <Text className="text-primary-500 font-semibold">Sign In</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -158,7 +158,7 @@ export default function PrivacySettings() {
       style={styles.settingRow}
     >
       <View style={styles.settingIcon}>
-        <MaterialCommunityIcons name={icon as any} size={24} color="#8B5CF6" />
+        <MaterialCommunityIcons name={icon as any} size={24} color="#9B87CE" />
       </View>
       <View style={styles.settingContent}>
         <View style={styles.settingHeader}>
@@ -175,7 +175,7 @@ export default function PrivacySettings() {
         value={value}
         onValueChange={onValueChange}
         trackColor={{ false: '#D1D5DB', true: '#A78BFA' }}
-        thumbColor={value ? '#8B5CF6' : '#F3F4F6'}
+        thumbColor={value ? '#9B87CE' : '#F3F4F6'}
         disabled={saving}
       />
     </MotiView>
@@ -192,7 +192,7 @@ export default function PrivacySettings() {
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8B5CF6" />
+          <ActivityIndicator size="large" color="#9B87CE" />
           <Text style={styles.loadingText}>Loading settings...</Text>
         </View>
       </View>
@@ -286,7 +286,7 @@ export default function PrivacySettings() {
         >
           <View style={styles.locationHeader}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="map-marker" size={24} color="#8B5CF6" />
+              <MaterialCommunityIcons name="map-marker" size={24} color="#9B87CE" />
             </View>
             <View style={styles.locationContent}>
               <Text style={styles.settingTitle}>Update Location</Text>
@@ -360,7 +360,7 @@ export default function PrivacySettings() {
           style={styles.learnMoreButton}
           onPress={() => Linking.openURL('https://joinaccord.app/privacy')}
         >
-          <MaterialCommunityIcons name="shield-lock-outline" size={20} color="#8B5CF6" />
+          <MaterialCommunityIcons name="shield-lock-outline" size={20} color="#9B87CE" />
           <Text style={styles.learnMoreText}>Privacy Policy</Text>
           <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
         </TouchableOpacity>
@@ -369,7 +369,7 @@ export default function PrivacySettings() {
           style={styles.learnMoreButton}
           onPress={() => Linking.openURL('https://joinaccord.app/terms')}
         >
-          <MaterialCommunityIcons name="file-document-outline" size={20} color="#8B5CF6" />
+          <MaterialCommunityIcons name="file-document-outline" size={20} color="#9B87CE" />
           <Text style={styles.learnMoreText}>Terms of Service</Text>
           <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
         </TouchableOpacity>
@@ -565,7 +565,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '500',
-    color: '#8B5CF6',
+    color: '#9B87CE',
   },
   locationCard: {
     backgroundColor: '#fff',
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 12,

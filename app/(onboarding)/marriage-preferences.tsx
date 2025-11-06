@@ -223,7 +223,7 @@ export default function MarriagePreferences() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 7 of 8</Text>
-            <Text className="text-sm text-primary-600 font-bold">88%</Text>
+            <Text className="text-sm text-primary-500 font-bold">88%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
@@ -264,7 +264,7 @@ export default function MarriagePreferences() {
                   <Text
                     className={`${
                       primaryReason === reason.value
-                        ? 'text-primary-700 font-semibold'
+                        ? 'text-primary-500 font-semibold'
                         : 'text-gray-700'
                     }`}
                   >
@@ -294,7 +294,7 @@ export default function MarriagePreferences() {
                   <Text
                     className={`${
                       relationshipType === type.value
-                        ? 'text-primary-700 font-semibold'
+                        ? 'text-primary-500 font-semibold'
                         : 'text-gray-700'
                     }`}
                   >
@@ -324,7 +324,7 @@ export default function MarriagePreferences() {
                   <Text
                     className={`text-center ${
                       wantsChildren === option.value
-                        ? 'text-primary-700 font-semibold'
+                        ? 'text-primary-500 font-semibold'
                         : 'text-gray-700'
                     }`}
                   >
@@ -355,7 +355,7 @@ export default function MarriagePreferences() {
                   <Text
                     className={`${
                       housingPreference.includes(pref.value)
-                        ? 'text-primary-700 font-semibold'
+                        ? 'text-primary-500 font-semibold'
                         : 'text-gray-700'
                     }`}
                   >
@@ -365,7 +365,7 @@ export default function MarriagePreferences() {
               ))}
             </View>
             {housingPreference.length > 0 && (
-              <Text className="text-xs text-primary-600 mt-2">
+              <Text className="text-xs text-primary-500 mt-2">
                 Selected: {housingPreference.map(val => HOUSING_PREFERENCES.find(p => p.value === val)?.label).join(', ')}
               </Text>
             )}
@@ -391,7 +391,7 @@ export default function MarriagePreferences() {
                   <Text
                     className={`${
                       financialArrangement.includes(arr.value)
-                        ? 'text-primary-700 font-semibold'
+                        ? 'text-primary-500 font-semibold'
                         : 'text-gray-700'
                     }`}
                   >
@@ -401,7 +401,7 @@ export default function MarriagePreferences() {
               ))}
             </View>
             {financialArrangement.length > 0 && (
-              <Text className="text-xs text-primary-600 mt-2">
+              <Text className="text-xs text-primary-500 mt-2">
                 Selected: {financialArrangement.map(val => FINANCIAL_ARRANGEMENTS.find(a => a.value === val)?.label).join(', ')}
               </Text>
             )}
@@ -428,7 +428,7 @@ export default function MarriagePreferences() {
                     <Text
                       className={`${
                         childrenArrangement.includes(arr.value)
-                          ? 'text-primary-700 font-semibold'
+                          ? 'text-primary-500 font-semibold'
                           : 'text-gray-700'
                       }`}
                     >
@@ -438,7 +438,7 @@ export default function MarriagePreferences() {
                 ))}
               </View>
               {childrenArrangement.length > 0 && (
-                <Text className="text-xs text-primary-600 mt-2">
+                <Text className="text-xs text-primary-500 mt-2">
                   Selected: {childrenArrangement.map(val => CHILDREN_ARRANGEMENTS.find(a => a.value === val)?.label).join(', ')}
                 </Text>
               )}
@@ -470,7 +470,7 @@ export default function MarriagePreferences() {
                     <Text
                       className={`${
                         smoking === option.value
-                          ? 'text-primary-700 font-semibold'
+                          ? 'text-primary-500 font-semibold'
                           : 'text-gray-700'
                       }`}
                     >
@@ -500,7 +500,7 @@ export default function MarriagePreferences() {
                     <Text
                       className={`${
                         drinking === option.value
-                          ? 'text-primary-700 font-semibold'
+                          ? 'text-primary-500 font-semibold'
                           : 'text-gray-700'
                       }`}
                     >
@@ -530,7 +530,7 @@ export default function MarriagePreferences() {
                     <Text
                       className={`${
                         pets === option.value
-                          ? 'text-primary-700 font-semibold'
+                          ? 'text-primary-500 font-semibold'
                           : 'text-gray-700'
                       }`}
                     >

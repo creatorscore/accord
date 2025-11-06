@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Alert, Modal, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -59,6 +60,15 @@ export default function Messages() {
       subscribeToMessages();
     }
   }, [currentProfileId, showArchived]);
+
+  // Reload conversations when screen comes into focus (e.g., after viewing a chat)
+  useFocusEffect(
+    useCallback(() => {
+      if (currentProfileId) {
+        loadConversations();
+      }
+    }, [currentProfileId, showArchived])
+  );
 
   const loadCurrentProfile = async () => {
     try {
@@ -596,7 +606,7 @@ export default function Messages() {
           onPress={() => setShowPaywall(true)}
         >
           <LinearGradient
-            colors={['#8B5CF6', '#EC4899']}
+            colors={['#9B87CE', '#B8A9DD']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.upgradeCard}
@@ -669,7 +679,7 @@ export default function Messages() {
             <View style={styles.conversationHeader}>
               <View style={styles.nameRow}>
                 {item.is_pinned && (
-                  <MaterialCommunityIcons name="pin" size={16} color="#8B5CF6" style={{ marginRight: 4 }} />
+                  <MaterialCommunityIcons name="pin" size={16} color="#9B87CE" style={{ marginRight: 4 }} />
                 )}
                 <Text style={styles.conversationName} numberOfLines={1}>
                   {item.profile.display_name}
@@ -709,7 +719,7 @@ export default function Messages() {
               </View>
             ) : (
               <View style={styles.ctaRow}>
-                <MaterialCommunityIcons name="chat-outline" size={14} color="#8B5CF6" />
+                <MaterialCommunityIcons name="chat-outline" size={14} color="#9B87CE" />
                 <Text style={styles.ctaText}>{t('messages.startConversation')}</Text>
               </View>
             )}
@@ -733,7 +743,7 @@ export default function Messages() {
         </View>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8B5CF6" />
+          <ActivityIndicator size="large" color="#9B87CE" />
           <Text style={styles.loadingText}>{t('messages.loadingMessages')}</Text>
         </View>
       </View>
@@ -757,7 +767,7 @@ export default function Messages() {
             transition={{ type: 'spring', delay: 200 }}
           >
             <View style={styles.emptyIconContainer}>
-              <LinearGradient colors={['#8B5CF6', '#EC4899']} style={styles.emptyIcon}>
+              <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.emptyIcon}>
                 <MaterialCommunityIcons name="chat-outline" size={48} color="white" />
               </LinearGradient>
             </View>
@@ -769,7 +779,7 @@ export default function Messages() {
               style={styles.emptyButton}
               onPress={() => router.push('/(tabs)/discover')}
             >
-              <LinearGradient colors={['#8B5CF6', '#EC4899']} style={styles.emptyButtonGradient}>
+              <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.emptyButtonGradient}>
                 <MaterialCommunityIcons name="cards-heart" size={20} color="white" />
                 <Text style={styles.emptyButtonText}>{t('messages.findMatches')}</Text>
               </LinearGradient>
@@ -826,8 +836,8 @@ export default function Messages() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#8B5CF6"
-            colors={['#8B5CF6']}
+            tintColor="#9B87CE"
+            colors={['#9B87CE']}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -881,7 +891,7 @@ export default function Messages() {
                 <MaterialCommunityIcons
                   name="pin"
                   size={24}
-                  color={selectedConversation?.is_pinned ? '#8B5CF6' : '#6B7280'}
+                  color={selectedConversation?.is_pinned ? '#9B87CE' : '#6B7280'}
                 />
                 <Text style={styles.actionText}>
                   {selectedConversation?.is_pinned ? t('messages.actions.unpinConversation') : t('messages.actions.pinConversation')}
@@ -970,7 +980,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAF7F0',
   },
   header: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     paddingTop: 60,
     paddingBottom: 24,
     paddingHorizontal: 24,
@@ -1169,7 +1179,7 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     fontSize: 14,
-    color: '#8B5CF6',
+    color: '#9B87CE',
     fontWeight: '500',
   },
   upgradeCardContainer: {
@@ -1226,7 +1236,7 @@ const styles = StyleSheet.create({
   upgradeCTAText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#8B5CF6',
+    color: '#9B87CE',
   },
   modalOverlay: {
     flex: 1,

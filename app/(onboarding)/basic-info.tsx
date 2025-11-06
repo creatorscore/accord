@@ -369,10 +369,10 @@ export default function BasicInfo() {
           birth_date: birthDate.toISOString().split('T')[0], // Store as YYYY-MM-DD
           age, // Calculated age
           zodiac_sign, // Calculated zodiac
-          gender: gender.length === 1 ? gender[0] : gender, // Single value as string, multiple as array
+          gender: gender, // Always store as array (TEXT[])
           pronouns,
-          ethnicity: ethnicity && ethnicity.length === 1 ? ethnicity[0] : (ethnicity.length > 1 ? ethnicity : null),
-          sexual_orientation: orientation.length === 1 ? orientation[0] : orientation, // Single value as string, multiple as array
+          ethnicity: ethnicity && ethnicity.length > 0 ? ethnicity : null, // Always store as array (TEXT[])
+          sexual_orientation: orientation, // Always store as array (TEXT[])
           location_city: locationCity,
           location_state: locationState,
           location_country: locationCountry || null,
@@ -410,7 +410,7 @@ export default function BasicInfo() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 1 of 8</Text>
-            <Text className="text-sm text-accent-500 font-bold">12%</Text>
+            <Text className="text-sm text-primary-400 font-bold">12%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
@@ -476,7 +476,7 @@ export default function BasicInfo() {
               activeOpacity={0.7}
             >
               <View className={`w-6 h-6 rounded-md border-2 mr-3 items-center justify-center ${
-                ageCertified ? 'bg-primary-600 border-primary-600' : 'bg-white border-gray-300'
+                ageCertified ? 'bg-primary-500 border-primary-500' : 'bg-white border-gray-300'
               }`}>
                 {ageCertified && (
                   <MaterialCommunityIcons name="check" size={16} color="white" />
@@ -525,7 +525,7 @@ export default function BasicInfo() {
                           onPress={() => setSelectedMonth(index)}
                         >
                           <Text className={`${
-                            selectedMonth === index ? 'text-primary-600 font-bold' : 'text-gray-700'
+                            selectedMonth === index ? 'text-primary-500 font-bold' : 'text-gray-700'
                           }`}>
                             {month}
                           </Text>
@@ -547,7 +547,7 @@ export default function BasicInfo() {
                           onPress={() => setSelectedDay(day)}
                         >
                           <Text className={`${
-                            selectedDay === day ? 'text-primary-600 font-bold' : 'text-gray-700'
+                            selectedDay === day ? 'text-primary-500 font-bold' : 'text-gray-700'
                           }`}>
                             {day}
                           </Text>
@@ -569,7 +569,7 @@ export default function BasicInfo() {
                           onPress={() => setSelectedYear(year)}
                         >
                           <Text className={`${
-                            selectedYear === year ? 'text-primary-600 font-bold' : 'text-gray-700'
+                            selectedYear === year ? 'text-primary-500 font-bold' : 'text-gray-700'
                           }`}>
                             {year}
                           </Text>
@@ -583,7 +583,7 @@ export default function BasicInfo() {
                 <TouchableOpacity
                   className={`rounded-full py-4 items-center ${
                     selectedMonth !== null && selectedDay !== null && selectedYear !== null
-                      ? 'bg-primary-600'
+                      ? 'bg-primary-500'
                       : 'bg-gray-300'
                   }`}
                   onPress={handleDateConfirm}
@@ -621,7 +621,7 @@ export default function BasicInfo() {
               ))}
             </View>
             {gender.length > 0 && (
-              <Text className="text-xs text-primary-600 mt-2">
+              <Text className="text-xs text-primary-500 mt-2">
                 Selected: {gender.join(', ')}
               </Text>
             )}
@@ -679,7 +679,7 @@ export default function BasicInfo() {
               ))}
             </View>
             {ethnicity.length > 0 && (
-              <Text className="text-xs text-primary-600 mt-2">
+              <Text className="text-xs text-primary-500 mt-2">
                 Selected: {ethnicity.join(', ')}
               </Text>
             )}
@@ -711,7 +711,7 @@ export default function BasicInfo() {
               ))}
             </View>
             {orientation.length > 0 && (
-              <Text className="text-xs text-primary-600 mt-2">
+              <Text className="text-xs text-primary-500 mt-2">
                 Selected: {orientation.join(', ')}
               </Text>
             )}
@@ -722,7 +722,7 @@ export default function BasicInfo() {
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-sm font-medium text-gray-700">{t('onboarding.location')}</Text>
               <TouchableOpacity onPress={handleGetLocation} disabled={gettingLocation}>
-                <Text className="text-primary-600 font-medium">
+                <Text className="text-primary-500 font-medium">
                   {gettingLocation ? t('onboarding.gettingLocation') : t('onboarding.useMyLocation')}
                 </Text>
               </TouchableOpacity>

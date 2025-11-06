@@ -84,7 +84,7 @@ export default function ResetPassword() {
         </View>
 
         <TouchableOpacity
-          className={`bg-primary-600 rounded-full py-4 items-center mt-4 ${
+          className={`bg-primary-500 rounded-full py-4 items-center mt-4 ${
             loading ? 'opacity-50' : ''
           }`}
           onPress={handleResetPassword}

@@ -35,7 +35,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>13</string>
+    <string>19</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>LSMinimumSystemVersion</key>
@@ -51,6 +51,8 @@
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>Accord needs access to your camera to take profile photos.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>Accord does not access your contacts. This permission is required by a third-party library but is not used in the app.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

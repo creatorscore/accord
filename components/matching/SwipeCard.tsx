@@ -366,7 +366,7 @@ export default function SwipeCard({
             {profile.compatibility_score && (
               <View className="absolute top-6 right-6" style={{ zIndex: 20 }}>
                 <LinearGradient
-                  colors={['#8B5CF6', '#EC4899']}
+                  colors={['#9B87CE', '#B8A9DD']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={{
@@ -515,7 +515,7 @@ export default function SwipeCard({
                     alignItems: 'center',
                   }}
                 >
-                  <MaterialCommunityIcons name="gesture-tap" size={48} color="#8B5CF6" />
+                  <MaterialCommunityIcons name="gesture-tap" size={48} color="#9B87CE" />
                   <Text
                     style={{
                       fontSize: 22,
@@ -557,7 +557,7 @@ export default function SwipeCard({
                           padding: 12,
                         }}
                       >
-                        <MaterialCommunityIcons name="chevron-left" size={24} color="#8B5CF6" />
+                        <MaterialCommunityIcons name="chevron-left" size={24} color="#9B87CE" />
                       </View>
                       <Text
                         style={{
@@ -578,7 +578,7 @@ export default function SwipeCard({
                           padding: 12,
                         }}
                       >
-                        <MaterialCommunityIcons name="account" size={24} color="#8B5CF6" />
+                        <MaterialCommunityIcons name="account" size={24} color="#9B87CE" />
                       </View>
                       <Text
                         style={{
@@ -599,7 +599,7 @@ export default function SwipeCard({
                           padding: 12,
                         }}
                       >
-                        <MaterialCommunityIcons name="chevron-right" size={24} color="#8B5CF6" />
+                        <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
                       </View>
                       <Text
                         style={{
@@ -616,7 +616,7 @@ export default function SwipeCard({
                   <TouchableOpacity
                     onPress={dismissTutorial}
                     style={{
-                      backgroundColor: '#8B5CF6',
+                      backgroundColor: '#9B87CE',
                       paddingVertical: 14,
                       paddingHorizontal: 32,
                       borderRadius: 16,

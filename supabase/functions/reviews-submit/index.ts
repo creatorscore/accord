@@ -136,6 +136,13 @@ serve(async (req) => {
     if (existingPrompt) {
       reviewPrompt = existingPrompt;
 
+      // Check if review period has started (3 days after match)
+      const triggerDate = new Date(reviewPrompt.trigger_date);
+      if (triggerDate > new Date()) {
+        const daysRemaining = Math.ceil((triggerDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+        throw new Error(`You can submit a review ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} after matching.`);
+      }
+
       // Check if window has expired
       const expiresAt = new Date(reviewPrompt.window_expires_at);
       if (expiresAt < new Date()) {
@@ -143,10 +150,18 @@ serve(async (req) => {
       }
     } else {
       // Create new review prompt
-      // Trigger immediately (could be 7 days after match in production)
-      const triggerDate = new Date();
-      // Window expires 3 days after trigger (Airbnb-style)
-      const expiresAt = new Date();
+      // Trigger date is 3 days after match (users must wait 3 days before reviewing)
+      const triggerDate = new Date(match.matched_at);
+      triggerDate.setDate(triggerDate.getDate() + 3);
+
+      // Check if 3 days have passed since match
+      if (triggerDate > new Date()) {
+        const daysRemaining = Math.ceil((triggerDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+        throw new Error(`You can submit a review ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} after matching.`);
+      }
+
+      // Window expires 3 days after trigger (total 6 days after match)
+      const expiresAt = new Date(triggerDate);
       expiresAt.setDate(expiresAt.getDate() + 3);
 
       const { data: newPrompt, error: promptError } = await supabase

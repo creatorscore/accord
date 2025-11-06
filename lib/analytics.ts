@@ -91,9 +91,12 @@ export const setUserProperties = (properties: Record<string, any>) => {
  * Track app lifecycle events
  */
 export const trackAppLifecycle = {
-  appStarted: () => trackEvent('app_started'),
+  appStarted: (isFirstLaunch: boolean = false) =>
+    trackEvent('app_started', { first_launch: isFirstLaunch }),
   appBackgrounded: () => trackEvent('app_backgrounded'),
   appForegrounded: () => trackEvent('app_foregrounded'),
+  appInstalled: (platform: 'ios' | 'android', version: string) =>
+    trackEvent('app_installed', { platform, version }),
 };
 
 /**

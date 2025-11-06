@@ -128,7 +128,7 @@ export default function ReviewPromptBanner({ onReviewPress }: ReviewPromptBanner
         onPress={() => onReviewPress(prompt)}
         activeOpacity={0.9}
       >
-        <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.gradient}>
+        <LinearGradient colors={['#9B87CE', '#9B87CE']} style={styles.gradient}>
           {/* Icon */}
           <View style={styles.iconContainer}>
             <MaterialCommunityIcons name="star-circle" size={40} color="#FFF" />
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   banner: {
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#8B5CF6',
+    shadowColor: '#9B87CE',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,

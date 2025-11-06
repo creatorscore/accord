@@ -86,9 +86,20 @@ interface Preferences {
   family_involvement?: string;
 }
 
+interface CompatibilityBreakdown {
+  overall: number;
+  location: number;
+  goals: number;
+  lifestyle: number;
+  personality: number;
+  demographics: number;
+  orientation: number;
+}
+
 interface ImmersiveProfileCardProps {
   profile: Profile;
   preferences?: Preferences;
+  compatibilityBreakdown?: CompatibilityBreakdown; // Real compatibility data
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
   onSuperLike?: () => void;
@@ -109,9 +120,53 @@ const formatArrayOrString = (value?: string | string[]): string => {
   return value;
 };
 
+// Helper to convert snake_case values to Title Case labels
+const formatLabel = (value: string) => {
+  return value
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+// Helper to format array fields and apply formatLabel to each item
+const formatArrayWithLabels = (value?: string | string[]): string => {
+  if (!value) return '';
+
+  let items: string[] = [];
+
+  // Handle actual arrays
+  if (Array.isArray(value)) {
+    items = value;
+  }
+  // Handle PostgreSQL array format strings like "{value1,value2}"
+  else if (typeof value === 'string') {
+    if (value.startsWith('{') && value.endsWith('}')) {
+      items = value.slice(1, -1).split(',');
+    }
+    // Check if it's a JSON array string
+    else if (value.startsWith('[') && value.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          items = parsed;
+        } else {
+          items = [value];
+        }
+      } catch (e) {
+        items = [value];
+      }
+    } else {
+      items = [value];
+    }
+  }
+
+  return items.map(formatLabel).join(', ');
+};
+
 export default function ImmersiveProfileCard({
   profile,
   preferences,
+  compatibilityBreakdown,
   onSwipeLeft,
   onSwipeRight,
   onSuperLike,
@@ -283,7 +338,7 @@ export default function ImmersiveProfileCard({
           {profile.voice_intro_url && (
             <TouchableOpacity onPress={playVoiceIntro} style={styles.voiceCard} activeOpacity={0.8}>
               <LinearGradient
-                colors={['#8B5CF6', '#7C3AED']}
+                colors={['#9B87CE', '#9B87CE']}
                 style={styles.voiceGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -319,17 +374,28 @@ export default function ImmersiveProfileCard({
           {profile.compatibility_score && (
             <View style={styles.compatibilityCard}>
               <View style={styles.compatibilityHeader}>
-                <MaterialCommunityIcons name="heart-circle" size={36} color="#8B5CF6" />
+                <MaterialCommunityIcons name="heart-circle" size={36} color="#9B87CE" />
                 <View style={styles.compatibilityTextBox}>
                   <Text style={styles.compatibilityScore}>{profile.compatibility_score}%</Text>
                   <Text style={styles.compatibilityLabel}>Compatibility Match</Text>
                 </View>
               </View>
               <View style={styles.compatibilityBreakdown}>
-                <CompFactorBar label="Marriage Goals" score={92} color="#8B5CF6" />
-                <CompFactorBar label="Location" score={85} color="#3B82F6" />
-                <CompFactorBar label="Lifestyle" score={88} color="#10B981" />
-                <CompFactorBar label="Financial Goals" score={90} color="#F59E0B" />
+                {compatibilityBreakdown ? (
+                  <>
+                    <CompFactorBar label="Marriage Goals" score={Math.round(compatibilityBreakdown.goals)} color="#9B87CE" />
+                    <CompFactorBar label="Location" score={Math.round(compatibilityBreakdown.location)} color="#3B82F6" />
+                    <CompFactorBar label="Lifestyle" score={Math.round(compatibilityBreakdown.lifestyle)} color="#10B981" />
+                    <CompFactorBar label="Personality" score={Math.round(compatibilityBreakdown.personality)} color="#F59E0B" />
+                  </>
+                ) : (
+                  <>
+                    <CompFactorBar label="Marriage Goals" score={92} color="#9B87CE" />
+                    <CompFactorBar label="Location" score={85} color="#3B82F6" />
+                    <CompFactorBar label="Lifestyle" score={88} color="#10B981" />
+                    <CompFactorBar label="Personality" score={90} color="#F59E0B" />
+                  </>
+                )}
               </View>
             </View>
           )}
@@ -358,7 +424,7 @@ export default function ImmersiveProfileCard({
           {/* MARRIAGE GOALS - MOST IMPORTANT */}
           <View style={styles.criticalSection}>
             <View style={styles.criticalHeader}>
-              <MaterialCommunityIcons name="ring" size={28} color="#8B5CF6" />
+              <MaterialCommunityIcons name="ring" size={28} color="#9B87CE" />
               <Text style={styles.criticalTitle}>Marriage Goals & Expectations</Text>
             </View>
 
@@ -384,7 +450,7 @@ export default function ImmersiveProfileCard({
               <View style={styles.criticalItem}>
                 <Text style={styles.criticalLabel}>Children</Text>
                 <Text style={styles.criticalValue}>
-                  {preferences.wants_children === true ? `Yes${preferences.children_arrangement ? ` - ${formatArrayOrString(preferences.children_arrangement)}` : ''}` :
+                  {preferences.wants_children === true ? `Yes${preferences.children_arrangement ? ` - ${formatArrayWithLabels(preferences.children_arrangement)}` : ''}` :
                    preferences.wants_children === false ? 'No children' :
                    'Maybe/Open to discussion'}
                 </Text>
@@ -438,14 +504,14 @@ export default function ImmersiveProfileCard({
             {preferences?.financial_arrangement && (
               <View style={styles.criticalItem}>
                 <Text style={styles.criticalLabel}>Financial arrangement</Text>
-                <Text style={styles.criticalValue}>{formatArrayOrString(preferences.financial_arrangement)}</Text>
+                <Text style={styles.criticalValue}>{formatArrayWithLabels(preferences.financial_arrangement)}</Text>
               </View>
             )}
 
             {preferences?.housing_preference && (
               <View style={styles.criticalItem}>
                 <Text style={styles.criticalLabel}>Living situation</Text>
-                <Text style={styles.criticalValue}>{formatArrayOrString(preferences.housing_preference)}</Text>
+                <Text style={styles.criticalValue}>{formatArrayWithLabels(preferences.housing_preference)}</Text>
               </View>
             )}
           </View>
@@ -502,14 +568,14 @@ export default function ImmersiveProfileCard({
               {profile.political_views && (
                 <LifestyleItem icon="vote" label="Politics" value={profile.political_views} />
               )}
-              {preferences?.drinking && (
-                <LifestyleItem icon="glass-wine" label="Drinking" value={preferences.drinking} />
+              {(preferences?.drinking || preferences?.lifestyle_preferences?.drinking) && (
+                <LifestyleItem icon="glass-wine" label="Drinking" value={preferences?.drinking || preferences?.lifestyle_preferences?.drinking} />
               )}
-              {preferences?.smoking && (
-                <LifestyleItem icon="smoking" label="Smoking" value={preferences.smoking} />
+              {(preferences?.smoking || preferences?.lifestyle_preferences?.smoking) && (
+                <LifestyleItem icon="smoking" label="Smoking" value={preferences?.smoking || preferences?.lifestyle_preferences?.smoking} />
               )}
-              {preferences?.pets && (
-                <LifestyleItem icon="paw" label="Pets" value={preferences.pets} />
+              {(preferences?.pets || preferences?.lifestyle_preferences?.pets) && (
+                <LifestyleItem icon="paw" label="Pets" value={preferences?.pets || preferences?.lifestyle_preferences?.pets} />
               )}
             </View>
           </View>
@@ -541,7 +607,7 @@ export default function ImmersiveProfileCard({
               {profile.interests.movies && profile.interests.movies.length > 0 && (
                 <View style={styles.favoriteCategory}>
                   <View style={styles.favoriteCategoryHeader}>
-                    <MaterialCommunityIcons name="movie-open" size={22} color="#EC4899" />
+                    <MaterialCommunityIcons name="movie-open" size={22} color="#B8A9DD" />
                     <Text style={styles.favoriteCategoryTitle}>Movies</Text>
                   </View>
                   <View style={styles.favoritesList}>
@@ -555,7 +621,7 @@ export default function ImmersiveProfileCard({
               {profile.interests.music && profile.interests.music.length > 0 && (
                 <View style={styles.favoriteCategory}>
                   <View style={styles.favoriteCategoryHeader}>
-                    <MaterialCommunityIcons name="music" size={22} color="#8B5CF6" />
+                    <MaterialCommunityIcons name="music" size={22} color="#9B87CE" />
                     <Text style={styles.favoriteCategoryTitle}>Music Artists</Text>
                   </View>
                   <View style={styles.favoritesList}>
@@ -686,7 +752,7 @@ export default function ImmersiveProfileCard({
             <View style={styles.matchedActionContainer}>
               <TouchableOpacity onPress={onSendMessage} style={styles.messageButton}>
                 <LinearGradient
-                  colors={['#8B5CF6', '#EC4899']}
+                  colors={['#9B87CE', '#B8A9DD']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.messageButtonGradient}
@@ -772,7 +838,7 @@ const CompFactorBar = ({ label, score, color }: { label: string; score: number; 
 
 const LifestyleItem = ({ icon, label, value }: { icon: string; label: string; value: string }) => (
   <View style={styles.lifestyleItem}>
-    <MaterialCommunityIcons name={icon as any} size={22} color="#8B5CF6" />
+    <MaterialCommunityIcons name={icon as any} size={22} color="#9B87CE" />
     <View style={styles.lifestyleText}>
       <Text style={styles.lifestyleLabel}>{label}</Text>
       <Text style={styles.lifestyleValue}>{value}</Text>
@@ -819,7 +885,7 @@ const styles = StyleSheet.create({
   },
   headerMatch: {
     fontSize: 13,
-    color: '#8B5CF6',
+    color: '#9B87CE',
     fontWeight: '600',
   },
   closeContainer: {
@@ -969,7 +1035,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#8B5CF6',
+    shadowColor: '#9B87CE',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1047,7 +1113,7 @@ const styles = StyleSheet.create({
   compatibilityScore: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#8B5CF6',
+    color: '#9B87CE',
   },
   compatibilityLabel: {
     fontSize: 15,
@@ -1238,7 +1304,7 @@ const styles = StyleSheet.create({
   messageButton: {
     borderRadius: 28,
     overflow: 'hidden',
-    shadowColor: '#8B5CF6',
+    shadowColor: '#9B87CE',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -1272,7 +1338,7 @@ const styles = StyleSheet.create({
   },
   hobbyText: {
     fontSize: 15,
-    color: '#7C3AED',
+    color: '#9B87CE',
     fontWeight: '600',
   },
   favoriteCategory: {

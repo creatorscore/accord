@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   button: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 999,

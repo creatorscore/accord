@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput, Keyboard } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,9 +15,10 @@ import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import FilterModal, { FilterOptions } from '@/components/matching/FilterModal';
 import ProfileBoostModal from '@/components/premium/ProfileBoostModal';
 import { sendMatchNotification, sendLikeNotification } from '@/lib/notifications';
-import { calculateCompatibilityScore } from '@/lib/matching-algorithm';
+import { calculateCompatibilityScore, getCompatibilityBreakdown } from '@/lib/matching-algorithm';
 import { initializeTracking } from '@/lib/tracking-permissions';
 import { router } from 'expo-router';
+import * as Crypto from 'expo-crypto';
 
 interface Profile {
   id: string;
@@ -42,6 +43,15 @@ interface Profile {
   interests?: any; // JSONB object with arrays
   photos?: Array<{ url: string; is_primary: boolean }>;
   compatibility_score?: number;
+  compatibilityBreakdown?: {
+    overall: number;
+    location: number;
+    goals: number;
+    lifestyle: number;
+    personality: number;
+    demographics: number;
+    orientation: number;
+  };
   is_verified?: boolean;
   distance?: number;
   prompt_answers?: Array<{ prompt: string; answer: string }>;
@@ -57,6 +67,18 @@ interface Profile {
 // Women get limited swipes to prevent oversaturation
 const DAILY_SWIPE_LIMIT_WOMEN = 10;
 const DAILY_SWIPE_LIMIT_MEN = 999999; // Effectively unlimited
+
+// Helper function to hash phone numbers for contact blocking
+const hashPhoneNumber = async (phoneNumber: string): Promise<string> => {
+  // Normalize phone number (remove spaces, dashes, etc.)
+  const normalized = phoneNumber.replace(/[\s\-\(\)]/g, '');
+  // Hash for privacy
+  const hash = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    normalized
+  );
+  return hash;
+};
 
 export default function Discover() {
   const { t } = useTranslation();
@@ -121,11 +143,11 @@ export default function Discover() {
   // This ensures fresh data when user returns from editing preferences or other screens
   useFocusEffect(
     useCallback(() => {
-      if (currentProfileId) {
+      if (currentProfileId && filters) {
         console.log('🔄 Discovery screen focused - reloading profiles');
         loadProfiles();
       }
-    }, [currentProfileId])
+    }, [currentProfileId, filters])
   );
 
   const [currentUserName, setCurrentUserName] = useState<string>('');
@@ -318,6 +340,15 @@ export default function Discover() {
         .select('blocker_profile_id')
         .eq('blocked_profile_id', currentProfileId);
 
+      // 3. Get contact-blocked phone numbers (hashed)
+      const { data: contactBlocks } = await supabase
+        .from('contact_blocks')
+        .select('phone_number')
+        .eq('profile_id', currentProfileId);
+
+      const blockedPhoneHashes = new Set(contactBlocks?.map(cb => cb.phone_number) || []);
+      console.log('📱 Contact-blocked phone hashes:', blockedPhoneHashes.size);
+
       const blockedIds = [
         ...(blockedByMe?.map(b => b.blocked_profile_id) || []),
         ...(blockedMe?.map(b => b.blocker_profile_id) || [])
@@ -366,17 +397,18 @@ export default function Discover() {
         query = query.not('id', 'in', `(${swipedIds.join(',')})`);
       }
 
-      // Apply basic filters with wider range (±5 years) to allow more matches
-      // Compatibility scoring will rank profiles closer to preferences higher
-      const ageBuffer = 5;
+      // Apply strict age filters (no buffer - respect user preferences exactly)
+      // Safety: Always enforce minimum age of 18
       query = query
-        .gte('age', Math.max(18, filters.ageMin - ageBuffer))
-        .lte('age', Math.min(100, filters.ageMax + ageBuffer));
+        .gte('age', Math.max(18, filters.ageMin))
+        .lte('age', filters.ageMax);
 
       // Apply gender preference filter (hard filter for all users)
       // Users can multi-select genders, so this should be a hard requirement
+      // Use array overlap operator (&&) since gender is now an array
       if (currentUserData.preferences?.gender_preference && currentUserData.preferences.gender_preference.length > 0) {
-        query = query.in('gender', currentUserData.preferences.gender_preference);
+        // Use filter with && operator for array overlap
+        query = query.filter('gender', 'ov', currentUserData.preferences.gender_preference);
       }
 
       // Apply premium filters (only if user is premium AND filters are set)
@@ -408,15 +440,51 @@ export default function Discover() {
 
       const boostedProfileIds = new Set(boostedProfiles?.map(b => b.profile_id) || []);
 
+      // Filter out contact-blocked profiles (by phone number hash)
+      // This happens BEFORE transformation to avoid unnecessary processing
+      let filteredData = data || [];
+
+      if (blockedPhoneHashes.size > 0) {
+        // Hash each profile's phone number and filter out matches
+        const filterPromises = filteredData.map(async (profile: any) => {
+          if (profile.phone_number) {
+            try {
+              const phoneHash = await hashPhoneNumber(profile.phone_number);
+              if (blockedPhoneHashes.has(phoneHash)) {
+                console.log('📱 Filtering out contact-blocked profile:', profile.id);
+                return null; // Mark for removal
+              }
+            } catch (err) {
+              console.error('Error hashing phone number:', err);
+            }
+          }
+          return profile;
+        });
+
+        const filterResults = await Promise.all(filterPromises);
+        filteredData = filterResults.filter(p => p !== null);
+
+        console.log('📱 Profiles after contact filtering:', filteredData.length, '(filtered out', (data?.length || 0) - filteredData.length, ')');
+      }
+
       // Transform and calculate real compatibility scores
-      const transformedProfiles: Profile[] = (data || [])
+      const transformedProfiles: Profile[] = filteredData
         .map((profile: any) => {
-          // Calculate real compatibility score using the algorithm
+          // Calculate real compatibility score and breakdown using the algorithm
           let compatibilityScore = 75; // Default if can't calculate
+          let compatibilityBreakdown = undefined;
 
           try {
             if (currentUserData.preferences && profile.preferences) {
               compatibilityScore = calculateCompatibilityScore(
+                currentUserData,
+                profile,
+                currentUserData.preferences,
+                profile.preferences
+              );
+
+              // Also calculate detailed breakdown for display
+              compatibilityBreakdown = getCompatibilityBreakdown(
                 currentUserData,
                 profile,
                 currentUserData.preferences,
@@ -468,6 +536,7 @@ export default function Discover() {
             prompt_answers: profile.prompt_answers,
             photos: profile.photos?.sort((a: any, b: any) => a.display_order - b.display_order),
             compatibility_score: compatibilityScore,
+            compatibilityBreakdown: compatibilityBreakdown,
             distance: distance,
             voice_intro_url: profile.voice_intro_url,
             voice_intro_duration: profile.voice_intro_duration,
@@ -478,9 +547,41 @@ export default function Discover() {
           };
         })
         .filter((profile: any) => {
-          // Apply client-side filters
+          // ====================================================================
+          // SAFETY FILTERS (ALWAYS APPLIED - NO BYPASS)
+          // ====================================================================
 
-          // Keyword search filter (if search is active)
+          // 1. CRITICAL: Minimum age verification (prevent underage users)
+          if (profile.age < 18) {
+            console.error('🚨 CRITICAL: Underage profile detected:', profile.id);
+            return false;
+          }
+
+          // 2. CRITICAL: Incognito mode double-check (privacy protection)
+          if (profile.incognito_mode === true) {
+            console.log('❌ Filtered: Profile in incognito mode');
+            return false;
+          }
+
+          // 3. CRITICAL: Blocked users double-check (safety protection)
+          const allBlockedIds = [
+            ...(blockedByMe?.map((b: any) => b.blocked_profile_id) || []),
+            ...(blockedMe?.map((b: any) => b.blocker_profile_id) || [])
+          ];
+          if (allBlockedIds.includes(profile.id)) {
+            console.log('🚫 Filtered: Blocked user (safety check)');
+            return false;
+          }
+
+          // 4. CRITICAL: Photo requirement
+          if (!profile.photos || profile.photos.length === 0) {
+            console.log('❌ Filtered: No photos');
+            return false;
+          }
+
+          // ====================================================================
+          // KEYWORD SEARCH FILTER (if in search mode)
+          // ====================================================================
           if (isSearchMode && searchKeyword.trim()) {
             const keyword = searchKeyword.toLowerCase().trim();
 
@@ -532,132 +633,227 @@ export default function Discover() {
             console.log('📝 Searchable text sample:', searchableText.substring(0, 200));
 
             if (!searchableText.includes(keyword)) {
+              return false; // Keyword not found
+            }
+
+            // IMPORTANT: Even in search mode, apply critical safety filters below
+          }
+
+          // ====================================================================
+          // DEALBREAKER FILTERS (ALWAYS APPLIED - even in search mode)
+          // ====================================================================
+
+          // 1. STRICT AGE FILTER (no buffer, exact preferences)
+          if (profile.age < filters.ageMin || profile.age > filters.ageMax) {
+            console.log('❌ Filtered: Age outside preference range');
+            return false;
+          }
+
+          // 2. BIDIRECTIONAL GENDER PREFERENCE (both directions must match)
+          // A. Check if current user wants this profile's gender
+          if (currentUserData.preferences?.gender_preference &&
+              currentUserData.preferences.gender_preference.length > 0) {
+            const profileGenderArray = Array.isArray(profile.gender) ? profile.gender : [profile.gender];
+            const userWantsThisGender = profileGenderArray.some((g: string) =>
+              currentUserData.preferences.gender_preference.includes(g)
+            );
+            if (!userWantsThisGender) {
+              console.log('❌ Filtered: User gender preference not matched');
               return false;
             }
           }
 
-          // Skip all preference-based filters when in keyword search mode
-          // Keyword search supersedes the algorithm and lets users find anyone
-          if (!isSearchMode) {
-            // Location/Distance filter
-            const userSearchGlobally = currentUserData.preferences?.search_globally || false;
-            const profileSearchGlobally = profile.preferences?.search_globally || false;
-            const userPreferredCities = currentUserData.preferences?.preferred_cities || [];
-            const profilePreferredCities = profile.preferences?.preferred_cities || [];
-
-            // Check if this profile matches user's preferred cities
-            const profileMatchesPreferredCity = userPreferredCities.length > 0 && (
-              userPreferredCities.some((city: string) => {
-                const cityLower = city.toLowerCase();
-                const profileCityLower = (profile.location_city || '').toLowerCase();
-                const profileStateLower = (profile.location_state || '').toLowerCase();
-                // Match if city name is in location_city or if "City, State" format matches
-                return profileCityLower.includes(cityLower) ||
-                       `${profileCityLower}, ${profileStateLower}`.includes(cityLower);
-              })
+          // B. Check if profile wants current user's gender
+          if (profile.preferences?.gender_preference &&
+              profile.preferences.gender_preference.length > 0) {
+            const currentUserGenderArray = Array.isArray(currentUserData.gender)
+              ? currentUserData.gender
+              : [currentUserData.gender];
+            const profileWantsMyGender = currentUserGenderArray.some((g: string) =>
+              profile.preferences.gender_preference.includes(g)
             );
-
-            // Check if user matches profile's preferred cities (bidirectional)
-            const userMatchesProfilePreferredCity = profilePreferredCities.length > 0 && (
-              profilePreferredCities.some((city: string) => {
-                const cityLower = city.toLowerCase();
-                const userCityLower = (currentUserData.location_city || '').toLowerCase();
-                const userStateLower = (currentUserData.location_state || '').toLowerCase();
-                return userCityLower.includes(cityLower) ||
-                       `${userCityLower}, ${userStateLower}`.includes(cityLower);
-              })
-            );
-
-            // Apply distance filter ONLY if:
-            // 1. Neither user is searching globally
-            // 2. Profile is NOT in user's preferred cities
-            // 3. User is NOT in profile's preferred cities
-            if (!userSearchGlobally && !profileSearchGlobally &&
-                !profileMatchesPreferredCity && !userMatchesProfilePreferredCity) {
-              // Neither is searching globally and no city match, apply distance filter
-              if (profile.distance !== null && profile.distance > filters.maxDistance) {
-                return false;
-              }
-            }
-
-            // DEALBREAKER FILTERS (all users) - Based on onboarding preferences
-
-            // 1. Bidirectional gender preference check
-            if (profile.preferences?.gender_preference && currentUserData.gender) {
-              if (!profile.preferences.gender_preference.includes(currentUserData.gender)) {
-                return false; // They don't want my gender
-              }
-            }
-
-            // 2. Children compatibility (hard dealbreaker)
-            // If one definitely wants kids and the other definitely doesn't, filter out
-            if (currentUserData.preferences?.wants_children !== undefined &&
-                profile.preferences?.wants_children !== undefined) {
-              const userWants = currentUserData.preferences.wants_children;
-              const profileWants = profile.preferences.wants_children;
-
-              // Hard incompatibility: one wants (true), one doesn't want (false)
-              // 'maybe' (null) is flexible and compatible with either
-              if ((userWants === true && profileWants === false) ||
-                  (userWants === false && profileWants === true)) {
-                return false;
-              }
-            }
-
-            // 3. Relationship type compatibility
-            // Filter out highly incompatible relationship types
-            if (currentUserData.preferences?.relationship_type && profile.preferences?.relationship_type) {
-              const userType = currentUserData.preferences.relationship_type;
-              const profileType = profile.preferences.relationship_type;
-
-              // Incompatible pairs: platonic with romantic (unless one is open)
-              const incompatiblePairs = [
-                ['platonic', 'romantic'],
-                ['romantic', 'platonic']
-              ];
-
-              const isIncompatible = incompatiblePairs.some(
-                ([type1, type2]) =>
-                  (userType === type1 && profileType === type2)
-              );
-
-              if (isIncompatible) {
-                return false;
-              }
+            if (!profileWantsMyGender) {
+              console.log('❌ Filtered: Profile gender preference not matched');
+              return false;
             }
           }
 
-          // PREMIUM-ONLY FILTERS
-          if (isPremium) {
-            // Religion filter
-            if (filters.religion.length > 0 && profile.religion) {
-              if (!filters.religion.includes(profile.religion)) {
-                return false;
+          // 3. SEXUAL ORIENTATION COMPATIBILITY (NEW - CRITICAL FOR LGBTQ+ APP)
+          if (profile.sexual_orientation && currentUserData.sexual_orientation) {
+            const profileOrientations = (Array.isArray(profile.sexual_orientation)
+              ? profile.sexual_orientation
+              : [profile.sexual_orientation]).map((o: string) => o.toLowerCase());
+            const userOrientations = (Array.isArray(currentUserData.sexual_orientation)
+              ? currentUserData.sexual_orientation
+              : [currentUserData.sexual_orientation]).map((o: string) => o.toLowerCase());
+
+            const compatibleOrientations: { [key: string]: string[] } = {
+              'lesbian': ['lesbian', 'bisexual', 'queer', 'pansexual'],
+              'gay': ['gay', 'bisexual', 'queer', 'pansexual'],
+              'bisexual': ['lesbian', 'gay', 'bisexual', 'queer', 'pansexual'],
+              'queer': ['lesbian', 'gay', 'bisexual', 'queer', 'pansexual', 'asexual'],
+              'pansexual': ['lesbian', 'gay', 'bisexual', 'queer', 'pansexual', 'asexual'],
+              'asexual': ['queer', 'pansexual', 'asexual'],
+            };
+
+            let isCompatible = false;
+            for (const userOr of userOrientations) {
+              const compatibles = compatibleOrientations[userOr] || [];
+              if (profileOrientations.some((po: string) => compatibles.includes(po))) {
+                isCompatible = true;
+                break;
               }
             }
 
-            // Political views filter
-            if (filters.politicalViews.length > 0 && profile.political_views) {
-              if (!filters.politicalViews.includes(profile.political_views)) {
-                return false;
-              }
-            }
-
-            // Housing preference filter
-            if (filters.housingPreference.length > 0 && profile.preferences?.housing_preference) {
-              if (!filters.housingPreference.includes(profile.preferences.housing_preference)) {
-                return false;
-              }
-            }
-
-            // Financial arrangement filter
-            if (filters.financialArrangement.length > 0 && profile.preferences?.financial_arrangement) {
-              if (!filters.financialArrangement.includes(profile.preferences.financial_arrangement)) {
-                return false;
-              }
+            if (!isCompatible) {
+              console.log('❌ Filtered: Sexual orientation incompatibility');
+              return false;
             }
           }
 
+          // 4. LOCATION/DISTANCE FILTER (ALWAYS APPLIED - even in search mode unless global)
+          const userSearchGlobally = currentUserData.preferences?.search_globally || false;
+          const profileSearchGlobally = profile.preferences?.search_globally || false;
+          const userPreferredCities = currentUserData.preferences?.preferred_cities || [];
+          const profilePreferredCities = profile.preferences?.preferred_cities || [];
+
+          // Check if profile is in user's preferred cities (exact match)
+          const profileMatchesPreferredCity = userPreferredCities.length > 0 &&
+            userPreferredCities.some((city: string) => {
+              const [prefCity, prefState] = city.split(',').map((s: string) => s.trim().toLowerCase());
+              const profileCity = (profile.location_city || '').toLowerCase();
+              const profileState = (profile.location_state || '').toLowerCase();
+
+              if (prefCity === profileCity) {
+                return !prefState || prefState === profileState;
+              }
+              return false;
+            });
+
+          // Check if user is in profile's preferred cities (bidirectional)
+          const userMatchesProfilePreferredCity = profilePreferredCities.length > 0 &&
+            profilePreferredCities.some((city: string) => {
+              const [prefCity, prefState] = city.split(',').map((s: string) => s.trim().toLowerCase());
+              const userCity = (currentUserData.location_city || '').toLowerCase();
+              const userState = (currentUserData.location_state || '').toLowerCase();
+
+              if (prefCity === userCity) {
+                return !prefState || prefState === userState;
+              }
+              return false;
+            });
+
+          // Apply distance filter if:
+          // - Neither is searching globally
+          // - Profile is NOT in preferred cities
+          if (!userSearchGlobally && !profileSearchGlobally &&
+              !profileMatchesPreferredCity && !userMatchesProfilePreferredCity) {
+
+            // Recalculate distance in real-time (avoid stale data)
+            let realTimeDistance = profile.distance;
+            if (currentUserData.latitude && currentUserData.longitude &&
+                profile.latitude && profile.longitude) {
+              const R = 3959; // Earth's radius in miles
+              const dLat = ((profile.latitude - currentUserData.latitude) * Math.PI) / 180;
+              const dLon = ((profile.longitude - currentUserData.longitude) * Math.PI) / 180;
+              const a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos((currentUserData.latitude * Math.PI) / 180) *
+                  Math.cos((profile.latitude * Math.PI) / 180) *
+                  Math.sin(dLon / 2) *
+                  Math.sin(dLon / 2);
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              realTimeDistance = Math.round(R * c);
+            }
+
+            if (realTimeDistance !== null && realTimeDistance > filters.maxDistance) {
+              console.log('❌ Filtered: Distance exceeds max distance');
+              return false;
+            }
+          }
+
+          // 5. CHILDREN COMPATIBILITY (hard dealbreaker if both have strong opinions)
+          if (currentUserData.preferences?.wants_children !== undefined &&
+              currentUserData.preferences?.wants_children !== null &&
+              profile.preferences?.wants_children !== undefined &&
+              profile.preferences?.wants_children !== null) {
+
+            const userWants = currentUserData.preferences.wants_children;
+            const profileWants = profile.preferences.wants_children;
+
+            // Hard incompatibility: one wants (true), one doesn't want (false)
+            if ((userWants === true && profileWants === false) ||
+                (userWants === false && profileWants === true)) {
+              console.log('❌ Filtered: Children preference incompatibility');
+              return false;
+            }
+          }
+
+          // 6. RELATIONSHIP TYPE COMPATIBILITY (stricter matching)
+          if (currentUserData.preferences?.relationship_type &&
+              profile.preferences?.relationship_type) {
+            const relationshipCompatibility: { [key: string]: string[] } = {
+              'platonic': ['platonic', 'open'],
+              'romantic': ['romantic', 'open'],
+              'open': ['platonic', 'romantic', 'open']
+            };
+
+            const compatibleTypes = relationshipCompatibility[currentUserData.preferences.relationship_type];
+            if (!compatibleTypes?.includes(profile.preferences.relationship_type)) {
+              console.log('❌ Filtered: Relationship type incompatibility');
+              return false;
+            }
+          }
+
+          // ====================================================================
+          // PREFERENCE FILTERS (Applied to all users, not just premium)
+          // ====================================================================
+
+          // Religion filter
+          if (filters.religion.length > 0 && profile.religion) {
+            if (!filters.religion.includes(profile.religion)) {
+              console.log('❌ Filtered: Religion preference');
+              return false;
+            }
+          }
+
+          // Political views filter
+          if (filters.politicalViews.length > 0 && profile.political_views) {
+            if (!filters.politicalViews.includes(profile.political_views)) {
+              console.log('❌ Filtered: Political views preference');
+              return false;
+            }
+          }
+
+          // Housing preference filter (for premium users with specific preferences)
+          if (isPremium && filters.housingPreference.length > 0 &&
+              profile.preferences?.housing_preference) {
+            const profileHousing = Array.isArray(profile.preferences.housing_preference)
+              ? profile.preferences.housing_preference
+              : [profile.preferences.housing_preference];
+
+            const hasMatch = profileHousing.some((h: string) => filters.housingPreference.includes(h));
+            if (!hasMatch) {
+              console.log('❌ Filtered: Housing preference (premium filter)');
+              return false;
+            }
+          }
+
+          // Financial arrangement filter (for premium users with specific preferences)
+          if (isPremium && filters.financialArrangement.length > 0 &&
+              profile.preferences?.financial_arrangement) {
+            const profileFinancial = Array.isArray(profile.preferences.financial_arrangement)
+              ? profile.preferences.financial_arrangement
+              : [profile.preferences.financial_arrangement];
+
+            const hasMatch = profileFinancial.some((f: string) => filters.financialArrangement.includes(f));
+            if (!hasMatch) {
+              console.log('❌ Filtered: Financial arrangement (premium filter)');
+              return false;
+            }
+          }
+
+          // All filters passed
           return true;
         });
 
@@ -1087,6 +1283,7 @@ export default function Discover() {
   };
 
   const handleSearch = () => {
+    Keyboard.dismiss(); // Always dismiss keyboard when search button is pressed
     if (searchKeyword.trim()) {
       setIsSearchMode(true);
       setCurrentIndex(0);
@@ -1254,7 +1451,7 @@ export default function Discover() {
   if (loading) {
     return (
       <View className="flex-1 bg-cream items-center justify-center">
-        <ActivityIndicator size="large" color="#8B5CF6" />
+        <ActivityIndicator size="large" color="#9B87CE" />
         <Text className="text-gray-600 mt-4">{t('discover.findingMatches')}</Text>
       </View>
     );
@@ -1283,8 +1480,8 @@ export default function Discover() {
                   style={{ backgroundColor: '#FFD700' }}
                   onPress={() => setShowPaywall(true)}
                 >
-                  <MaterialCommunityIcons name="crown" size={16} color="#8B5CF6" />
-                  <Text className="text-primary-600 font-bold text-xs">Upgrade</Text>
+                  <MaterialCommunityIcons name="crown" size={16} color="#9B87CE" />
+                  <Text className="text-primary-500 font-bold text-xs">Upgrade</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -1449,8 +1646,8 @@ export default function Discover() {
                 style={{ backgroundColor: '#FFD700' }}
                 onPress={() => setShowPaywall(true)}
               >
-                <MaterialCommunityIcons name="crown" size={16} color="#8B5CF6" />
-                <Text className="text-primary-600 font-bold text-xs">Upgrade</Text>
+                <MaterialCommunityIcons name="crown" size={16} color="#9B87CE" />
+                <Text className="text-primary-500 font-bold text-xs">Upgrade</Text>
               </TouchableOpacity>
             )}
             {isPlatinum && (
@@ -1553,7 +1750,7 @@ export default function Discover() {
           {/* Rewind Button */}
           <TouchableOpacity
             className={`rounded-full w-14 h-14 items-center justify-center shadow-lg ${
-              lastSwipe && isPremium ? 'bg-accent-500' : 'bg-gray-300'
+              lastSwipe && isPremium ? 'bg-primary-400' : 'bg-gray-300'
             }`}
             onPress={handleRewind}
             disabled={!lastSwipe && isPremium}
@@ -1594,7 +1791,7 @@ export default function Discover() {
         <View className="flex-row justify-center items-center gap-4 mt-2">
           <Text className="text-gray-600 text-xs font-medium w-14 text-center">Rewind</Text>
           <Text className="text-gray-600 text-xs font-medium w-16 text-center">Pass</Text>
-          <Text className="text-primary-600 text-xs font-bold w-16 text-center">Obsessed</Text>
+          <Text className="text-primary-500 text-xs font-bold w-16 text-center">Obsessed</Text>
           <Text className="text-gray-600 text-xs font-medium w-16 text-center">Like</Text>
         </View>
       </View>
@@ -1625,6 +1822,7 @@ export default function Discover() {
           <ImmersiveProfileCard
             profile={profiles[currentIndex]}
             preferences={currentProfilePreferences}
+            compatibilityBreakdown={profiles[currentIndex].compatibilityBreakdown}
             onSwipeLeft={handleImmersiveSwipeLeft}
             onSwipeRight={handleImmersiveSwipeRight}
             onSuperLike={handleImmersiveSwipeUp}
@@ -1678,7 +1876,7 @@ export default function Discover() {
       {/* Swipe Counter for Free Users (only show for women since men have unlimited) */}
       {!isPremium && currentUserGender === 'Woman' && (
         <View className="absolute bottom-32 right-6 bg-white rounded-full px-4 py-2 shadow-lg border-2 border-primary-500">
-          <Text className="text-primary-600 font-bold text-sm">
+          <Text className="text-primary-500 font-bold text-sm">
             {t('discover.swipesRemaining', { count: swipeCount, limit: DAILY_SWIPE_LIMIT_WOMEN })}
           </Text>
         </View>
@@ -1688,8 +1886,8 @@ export default function Discover() {
       {isPremium && (
         <View className="absolute bottom-32 right-6 bg-white rounded-full px-4 py-2 shadow-lg border-2 border-primary-500">
           <View className="flex-row items-center gap-1">
-            <MaterialCommunityIcons name="star" size={16} color="#8B5CF6" />
-            <Text className="text-primary-600 font-bold text-sm">
+            <MaterialCommunityIcons name="star" size={16} color="#9B87CE" />
+            <Text className="text-primary-500 font-bold text-sm">
               {t('discover.superLikesRemaining', { count: superLikesRemaining })}
             </Text>
           </View>

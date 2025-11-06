@@ -10,6 +10,7 @@ import {
   Alert,
   StatusBar,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -257,19 +258,53 @@ export default function PremiumPaywall({
     } catch (error: any) {
       console.error('Purchase error:', error);
 
-      // More detailed error messages
-      let errorMessage = 'Something went wrong. Please try again.';
-
-      if (error.message?.includes('Product not available')) {
-        errorMessage = 'This subscription is currently unavailable. Please try again later.';
-      } else if (error.message?.includes('network')) {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      } else if (error.code === 'E_USER_CANCELLED') {
-        // User cancelled, don't show error
+      // Check if user cancelled
+      if (error.userCancelled || error.code === 'E_USER_CANCELLED') {
         return;
       }
 
-      Alert.alert('Error', errorMessage, [{ text: 'OK' }]);
+      // Check for Google Play canceled subscription error
+      const errorMessage = error.message || error.toString();
+      const errorCode = error.code || '';
+
+      if (
+        errorMessage.toLowerCase().includes('unable to change') ||
+        errorMessage.toLowerCase().includes('manage subscription') ||
+        errorCode === 'PRODUCT_ALREADY_OWNED' ||
+        errorCode === '7' // Google Play error code for already owned
+      ) {
+        // User has a canceled subscription - guide them to reactivate or switch accounts
+        Alert.alert(
+          'Subscription Already Exists',
+          Platform.OS === 'android'
+            ? 'You have a canceled subscription on your current Google Play account.\n\nOptions:\n\n1. Reactivate your existing subscription in Google Play Settings\n\n2. Use a different Google Play account: Sign out of Google Play on your device, then sign in with a different account and try again'
+            : 'You have a canceled subscription on your current Apple ID.\n\nOptions:\n\n1. Reactivate your existing subscription in App Store Settings\n\n2. Use a different Apple ID: Sign out in Settings > [Your Name], then sign in with a different Apple ID and try again',
+          [
+            { text: 'Got It', style: 'cancel', onPress: onClose },
+            {
+              text: 'Open Settings',
+              onPress: async () => {
+                try {
+                  if (Platform.OS === 'ios') {
+                    await Linking.openURL('https://apps.apple.com/account/subscriptions');
+                  } else {
+                    await Linking.openURL('https://play.google.com/store/account/subscriptions');
+                  }
+                  onClose();
+                } catch (err) {
+                  Alert.alert('Error', 'Could not open subscription management');
+                }
+              }
+            }
+          ]
+        );
+      } else if (errorMessage.includes('Product not available')) {
+        Alert.alert('Error', 'This subscription is currently unavailable. Please try again later.', [{ text: 'OK' }]);
+      } else if (errorMessage.includes('network')) {
+        Alert.alert('Error', 'Network error. Please check your connection and try again.', [{ text: 'OK' }]);
+      } else {
+        Alert.alert('Error', 'Something went wrong. Please try again or contact support.', [{ text: 'OK' }]);
+      }
     } finally {
       setLoading(false);
     }
@@ -300,11 +335,11 @@ export default function PremiumPaywall({
       <View style={styles.containerFull}>
         <StatusBar
           barStyle="light-content"
-          backgroundColor="#8B5CF6"
+          backgroundColor="#9B87CE"
           translucent={true}
           animated={true}
         />
-        <LinearGradient colors={['#8B5CF6', '#EC4899']} style={styles.containerFull}>
+        <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.containerFull}>
           <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             {/* Close Button */}
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
@@ -386,7 +421,7 @@ export default function PremiumPaywall({
                 style={styles.featureItem}
               >
                 <View style={styles.featureIcon}>
-                  <MaterialCommunityIcons name={feature.icon as any} size={24} color="#8B5CF6" />
+                  <MaterialCommunityIcons name={feature.icon as any} size={24} color="#9B87CE" />
                 </View>
                 <View style={styles.featureText}>
                   <Text style={styles.featureTitle}>{feature.title}</Text>
@@ -439,7 +474,7 @@ export default function PremiumPaywall({
 const styles = StyleSheet.create({
   containerFull: {
     flex: 1,
-    backgroundColor: '#8B5CF6', // Purple background to fill status bar area
+    backgroundColor: '#9B87CE', // Purple background to fill status bar area
   },
   container: {
     flex: 1,
@@ -526,7 +561,7 @@ const styles = StyleSheet.create({
   planPrice: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#8B5CF6',
+    color: '#9B87CE',
     marginBottom: 4,
   },
   planDescription: {
@@ -591,7 +626,7 @@ const styles = StyleSheet.create({
   ctaButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#8B5CF6',
+    color: '#9B87CE',
     marginBottom: 4,
   },
   ctaButtonSubtext: {

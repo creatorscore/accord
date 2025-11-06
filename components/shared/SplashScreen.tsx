@@ -21,7 +21,7 @@ export function SplashScreen({ onFinish }: SplashScreenProps) {
 
   return (
     <LinearGradient
-      colors={['#8B5CF6', '#EC4899']}
+      colors={['#9B87CE', '#B8A9DD']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     zIndex: 9999,
   },
   logoContainer: {

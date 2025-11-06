@@ -240,7 +240,7 @@ export default function TermsOfService() {
           </Text>
 
           <View style={styles.footer}>
-            <MaterialCommunityIcons name="file-document" size={24} color="#8B5CF6" />
+            <MaterialCommunityIcons name="file-document" size={24} color="#9B87CE" />
             <Text style={styles.footerText}>
               By using Accord, you agree to these Terms of Service. Please read them carefully.
             </Text>

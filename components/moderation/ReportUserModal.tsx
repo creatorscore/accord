@@ -183,7 +183,7 @@ export default function ReportUserModal({
                   <MaterialCommunityIcons
                     name={reason.icon as any}
                     size={24}
-                    color={selectedReason === reason.id ? '#8B5CF6' : '#6B7280'}
+                    color={selectedReason === reason.id ? '#9B87CE' : '#6B7280'}
                   />
                 </View>
                 <View style={styles.reasonContent}>
@@ -199,7 +199,7 @@ export default function ReportUserModal({
                   <MaterialCommunityIcons
                     name="check-circle"
                     size={24}
-                    color="#8B5CF6"
+                    color="#9B87CE"
                   />
                 )}
               </TouchableOpacity>
@@ -225,7 +225,7 @@ export default function ReportUserModal({
 
             {/* Privacy Notice */}
             <View style={styles.noticeBox}>
-              <MaterialCommunityIcons name="shield-check" size={20} color="#8B5CF6" />
+              <MaterialCommunityIcons name="shield-check" size={20} color="#9B87CE" />
               <Text style={styles.noticeText}>
                 Your report is anonymous. The reported user will not be notified.
               </Text>
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   reasonCardSelected: {
-    borderColor: '#8B5CF6',
+    borderColor: '#9B87CE',
     backgroundColor: '#F3E8FF',
   },
   reasonIcon: {
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   reasonLabelSelected: {
-    color: '#8B5CF6',
+    color: '#9B87CE',
   },
   reasonDescription: {
     fontSize: 13,
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     borderRadius: 12,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     alignItems: 'center',
   },
   submitButtonDisabled: {

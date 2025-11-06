@@ -29,6 +29,38 @@ import ProfileQuickFacts from '@/components/profile/ProfileQuickFacts';
 import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
 import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
 
+// Helper function to format arrays or strings (handles PostgreSQL array strings)
+const formatArrayOrString = (value?: string | string[]): string => {
+  if (!value) return '';
+
+  // Handle actual arrays
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+
+  // Handle PostgreSQL array format strings like "{value1,value2}"
+  if (typeof value === 'string') {
+    // Check if it's a PostgreSQL array string
+    if (value.startsWith('{') && value.endsWith('}')) {
+      const items = value.slice(1, -1).split(',');
+      return items.join(', ');
+    }
+    // Check if it's a JSON array string like '["value1","value2"]'
+    if (value.startsWith('[') && value.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          return parsed.join(', ');
+        }
+      } catch (e) {
+        // Not valid JSON, just return as-is
+      }
+    }
+  }
+
+  return value;
+};
+
 interface ProfileData {
   id: string;
   display_name: string;
@@ -69,6 +101,7 @@ export default function Profile() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [preferences, setPreferences] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -119,6 +152,7 @@ export default function Profile() {
           zodiac_sign,
           personality_type,
           is_verified,
+          is_admin,
           prompt_answers,
           interests,
           hobbies,
@@ -162,6 +196,9 @@ export default function Profile() {
         ...data,
         photos: enhancedPhotos,
       });
+
+      // Set admin status
+      setIsAdmin(data.is_admin || false);
     } catch (error: any) {
       console.error('Error loading profile:', error);
       Alert.alert(
@@ -234,7 +271,7 @@ export default function Profile() {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8B5CF6" />
+          <ActivityIndicator size="large" color="#9B87CE" />
           <Text style={styles.loadingText}>{t('profile.loadingProfile')}</Text>
         </View>
       </View>
@@ -288,7 +325,7 @@ export default function Profile() {
         ) : (
           <View style={styles.placeholderHeader}>
             <LinearGradient
-              colors={['#8B5CF6', '#EC4899']}
+              colors={['#9B87CE', '#B8A9DD']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.placeholderGradient}
@@ -330,7 +367,7 @@ export default function Profile() {
               title={t('profile.myStory')}
               icon="book-open-variant"
               content={profile.bio}
-              gradient={['#8B5CF6', '#EC4899']}
+              gradient={['#9B87CE', '#B8A9DD']}
               delay={100}
             />
           )}
@@ -355,8 +392,8 @@ export default function Profile() {
             </View>
           )}
 
-          {/* Interests Section */}
-          {profile?.interests && profile.interests.length > 0 && (
+          {/* Interests Section - interests is a JSONB object {movies: [], music: [], books: [], tv_shows: []} */}
+          {profile?.interests && typeof profile.interests === 'object' && Object.keys(profile.interests).length > 0 && (
             <View style={{ marginBottom: 16 }}>
               <Text style={{
                 fontSize: 20,
@@ -369,7 +406,9 @@ export default function Profile() {
                 flexWrap: 'wrap',
                 gap: 8,
               }}>
-                {profile.interests.map((interest, index) => (
+                {Object.entries(profile.interests).flatMap(([category, items]) =>
+                  Array.isArray(items) && items.length > 0 ? items : []
+                ).map((interest, index) => (
                   <MotiView
                     key={index}
                     from={{ opacity: 0, scale: 0.8 }}
@@ -384,7 +423,7 @@ export default function Profile() {
                     }}
                   >
                     <Text style={{
-                      color: index % 3 === 0 ? '#7C3AED' :
+                      color: index % 3 === 0 ? '#9B87CE' :
                              index % 3 === 1 ? '#F59E0B' : '#3B82F6',
                       fontWeight: '600',
                       fontSize: 14,
@@ -419,12 +458,12 @@ export default function Profile() {
                 ...(profile.gender ? [{
                   icon: 'gender-transgender',
                   label: t('profile.gender'),
-                  value: Array.isArray(profile.gender) ? profile.gender.join(', ') : profile.gender,
+                  value: formatArrayOrString(profile.gender),
                 }] : []),
                 ...(profile.sexual_orientation ? [{
                   icon: 'heart',
                   label: t('profile.orientation'),
-                  value: Array.isArray(profile.sexual_orientation) ? profile.sexual_orientation.join(', ') : profile.sexual_orientation,
+                  value: formatArrayOrString(profile.sexual_orientation),
                 }] : []),
               ]}
             />
@@ -436,7 +475,7 @@ export default function Profile() {
             onPress={() => router.push('/settings/edit-profile')}
           >
             <LinearGradient
-              colors={['#8B5CF6', '#EC4899']}
+              colors={['#9B87CE', '#B8A9DD']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.editProfileGradient}
@@ -451,7 +490,7 @@ export default function Profile() {
             style={styles.previewProfileButton}
             onPress={handlePreviewProfile}
           >
-            <MaterialCommunityIcons name="eye-outline" size={20} color="#8B5CF6" />
+            <MaterialCommunityIcons name="eye-outline" size={20} color="#9B87CE" />
             <Text style={styles.previewProfileText}>{t('profile.previewProfile')}</Text>
           </TouchableOpacity>
 
@@ -464,7 +503,7 @@ export default function Profile() {
           style={styles.premiumCard}
         >
           <LinearGradient
-            colors={isPlatinum ? ['#FFD700', '#FFA500'] : ['#8B5CF6', '#EC4899']}
+            colors={isPlatinum ? ['#FFD700', '#FFA500'] : ['#9B87CE', '#B8A9DD']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.premiumGradient}
@@ -513,7 +552,7 @@ export default function Profile() {
                 style={styles.upgradeToPlatinum}
                 onPress={() => setShowPaywall(true)}
               >
-                <MaterialCommunityIcons name="crown" size={16} color="#8B5CF6" />
+                <MaterialCommunityIcons name="crown" size={16} color="#9B87CE" />
                 <Text style={styles.upgradeToPlatinumText}>{t('profile.upgradeToPlatinum')}</Text>
               </TouchableOpacity>
             )}
@@ -531,7 +570,7 @@ export default function Profile() {
             onPress={() => setShowPaywall(true)}
           >
             <LinearGradient
-              colors={['#8B5CF6', '#EC4899']}
+              colors={['#9B87CE', '#B8A9DD']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.upgradeGradient}
@@ -561,7 +600,7 @@ export default function Profile() {
 
               <View style={styles.upgradeCTA}>
                 <Text style={styles.upgradeCTAText}>{t('profile.unlockPremiumFeatures')}</Text>
-                <MaterialCommunityIcons name="arrow-right" size={20} color="#8B5CF6" />
+                <MaterialCommunityIcons name="arrow-right" size={20} color="#9B87CE" />
               </View>
             </LinearGradient>
           </TouchableOpacity>
@@ -588,10 +627,10 @@ export default function Profile() {
           onPress={() => router.push('/settings/matching-preferences')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="heart-cog" size={24} color="#8B5CF6" />
-            <Text style={[styles.menuItemText, { color: '#8B5CF6', fontWeight: '600' }]}>{t('profile.matchingPreferences')}</Text>
+            <MaterialCommunityIcons name="heart-cog" size={24} color="#9B87CE" />
+            <Text style={[styles.menuItemText, { color: '#9B87CE', fontWeight: '600' }]}>{t('profile.matchingPreferences')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#8B5CF6" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -646,13 +685,13 @@ export default function Profile() {
             <MaterialCommunityIcons
               name={isPremium ? "credit-card-outline" : "crown-outline"}
               size={24}
-              color={isPremium ? "#6B7280" : "#8B5CF6"}
+              color={isPremium ? "#6B7280" : "#9B87CE"}
             />
-            <Text style={[styles.menuItemText, !isPremium && { color: '#8B5CF6', fontWeight: '600' }]}>
+            <Text style={[styles.menuItemText, !isPremium && { color: '#9B87CE', fontWeight: '600' }]}>
               {isPremium ? t('profile.manageSubscription') : t('profile.upgradeToPremium')}
             </Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={isPremium ? "#D1D5DB" : "#8B5CF6"} />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={isPremium ? "#D1D5DB" : "#9B87CE"} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -676,6 +715,50 @@ export default function Profile() {
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push('/settings/contact-blocking')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="phone-off" size={24} color="#6B7280" />
+            <Text style={styles.menuItemText}>Block Contacts</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+        </TouchableOpacity>
+
+        {/* Admin Panel - Only visible to admins */}
+        {isAdmin && (
+          <>
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: '#FEF3C7', borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}
+              onPress={() => router.push('/admin/reports')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="shield-alert" size={24} color="#F59E0B" />
+                <View>
+                  <Text style={[styles.menuItemText, { color: '#92400E', fontWeight: '700' }]}>Admin Panel</Text>
+                  <Text style={{ fontSize: 12, color: '#92400E', marginTop: 2 }}>View reports & moderate</Text>
+                </View>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: '#DBEAFE', borderLeftWidth: 4, borderLeftColor: '#3B82F6' }]}
+              onPress={() => router.push('/admin/cost-monitoring')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="chart-line" size={24} color="#3B82F6" />
+                <View>
+                  <Text style={[styles.menuItemText, { color: '#1E40AF', fontWeight: '700' }]}>Cost Monitoring</Text>
+                  <Text style={{ fontSize: 12, color: '#1E40AF', marginTop: 2 }}>Database size & cleanup</Text>
+                </View>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+          </>
+        )}
 
         <TouchableOpacity
           style={styles.menuItem}
@@ -846,14 +929,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#8B5CF6',
+    borderColor: '#9B87CE',
     backgroundColor: 'white',
     marginBottom: 20,
   },
   previewProfileText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#8B5CF6',
+    color: '#9B87CE',
   },
   loadingContainer: {
     flex: 1,
@@ -927,7 +1010,7 @@ const styles = StyleSheet.create({
   upgradeToPlatinumText: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#8B5CF6',
+    color: '#9B87CE',
   },
   upgradeCard: {
     marginHorizontal: 20,
@@ -994,7 +1077,7 @@ const styles = StyleSheet.create({
   upgradeCTAText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#8B5CF6',
+    color: '#9B87CE',
   },
   menuSection: {
     marginHorizontal: 20,

@@ -249,7 +249,7 @@ export default function Likes() {
           {/* Teaser - show blurred cards */}
           <View className="mb-6 rounded-3xl overflow-hidden">
             <LinearGradient
-              colors={['#8B5CF6', '#EC4899']}
+              colors={['#9B87CE', '#B8A9DD']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               className="p-6"
@@ -316,7 +316,7 @@ export default function Likes() {
 
       {loading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#8B5CF6" />
+          <ActivityIndicator size="large" color="#9B87CE" />
         </View>
       ) : likes.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
@@ -330,7 +330,7 @@ export default function Likes() {
         <ScrollView
           className="flex-1 px-6 pt-6"
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#8B5CF6" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#9B87CE" />
           }
         >
           <View className="flex-row flex-wrap gap-3 pb-6">
@@ -370,7 +370,7 @@ export default function Likes() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handleLikeBack(like.profile_id)}
-                    className="flex-1 bg-accent-500 py-3 rounded-full items-center"
+                    className="flex-1 bg-primary-400 py-3 rounded-full items-center"
                   >
                     <MaterialCommunityIcons name="heart" size={24} color="white" />
                   </TouchableOpacity>

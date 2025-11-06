@@ -153,7 +153,7 @@ export default function LanguageSettings() {
                 </View>
 
                 {currentLang === language.code ? (
-                  <MaterialCommunityIcons name="check-circle" size={24} color="#8B5CF6" />
+                  <MaterialCommunityIcons name="check-circle" size={24} color="#9B87CE" />
                 ) : (
                   <MaterialCommunityIcons name="circle-outline" size={24} color="#D1D5DB" />
                 )}
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   languageCardSelected: {
-    borderColor: '#8B5CF6',
+    borderColor: '#9B87CE',
     backgroundColor: '#F3E8FF',
   },
   languageContent: {

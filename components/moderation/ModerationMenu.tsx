@@ -4,22 +4,30 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ReportUserModal from './ReportUserModal';
 import BlockUserModal from './BlockUserModal';
+import UnmatchModal from './UnmatchModal';
 
 interface ModerationMenuProps {
   profileId: string;
   profileName: string;
+  matchId?: string;
+  currentProfileId?: string;
   onBlock?: () => void;
+  onUnmatch?: () => void;
 }
 
 export default function ModerationMenu({
   profileId,
   profileName,
+  matchId,
+  currentProfileId,
   onBlock,
+  onUnmatch,
 }: ModerationMenuProps) {
   const insets = useSafeAreaInsets();
   const [menuVisible, setMenuVisible] = useState(false);
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [blockModalVisible, setBlockModalVisible] = useState(false);
+  const [unmatchModalVisible, setUnmatchModalVisible] = useState(false);
 
   const openMenu = () => setMenuVisible(true);
   const closeMenu = () => setMenuVisible(false);
@@ -28,6 +36,13 @@ export default function ModerationMenu({
     closeMenu();
     setTimeout(() => {
       setReportModalVisible(true);
+    }, 100);
+  };
+
+  const handleUnmatch = () => {
+    closeMenu();
+    setTimeout(() => {
+      setUnmatchModalVisible(true);
     }, 100);
   };
 
@@ -80,6 +95,18 @@ export default function ModerationMenu({
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
               </TouchableOpacity>
 
+              {/* Unmatch option - only show if we have matchId */}
+              {matchId && currentProfileId && (
+                <TouchableOpacity
+                  style={[styles.actionItem, styles.actionItemWarning]}
+                  onPress={handleUnmatch}
+                >
+                  <MaterialCommunityIcons name="heart-broken" size={24} color="#F59E0B" />
+                  <Text style={[styles.actionText, styles.actionTextWarning]}>Unmatch</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#F59E0B" />
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
                 style={[styles.actionItem, styles.actionItemDanger]}
                 onPress={handleBlock}
@@ -98,6 +125,16 @@ export default function ModerationMenu({
         onClose={() => setReportModalVisible(false)}
         reportedProfileId={profileId}
         reportedProfileName={profileName}
+      />
+
+      <UnmatchModal
+        visible={unmatchModalVisible}
+        onClose={() => setUnmatchModalVisible(false)}
+        matchId={matchId || ''}
+        matchedProfileId={profileId}
+        matchedProfileName={profileName}
+        currentProfileId={currentProfileId || ''}
+        onUnmatchSuccess={onUnmatch}
       />
 
       <BlockUserModal
@@ -153,6 +190,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     gap: 12,
   },
+  actionItemWarning: {
+    borderTopWidth: 1,
+    borderTopColor: '#FEF3C7',
+    marginTop: 8,
+  },
   actionItemDanger: {
     borderTopWidth: 1,
     borderTopColor: '#FEE2E2',
@@ -162,6 +204,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#374151',
+  },
+  actionTextWarning: {
+    color: '#F59E0B',
   },
   actionTextDanger: {
     color: '#EF4444',

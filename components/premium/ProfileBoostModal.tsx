@@ -209,19 +209,19 @@ export default function ProfileBoostModal({
             {/* Features */}
             <View style={styles.featuresContainer}>
               <View style={styles.featureItem}>
-                <MaterialCommunityIcons name="eye" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="eye" size={24} color="#9B87CE" />
                 <Text style={styles.featureText}>10x more profile views</Text>
               </View>
               <View style={styles.featureItem}>
-                <MaterialCommunityIcons name="chart-line" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="chart-line" size={24} color="#9B87CE" />
                 <Text style={styles.featureText}>Appear at the top of discovery</Text>
               </View>
               <View style={styles.featureItem}>
-                <MaterialCommunityIcons name="clock-outline" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="clock-outline" size={24} color="#9B87CE" />
                 <Text style={styles.featureText}>Lasts for 30 minutes</Text>
               </View>
               <View style={styles.featureItem}>
-                <MaterialCommunityIcons name="calendar-week" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="calendar-week" size={24} color="#9B87CE" />
                 <Text style={styles.featureText}>Available once per week</Text>
               </View>
             </View>
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   actionButton: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     paddingVertical: 18,
     borderRadius: 16,
     flexDirection: 'row',

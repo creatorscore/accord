@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { isOnline, getLastActiveText } from '@/lib/online-status';
+import { realtimeManager } from '@/lib/realtime-manager';
 
 interface Match {
   id: string;
@@ -236,7 +237,7 @@ export default function Matches() {
   const subscribeToMatches = () => {
     if (!currentProfileId) return;
 
-    // Subscribe to new matches
+    // Subscribe to new matches (with realtime manager for cost protection)
     const matchesChannel = supabase
       .channel('matches-changes')
       .on(
@@ -300,7 +301,17 @@ export default function Matches() {
       )
       .subscribe();
 
+    // Register channels with realtime manager for cost protection
+    realtimeManager.registerChannel(currentProfileId, matchesChannel);
+    realtimeManager.registerChannel(currentProfileId, messagesChannel);
+    realtimeManager.registerChannel(currentProfileId, likesChannel);
+
     return () => {
+      // Unregister and cleanup
+      realtimeManager.unregisterChannel(currentProfileId, matchesChannel);
+      realtimeManager.unregisterChannel(currentProfileId, messagesChannel);
+      realtimeManager.unregisterChannel(currentProfileId, likesChannel);
+
       matchesChannel.unsubscribe();
       messagesChannel.unsubscribe();
       likesChannel.unsubscribe();
@@ -548,7 +559,7 @@ export default function Matches() {
           onPress={handleLikesPress}
         >
           <LinearGradient
-            colors={['#8B5CF6', '#EC4899']}
+            colors={['#9B87CE', '#B8A9DD']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.likesCard}
@@ -640,7 +651,7 @@ export default function Matches() {
             {item.compatibility_score && (
               <View style={styles.compatibilityRow}>
                 <LinearGradient
-                  colors={['#8B5CF6', '#EC4899']}
+                  colors={['#9B87CE', '#B8A9DD']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.compatibilityBadge}
@@ -667,7 +678,7 @@ export default function Matches() {
               </Text>
             ) : (
               <View style={styles.ctaRow}>
-                <MaterialCommunityIcons name="message-outline" size={14} color="#8B5CF6" />
+                <MaterialCommunityIcons name="message-outline" size={14} color="#9B87CE" />
                 <Text style={styles.ctaText}>{t('matches.sayHi')}</Text>
               </View>
             )}
@@ -691,7 +702,7 @@ export default function Matches() {
         </View>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8B5CF6" />
+          <ActivityIndicator size="large" color="#9B87CE" />
           <Text style={styles.loadingText}>{t('matches.loadingMatches')}</Text>
         </View>
       </View>
@@ -716,7 +727,7 @@ export default function Matches() {
           >
             <View style={styles.emptyIconContainer}>
               <LinearGradient
-                colors={['#8B5CF6', '#EC4899']}
+                colors={['#9B87CE', '#B8A9DD']}
                 style={styles.emptyIcon}
               >
                 <MaterialCommunityIcons name="heart-outline" size={48} color="white" />
@@ -731,7 +742,7 @@ export default function Matches() {
               onPress={() => router.push('/(tabs)/discover')}
             >
               <LinearGradient
-                colors={['#8B5CF6', '#EC4899']}
+                colors={['#9B87CE', '#B8A9DD']}
                 style={styles.emptyButtonGradient}
               >
                 <MaterialCommunityIcons name="cards-heart" size={20} color="white" />
@@ -770,8 +781,8 @@ export default function Matches() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#8B5CF6"
-            colors={['#8B5CF6']}
+            tintColor="#9B87CE"
+            colors={['#9B87CE']}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -859,7 +870,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAF7F0',
   },
   header: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     paddingTop: 60,
     paddingBottom: 24,
     paddingHorizontal: 24,
@@ -1048,7 +1059,7 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     fontSize: 14,
-    color: '#8B5CF6',
+    color: '#9B87CE',
     fontWeight: '500',
   },
   likesCardContainer: {

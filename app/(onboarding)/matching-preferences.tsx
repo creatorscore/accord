@@ -11,6 +11,8 @@ const GENDER_OPTIONS = [
   'Non-binary',
   'Trans Man',
   'Trans Woman',
+  'Genderfluid',
+  'Genderqueer',
 ];
 
 export default function MatchingPreferences() {
@@ -107,7 +109,7 @@ export default function MatchingPreferences() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 8 of 8</Text>
-            <Text className="text-sm text-primary-600 font-bold">100%</Text>
+            <Text className="text-sm text-primary-500 font-bold">100%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
@@ -143,7 +145,7 @@ export default function MatchingPreferences() {
                   step={1}
                   value={ageMin}
                   onValueChange={setAgeMin}
-                  minimumTrackTintColor="#8B5CF6"
+                  minimumTrackTintColor="#9B87CE"
                   maximumTrackTintColor="#D1D5DB"
                 />
               </View>
@@ -155,7 +157,7 @@ export default function MatchingPreferences() {
                   step={1}
                   value={ageMax}
                   onValueChange={setAgeMax}
-                  minimumTrackTintColor="#8B5CF6"
+                  minimumTrackTintColor="#9B87CE"
                   maximumTrackTintColor="#D1D5DB"
                 />
               </View>
@@ -173,7 +175,7 @@ export default function MatchingPreferences() {
               step={10}
               value={maxDistance}
               onValueChange={setMaxDistance}
-              minimumTrackTintColor="#8B5CF6"
+              minimumTrackTintColor="#9B87CE"
               maximumTrackTintColor="#D1D5DB"
             />
           </View>

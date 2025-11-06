@@ -76,7 +76,7 @@ export default function LanguageSelection() {
                   <Text
                     className={`text-lg font-semibold ${
                       selectedLanguage === language.code
-                        ? 'text-primary-700'
+                        ? 'text-primary-500'
                         : 'text-gray-900'
                     }`}
                   >
@@ -86,7 +86,7 @@ export default function LanguageSelection() {
                 </View>
               </View>
               {selectedLanguage === language.code && (
-                <MaterialCommunityIcons name="check-circle" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="check-circle" size={24} color="#9B87CE" />
               )}
             </TouchableOpacity>
           ))}
@@ -94,7 +94,7 @@ export default function LanguageSelection() {
 
         {/* Info Banner */}
         <View className="bg-purple-50 rounded-xl p-4 mb-6 flex-row">
-          <MaterialCommunityIcons name="information" size={24} color="#8B5CF6" />
+          <MaterialCommunityIcons name="information" size={24} color="#9B87CE" />
           <View className="flex-1 ml-3">
             <Text className="text-sm text-gray-700">
               <Text className="font-semibold">Global Community: </Text>
