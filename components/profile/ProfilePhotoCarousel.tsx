@@ -32,6 +32,8 @@ interface ProfilePhotoCarouselProps {
   isVerified?: boolean;
   distance?: number;
   compatibilityScore?: number;
+  photoBlurEnabled?: boolean;
+  isRevealed?: boolean;
 }
 
 export default function ProfilePhotoCarousel({
@@ -41,6 +43,8 @@ export default function ProfilePhotoCarousel({
   isVerified,
   distance,
   compatibilityScore,
+  photoBlurEnabled = false,
+  isRevealed = false,
 }: ProfilePhotoCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
@@ -71,6 +75,7 @@ export default function ProfilePhotoCarousel({
               source={{ uri: photo.url }}
               style={styles.photo}
               resizeMode="cover"
+              blurRadius={photoBlurEnabled && !isRevealed ? 30 : 0}
             />
 
             {/* Gradient Overlay */}
@@ -164,7 +169,7 @@ export default function ProfilePhotoCarousel({
           style={[styles.compatibilityBadge, { top: insets.top + 60 }]}
         >
           <LinearGradient
-            colors={['#8B5CF6', '#EC4899']}
+            colors={['#9B87CE', '#B8A9DD']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.compatibilityGradient}

@@ -28,6 +28,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import { sendMessageNotification } from '@/lib/notifications';
 import BlockModal from '@/components/safety/BlockModal';
+import { optimizeImage, uriToArrayBuffer, validateImage, IMAGE_CONFIG } from '@/lib/image-optimization';
 import ReportModal from '@/components/safety/ReportModal';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import IntroMessages from '@/components/messaging/IntroMessages';
@@ -104,6 +105,13 @@ export default function Chat() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null);
 
+  // Photo reveal state
+  const [hasRevealedPhotos, setHasRevealedPhotos] = useState(false);
+  const [otherUserRevealed, setOtherUserRevealed] = useState(false);
+  const [currentUserPhotoBlur, setCurrentUserPhotoBlur] = useState(false);
+  const [matchProfilePhotoBlur, setMatchProfilePhotoBlur] = useState(false);
+  const [revealLoading, setRevealLoading] = useState(false);
+
   useEffect(() => {
     loadCurrentProfile();
     setupAudio();
@@ -176,13 +184,14 @@ export default function Chat() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, display_name')
+        .select('id, display_name, photo_blur_enabled')
         .eq('user_id', user?.id)
         .single();
 
       if (error) throw error;
       setCurrentProfileId(data.id);
       setCurrentProfileName(data.display_name);
+      setCurrentUserPhotoBlur(data.photo_blur_enabled || false);
     } catch (error: any) {
       console.error('Error loading profile:', error);
     }
@@ -240,6 +249,7 @@ export default function Chat() {
           longitude,
           last_active_at,
           hide_last_active,
+          photo_blur_enabled,
           photos (
             url,
             is_primary,
@@ -304,6 +314,10 @@ export default function Chat() {
 
       console.log('✅ Match profile loaded:', matchProfileData);
       setMatchProfile(matchProfileData);
+      setMatchProfilePhotoBlur(profile.photo_blur_enabled || false);
+
+      // Check photo reveal status
+      checkPhotoRevealStatus(otherProfileId);
     } catch (error: any) {
       console.error('❌ Error loading match profile:', error);
       Alert.alert(t('common.error'), 'Failed to load chat. Please try again.');
@@ -619,23 +633,38 @@ export default function Chat() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
+        const selectedUri = result.assets[0].uri;
         setSending(true);
 
         try {
-          // Upload image to Supabase Storage
-          const fileExt = asset.uri.split('.').pop();
-          const fileName = `${matchId}_${Date.now()}.${fileExt}`;
+          // Validate image before processing
+          const validation = await validateImage(selectedUri);
+          if (!validation.isValid) {
+            Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
+            setSending(false);
+            return;
+          }
+
+          // Optimize image for chat (smaller size for faster sending)
+          const { optimized } = await optimizeImage(selectedUri, {
+            maxWidth: IMAGE_CONFIG.chat.maxWidth,
+            maxHeight: IMAGE_CONFIG.chat.maxHeight,
+            quality: IMAGE_CONFIG.chat.quality,
+          });
+
+          console.log(`Optimized chat image: ${(optimized.size! / 1024).toFixed(0)}KB (${optimized.width}x${optimized.height})`);
+
+          // Upload optimized image to Supabase Storage
+          const fileName = `${matchId}_${Date.now()}.jpg`;
           const filePath = `chat-images/${fileName}`;
 
-          // Read file as ArrayBuffer (React Native compatible)
-          const response = await fetch(asset.uri);
-          const arrayBuffer = await response.arrayBuffer();
+          // Convert to ArrayBuffer using optimized utility
+          const arrayBuffer = await uriToArrayBuffer(optimized.uri);
 
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from('chat-media')
             .upload(filePath, arrayBuffer, {
-              contentType: asset.mimeType || 'image/jpeg',
+              contentType: 'image/jpeg',
               upsert: false,
             });
 
@@ -929,6 +958,91 @@ export default function Chat() {
     }
   };
 
+  const checkPhotoRevealStatus = async (otherProfileId: string) => {
+    if (!currentProfileId) return;
+
+    try {
+      // Check if current user has revealed photos to this profile
+      const { data: myReveal } = await supabase
+        .from('photo_reveals')
+        .select('id')
+        .eq('revealer_profile_id', currentProfileId)
+        .eq('revealed_to_profile_id', otherProfileId)
+        .maybeSingle();
+
+      setHasRevealedPhotos(!!myReveal);
+
+      // Check if other user has revealed photos to current user
+      const { data: theirReveal } = await supabase
+        .from('photo_reveals')
+        .select('id')
+        .eq('revealer_profile_id', otherProfileId)
+        .eq('revealed_to_profile_id', currentProfileId)
+        .maybeSingle();
+
+      setOtherUserRevealed(!!theirReveal);
+    } catch (error: any) {
+      console.error('Error checking photo reveal status:', error);
+    }
+  };
+
+  const togglePhotoReveal = async () => {
+    if (!currentProfileId || !matchProfile?.id || !matchId) {
+      Alert.alert(t('common.error'), 'Unable to toggle photo reveal');
+      return;
+    }
+
+    setRevealLoading(true);
+
+    try {
+      if (hasRevealedPhotos) {
+        // Re-blur: Delete the reveal
+        const { error } = await supabase
+          .from('photo_reveals')
+          .delete()
+          .eq('revealer_profile_id', currentProfileId)
+          .eq('revealed_to_profile_id', matchProfile.id);
+
+        if (error) throw error;
+
+        setHasRevealedPhotos(false);
+        Alert.alert('Photos Blurred', 'Your photos are now blurred for this match');
+      } else {
+        // Reveal: Insert new reveal
+        const { error } = await supabase
+          .from('photo_reveals')
+          .insert({
+            revealer_profile_id: currentProfileId,
+            revealed_to_profile_id: matchProfile.id,
+            match_id: matchId as string,
+          });
+
+        if (error) throw error;
+
+        setHasRevealedPhotos(true);
+
+        // Send push notification
+        try {
+          await sendMessageNotification(
+            matchProfile.id,
+            currentProfileName,
+            `${currentProfileName} revealed their photos to you! 👀`,
+            matchId as string
+          );
+        } catch (notifError) {
+          console.log('Notification error (ignoring):', notifError);
+        }
+
+        Alert.alert('Photos Revealed', `Your photos are now visible to ${matchProfile.display_name}`);
+      }
+    } catch (error: any) {
+      console.error('Error toggling photo reveal:', error);
+      Alert.alert(t('common.error'), 'Failed to update photo visibility. Please try again.');
+    } finally {
+      setRevealLoading(false);
+    }
+  };
+
   const handleBlock = async () => {
     if (!currentProfileId || !matchProfile) return;
 
@@ -1108,7 +1222,7 @@ export default function Chat() {
             >
               {isMine ? (
                 <LinearGradient
-                  colors={['#8B5CF6', '#EC4899']}
+                  colors={['#9B87CE', '#B8A9DD']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.imageMessageGradient}
@@ -1145,7 +1259,7 @@ export default function Chat() {
             <TouchableOpacity onPress={() => handleVoicePlay(item)} activeOpacity={0.7}>
               {isMine ? (
                 <LinearGradient
-                  colors={['#8B5CF6', '#EC4899']}
+                  colors={['#9B87CE', '#B8A9DD']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.voiceMessageBubble}
@@ -1196,7 +1310,7 @@ export default function Chat() {
                     <MaterialCommunityIcons
                       name={playingVoiceId === item.id ? "pause-circle" : "play-circle"}
                       size={32}
-                      color="#8B5CF6"
+                      color="#9B87CE"
                     />
                     <View style={styles.voiceMessageInfo}>
                       <View style={styles.voiceWaveform}>
@@ -1229,7 +1343,7 @@ export default function Chat() {
             <>
               {isMine ? (
                 <LinearGradient
-                  colors={['#8B5CF6', '#EC4899']}
+                  colors={['#9B87CE', '#B8A9DD']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.messageBubbleGradient}
@@ -1268,7 +1382,7 @@ export default function Chat() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8B5CF6" />
+        <ActivityIndicator size="large" color="#9B87CE" />
         <Text style={{ marginTop: 16, color: '#6B7280' }}>{t('chat.loadingChat')}</Text>
       </View>
     );
@@ -1343,7 +1457,7 @@ export default function Chat() {
   if (!matchProfile) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8B5CF6" />
+        <ActivityIndicator size="large" color="#9B87CE" />
         <Text style={{ marginTop: 16, color: '#6B7280' }}>{t('chat.loading')}</Text>
       </View>
     );
@@ -1389,10 +1503,31 @@ export default function Chat() {
         </TouchableOpacity>
 
         <View style={styles.headerRight}>
+          {/* Photo Reveal Button - Only show if current user has photo blur enabled */}
+          {currentUserPhotoBlur && (
+            <TouchableOpacity
+              onPress={togglePhotoReveal}
+              disabled={revealLoading}
+              style={styles.revealButton}
+            >
+              {revealLoading ? (
+                <ActivityIndicator size="small" color="#9B87CE" />
+              ) : (
+                <MaterialCommunityIcons
+                  name={hasRevealedPhotos ? "eye-off" : "eye"}
+                  size={24}
+                  color={hasRevealedPhotos ? "#9B87CE" : "#D1D5DB"}
+                />
+              )}
+            </TouchableOpacity>
+          )}
           <ModerationMenu
             profileId={matchProfile?.id || ''}
             profileName={matchProfile?.display_name || ''}
+            matchId={matchId as string}
+            currentProfileId={currentProfileId || ''}
             onBlock={() => router.back()}
+            onUnmatch={() => router.back()}
           />
         </View>
       </View>
@@ -1405,7 +1540,7 @@ export default function Chat() {
           style={styles.premiumBanner}
         >
           <LinearGradient
-            colors={['#8B5CF6', '#EC4899']}
+            colors={['#9B87CE', '#B8A9DD']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.premiumBannerGradient}
@@ -1445,8 +1580,8 @@ export default function Chat() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#8B5CF6"
-            colors={['#8B5CF6']}
+            tintColor="#9B87CE"
+            colors={['#9B87CE']}
           />
         }
         ListEmptyComponent={
@@ -1457,7 +1592,7 @@ export default function Chat() {
               transition={{ type: 'spring' }}
             >
               <View style={styles.emptyIconContainer}>
-                <LinearGradient colors={['#8B5CF6', '#EC4899']} style={styles.emptyIcon}>
+                <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.emptyIcon}>
                   <MaterialCommunityIcons name="message-text-outline" size={40} color="white" />
                 </LinearGradient>
               </View>
@@ -1512,7 +1647,7 @@ export default function Chat() {
           </View>
 
           <TouchableOpacity style={styles.stopButton} onPress={handleVoiceRecordStop}>
-            <LinearGradient colors={['#8B5CF6', '#EC4899']} style={styles.stopButtonGradient}>
+            <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.stopButtonGradient}>
               <MaterialCommunityIcons name="send" size={20} color="white" />
             </LinearGradient>
           </TouchableOpacity>
@@ -1523,7 +1658,7 @@ export default function Chat() {
           paddingBottom: (insets.bottom || 4) + 8
         }]}>
           <TouchableOpacity style={styles.imageButton} onPress={handleImagePick} disabled={sending}>
-            <MaterialCommunityIcons name="image-outline" size={24} color={sending ? "#D1D5DB" : "#8B5CF6"} />
+            <MaterialCommunityIcons name="image-outline" size={24} color={sending ? "#D1D5DB" : "#9B87CE"} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1532,7 +1667,7 @@ export default function Chat() {
             onLongPress={handleVoiceRecordStart}
             disabled={sending}
           >
-            <MaterialCommunityIcons name="microphone" size={24} color={sending ? "#D1D5DB" : "#8B5CF6"} />
+            <MaterialCommunityIcons name="microphone" size={24} color={sending ? "#D1D5DB" : "#9B87CE"} />
           </TouchableOpacity>
 
           <View style={styles.inputWrapper}>
@@ -1560,7 +1695,7 @@ export default function Chat() {
             {sending ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
-              <LinearGradient colors={['#8B5CF6', '#EC4899']} style={styles.sendButtonGradient}>
+              <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.sendButtonGradient}>
                 <MaterialCommunityIcons name="send" size={20} color="white" />
               </LinearGradient>
             )}
@@ -1632,7 +1767,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     paddingTop: 48,
     paddingBottom: 12,
     paddingHorizontal: 16,
@@ -1680,7 +1815,17 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
   },
   headerRight: {
-    width: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  revealButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   premiumBanner: {
     marginHorizontal: 12,
@@ -1999,7 +2144,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   unmatchedButton: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 12,

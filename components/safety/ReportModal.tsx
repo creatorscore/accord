@@ -113,7 +113,7 @@ export default function ReportModal({
                     <MaterialCommunityIcons
                       name={reason.icon as any}
                       size={20}
-                      color={selectedReason === reason.id ? '#8B5CF6' : '#6B7280'}
+                      color={selectedReason === reason.id ? '#9B87CE' : '#6B7280'}
                     />
                   </View>
                   <Text
@@ -125,7 +125,7 @@ export default function ReportModal({
                     {reason.label}
                   </Text>
                   {selectedReason === reason.id && (
-                    <MaterialCommunityIcons name="check-circle" size={20} color="#8B5CF6" />
+                    <MaterialCommunityIcons name="check-circle" size={20} color="#9B87CE" />
                   )}
                 </TouchableOpacity>
               ))}
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   },
   reasonItemSelected: {
     backgroundColor: '#F3E8FF',
-    borderColor: '#8B5CF6',
+    borderColor: '#9B87CE',
   },
   reasonIcon: {
     width: 32,

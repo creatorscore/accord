@@ -131,7 +131,7 @@ export default function Interests() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 5 of 9</Text>
-            <Text className="text-sm text-primary-600 font-bold">56%</Text>
+            <Text className="text-sm text-primary-500 font-bold">56%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
@@ -185,7 +185,7 @@ export default function Interests() {
         {/* Favorites Section */}
         <View className="bg-white rounded-3xl p-6 shadow-sm border border-purple-100 mb-8">
           <View className="flex-row items-center mb-6">
-            <MaterialCommunityIcons name="heart-multiple" size={28} color="#8B5CF6" />
+            <MaterialCommunityIcons name="heart-multiple" size={28} color="#9B87CE" />
             <Text className="text-2xl font-bold text-gray-900 ml-2">
               Your Favorites
             </Text>

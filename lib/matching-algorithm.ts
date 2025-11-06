@@ -97,8 +97,7 @@ interface Preferences {
   } | null;
   age_min: number;
   age_max: number;
-  gender_preference: string[];
-  seeking_gender?: string | null;
+  gender_preference: string[]; // Array of genders this user is interested in matching with
 }
 
 /**

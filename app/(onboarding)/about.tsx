@@ -147,7 +147,7 @@ export default function About() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 3 of 9</Text>
-            <Text className="text-sm text-primary-600 font-bold">33%</Text>
+            <Text className="text-sm text-primary-500 font-bold">33%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View

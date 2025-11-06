@@ -166,7 +166,7 @@ export default function Prompts() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 5 of 7</Text>
-            <Text className="text-sm text-primary-600 font-bold">71%</Text>
+            <Text className="text-sm text-primary-500 font-bold">71%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
@@ -194,7 +194,7 @@ export default function Prompts() {
                 className="bg-purple-100 border-2 border-dashed border-purple-300 rounded-3xl p-6 items-center"
                 onPress={() => setShowPromptPicker(index)}
               >
-                <MaterialCommunityIcons name="plus-circle" size={40} color="#8B5CF6" />
+                <MaterialCommunityIcons name="plus-circle" size={40} color="#9B87CE" />
                 <Text className="text-purple-700 font-bold text-lg mt-2">
                   Choose a prompt
                 </Text>
@@ -249,7 +249,7 @@ export default function Prompts() {
                   className="py-4 border-b-2 border-purple-300 bg-purple-50 rounded-xl mb-2 px-4 flex-row items-center"
                   onPress={handleCustomPrompt}
                 >
-                  <MaterialCommunityIcons name="pencil-plus" size={24} color="#8B5CF6" />
+                  <MaterialCommunityIcons name="pencil-plus" size={24} color="#9B87CE" />
                   <Text className="text-purple-700 font-bold text-base ml-3">
                     ✨ Write your own prompt
                   </Text>
@@ -327,7 +327,7 @@ export default function Prompts() {
         {/* Tips */}
         <View className="bg-purple-50 border-2 border-purple-200 rounded-3xl p-5 mb-8">
           <View className="flex-row items-center mb-3">
-            <MaterialCommunityIcons name="lightbulb-on" size={24} color="#8B5CF6" />
+            <MaterialCommunityIcons name="lightbulb-on" size={24} color="#9B87CE" />
             <Text className="text-purple-900 font-bold text-lg ml-2">Pro Tips</Text>
           </View>
           <Text className="text-purple-800 text-sm mb-2">

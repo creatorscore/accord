@@ -209,7 +209,7 @@ export default function PrivacyPolicy() {
           </Text>
 
           <View style={styles.footer}>
-            <MaterialCommunityIcons name="shield-check" size={24} color="#8B5CF6" />
+            <MaterialCommunityIcons name="shield-check" size={24} color="#9B87CE" />
             <Text style={styles.footerText}>
               Your privacy is protected. We're committed to keeping your information safe and secure.
             </Text>

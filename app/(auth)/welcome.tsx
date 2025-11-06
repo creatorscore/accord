@@ -8,7 +8,7 @@ export default function Welcome() {
   const { t } = useTranslation();
   return (
     <LinearGradient
-      colors={['#A78BFA', '#EC4899']}
+      colors={['#A78BFA', '#B8A9DD']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   primaryButtonText: {
-    color: '#7C3AED',
+    color: '#9B87CE',
     fontWeight: 'bold',
     fontSize: 18,
   },

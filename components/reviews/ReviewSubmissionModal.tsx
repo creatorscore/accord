@@ -176,7 +176,7 @@ export default function ReviewSubmissionModal({
             transition={{ type: 'spring' }}
             style={styles.overallCard}
           >
-            <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.overallGradient}>
+            <LinearGradient colors={['#9B87CE', '#9B87CE']} style={styles.overallGradient}>
               <Text style={styles.overallLabel}>{t('reviews.overallRating')}</Text>
               <View style={styles.overallScoreRow}>
                 <Text style={styles.overallScore}>{overallRating}</Text>
@@ -221,7 +221,7 @@ export default function ReviewSubmissionModal({
             onPress={handleSubmit}
             disabled={isSubmitting}
           >
-            <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.submitGradient}>
+            <LinearGradient colors={['#9B87CE', '#9B87CE']} style={styles.submitGradient}>
               {isSubmitting ? (
                 <ActivityIndicator color="#FFF" />
               ) : (
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#8B5CF6',
+    shadowColor: '#9B87CE',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

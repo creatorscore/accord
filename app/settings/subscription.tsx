@@ -113,8 +113,43 @@ export default function SubscriptionManagement() {
         );
       }
     } catch (error: any) {
-      if (!error.userCancelled) {
-        Alert.alert('Purchase Failed', 'Failed to complete purchase. Please try again.');
+      console.error('Purchase error details:', error);
+
+      if (error.userCancelled) {
+        // User cancelled, don't show error
+        return;
+      }
+
+      // Check for Google Play canceled subscription error
+      const errorMessage = error.message || error.toString();
+      const errorCode = error.code || '';
+
+      if (
+        errorMessage.toLowerCase().includes('unable to change') ||
+        errorMessage.toLowerCase().includes('manage subscription') ||
+        errorCode === 'PRODUCT_ALREADY_OWNED' ||
+        errorCode === '7' // Google Play error code for already owned
+      ) {
+        // User has a canceled subscription - guide them to reactivate or switch accounts
+        Alert.alert(
+          'Subscription Already Exists',
+          Platform.OS === 'android'
+            ? 'You have a canceled subscription on your current Google Play account.\n\nOptions:\n\n1. Reactivate your existing subscription in Google Play Settings\n\n2. Use a different Google Play account: Sign out of Google Play on your device, then sign in with a different account and try again'
+            : 'You have a canceled subscription on your current Apple ID.\n\nOptions:\n\n1. Reactivate your existing subscription in App Store Settings\n\n2. Use a different Apple ID: Sign out in Settings > [Your Name], then sign in with a different Apple ID and try again',
+          [
+            { text: 'Got It', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: handleManageSubscription
+            }
+          ]
+        );
+      } else {
+        // Other purchase errors
+        Alert.alert(
+          'Purchase Failed',
+          'Failed to complete purchase. Please try again or contact support if the problem persists.'
+        );
       }
     } finally {
       setLoading(false);
@@ -137,7 +172,7 @@ export default function SubscriptionManagement() {
         title: 'Premium Member',
         description: 'Enhanced features unlocked',
         icon: 'star',
-        color: '#8B5CF6',
+        color: '#9B87CE',
       };
     }
 
@@ -223,7 +258,7 @@ export default function SubscriptionManagement() {
                 onPress={() => setBillingPeriod('monthly')}
                 className="flex-1"
               >
-                <View className={`py-3 rounded-full ${billingPeriod === 'monthly' ? 'bg-purple-600' : 'bg-transparent'}`}>
+                <View className={`py-3 rounded-full ${billingPeriod === 'monthly' ? 'bg-purple-500' : 'bg-transparent'}`}>
                   <Text className={`text-center font-bold ${billingPeriod === 'monthly' ? 'text-white' : 'text-gray-600'}`}>
                     Monthly
                   </Text>
@@ -233,7 +268,7 @@ export default function SubscriptionManagement() {
                 onPress={() => setBillingPeriod('annual')}
                 className="flex-1"
               >
-                <View className={`py-3 rounded-full ${billingPeriod === 'annual' ? 'bg-purple-600' : 'bg-transparent'}`}>
+                <View className={`py-3 rounded-full ${billingPeriod === 'annual' ? 'bg-purple-500' : 'bg-transparent'}`}>
                   <Text className={`text-center font-bold ${billingPeriod === 'annual' ? 'text-white' : 'text-gray-600'}`}>
                     Annual
                     <Text className="text-xs"> (Save 33%)</Text>
@@ -245,7 +280,7 @@ export default function SubscriptionManagement() {
             {/* Premium Plan */}
             <View className="mb-6">
               <View className="flex-row items-center mb-3">
-                <MaterialCommunityIcons name="star" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="star" size={24} color="#9B87CE" />
                 <Text className="text-lg font-bold text-gray-900 ml-2">Premium</Text>
               </View>
 
@@ -312,7 +347,7 @@ export default function SubscriptionManagement() {
                           /{billingPeriod === 'monthly' ? 'month' : 'year'}
                         </Text>
                       </View>
-                      <View className="bg-purple-600 rounded-xl py-4 mb-4">
+                      <View className="bg-purple-500 rounded-xl py-4 mb-4">
                         <Text className="text-white text-center text-lg font-bold">
                           {loading ? 'Processing...' : 'Subscribe to Premium'}
                         </Text>
@@ -447,7 +482,7 @@ export default function SubscriptionManagement() {
 
         {loadingOfferings && (
           <View className="py-8 items-center">
-            <ActivityIndicator size="large" color="#8B5CF6" />
+            <ActivityIndicator size="large" color="#9B87CE" />
             <Text className="text-gray-600 mt-2">Loading plans...</Text>
           </View>
         )}
@@ -503,7 +538,7 @@ export default function SubscriptionManagement() {
                 <MaterialCommunityIcons
                   name={feature.icon as any}
                   size={24}
-                  color={feature.tier === 'platinum' ? '#FFD700' : '#8B5CF6'}
+                  color={feature.tier === 'platinum' ? '#FFD700' : '#9B87CE'}
                 />
                 <Text className="text-gray-800 text-base ml-3 flex-1">{feature.text}</Text>
                 {feature.tier === 'platinum' && (
@@ -526,12 +561,12 @@ export default function SubscriptionManagement() {
           >
             {restoring ? (
               <View className="flex-row items-center justify-center">
-                <ActivityIndicator size="small" color="#8B5CF6" />
+                <ActivityIndicator size="small" color="#9B87CE" />
                 <Text className="text-purple-600 font-bold text-lg ml-2">Restoring...</Text>
               </View>
             ) : (
               <View className="flex-row items-center justify-center">
-                <MaterialCommunityIcons name="restore" size={20} color="#8B5CF6" />
+                <MaterialCommunityIcons name="restore" size={20} color="#9B87CE" />
                 <Text className="text-purple-600 font-bold text-lg ml-2">Restore Purchases</Text>
               </View>
             )}

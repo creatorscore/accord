@@ -266,7 +266,7 @@ export default function MyReviewsScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8B5CF6" />
+          <ActivityIndicator size="large" color="#9B87CE" />
         </View>
       ) : (
         <ScrollView
@@ -282,7 +282,7 @@ export default function MyReviewsScreen() {
               transition={{ type: 'spring' }}
               style={styles.statsCard}
             >
-              <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.statsGradient}>
+              <LinearGradient colors={['#9B87CE', '#9B87CE']} style={styles.statsGradient}>
                 <Text style={styles.statsLabel}>{t('reviews.yourOverallRating')}</Text>
                 <View style={styles.statsRow}>
                   <Text style={styles.statsScore}>{aggregateScore.toFixed(1)}</Text>
@@ -318,7 +318,7 @@ export default function MyReviewsScreen() {
                         />
                       ) : (
                         <View style={[styles.pendingAvatar, styles.pendingAvatarPlaceholder]}>
-                          <MaterialCommunityIcons name="account" size={32} color="#8B5CF6" />
+                          <MaterialCommunityIcons name="account" size={32} color="#9B87CE" />
                         </View>
                       )}
                       <View style={styles.pendingInfo}>
@@ -334,8 +334,8 @@ export default function MyReviewsScreen() {
                           )}
                           {pending.compatibility_score && (
                             <View style={[styles.metaBadge, styles.compatibilityBadge]}>
-                              <MaterialCommunityIcons name="heart" size={12} color="#EC4899" />
-                              <Text style={[styles.metaText, { color: '#EC4899', fontWeight: '600' }]}>
+                              <MaterialCommunityIcons name="heart" size={12} color="#B8A9DD" />
+                              <Text style={[styles.metaText, { color: '#B8A9DD', fontWeight: '600' }]}>
                                 {pending.compatibility_score}% Match
                               </Text>
                             </View>
@@ -422,7 +422,7 @@ export default function MyReviewsScreen() {
                         />
                       ) : (
                         <View style={styles.avatarPlaceholder}>
-                          <MaterialCommunityIcons name="account" size={28} color="#8B5CF6" />
+                          <MaterialCommunityIcons name="account" size={28} color="#9B87CE" />
                         </View>
                       )}
                       <View style={{ flex: 1 }}>
@@ -438,8 +438,8 @@ export default function MyReviewsScreen() {
                           )}
                           {review.compatibility_score && (
                             <View style={[styles.metaBadge, styles.compatibilityBadge]}>
-                              <MaterialCommunityIcons name="heart" size={11} color="#EC4899" />
-                              <Text style={[styles.metaText, { color: '#EC4899', fontWeight: '600' }]}>
+                              <MaterialCommunityIcons name="heart" size={11} color="#B8A9DD" />
+                              <Text style={[styles.metaText, { color: '#B8A9DD', fontWeight: '600' }]}>
                                 {review.compatibility_score}%
                               </Text>
                             </View>
@@ -449,7 +449,7 @@ export default function MyReviewsScreen() {
                     </View>
                     <View style={styles.overallRatingContainer}>
                       <LinearGradient
-                        colors={['#8B5CF6', '#EC4899']}
+                        colors={['#9B87CE', '#B8A9DD']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.ratingBadge}
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
-    shadowColor: '#8B5CF6',
+    shadowColor: '#9B87CE',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -742,7 +742,7 @@ const styles = StyleSheet.create({
   feedbackContainer: {
     backgroundColor: '#F9FAFB',
     borderLeftWidth: 3,
-    borderLeftColor: '#8B5CF6',
+    borderLeftColor: '#9B87CE',
     padding: 14,
     borderRadius: 12,
     marginBottom: 14,
@@ -917,10 +917,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     paddingVertical: 14,
     borderRadius: 12,
-    shadowColor: '#8B5CF6',
+    shadowColor: '#9B87CE',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

@@ -100,7 +100,7 @@ export default function ProfileVoiceNote({
       style={styles.container}
     >
       <LinearGradient
-        colors={['#8B5CF6', '#EC4899']}
+        colors={['#9B87CE', '#B8A9DD']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}

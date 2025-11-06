@@ -97,7 +97,7 @@ export default function MatchModal({
 
           {/* Header */}
           <View className="items-center mb-6">
-            <Text className="text-4xl font-black text-primary-600 mb-2 text-center">
+            <Text className="text-4xl font-black text-primary-500 mb-2 text-center">
               IT'S A MATCH! 🎉
             </Text>
             <Text className="text-gray-600 text-center text-base">
@@ -151,8 +151,8 @@ export default function MatchModal({
           {matchedProfile.compatibility_score && (
             <View className="bg-purple-100 rounded-2xl p-4 mb-6">
               <View className="flex-row items-center justify-center">
-                <MaterialCommunityIcons name="star-circle" size={24} color="#8B5CF6" />
-                <Text className="text-primary-700 font-bold text-lg ml-2">
+                <MaterialCommunityIcons name="star-circle" size={24} color="#9B87CE" />
+                <Text className="text-primary-500 font-bold text-lg ml-2">
                   {matchedProfile.compatibility_score}% Compatible
                 </Text>
               </View>
@@ -199,7 +199,7 @@ export default function MatchModal({
           origin={{ x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT / 2 }}
           autoStart={false}
           fadeOut
-          colors={['#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#EF4444']}
+          colors={['#9B87CE', '#B8A9DD', '#F59E0B', '#10B981', '#3B82F6', '#EF4444']}
           explosionSpeed={350}
           fallSpeed={2500}
         />

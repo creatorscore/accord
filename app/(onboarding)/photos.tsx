@@ -193,7 +193,7 @@ export default function Photos() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 2 of 8</Text>
-            <Text className="text-sm text-primary-600 font-bold">25%</Text>
+            <Text className="text-sm text-primary-500 font-bold">25%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View

@@ -110,7 +110,7 @@ export default function ProfileReviewDisplay({
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#8B5CF6" />
+        <ActivityIndicator size="small" color="#9B87CE" />
       </View>
     );
   }
@@ -142,7 +142,7 @@ export default function ProfileReviewDisplay({
         transition={{ type: 'spring' }}
         style={styles.aggregateCard}
       >
-        <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.aggregateGradient}>
+        <LinearGradient colors={['#9B87CE', '#9B87CE']} style={styles.aggregateGradient}>
           <View style={styles.aggregateHeader}>
             <View>
               <Text style={styles.aggregateLabel}>{t('reviews.overallRating')}</Text>
@@ -192,7 +192,7 @@ export default function ProfileReviewDisplay({
                       <MaterialCommunityIcons
                         name={category.icon as any}
                         size={20}
-                        color="#8B5CF6"
+                        color="#9B87CE"
                       />
                     </View>
                     <Text style={styles.categoryName}>

@@ -103,7 +103,7 @@ export default function SignIn() {
   return (
     <View className="flex-1 bg-cream px-6 pt-16">
       <TouchableOpacity onPress={() => router.back()} className="mb-8">
-        <Text className="text-primary-600 text-lg font-semibold">{t('auth.signIn.backButton')}</Text>
+        <Text className="text-primary-500 text-lg font-semibold">{t('auth.signIn.backButton')}</Text>
       </TouchableOpacity>
 
       <Text className="text-4xl font-bold text-charcoal mb-2">
@@ -138,7 +138,7 @@ export default function SignIn() {
         </View>
 
         <TouchableOpacity
-          className={`bg-primary-600 rounded-full py-4 items-center mt-4 shadow-lg ${
+          className={`bg-primary-500 rounded-full py-4 items-center mt-4 shadow-lg ${
             loading ? 'opacity-50' : ''
           }`}
           onPress={handleSignIn}
@@ -153,7 +153,7 @@ export default function SignIn() {
           className="items-center mt-4"
           onPress={() => router.push('/(auth)/forgot-password')}
         >
-          <Text className="text-primary-600">{t('auth.signIn.forgotPassword')}</Text>
+          <Text className="text-primary-500">{t('auth.signIn.forgotPassword')}</Text>
         </TouchableOpacity>
 
         {/* Divider */}
@@ -191,7 +191,7 @@ export default function SignIn() {
         <View className="flex-row justify-center items-center mt-6">
           <Text className="text-gray-600">{t('auth.signIn.noAccount')}</Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/sign-up')}>
-            <Text className="text-primary-600 font-semibold">{t('auth.signIn.signUpLink')}</Text>
+            <Text className="text-primary-500 font-semibold">{t('auth.signIn.signUpLink')}</Text>
           </TouchableOpacity>
         </View>
       </View>

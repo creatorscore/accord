@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  Keyboard,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
@@ -266,6 +267,7 @@ export default function MatchingPreferences() {
 
   const addCity = () => {
     if (newCity.trim() && !preferences.preferred_cities.includes(newCity.trim())) {
+      Keyboard.dismiss(); // Dismiss keyboard when city is added
       setPreferences((prev) => ({
         ...prev,
         preferred_cities: [...prev.preferred_cities, newCity.trim()],
@@ -293,7 +295,7 @@ export default function MatchingPreferences() {
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8B5CF6" />
+          <ActivityIndicator size="large" color="#9B87CE" />
           <Text style={styles.loadingText}>Loading preferences...</Text>
         </View>
       </View>
@@ -323,7 +325,7 @@ export default function MatchingPreferences() {
             colors={['#F3E8FF', '#E9D5FF']}
             style={styles.infoBannerGradient}
           >
-            <MaterialCommunityIcons name="heart-multiple" size={24} color="#8B5CF6" />
+            <MaterialCommunityIcons name="heart-multiple" size={24} color="#9B87CE" />
             <View style={styles.infoBannerContent}>
               <Text style={styles.infoBannerTitle}>Core Dealbreakers</Text>
               <Text style={styles.infoBannerText}>
@@ -339,7 +341,7 @@ export default function MatchingPreferences() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
-                <MaterialCommunityIcons name="gender-male-female" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="gender-male-female" size={24} color="#9B87CE" />
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>Gender Preference</Text>
@@ -376,7 +378,7 @@ export default function MatchingPreferences() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
-                <MaterialCommunityIcons name="human-male-child" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="human-male-child" size={24} color="#9B87CE" />
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>Do you want children?</Text>
@@ -399,7 +401,7 @@ export default function MatchingPreferences() {
                     name={option.icon as any}
                     size={24}
                     color={
-                      preferences.wants_children === option.value ? '#8B5CF6' : '#6B7280'
+                      preferences.wants_children === option.value ? '#9B87CE' : '#6B7280'
                     }
                   />
                   <Text
@@ -423,7 +425,7 @@ export default function MatchingPreferences() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
-                <MaterialCommunityIcons name="heart-outline" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="heart-outline" size={24} color="#9B87CE" />
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>What type of relationship?</Text>
@@ -463,7 +465,7 @@ export default function MatchingPreferences() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
-                <MaterialCommunityIcons name="calendar-range" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="calendar-range" size={24} color="#9B87CE" />
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>
@@ -483,7 +485,7 @@ export default function MatchingPreferences() {
                 onValueChange={(value) =>
                   setPreferences((prev) => ({ ...prev, age_min: value }))
                 }
-                minimumTrackTintColor="#8B5CF6"
+                minimumTrackTintColor="#9B87CE"
                 maximumTrackTintColor="#E5E7EB"
               />
               <Text style={styles.sliderLabel}>Maximum Age: {preferences.age_max}</Text>
@@ -496,7 +498,7 @@ export default function MatchingPreferences() {
                 onValueChange={(value) =>
                   setPreferences((prev) => ({ ...prev, age_max: value }))
                 }
-                minimumTrackTintColor="#8B5CF6"
+                minimumTrackTintColor="#9B87CE"
                 maximumTrackTintColor="#E5E7EB"
               />
             </View>
@@ -509,7 +511,7 @@ export default function MatchingPreferences() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
-                <MaterialCommunityIcons name="map-marker-distance" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="map-marker-distance" size={24} color="#9B87CE" />
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>
@@ -528,7 +530,7 @@ export default function MatchingPreferences() {
                 onValueChange={(value) =>
                   setPreferences((prev) => ({ ...prev, max_distance_miles: value }))
                 }
-                minimumTrackTintColor="#8B5CF6"
+                minimumTrackTintColor="#9B87CE"
                 maximumTrackTintColor="#E5E7EB"
               />
             </View>
@@ -546,13 +548,13 @@ export default function MatchingPreferences() {
                   setPreferences((prev) => ({ ...prev, willing_to_relocate: value }))
                 }
                 trackColor={{ false: '#D1D5DB', true: '#A78BFA' }}
-                thumbColor={preferences.willing_to_relocate ? '#8B5CF6' : '#F3F4F6'}
+                thumbColor={preferences.willing_to_relocate ? '#9B87CE' : '#F3F4F6'}
               />
             </View>
 
             <View style={styles.switchRow}>
               <View style={styles.switchContent}>
-                <MaterialCommunityIcons name="earth" size={20} color="#8B5CF6" style={{ marginRight: 8 }} />
+                <MaterialCommunityIcons name="earth" size={20} color="#9B87CE" style={{ marginRight: 8 }} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.switchTitle}>Search globally</Text>
                   <Text style={styles.switchDescription}>
@@ -566,7 +568,7 @@ export default function MatchingPreferences() {
                   setPreferences((prev) => ({ ...prev, search_globally: value }))
                 }
                 trackColor={{ false: '#D1D5DB', true: '#A78BFA' }}
-                thumbColor={preferences.search_globally ? '#8B5CF6' : '#F3F4F6'}
+                thumbColor={preferences.search_globally ? '#9B87CE' : '#F3F4F6'}
               />
             </View>
           </View>
@@ -578,7 +580,7 @@ export default function MatchingPreferences() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
-                <MaterialCommunityIcons name="city-variant" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="city-variant" size={24} color="#9B87CE" />
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>Preferred Cities</Text>
@@ -622,7 +624,7 @@ export default function MatchingPreferences() {
                       ]}
                       onPress={() => selectCity(city)}
                     >
-                      <MaterialCommunityIcons name="map-marker" size={18} color="#8B5CF6" />
+                      <MaterialCommunityIcons name="map-marker" size={18} color="#9B87CE" />
                       <Text style={styles.suggestionText}>{city}</Text>
                     </TouchableOpacity>
                   ))}
@@ -635,7 +637,7 @@ export default function MatchingPreferences() {
               <View style={styles.cityChipsContainer}>
                 {preferences.preferred_cities.map((city) => (
                   <View key={city} style={styles.cityChip}>
-                    <MaterialCommunityIcons name="map-marker" size={16} color="#8B5CF6" />
+                    <MaterialCommunityIcons name="map-marker" size={16} color="#9B87CE" />
                     <Text style={styles.cityChipText}>{city}</Text>
                     <TouchableOpacity onPress={() => removeCity(city)} style={styles.removeCityButton}>
                       <MaterialCommunityIcons name="close-circle" size={18} color="#6B7280" />
@@ -664,7 +666,7 @@ export default function MatchingPreferences() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
-                <MaterialCommunityIcons name="smoking" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="smoking" size={24} color="#9B87CE" />
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>Smoking</Text>
@@ -679,7 +681,7 @@ export default function MatchingPreferences() {
                     paddingVertical: 10,
                     borderRadius: 20,
                     borderWidth: 1,
-                    borderColor: preferences.lifestyle_preferences?.smoking === option.value ? '#8B5CF6' : '#D1D5DB',
+                    borderColor: preferences.lifestyle_preferences?.smoking === option.value ? '#9B87CE' : '#D1D5DB',
                     backgroundColor: preferences.lifestyle_preferences?.smoking === option.value ? '#F3E8FF' : '#fff',
                   }}
                   onPress={() =>
@@ -694,7 +696,7 @@ export default function MatchingPreferences() {
                 >
                   <Text
                     style={{
-                      color: preferences.lifestyle_preferences?.smoking === option.value ? '#8B5CF6' : '#6B7280',
+                      color: preferences.lifestyle_preferences?.smoking === option.value ? '#9B87CE' : '#6B7280',
                       fontWeight: preferences.lifestyle_preferences?.smoking === option.value ? '600' : '400',
                     }}
                   >
@@ -709,7 +711,7 @@ export default function MatchingPreferences() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
-                <MaterialCommunityIcons name="glass-cocktail" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="glass-cocktail" size={24} color="#9B87CE" />
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>Drinking</Text>
@@ -724,7 +726,7 @@ export default function MatchingPreferences() {
                     paddingVertical: 10,
                     borderRadius: 20,
                     borderWidth: 1,
-                    borderColor: preferences.lifestyle_preferences?.drinking === option.value ? '#8B5CF6' : '#D1D5DB',
+                    borderColor: preferences.lifestyle_preferences?.drinking === option.value ? '#9B87CE' : '#D1D5DB',
                     backgroundColor: preferences.lifestyle_preferences?.drinking === option.value ? '#F3E8FF' : '#fff',
                   }}
                   onPress={() =>
@@ -739,7 +741,7 @@ export default function MatchingPreferences() {
                 >
                   <Text
                     style={{
-                      color: preferences.lifestyle_preferences?.drinking === option.value ? '#8B5CF6' : '#6B7280',
+                      color: preferences.lifestyle_preferences?.drinking === option.value ? '#9B87CE' : '#6B7280',
                       fontWeight: preferences.lifestyle_preferences?.drinking === option.value ? '600' : '400',
                     }}
                   >
@@ -754,7 +756,7 @@ export default function MatchingPreferences() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
-                <MaterialCommunityIcons name="paw" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="paw" size={24} color="#9B87CE" />
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>Pets</Text>
@@ -769,7 +771,7 @@ export default function MatchingPreferences() {
                     paddingVertical: 10,
                     borderRadius: 20,
                     borderWidth: 1,
-                    borderColor: preferences.lifestyle_preferences?.pets === option.value ? '#8B5CF6' : '#D1D5DB',
+                    borderColor: preferences.lifestyle_preferences?.pets === option.value ? '#9B87CE' : '#D1D5DB',
                     backgroundColor: preferences.lifestyle_preferences?.pets === option.value ? '#F3E8FF' : '#fff',
                   }}
                   onPress={() =>
@@ -784,7 +786,7 @@ export default function MatchingPreferences() {
                 >
                   <Text
                     style={{
-                      color: preferences.lifestyle_preferences?.pets === option.value ? '#8B5CF6' : '#6B7280',
+                      color: preferences.lifestyle_preferences?.pets === option.value ? '#9B87CE' : '#6B7280',
                       fontWeight: preferences.lifestyle_preferences?.pets === option.value ? '600' : '400',
                     }}
                   >
@@ -959,8 +961,8 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   chipSelected: {
-    backgroundColor: '#8B5CF6',
-    borderColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
+    borderColor: '#9B87CE',
   },
   chipText: {
     fontSize: 14,
@@ -989,7 +991,7 @@ const styles = StyleSheet.create({
   },
   optionButtonSelected: {
     backgroundColor: '#F3E8FF',
-    borderColor: '#8B5CF6',
+    borderColor: '#9B87CE',
   },
   optionButtonText: {
     fontSize: 14,
@@ -997,7 +999,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   optionButtonTextSelected: {
-    color: '#8B5CF6',
+    color: '#9B87CE',
   },
   sliderContainer: {
     gap: 8,
@@ -1052,7 +1054,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     paddingVertical: 16,
     borderRadius: 12,
     gap: 8,
@@ -1084,7 +1086,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     alignItems: 'center',
     justifyContent: 'center',
   },

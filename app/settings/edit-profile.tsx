@@ -12,6 +12,7 @@ import {
   Platform,
   ActivityIndicator,
   Modal,
+  Pressable,
 } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import { Audio } from 'expo-av';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { optimizeImage, uriToArrayBuffer, validateImage } from '@/lib/image-optimization';
 
 interface Photo {
   id?: string;
@@ -377,37 +379,6 @@ export default function EditProfile() {
   }, []);
 
   const loadProfile = async () => {
-    // Helper function to safely parse array fields and prevent nested array corruption
-    const safeParseArray = (value: any): string[] => {
-      if (!value) return [];
-
-      // If it's already a clean array, return it
-      if (Array.isArray(value)) {
-        // Check if array contains nested stringified arrays (corruption detection)
-        const filtered = value.filter(item => typeof item === 'string' && !item.startsWith('["'));
-        return filtered.length > 0 ? filtered : value;
-      }
-
-      // If it's a string, try to parse it as JSON first
-      if (typeof value === 'string') {
-        // Check if it looks like a JSON array
-        if (value.startsWith('[') && value.endsWith(']')) {
-          try {
-            const parsed = JSON.parse(value);
-            if (Array.isArray(parsed)) {
-              return parsed.filter(item => typeof item === 'string');
-            }
-          } catch (e) {
-            console.warn('Failed to parse array string:', value);
-          }
-        }
-        // If not JSON or parsing failed, treat as single value
-        return [value];
-      }
-
-      return [];
-    };
-
     try {
       // Load profile data
       const { data: profileData, error: profileError} = await supabase
@@ -466,10 +437,10 @@ export default function EditProfile() {
         setLocationCity(profileData.location_city || '');
         setLocationState(profileData.location_state || '');
 
-        setGender(safeParseArray(profileData.gender));
+        setGender(profileData.gender || []);
         setPronouns(profileData.pronouns || '');
-        setEthnicity(safeParseArray(profileData.ethnicity));
-        setSexualOrientation(safeParseArray(profileData.sexual_orientation));
+        setEthnicity(profileData.ethnicity || []);
+        setSexualOrientation(profileData.sexual_orientation || []);
 
         // Convert height_inches to feet and inches
         if (profileData.height_inches) {
@@ -517,7 +488,9 @@ export default function EditProfile() {
           setHobbies([]);
         }
 
-        setLoveLanguage(profileData.love_language || '');
+        // love_language is now a TEXT[] array, take first element if present
+        const loveLanguageArray = profileData.love_language || [];
+        setLoveLanguage(Array.isArray(loveLanguageArray) && loveLanguageArray.length > 0 ? loveLanguageArray[0] : '');
 
         if (profileData.languages_spoken && Array.isArray(profileData.languages_spoken)) {
           setLanguagesSpoken(profileData.languages_spoken);
@@ -547,9 +520,9 @@ export default function EditProfile() {
             setPrimaryReason(prefsData.primary_reason || '');
             setRelationshipType(prefsData.relationship_type || '');
             setWantsChildren(prefsData.wants_children);
-            setChildrenArrangement(safeParseArray(prefsData.children_arrangement));
-            setFinancialArrangement(safeParseArray(prefsData.financial_arrangement));
-            setHousingPreference(safeParseArray(prefsData.housing_preference));
+            setChildrenArrangement(prefsData.children_arrangement || []);
+            setFinancialArrangement(prefsData.financial_arrangement || []);
+            setHousingPreference(prefsData.housing_preference || []);
             setAgeMin(prefsData.age_min?.toString() || '25');
             setAgeMax(prefsData.age_max?.toString() || '45');
             setMaxDistance(prefsData.max_distance_miles?.toString() || '50');
@@ -611,8 +584,24 @@ export default function EditProfile() {
     });
 
     if (!result.canceled && result.assets[0]) {
+      const selectedUri = result.assets[0].uri;
+
+      // Validate image before processing
+      const validation = await validateImage(selectedUri);
+      if (!validation.isValid) {
+        Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
+        return;
+      }
+
+      // Optimize image with compression
+      const { optimized } = await optimizeImage(selectedUri, {
+        generateThumbnail: true,
+      });
+
+      console.log(`Optimized profile image: ${(optimized.size! / 1024).toFixed(0)}KB`);
+
       const newPhoto: Photo = {
-        url: result.assets[0].uri,
+        url: optimized.uri,
         is_primary: activePhotos.length === 0,
         display_order: activePhotos.length,
         is_new: true,
@@ -832,16 +821,16 @@ export default function EditProfile() {
         education,
         location_city: locationCity,
         location_state: locationState,
-        gender,
+        gender: gender.length > 0 ? gender : null,
         pronouns,
-        ethnicity: ethnicity || null,
-        sexual_orientation: sexualOrientation,
+        ethnicity: ethnicity.length > 0 ? ethnicity : null,
+        sexual_orientation: sexualOrientation.length > 0 ? sexualOrientation : null,
         height_inches: totalHeightInches,
         personality_type: personality,
         prompt_answers: validPromptAnswers.length > 0 ? validPromptAnswers : null,
         interests: interests.length > 0 ? interests : null,
         hobbies: hobbies.length > 0 ? hobbies : null,
-        love_language: loveLanguage || null,
+        love_language: loveLanguage ? [loveLanguage] : null,
         languages_spoken: languagesSpoken.length > 0 ? languagesSpoken : null,
         my_story: myStory || null,
         religion: religion || null,
@@ -900,18 +889,17 @@ export default function EditProfile() {
       for (const photo of photosToUpload) {
         try {
           // Get file extension
-          const fileExt = photo.url.split('.').pop()?.toLowerCase() || 'jpg';
+          const fileExt = 'jpg'; // Always use jpg since we optimized as JPEG
           const fileName = `${finalProfileId}/${Date.now()}_${photo.display_order}.${fileExt}`;
 
-          // Fetch the image and convert to ArrayBuffer
-          const response = await fetch(photo.url);
-          const arrayBuffer = await response.arrayBuffer();
+          // Convert optimized image to ArrayBuffer
+          const arrayBuffer = await uriToArrayBuffer(photo.url);
 
           // Upload to Supabase Storage
           const { error: uploadError } = await supabase.storage
             .from('profile-photos')
             .upload(fileName, arrayBuffer, {
-              contentType: `image/${fileExt}`,
+              contentType: 'image/jpeg',
               upsert: false
             });
 
@@ -1056,7 +1044,7 @@ export default function EditProfile() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8B5CF6" />
+        <ActivityIndicator size="large" color="#9B87CE" />
       </View>
     );
   }
@@ -1067,7 +1055,7 @@ export default function EditProfile() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <LinearGradient
-        colors={['#8B5CF6', '#EC4899']}
+        colors={['#9B87CE', '#B8A9DD']}
         style={styles.header}
       >
         <TouchableOpacity onPress={() => router.back()}>
@@ -1150,7 +1138,7 @@ export default function EditProfile() {
 
             {photos.filter(p => !p.to_delete).length < 6 && (
               <TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
-                <MaterialCommunityIcons name="camera-plus" size={32} color="#8B5CF6" />
+                <MaterialCommunityIcons name="camera-plus" size={32} color="#9B87CE" />
                 <Text style={styles.addPhotoText}>Add Photo</Text>
               </TouchableOpacity>
             )}
@@ -1229,7 +1217,7 @@ export default function EditProfile() {
                           onPress={() => setSelectedMonth(index)}
                         >
                           <Text style={{
-                            color: selectedMonth === index ? '#8B5CF6' : '#374151',
+                            color: selectedMonth === index ? '#9B87CE' : '#374151',
                             fontWeight: selectedMonth === index ? 'bold' : 'normal'
                           }}>
                             {month}
@@ -1257,7 +1245,7 @@ export default function EditProfile() {
                           onPress={() => setSelectedDay(day)}
                         >
                           <Text style={{
-                            color: selectedDay === day ? '#8B5CF6' : '#374151',
+                            color: selectedDay === day ? '#9B87CE' : '#374151',
                             fontWeight: selectedDay === day ? 'bold' : 'normal'
                           }}>
                             {day}
@@ -1285,7 +1273,7 @@ export default function EditProfile() {
                           onPress={() => setSelectedYear(year)}
                         >
                           <Text style={{
-                            color: selectedYear === year ? '#8B5CF6' : '#374151',
+                            color: selectedYear === year ? '#9B87CE' : '#374151',
                             fontWeight: selectedYear === year ? 'bold' : 'normal'
                           }}>
                             {year}
@@ -1302,7 +1290,7 @@ export default function EditProfile() {
                     borderRadius: 16,
                     paddingVertical: 16,
                     alignItems: 'center',
-                    backgroundColor: (selectedMonth !== null && selectedDay !== null && selectedYear !== null) ? '#8B5CF6' : '#D1D5DB'
+                    backgroundColor: (selectedMonth !== null && selectedDay !== null && selectedYear !== null) ? '#9B87CE' : '#D1D5DB'
                   }}
                   onPress={handleDateConfirm}
                   disabled={selectedMonth === null || selectedDay === null || selectedYear === null}
@@ -1325,7 +1313,7 @@ export default function EditProfile() {
                   key={g}
                   style={[
                     styles.interestChip,
-                    gender.includes(g) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    gender.includes(g) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => {
                     if (gender.includes(g)) {
@@ -1343,7 +1331,7 @@ export default function EditProfile() {
               ))}
             </View>
             {gender.length > 0 && (
-              <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
                 Selected: {gender.join(', ')}
               </Text>
             )}
@@ -1357,7 +1345,7 @@ export default function EditProfile() {
                   key={p}
                   style={[
                     styles.interestChip,
-                    pronouns === p && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    pronouns === p && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => setPronouns(p)}
                 >
@@ -1379,7 +1367,7 @@ export default function EditProfile() {
                   key={e}
                   style={[
                     styles.interestChip,
-                    ethnicity.includes(e) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    ethnicity.includes(e) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => {
                     if (ethnicity.includes(e)) {
@@ -1397,7 +1385,7 @@ export default function EditProfile() {
               ))}
             </View>
             {ethnicity.length > 0 && (
-              <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
                 Selected: {ethnicity.join(', ')}
               </Text>
             )}
@@ -1412,7 +1400,7 @@ export default function EditProfile() {
                   key={o}
                   style={[
                     styles.interestChip,
-                    sexualOrientation.includes(o) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    sexualOrientation.includes(o) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => {
                     if (sexualOrientation.includes(o)) {
@@ -1430,7 +1418,7 @@ export default function EditProfile() {
               ))}
             </View>
             {sexualOrientation.length > 0 && (
-              <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
                 Selected: {sexualOrientation.join(', ')}
               </Text>
             )}
@@ -1474,7 +1462,7 @@ export default function EditProfile() {
                   key={type}
                   style={[
                     styles.interestChip,
-                    personality === type && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    personality === type && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => setPersonality(type)}
                 >
@@ -1550,7 +1538,7 @@ export default function EditProfile() {
                   key={lang}
                   style={[
                     styles.interestChip,
-                    loveLanguage === lang && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    loveLanguage === lang && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => setLoveLanguage(lang)}
                 >
@@ -1571,7 +1559,7 @@ export default function EditProfile() {
                   key={rel}
                   style={[
                     styles.interestChip,
-                    religion === rel && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    religion === rel && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => setReligion(rel)}
                 >
@@ -1592,7 +1580,7 @@ export default function EditProfile() {
                   key={view}
                   style={[
                     styles.interestChip,
-                    politicalViews === view && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    politicalViews === view && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => setPoliticalViews(view)}
                 >
@@ -1648,7 +1636,7 @@ export default function EditProfile() {
                 onPress={() => removeHobby(index)}
               >
                 <Text style={styles.interestText}>{hobby}</Text>
-                <MaterialCommunityIcons name="close" size={16} color="#8B5CF6" />
+                <MaterialCommunityIcons name="close" size={16} color="#9B87CE" />
               </TouchableOpacity>
             ))}
           </View>
@@ -1664,7 +1652,7 @@ export default function EditProfile() {
                 onSubmitEditing={addHobby}
               />
               <TouchableOpacity style={styles.addButton} onPress={addHobby}>
-                <MaterialCommunityIcons name="plus" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="plus" size={24} color="#9B87CE" />
               </TouchableOpacity>
             </View>
           )}
@@ -1683,7 +1671,7 @@ export default function EditProfile() {
                 onPress={() => removeInterest(index)}
               >
                 <Text style={styles.interestText}>{interest}</Text>
-                <MaterialCommunityIcons name="close" size={16} color="#8B5CF6" />
+                <MaterialCommunityIcons name="close" size={16} color="#9B87CE" />
               </TouchableOpacity>
             ))}
           </View>
@@ -1699,7 +1687,7 @@ export default function EditProfile() {
                 onSubmitEditing={addInterest}
               />
               <TouchableOpacity style={styles.addButton} onPress={addInterest}>
-                <MaterialCommunityIcons name="plus" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="plus" size={24} color="#9B87CE" />
               </TouchableOpacity>
             </View>
           )}
@@ -1718,7 +1706,7 @@ export default function EditProfile() {
                 onPress={() => removeLanguage(index)}
               >
                 <Text style={styles.interestText}>{language}</Text>
-                <MaterialCommunityIcons name="close" size={16} color="#8B5CF6" />
+                <MaterialCommunityIcons name="close" size={16} color="#9B87CE" />
               </TouchableOpacity>
             ))}
           </View>
@@ -1754,7 +1742,7 @@ export default function EditProfile() {
             <MaterialCommunityIcons
               name={isRecording ? "stop" : "microphone"}
               size={32}
-              color={isRecording ? "#EF4444" : "#8B5CF6"}
+              color={isRecording ? "#EF4444" : "#9B87CE"}
             />
             <Text style={[styles.voiceButtonText, isRecording && { color: '#EF4444' }]}>
               {isRecording ? "Stop Recording" : voiceIntroUrl ? "Re-record Voice Intro" : "Record Voice Intro"}
@@ -1812,7 +1800,7 @@ export default function EditProfile() {
                 <Text style={pa.prompt ? styles.promptText : styles.promptPlaceholder}>
                   {pa.prompt || 'Select a prompt...'}
                 </Text>
-                <MaterialCommunityIcons name="chevron-down" size={20} color="#8B5CF6" />
+                <MaterialCommunityIcons name="chevron-down" size={20} color="#9B87CE" />
               </TouchableOpacity>
 
               {pa.prompt && (
@@ -1844,7 +1832,7 @@ export default function EditProfile() {
                   key={option.value}
                   style={[
                     styles.interestChip,
-                    smoking === option.value && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    smoking === option.value && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => setSmoking(option.value)}
                 >
@@ -1865,7 +1853,7 @@ export default function EditProfile() {
                   key={option.value}
                   style={[
                     styles.interestChip,
-                    drinking === option.value && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    drinking === option.value && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => setDrinking(option.value)}
                 >
@@ -1886,7 +1874,7 @@ export default function EditProfile() {
                   key={option.value}
                   style={[
                     styles.interestChip,
-                    pets === option.value && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    pets === option.value && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => setPets(option.value)}
                 >
@@ -1913,7 +1901,7 @@ export default function EditProfile() {
                   key={reason}
                   style={[
                     styles.interestChip,
-                    primaryReason === reason && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    primaryReason === reason && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => setPrimaryReason(reason)}
                 >
@@ -1934,7 +1922,7 @@ export default function EditProfile() {
                   key={type}
                   style={[
                     styles.interestChip,
-                    relationshipType === type && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    relationshipType === type && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => setRelationshipType(type)}
                 >
@@ -1951,22 +1939,22 @@ export default function EditProfile() {
             <Text style={styles.inputLabel}>Children</Text>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity
-                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === true && { backgroundColor: '#E9D5FF', borderColor: '#8B5CF6' }]}
+                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === true && { backgroundColor: '#E9D5FF', borderColor: '#9B87CE' }]}
                 onPress={() => setWantsChildren(true)}
               >
-                <Text style={{ color: wantsChildren === true ? '#8B5CF6' : '#6B7280', fontWeight: wantsChildren === true ? '600' : '400' }}>Yes</Text>
+                <Text style={{ color: wantsChildren === true ? '#9B87CE' : '#6B7280', fontWeight: wantsChildren === true ? '600' : '400' }}>Yes</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === false && { backgroundColor: '#E9D5FF', borderColor: '#8B5CF6' }]}
+                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === false && { backgroundColor: '#E9D5FF', borderColor: '#9B87CE' }]}
                 onPress={() => setWantsChildren(false)}
               >
-                <Text style={{ color: wantsChildren === false ? '#8B5CF6' : '#6B7280', fontWeight: wantsChildren === false ? '600' : '400' }}>No</Text>
+                <Text style={{ color: wantsChildren === false ? '#9B87CE' : '#6B7280', fontWeight: wantsChildren === false ? '600' : '400' }}>No</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === null && { backgroundColor: '#E9D5FF', borderColor: '#8B5CF6' }]}
+                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === null && { backgroundColor: '#E9D5FF', borderColor: '#9B87CE' }]}
                 onPress={() => setWantsChildren(null)}
               >
-                <Text style={{ color: wantsChildren === null ? '#8B5CF6' : '#6B7280', fontWeight: wantsChildren === null ? '600' : '400' }}>Open</Text>
+                <Text style={{ color: wantsChildren === null ? '#9B87CE' : '#6B7280', fontWeight: wantsChildren === null ? '600' : '400' }}>Open</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1981,7 +1969,7 @@ export default function EditProfile() {
                     key={arr}
                     style={[
                       styles.interestChip,
-                      childrenArrangement.includes(arr) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                      childrenArrangement.includes(arr) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                     ]}
                     onPress={() => {
                       if (childrenArrangement.includes(arr)) {
@@ -1999,7 +1987,7 @@ export default function EditProfile() {
                 ))}
               </View>
               {childrenArrangement.length > 0 && (
-                <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+                <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
                   Selected: {childrenArrangement.join(', ')}
                 </Text>
               )}
@@ -2015,7 +2003,7 @@ export default function EditProfile() {
                   key={arr}
                   style={[
                     styles.interestChip,
-                    financialArrangement.includes(arr) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    financialArrangement.includes(arr) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => {
                     if (financialArrangement.includes(arr)) {
@@ -2033,7 +2021,7 @@ export default function EditProfile() {
               ))}
             </View>
             {financialArrangement.length > 0 && (
-              <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
                 Selected: {financialArrangement.join(', ')}
               </Text>
             )}
@@ -2048,7 +2036,7 @@ export default function EditProfile() {
                   key={pref}
                   style={[
                     styles.interestChip,
-                    housingPreference.includes(pref) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    housingPreference.includes(pref) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => {
                     if (housingPreference.includes(pref)) {
@@ -2066,7 +2054,7 @@ export default function EditProfile() {
               ))}
             </View>
             {housingPreference.length > 0 && (
-              <Text style={{ fontSize: 12, color: '#8B5CF6', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
                 Selected: {housingPreference.join(', ')}
               </Text>
             )}
@@ -2113,7 +2101,7 @@ export default function EditProfile() {
                   key={gender}
                   style={[
                     styles.interestChip,
-                    genderPreference.includes(gender) && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }
+                    genderPreference.includes(gender) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
                   onPress={() => toggleGenderPreference(gender)}
                 >
@@ -2148,8 +2136,8 @@ export default function EditProfile() {
                 height: 24,
                 borderRadius: 6,
                 borderWidth: 2,
-                borderColor: willingToRelocate ? '#8B5CF6' : '#D1D5DB',
-                backgroundColor: willingToRelocate ? '#8B5CF6' : 'transparent',
+                borderColor: willingToRelocate ? '#9B87CE' : '#D1D5DB',
+                backgroundColor: willingToRelocate ? '#9B87CE' : 'transparent',
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
@@ -2193,7 +2181,7 @@ export default function EditProfile() {
                 onSubmitEditing={addDealbreaker}
               />
               <TouchableOpacity style={styles.addButton} onPress={addDealbreaker}>
-                <MaterialCommunityIcons name="plus" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="plus" size={24} color="#9B87CE" />
               </TouchableOpacity>
             </View>
           )}
@@ -2228,7 +2216,7 @@ export default function EditProfile() {
                 onSubmitEditing={addMustHave}
               />
               <TouchableOpacity style={styles.addButton} onPress={addMustHave}>
-                <MaterialCommunityIcons name="plus" size={24} color="#8B5CF6" />
+                <MaterialCommunityIcons name="plus" size={24} color="#9B87CE" />
               </TouchableOpacity>
             </View>
           )}
@@ -2249,7 +2237,7 @@ export default function EditProfile() {
             disabled={saving}
           >
             <LinearGradient
-              colors={['#8B5CF6', '#EC4899']}
+              colors={['#9B87CE', '#B8A9DD']}
               style={styles.actionButtonGradient}
             >
               <MaterialCommunityIcons name="content-save" size={20} color="white" />
@@ -2278,14 +2266,14 @@ export default function EditProfile() {
               education,
               location_city: locationCity,
               location_state: locationState,
-              gender,
+              gender: gender.length > 0 ? gender : null,
               pronouns,
-              ethnicity,
-              sexual_orientation: sexualOrientation,
+              ethnicity: ethnicity.length > 0 ? ethnicity : null,
+              sexual_orientation: sexualOrientation.length > 0 ? sexualOrientation : null,
               height_inches: totalHeightInches,
               zodiac_sign: calculatedZodiac,
               personality_type: personality,
-              love_language: loveLanguage,
+              love_language: loveLanguage ? [loveLanguage] : null,
               languages_spoken: languagesSpoken.length > 0 ? languagesSpoken : null,
               religion,
               political_views: politicalViews,
@@ -2329,7 +2317,7 @@ export default function EditProfile() {
             });
           }}
         >
-              <MaterialCommunityIcons name="eye" size={20} color="#8B5CF6" />
+              <MaterialCommunityIcons name="eye" size={20} color="#9B87CE" />
               <Text style={styles.previewButtonText}>Live Preview</Text>
             </TouchableOpacity>
           </View>
@@ -2347,9 +2335,27 @@ export default function EditProfile() {
           setCustomPromptText('');
         }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Write your own prompt</Text>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            setShowCustomPromptInput(null);
+            setCustomPromptText('');
+          }}
+        >
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            {/* Header with Close Button */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Write your own prompt</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowCustomPromptInput(null);
+                  setCustomPromptText('');
+                }}
+                style={styles.modalCloseButton}
+              >
+                <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
 
             <TextInput
               style={styles.customPromptInput}
@@ -2390,8 +2396,8 @@ export default function EditProfile() {
                 ]}>Save</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -2482,7 +2488,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     left: 8,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -2505,7 +2511,7 @@ const styles = StyleSheet.create({
   },
   addPhotoText: {
     fontSize: 14,
-    color: '#8B5CF6',
+    color: '#9B87CE',
     marginTop: 8,
   },
   inputGroup: {
@@ -2578,7 +2584,7 @@ const styles = StyleSheet.create({
   },
   interestText: {
     fontSize: 14,
-    color: '#8B5CF6',
+    color: '#9B87CE',
     fontWeight: '500',
   },
   addInterestContainer: {
@@ -2611,7 +2617,7 @@ const styles = StyleSheet.create({
   voiceButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#8B5CF6',
+    color: '#9B87CE',
   },
   voiceStatus: {
     flexDirection: 'row',
@@ -2637,7 +2643,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   savePreviewButton: {
-    shadowColor: '#8B5CF6',
+    shadowColor: '#9B87CE',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2662,13 +2668,13 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 16,
     borderWidth: 2,
-    borderColor: '#8B5CF6',
+    borderColor: '#9B87CE',
     backgroundColor: 'white',
   },
   previewButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#8B5CF6',
+    color: '#9B87CE',
   },
   modalOverlay: {
     flex: 1,
@@ -2684,12 +2690,21 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
   },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 16,
-    textAlign: 'center',
+    flex: 1,
+  },
+  modalCloseButton: {
+    padding: 4,
+    marginLeft: 8,
   },
   customPromptInput: {
     borderWidth: 1,
@@ -2722,7 +2737,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   modalSaveButton: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#9B87CE',
   },
   modalButtonDisabled: {
     backgroundColor: '#E5E7EB',

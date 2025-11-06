@@ -221,7 +221,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (error) {
       console.error('❌ Error syncing subscription to database:', error);
     }
-  }, [user, isPremium, isPlatinum, subscriptionTier]);
+  }, [user, customerInfo, dbPremiumStatus, dbPlatinumStatus, isDatabaseOnlyMode]);
 
   // In database-only mode (dev), use database status exclusively
   // In production, use RevenueCat OR database (database as fallback)

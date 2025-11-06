@@ -235,7 +235,7 @@ export default function VoiceIntro() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 6 of 7</Text>
-            <Text className="text-sm text-primary-600 font-bold">86%</Text>
+            <Text className="text-sm text-primary-500 font-bold">86%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
@@ -324,7 +324,7 @@ export default function VoiceIntro() {
         {/* Tips */}
         <View className="bg-pink-50 border-2 border-pink-200 rounded-3xl p-5 mb-8">
           <View className="flex-row items-center mb-3">
-            <MaterialCommunityIcons name="lightbulb-on" size={24} color="#EC4899" />
+            <MaterialCommunityIcons name="lightbulb-on" size={24} color="#B8A9DD" />
             <Text className="text-pink-900 font-bold text-lg ml-2">Recording Tips</Text>
           </View>
           <Text className="text-pink-800 text-sm mb-2">

@@ -45,7 +45,7 @@ export default function ProfileInteractiveSection({
               <MaterialCommunityIcons
                 name="chevron-down"
                 size={24}
-                color="#8B5CF6"
+                color="#9B87CE"
               />
             </MotiView>
           )}
@@ -71,7 +71,7 @@ export default function ProfileInteractiveSection({
                     <MaterialCommunityIcons
                       name={item.icon as any}
                       size={20}
-                      color="#8B5CF6"
+                      color="#9B87CE"
                     />
                   </View>
                 )}
@@ -102,9 +102,15 @@ export default function ProfileInteractiveSection({
           animate={{ opacity: 1 }}
           transition={{ type: 'timing', duration: 300 }}
         >
-          <Text style={styles.moreText}>
-            +{items.length - 3} more
-          </Text>
+          <TouchableOpacity
+            onPress={() => setExpanded(true)}
+            activeOpacity={0.7}
+            style={styles.moreButton}
+          >
+            <Text style={styles.moreText}>
+              +{items.length - 3} more
+            </Text>
+          </TouchableOpacity>
         </MotiView>
       )}
     </MotiView>
@@ -179,9 +185,12 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 2,
   },
+  moreButton: {
+    paddingVertical: 8,
+  },
   moreText: {
     fontSize: 14,
-    color: '#8B5CF6',
+    color: '#9B87CE',
     fontWeight: '600',
     textAlign: 'center',
     marginTop: 8,
