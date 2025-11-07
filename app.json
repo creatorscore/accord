@@ -47,12 +47,6 @@
         ]
       },
       "privacyManifests": {
-        "NSPrivacyAccessedAPITypes": [
-          {
-            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryLocationAlways",
-            "NSPrivacyAccessedAPITypeReasons": ["DDA9.1"]
-          }
-        ],
         "NSPrivacyTracking": false,
         "NSPrivacyTrackingDomains": [],
         "NSPrivacyCollectedDataTypes": [
