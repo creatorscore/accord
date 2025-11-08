@@ -1,28 +1,31 @@
 /**
- * Accord Compatibility Matching Algorithm (Enhanced - OkCupid-Inspired)
+ * Accord Compatibility Matching Algorithm - Lavender Marriage Edition
  *
- * This comprehensive matching algorithm uses ALL onboarding fields to calculate
- * deep compatibility between users, inspired by OkCupid's highly successful
- * matching system that considers cultural interests, values, and lifestyle.
+ * This algorithm calculates compatibility for LAVENDER MARRIAGES - marriages of
+ * convenience between LGBTQ+ individuals. Unlike traditional dating apps, this
+ * algorithm prioritizes PRACTICAL COMPATIBILITY over romantic attraction.
  *
- * WEIGHT DISTRIBUTION:
- * - Location & Distance: 20%
- * - Marriage Goals & Preferences: 25%
- * - Lifestyle & Values: 20%
- * - Personality & Interests: 20% (ENHANCED with media interests)
- * - Demographics: 10%
- * - Sexual Orientation & Identity: 5% (NEW)
+ * WEIGHT DISTRIBUTION (Optimized for Lavender Marriages):
+ * - Marriage Goals & Practical Arrangements: 35% (PRIMARY FACTOR)
+ * - Lifestyle & Values: 25% (Daily life compatibility)
+ * - Location & Distance: 20% (Logistics)
+ * - Demographics (Age/Gender Preferences): 15% (Basic compatibility)
+ * - Personality & Interests: 5% (Nice to have, but not critical)
  *
- * WHAT'S NEW (Enhanced Features):
- * ✅ Media Interests Matching (movies, music, books, TV shows)
- *    - OkCupid's secret sauce: shared cultural interests predict compatibility
- * ✅ Sexual Orientation Compatibility (lesbian, gay, bi, queer, pan, ace, etc.)
- * ✅ Pronouns Respect & Compatibility (he/him, she/her, they/them, etc.)
- * ✅ Lifestyle Preferences (smoking, drinking, pets compatibility)
- * ✅ Bio/Story Keyword Analysis (shared themes and values)
- * ✅ Children Arrangement Compatibility (biological, adoption, foster, etc.)
- * ✅ Multi-City & Global Search Support
- * ✅ Enhanced Political Compatibility Matrix
+ * KEY FEATURES FOR LAVENDER MARRIAGES:
+ * ✅ Practical Arrangement Compatibility (financial, housing, children)
+ * ✅ Marriage Goals Alignment (why seeking lavender marriage)
+ * ✅ Lifestyle Compatibility (smoking, drinking, pets, daily habits)
+ * ✅ Location & Relocation Flexibility
+ * ✅ Gender Preference Matching (what gender seeking in partner)
+ * ✅ Age Compatibility
+ * ✅ Political & Religious Values Alignment
+ *
+ * REMOVED FOR LAVENDER MARRIAGES:
+ * ❌ Sexual Orientation Compatibility - DIFFERENT orientations are IDEAL!
+ *    (gay man + straight woman = perfect lavender marriage)
+ * ❌ Strict Relationship Type Filtering - People need flexibility to negotiate
+ * ❌ Romantic Compatibility Factors - This is about practical arrangements
  *
  * FIELDS USED (Comprehensive):
  * Profile Fields:
@@ -274,12 +277,14 @@ function calculateGoalsScore(prefs1: Preferences, prefs2: Preferences): number {
   }
 
   // Relationship type compatibility (30 points)
+  // NOTE: For lavender marriages, this should be FLEXIBLE - people negotiate arrangements
+  // Don't penalize mismatches too heavily since these are practical arrangements, not romance
   const typeCompatibility: { [key: string]: { [key: string]: number } } = {
-    platonic: { platonic: 30, romantic: 8, open: 18 },
-    romantic: { platonic: 8, romantic: 30, open: 22 },
-    open: { platonic: 18, romantic: 22, open: 30 },
+    platonic: { platonic: 30, romantic: 20, open: 25 }, // Increased romantic from 8 to 20
+    romantic: { platonic: 20, romantic: 30, open: 25 }, // Increased platonic from 8 to 20
+    open: { platonic: 25, romantic: 25, open: 30 },
   };
-  score += typeCompatibility[prefs1.relationship_type]?.[prefs2.relationship_type] || 0;
+  score += typeCompatibility[prefs1.relationship_type]?.[prefs2.relationship_type] || 15;
 
   // Children compatibility (20 points - whether they want children)
   if (prefs1.wants_children === prefs2.wants_children) {
@@ -796,10 +801,14 @@ function calculateMBTICompatibility(type1: string, type2: string): number {
 }
 
 /**
- * Calculate sexual orientation & identity compatibility (0-100)
- * Weight: 5% of total score - NEW
+ * Calculate orientation & identity respect score (0-100)
+ * Weight: 0% of total score - NOT USED FOR LAVENDER MARRIAGES
  *
- * For LGBTQ+ focused app, understanding orientation compatibility is important
+ * IMPORTANT: For lavender marriages, DIFFERENT sexual orientations are IDEAL!
+ * A gay man and a straight woman is a PERFECT match for a lavender marriage.
+ * Therefore, this function returns a NEUTRAL score and is NOT included in final calculation.
+ *
+ * This function is kept for potential future use but does NOT affect compatibility scoring.
  */
 function calculateOrientationScore(
   profile1: Profile,
@@ -807,67 +816,9 @@ function calculateOrientationScore(
   prefs1: Preferences,
   prefs2: Preferences
 ): number {
-  let score = 50; // Start at neutral
-
-  // Sexual orientation alignment (30 points)
-  // Check if orientations are generally compatible
-  if (profile1.sexual_orientation && profile2.sexual_orientation) {
-    const arr1 = toArray(profile1.sexual_orientation).map(o => o.toLowerCase());
-    const arr2 = toArray(profile2.sexual_orientation).map(o => o.toLowerCase());
-
-    // Check for any overlap
-    if (hasArrayOverlap(arr1, arr2)) {
-      // Shared orientation(s) - great indicator
-      score += 25;
-    } else {
-      // Check for compatible orientations
-      const compatibleOrientations: { [key: string]: string[] } = {
-        lesbian: ['lesbian', 'bisexual', 'queer', 'pansexual'],
-        gay: ['gay', 'bisexual', 'queer', 'pansexual'],
-        bisexual: ['lesbian', 'gay', 'bisexual', 'queer', 'pansexual', 'straight'],
-        queer: ['lesbian', 'gay', 'bisexual', 'queer', 'pansexual', 'asexual'],
-        pansexual: ['lesbian', 'gay', 'bisexual', 'queer', 'pansexual', 'straight', 'asexual'],
-        asexual: ['queer', 'pansexual', 'asexual'],
-        straight: ['bisexual', 'pansexual', 'straight'],
-      };
-
-      // Find best compatibility score between any pair
-      let foundCompatible = false;
-      for (const o1 of arr1) {
-        for (const o2 of arr2) {
-          if (compatibleOrientations[o1]?.includes(o2)) {
-            foundCompatible = true;
-            break;
-          }
-        }
-        if (foundCompatible) break;
-      }
-
-      if (foundCompatible) {
-        score += 18;
-      } else {
-        score += 10; // Different but respect diversity
-      }
-    }
-  }
-
-  // Pronouns compatibility (20 points)
-  // Shows respect for gender identity
-  if (profile1.pronouns && profile2.pronouns) {
-    if (profile1.pronouns === profile2.pronouns) {
-      score += 15;
-    } else if (
-      profile1.pronouns === 'any pronouns' ||
-      profile2.pronouns === 'any pronouns' ||
-      profile1.pronouns.includes('/') && profile2.pronouns.includes('/')
-    ) {
-      score += 12; // Flexible or multiple pronouns
-    } else {
-      score += 10; // Different but respectful
-    }
-  }
-
-  return Math.min(score, 100);
+  // Return neutral score - sexual orientation should NOT affect lavender marriage compatibility
+  // Different orientations (gay + straight) are actually IDEAL for these arrangements!
+  return 50; // Always neutral - not used in final calculation
 }
 
 /**
@@ -925,16 +876,16 @@ function calculateDemographicsScore(
 }
 
 /**
- * Main function: Calculate overall compatibility score (ENHANCED)
+ * Main function: Calculate overall compatibility score for LAVENDER MARRIAGES
  * Returns a score from 0-100
  *
- * New Weight Distribution (OkCupid-inspired):
- * - Location & Distance: 20% (was 25%)
- * - Marriage Goals: 25% (was 30%)
- * - Lifestyle & Values: 20% (unchanged)
- * - Personality & Interests: 20% (was 15% - INCREASED for media interests!)
- * - Demographics: 10% (unchanged)
- * - Orientation & Identity: 5% (NEW - important for LGBTQ+ app)
+ * Weight Distribution (Optimized for Practical Arrangements):
+ * - Marriage Goals & Arrangements: 35% (PRIMARY - why they're here, children, finances)
+ * - Lifestyle & Values: 25% (Daily compatibility - housing, politics, religion, habits)
+ * - Location & Distance: 20% (Logistics - where they live, relocation)
+ * - Demographics: 15% (Age/Gender preferences)
+ * - Personality & Interests: 5% (Nice bonus but not critical for practical arrangements)
+ * - Sexual Orientation: 0% (REMOVED - different orientations are IDEAL!)
  */
 export function calculateCompatibilityScore(
   profile1: Profile,
@@ -947,16 +898,15 @@ export function calculateCompatibilityScore(
   const lifestyleScore = calculateLifestyleScore(profile1, profile2, prefs1, prefs2);
   const personalityScore = calculatePersonalityScore(profile1, profile2);
   const demographicsScore = calculateDemographicsScore(profile1, profile2, prefs1, prefs2);
-  const orientationScore = calculateOrientationScore(profile1, profile2, prefs1, prefs2);
+  // Note: orientationScore is NOT used in final calculation for lavender marriages
 
-  // Weighted average with new distribution
+  // Weighted average optimized for practical lavender marriage arrangements
   const totalScore =
-    locationScore * 0.20 +
-    goalsScore * 0.25 +
-    lifestyleScore * 0.20 +
-    personalityScore * 0.20 +
-    demographicsScore * 0.10 +
-    orientationScore * 0.05;
+    goalsScore * 0.35 +        // PRIMARY: Marriage goals & practical arrangements
+    lifestyleScore * 0.25 +    // Daily life compatibility
+    locationScore * 0.20 +     // Logistics
+    demographicsScore * 0.15 + // Age/Gender match
+    personalityScore * 0.05;   // Bonus but not critical
 
   // Round to whole number
   return Math.round(totalScore);
@@ -976,7 +926,8 @@ export function getCompatibilityExplanation(score: number): string {
 }
 
 /**
- * Get compatibility breakdown by category (ENHANCED)
+ * Get compatibility breakdown by category (Lavender Marriage Edition)
+ * Note: Orientation is NOT included as it doesn't affect lavender marriage compatibility
  */
 export function getCompatibilityBreakdown(
   profile1: Profile,
@@ -989,16 +940,14 @@ export function getCompatibilityBreakdown(
   lifestyle: number;
   personality: number;
   demographics: number;
-  orientation: number;
   total: number;
 } {
   return {
-    location: calculateLocationScore(profile1, profile2, prefs1, prefs2),
-    goals: calculateGoalsScore(prefs1, prefs2),
-    lifestyle: calculateLifestyleScore(profile1, profile2, prefs1, prefs2),
-    personality: calculatePersonalityScore(profile1, profile2),
-    demographics: calculateDemographicsScore(profile1, profile2, prefs1, prefs2),
-    orientation: calculateOrientationScore(profile1, profile2, prefs1, prefs2),
+    goals: calculateGoalsScore(prefs1, prefs2), // PRIMARY FACTOR (35%)
+    lifestyle: calculateLifestyleScore(profile1, profile2, prefs1, prefs2), // 25%
+    location: calculateLocationScore(profile1, profile2, prefs1, prefs2), // 20%
+    demographics: calculateDemographicsScore(profile1, profile2, prefs1, prefs2), // 15%
+    personality: calculatePersonalityScore(profile1, profile2), // 5%
     total: calculateCompatibilityScore(profile1, profile2, prefs1, prefs2),
   };
 }

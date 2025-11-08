@@ -360,7 +360,7 @@ export default function Discover() {
       ];
 
       // Get current user's full profile and preferences for compatibility calculation
-      const { data: currentUserData, error: currentUserError } = await supabase
+      const { data: currentUserDataRaw, error: currentUserError } = await supabase
         .from('profiles')
         .select(`
           *,
@@ -370,6 +370,37 @@ export default function Discover() {
         .single();
 
       if (currentUserError) throw currentUserError;
+
+      // Extract preferences as single object (Supabase returns array for joined queries)
+      const currentUserData = {
+        ...currentUserDataRaw,
+        preferences: Array.isArray(currentUserDataRaw.preferences)
+          ? currentUserDataRaw.preferences[0]
+          : currentUserDataRaw.preferences
+      };
+
+      // DEBUG: Check if Vanessa and Lisa profiles exist
+      const { data: debugProfiles } = await supabase
+        .from('profiles')
+        .select('id, display_name, age, gender, location_city, incognito_mode, preferences:preferences(age_min, age_max, gender_preference)')
+        .or('display_name.ilike.%vanessa%,display_name.ilike.%lisa%');
+
+      if (debugProfiles && debugProfiles.length > 0) {
+        console.log('🔍 DEBUG: Found Vanessa/Lisa profiles:', debugProfiles.length);
+        debugProfiles.forEach((p: any) => {
+          const prefs = Array.isArray(p.preferences) ? p.preferences[0] : p.preferences;
+          console.log(`  - ${p.display_name}:`, {
+            age: p.age,
+            gender: p.gender,
+            city: p.location_city,
+            incognito: p.incognito_mode,
+            age_pref: prefs ? `${prefs.age_min}-${prefs.age_max}` : 'none',
+            gender_pref: prefs?.gender_preference
+          });
+        });
+      } else {
+        console.log('🔍 DEBUG: No Vanessa/Lisa profiles found');
+      }
 
       // Get potential matches with all fields needed for compatibility
       let query = supabase
@@ -394,6 +425,8 @@ export default function Discover() {
 
       // Apply strict age filters (no buffer - respect user preferences exactly)
       // Safety: Always enforce minimum age of 18
+      console.log('🔍 Applying age filter:', Math.max(18, filters.ageMin), '-', filters.ageMax);
+      console.log('📋 Current user age:', currentUserData.age);
       query = query
         .gte('age', Math.max(18, filters.ageMin))
         .lte('age', filters.ageMax);
@@ -410,6 +443,7 @@ export default function Discover() {
         // Use 'overlaps' operator for array-to-array matching
         // Format as PostgreSQL array literal with quoted values: {"value1","value2"}
         const pgArrayLiteral = `{${genderPrefArray.map(g => `"${g}"`).join(',')}}`;
+        console.log('🔍 Applying gender filter:', genderPrefArray, '→', pgArrayLiteral);
         query = query.filter('gender', 'ov', pgArrayLiteral);
       }
 
@@ -432,6 +466,20 @@ export default function Discover() {
 
       console.log('📊 Query returned profiles:', data?.length || 0);
       console.log('🔍 Swiped IDs:', swipedIds.length);
+
+      // Debug: Log profile details
+      if (data && data.length > 0) {
+        console.log('👥 Profiles returned:');
+        data.forEach((p: any) => {
+          const prefs = Array.isArray(p.preferences) ? p.preferences[0] : p.preferences;
+          console.log(`  - ${p.display_name} (age: ${p.age}, gender: ${JSON.stringify(p.gender)}, seeking: ${JSON.stringify(prefs?.gender_preference)}, city: ${p.location_city})`);
+        });
+      } else {
+        console.log('❌ NO PROFILES RETURNED FROM QUERY');
+        console.log('   - Age filter: ', Math.max(18, filters.ageMin), '-', filters.ageMax);
+        console.log('   - Gender preference:', currentUserData.preferences?.gender_preference);
+        console.log('   - Excluded (swiped/blocked):', swipedIds.length);
+      }
 
       // Check for boosted profiles
       const { data: boostedProfiles } = await supabase
@@ -546,7 +594,8 @@ export default function Discover() {
             photo_blur_enabled: profile.photo_blur_enabled || false,
             hide_distance: profile.hide_distance || false,
             hide_last_active: profile.hide_last_active || false,
-            preferences: profile.preferences,
+            // Supabase returns preferences as array when using joined queries, extract first element
+            preferences: Array.isArray(profile.preferences) ? profile.preferences[0] : profile.preferences,
           };
         })
         .filter((profile: any) => {
@@ -687,59 +736,22 @@ export default function Discover() {
             );
             if (!profileWantsMyGender) {
               console.log('❌ Filtered: Profile gender preference not matched');
+              console.log(`   ${profile.display_name} wants: ${JSON.stringify(profileGenderPrefArray)}`);
+              console.log(`   But current user is: ${JSON.stringify(currentUserGenderArray)}`);
               return false;
             }
           }
 
-          // 3. SEXUAL ORIENTATION COMPATIBILITY (NEW - CRITICAL FOR LGBTQ+ APP)
-          // Note: For lavender marriages, this should be flexible since arrangements are often platonic
-          if (profile.sexual_orientation && currentUserData.sexual_orientation) {
-            const profileOrientations = (Array.isArray(profile.sexual_orientation)
-              ? profile.sexual_orientation
-              : [profile.sexual_orientation]).map((o: string) => o.toLowerCase());
-            const userOrientations = (Array.isArray(currentUserData.sexual_orientation)
-              ? currentUserData.sexual_orientation
-              : [currentUserData.sexual_orientation]).map((o: string) => o.toLowerCase());
-
-            // Skip orientation check if either user selected "Prefer not to say"
-            if (profileOrientations.includes('prefer not to say') || userOrientations.includes('prefer not to say')) {
-              // Allow match - user chose not to disclose orientation
-            } else {
-              const compatibleOrientations: { [key: string]: string[] } = {
-                'straight': ['straight', 'bisexual', 'pansexual', 'queer', 'heteroflexible', 'homoflexible'],
-                'lesbian': ['lesbian', 'bisexual', 'queer', 'pansexual', 'homoflexible', 'omnisexual', 'polysexual', 'gynesexual'],
-                'gay': ['gay', 'bisexual', 'queer', 'pansexual', 'homoflexible', 'omnisexual', 'polysexual', 'androsexual'],
-                'bisexual': ['straight', 'lesbian', 'gay', 'bisexual', 'queer', 'pansexual', 'omnisexual', 'polysexual', 'heteroflexible', 'homoflexible'],
-                'queer': ['straight', 'lesbian', 'gay', 'bisexual', 'queer', 'pansexual', 'asexual', 'demisexual', 'omnisexual', 'polysexual', 'sapiosexual'],
-                'pansexual': ['straight', 'lesbian', 'gay', 'bisexual', 'queer', 'pansexual', 'asexual', 'demisexual', 'omnisexual', 'polysexual', 'sapiosexual'],
-                'asexual': ['queer', 'pansexual', 'asexual', 'demisexual', 'sapiosexual'],
-                'demisexual': ['asexual', 'demisexual', 'pansexual', 'queer', 'sapiosexual'],
-                'omnisexual': ['bisexual', 'pansexual', 'queer', 'omnisexual', 'polysexual', 'lesbian', 'gay'],
-                'polysexual': ['bisexual', 'pansexual', 'queer', 'omnisexual', 'polysexual', 'lesbian', 'gay'],
-                'androsexual': ['gay', 'bisexual', 'pansexual', 'queer', 'androsexual'],
-                'gynesexual': ['lesbian', 'bisexual', 'pansexual', 'queer', 'gynesexual'],
-                'sapiosexual': ['pansexual', 'queer', 'asexual', 'demisexual', 'sapiosexual', 'bisexual'],
-                'heteroflexible': ['straight', 'bisexual', 'heteroflexible'],
-                'homoflexible': ['lesbian', 'gay', 'bisexual', 'homoflexible'],
-                'questioning': ['bisexual', 'pansexual', 'queer', 'questioning'], // Open to exploring
-                'other': ['bisexual', 'pansexual', 'queer', 'other'], // Most flexible
-              };
-
-              let isCompatible = false;
-              for (const userOr of userOrientations) {
-                const compatibles = compatibleOrientations[userOr] || [];
-                if (profileOrientations.some((po: string) => compatibles.includes(po))) {
-                  isCompatible = true;
-                  break;
-                }
-              }
-
-              if (!isCompatible) {
-                console.log('❌ Filtered: Sexual orientation incompatibility');
-                return false;
-              }
-            }
-          }
+          // 3. SEXUAL ORIENTATION COMPATIBILITY - DISABLED FOR LAVENDER MARRIAGE APP
+          // Note: Lavender marriages are specifically for LGBTQ+ individuals seeking marriages of
+          // convenience (often platonic). Sexual orientation should NOT be a blocking factor because
+          // the whole point is that people with different orientations can match (e.g., gay man + straight woman).
+          // Users already specify what GENDER they're seeking, which is the only relevant filter.
+          //
+          // Example: A gay man seeking a woman for a lavender marriage should match with straight women.
+          // This is literally the purpose of the app!
+          //
+          // FILTER DISABLED - Gender preference is the only relevant matching criteria.
 
           // 4. LOCATION/DISTANCE FILTER (ALWAYS APPLIED - even in search mode unless global)
           const userSearchGlobally = currentUserData.preferences?.search_globally || false;
@@ -819,25 +831,18 @@ export default function Discover() {
             }
           }
 
-          // 6. RELATIONSHIP TYPE COMPATIBILITY (stricter matching)
-          if (currentUserData.preferences?.relationship_type &&
-              profile.preferences?.relationship_type) {
-            const relationshipCompatibility: { [key: string]: string[] } = {
-              'platonic': ['platonic', 'open'],
-              'romantic': ['romantic', 'open'],
-              'open': ['platonic', 'romantic', 'open']
-            };
-
-            // Normalize to lowercase for case-insensitive comparison
-            const userType = currentUserData.preferences.relationship_type.toLowerCase();
-            const profileType = profile.preferences.relationship_type.toLowerCase();
-
-            const compatibleTypes = relationshipCompatibility[userType];
-            if (!compatibleTypes?.includes(profileType)) {
-              console.log('❌ Filtered: Relationship type incompatibility');
-              return false;
-            }
-          }
+          // 6. RELATIONSHIP TYPE COMPATIBILITY - REMOVED AS BLOCKING FILTER
+          // Note: Relationship type preference (platonic, romantic, open) is important for
+          // compatibility scoring, but should NOT be a blocking filter in a lavender marriage app.
+          // People with different relationship type preferences should still be able to see each
+          // other and discuss what arrangement works for them. The compatibility score will reflect
+          // the preference mismatch, but they should have the opportunity to connect and negotiate.
+          //
+          // Example: Someone seeking platonic should still see people seeking romantic, because
+          // lavender marriages are about finding mutually beneficial arrangements that work for
+          // both parties - not rigid matching rules.
+          //
+          // FILTER REMOVED - Compatibility score handles this preference.
 
           // ====================================================================
           // PREFERENCE FILTERS (Applied to all users, not just premium)
@@ -1864,6 +1869,7 @@ export default function Discover() {
             visible={showImmersiveProfile}
             onBlock={handleBlock}
             onReport={handleReport}
+            currentProfileId={currentProfileId || undefined}
           />
         )}
       </Modal>
