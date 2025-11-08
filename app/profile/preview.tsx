@@ -22,7 +22,8 @@ export default function ProfilePreview() {
         const data = JSON.parse(profileDataParam);
         const { preferences: prefs, ...profileData } = data;
         setProfile(profileData);
-        setPreferences(prefs);
+        // Handle preferences as array or object
+        setPreferences(Array.isArray(prefs) ? prefs[0] : prefs);
         setLoading(false);
       } catch (error) {
         console.error('Error parsing profile data:', error);
@@ -71,7 +72,8 @@ export default function ProfilePreview() {
       };
 
       setProfile(transformedProfile);
-      setPreferences(prefsData);
+      // Supabase returns preferences as an array when using joined queries, extract first element
+      setPreferences(Array.isArray(prefsData) ? prefsData[0] : prefsData);
     } catch (error: any) {
       console.error('Error loading profile:', error);
     } finally {

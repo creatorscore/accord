@@ -96,12 +96,18 @@ export default function ProfileReviewDisplay({
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to fetch reviews');
+        // Edge function not deployed or other error - fail silently
+        console.log('Reviews edge function not available - hiding reviews section');
+        setReviewData(null);
+        setLoading(false);
+        return;
       }
 
       setReviewData(result);
     } catch (error) {
-      console.error('Error fetching reviews:', error);
+      // Fail silently if edge function not deployed
+      console.log('Reviews feature not available - edge function may not be deployed');
+      setReviewData(null);
     } finally {
       setLoading(false);
     }
