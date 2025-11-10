@@ -5,12 +5,23 @@ import { Platform, Alert, AppState } from 'react-native';
  * Hook to protect against screenshots and screen recording
  *
  * Android: Completely blocks screenshots and screen recording (FLAG_SECURE)
- * iOS: Makes screenshots appear black by overlaying content when app is inactive
- *      (Telegram-style privacy protection)
+ * iOS:
+ *   - Makes screenshots appear black by overlaying content when app is inactive
+ *   - Detects screenshots and logs security alert
+ *   - Black overlay shown during app switcher/background (Telegram-style)
+ *
+ * Note: iOS does not provide an API to detect active screen recording or prevent
+ * screenshots while the app is in the foreground. This is a platform limitation.
+ *
+ * @param enabled - Whether screenshot protection is enabled
+ * @param onScreenshot - Optional callback when screenshot is detected (receives no params)
  *
  * Returns: showOverlay state for iOS (use with ScreenCaptureOverlay component)
  */
-export function useScreenCaptureProtection(enabled: boolean = true) {
+export function useScreenCaptureProtection(
+  enabled: boolean = true,
+  onScreenshot?: () => void | Promise<void>
+) {
   const [showSecurityOverlay, setShowSecurityOverlay] = useState(false);
 
   useEffect(() => {
@@ -32,12 +43,21 @@ export function useScreenCaptureProtection(enabled: boolean = true) {
         }
       });
 
-      // Also detect screenshots and warn user
+      // Detect screenshots and warn user
       let screenshotSubscription: any;
       if (ScreenCapture.addScreenshotListener) {
-        screenshotSubscription = ScreenCapture.addScreenshotListener(() => {
+        screenshotSubscription = ScreenCapture.addScreenshotListener(async () => {
           // Screenshot was taken
           console.warn('[SECURITY] Screenshot detected');
+
+          // Call the callback to log the event
+          if (onScreenshot) {
+            try {
+              await onScreenshot();
+            } catch (error) {
+              console.error('Error logging screenshot event:', error);
+            }
+          }
 
           // Optional: Show subtle warning (don't interrupt user flow)
           setTimeout(() => {
@@ -47,8 +67,6 @@ export function useScreenCaptureProtection(enabled: boolean = true) {
               [{ text: 'Understood' }]
             );
           }, 500);
-
-          // TODO: Log to analytics/security monitoring
         });
       }
 
@@ -60,7 +78,7 @@ export function useScreenCaptureProtection(enabled: boolean = true) {
 
     // Android: Screenshots are blocked at native level (MainActivity.kt with FLAG_SECURE)
     // No JS code needed - screenshots will fail completely
-  }, [enabled]);
+  }, [enabled, onScreenshot]);
 
   return showSecurityOverlay;
 }

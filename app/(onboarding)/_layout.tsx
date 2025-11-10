@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { TouchableOpacity, Alert } from 'react-native';
+import { TouchableOpacity, Alert, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -39,11 +39,19 @@ export default function OnboardingLayout() {
         headerLeft: () => (
           <TouchableOpacity
             onPress={handleSignOut}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{
               padding: 8,
               backgroundColor: 'rgba(255, 255, 255, 0.9)',
               borderRadius: 20,
               marginLeft: 8,
+              elevation: Platform.OS === 'android' ? 5 : 0,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+              zIndex: 1000,
             }}
           >
             <MaterialCommunityIcons name="logout" size={20} color="#9B87CE" />

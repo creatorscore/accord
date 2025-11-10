@@ -423,7 +423,7 @@ export default function SwipeCard({
             />
 
             {/* Dark Overlay for text readability */}
-            <View className="absolute bottom-0 left-0 right-0 h-64 bg-black/60" style={{ opacity: 0.8 }} />
+            <View className="absolute bottom-0 left-0 right-0 h-48 bg-black/60" style={{ opacity: 0.8 }} />
 
             {/* Profile Info - tappable to view full profile */}
             <TouchableOpacity
@@ -447,13 +447,13 @@ export default function SwipeCard({
                 </Text>
               )}
 
-              {distance && (
+              {(distance !== undefined && distance !== null) && (
                 <Text className="text-white/80 text-base mb-3">
                   📍 {distance}
                 </Text>
               )}
 
-              {profile.compatibility_score && (
+              {(profile.compatibility_score !== undefined && profile.compatibility_score !== null) && (
                 <View className="flex-row items-center gap-2 mb-3">
                   <View className="bg-primary-500 px-3 py-1 rounded-full">
                     <Text className="text-white font-bold text-sm">
@@ -468,12 +468,6 @@ export default function SwipeCard({
                 profileId={profile.id}
                 compact={true}
               />
-
-              {profile.bio && (
-                <Text className="text-white/90 text-base line-clamp-2">
-                  {profile.bio}
-                </Text>
-              )}
             </TouchableOpacity>
 
             {/* First-Time Tutorial Overlay */}

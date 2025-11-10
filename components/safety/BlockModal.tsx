@@ -73,7 +73,7 @@ export default function BlockModal({
               'Remove them from your matches',
               'Hide your profile from them',
               'Prevent future matching',
-              'Delete your conversation',
+              'Permanently delete all messages (cannot be undone)',
             ].map((item, i) => (
               <View key={i} style={styles.bulletItem}>
                 <MaterialCommunityIcons name="circle-small" size={20} color="#6B7280" />

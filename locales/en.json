@@ -1,4 +1,18 @@
 {
+  "auth": {
+    "welcome": {
+      "title": "Find Your Perfect Match",
+      "tagline": "Connect with like-minded individuals",
+      "subtitle": "Safe, discreet, and verified connections for lavender marriages",
+      "verifiedSafe": "Verified & Safe",
+      "smartMatching": "Smart Matching",
+      "privacyFirst": "Privacy First",
+      "trustBadge": "Join thousands finding their perfect arrangement",
+      "getStarted": "Get Started",
+      "signIn": "Sign In",
+      "footer": "By continuing, you agree to our Terms of Service and Privacy Policy"
+    }
+  },
   "common": {
     "continue": "Continue",
     "save": "Save",

@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 
@@ -345,7 +346,7 @@ export default function VoiceIntro() {
         <View className="flex-row gap-3">
           <TouchableOpacity
             className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
-            onPress={() => router.back()}
+            onPress={() => goToPreviousOnboardingStep('/(onboarding)/voice-intro')}
             disabled={loading || isRecording}
           >
             <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>

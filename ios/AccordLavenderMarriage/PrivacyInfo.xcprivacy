@@ -39,14 +39,6 @@
 				<string>85F4.1</string>
 			</array>
 		</dict>
-		<dict>
-			<key>NSPrivacyAccessedAPIType</key>
-			<string>NSPrivacyAccessedAPICategoryLocationAlways</string>
-			<key>NSPrivacyAccessedAPITypeReasons</key>
-			<array>
-				<string>DDA9.1</string>
-			</array>
-		</dict>
 	</array>
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>

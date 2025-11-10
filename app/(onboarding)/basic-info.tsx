@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -137,6 +137,8 @@ export default function BasicInfo() {
   const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationSearch, setLocationSearch] = useState('');
   const [searchingLocation, setSearchingLocation] = useState(false);
+  const [locationSuggestions, setLocationSuggestions] = useState<Array<{ city: string; state: string; country: string; latitude: number; longitude: number }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [ageCertified, setAgeCertified] = useState(false);
@@ -318,66 +320,95 @@ export default function BasicInfo() {
     }
   };
 
+  // Debounce timer ref
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const handleLocationSearch = async (searchText: string) => {
     setLocationSearch(searchText);
 
+    // Clear previous suggestions if search is too short
     if (searchText.trim().length < 3) {
-      return; // Wait for at least 3 characters
+      setLocationSuggestions([]);
+      setShowSuggestions(false);
+      return;
     }
 
-    try {
-      setSearchingLocation(true);
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
 
-      // Use expo-location geocoding to find the location
-      const results = await Location.geocodeAsync(searchText);
+    // Debounce search by 500ms
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setSearchingLocation(true);
 
-      if (results.length > 0) {
-        const result = results[0];
+        // Use expo-location geocoding to find the location
+        const results = await Location.geocodeAsync(searchText);
 
-        // Get the address details using reverse geocoding
-        const [address] = await Location.reverseGeocodeAsync({
-          latitude: result.latitude,
-          longitude: result.longitude,
-        });
+        if (results.length > 0) {
+          // Get address details for each result (limit to first 5)
+          const suggestions = await Promise.all(
+            results.slice(0, 5).map(async (result) => {
+              try {
+                const [address] = await Location.reverseGeocodeAsync({
+                  latitude: result.latitude,
+                  longitude: result.longitude,
+                });
 
-        // Auto-populate all fields
-        if (address.city) setLocationCity(address.city);
-        if (address.region) setLocationState(address.region);
-        if (address.country) setLocationCountry(address.country);
+                return {
+                  city: address.city || '',
+                  state: address.region || '',
+                  country: address.country || '',
+                  latitude: result.latitude,
+                  longitude: result.longitude,
+                };
+              } catch (error) {
+                return null;
+              }
+            })
+          );
 
-        // Store the precise coordinates
-        setLocationCoords({
-          latitude: result.latitude,
-          longitude: result.longitude,
-        });
+          // Filter out null results and duplicates
+          const validSuggestions = suggestions.filter(
+            (s): s is { city: string; state: string; country: string; latitude: number; longitude: number } =>
+              s !== null && s.city !== ''
+          );
 
-        console.log('✅ Location found:', {
-          city: address.city,
-          state: address.region,
-          country: address.country,
-          coords: `${result.latitude}, ${result.longitude}`
-        });
-
-        Alert.alert(
-          'Location Found',
-          `${address.city}, ${address.region}, ${address.country}\n\nCoordinates have been saved for accurate matching.`,
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert(
-          'Location Not Found',
-          'Could not find that location. Please try a different search or use "Get My Location".'
-        );
+          setLocationSuggestions(validSuggestions);
+          setShowSuggestions(validSuggestions.length > 0);
+        } else {
+          setLocationSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch (error: any) {
+        console.error('Location search error:', error);
+        setLocationSuggestions([]);
+        setShowSuggestions(false);
+      } finally {
+        setSearchingLocation(false);
       }
-    } catch (error: any) {
-      console.error('Location search error:', error);
-      Alert.alert(
-        'Search Error',
-        'Could not search for that location. Please try again or enter manually.'
-      );
-    } finally {
-      setSearchingLocation(false);
-    }
+    }, 500);
+  };
+
+  const selectLocation = (suggestion: { city: string; state: string; country: string; latitude: number; longitude: number }) => {
+    setLocationCity(suggestion.city);
+    setLocationState(suggestion.state);
+    setLocationCountry(suggestion.country);
+    setLocationCoords({
+      latitude: suggestion.latitude,
+      longitude: suggestion.longitude,
+    });
+    setLocationSearch(`${suggestion.city}, ${suggestion.state}`);
+    setShowSuggestions(false);
+    setLocationSuggestions([]);
+
+    console.log('✅ Location selected:', {
+      city: suggestion.city,
+      state: suggestion.state,
+      country: suggestion.country,
+      coords: `${suggestion.latitude}, ${suggestion.longitude}`
+    });
   };
 
   const handleContinue = async () => {
@@ -477,7 +508,8 @@ export default function BasicInfo() {
         }
       }
 
-      // Calculate zodiac sign from birth date
+      // Calculate age and zodiac sign from birth date
+      const age = calculateAge(birthDate);
       const zodiac_sign = calculateZodiac(birthDate);
 
       // Initialize encryption keys for this user
@@ -860,31 +892,55 @@ export default function BasicInfo() {
               </TouchableOpacity>
             </View>
 
-            {/* Location Search */}
+            {/* Location Search with Autocomplete */}
             <View className="mb-3">
-              <View className="flex-row items-center gap-2">
+              <View className="relative">
                 <TextInput
-                  className="flex-1 bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+                  className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900 pr-12"
                   placeholder="Search for your city (e.g., Vancouver, BC)"
                   value={locationSearch}
-                  onChangeText={setLocationSearch}
-                  onSubmitEditing={() => handleLocationSearch(locationSearch)}
-                  returnKeyType="search"
+                  onChangeText={handleLocationSearch}
+                  onFocus={() => {
+                    if (locationSuggestions.length > 0) {
+                      setShowSuggestions(true);
+                    }
+                  }}
                 />
-                <TouchableOpacity
-                  className={`bg-primary-500 rounded-xl px-4 py-3 ${searchingLocation ? 'opacity-50' : ''}`}
-                  onPress={() => handleLocationSearch(locationSearch)}
-                  disabled={searchingLocation || locationSearch.trim().length < 3}
-                >
-                  <MaterialCommunityIcons
-                    name={searchingLocation ? "loading" : "magnify"}
-                    size={24}
-                    color="white"
-                  />
-                </TouchableOpacity>
+                {searchingLocation && (
+                  <View className="absolute right-4 top-3">
+                    <MaterialCommunityIcons name="loading" size={24} color="#9CA3AF" />
+                  </View>
+                )}
               </View>
+
+              {/* Autocomplete Suggestions Dropdown */}
+              {showSuggestions && locationSuggestions.length > 0 && (
+                <View className="bg-white border border-gray-300 rounded-xl mt-2 overflow-hidden shadow-lg" style={{ maxHeight: 200 }}>
+                  <ScrollView nestedScrollEnabled>
+                    {locationSuggestions.map((suggestion, index) => (
+                      <TouchableOpacity
+                        key={`${suggestion.latitude}-${suggestion.longitude}-${index}`}
+                        className="px-4 py-3 border-b border-gray-100 flex-row items-center"
+                        onPress={() => selectLocation(suggestion)}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialCommunityIcons name="map-marker" size={20} color="#9B87CE" />
+                        <View className="ml-3 flex-1">
+                          <Text className="text-gray-900 font-medium">
+                            {suggestion.city}
+                          </Text>
+                          <Text className="text-gray-500 text-xs">
+                            {suggestion.state}, {suggestion.country}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
               <Text className="text-xs text-gray-500 mt-1">
-                Search for your city to auto-fill details and get accurate coordinates
+                Start typing to see suggestions, or use "Get My Location"
               </Text>
             </View>
 
@@ -899,6 +955,9 @@ export default function BasicInfo() {
                 setLocationCity(text);
                 // Clear stored coordinates when user manually edits location
                 setLocationCoords(null);
+                // Clear suggestions
+                setShowSuggestions(false);
+                setLocationSuggestions([]);
               }}
               editable={!searchingLocation}
             />

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 import Slider from '@react-native-community/slider';
 
 const GENDER_OPTIONS = [
@@ -256,7 +257,7 @@ export default function MatchingPreferences() {
         <View className="flex-row gap-3">
           <TouchableOpacity
             className="flex-1 py-4 rounded-full border border-gray-300"
-            onPress={() => router.back()}
+            onPress={() => goToPreviousOnboardingStep('/(onboarding)/matching-preferences')}
             disabled={loading}
           >
             <Text className="text-gray-700 text-center font-semibold text-lg">Back</Text>

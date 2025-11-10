@@ -15,7 +15,7 @@ import { ActivityTracker } from '@/components/shared/ActivityTracker';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { ScreenCaptureOverlay } from '@/components/shared/ScreenCaptureOverlay';
 import { initI18n, isRTL } from '@/lib/i18n';
-import { initializeSentry } from '@/lib/sentry';
+// import { initializeSentry } from '@/lib/sentry'; // Temporarily disabled for production build
 import { initializePostHog, trackAppLifecycle } from '@/lib/analytics';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,11 +24,12 @@ import { Platform } from 'react-native';
 import '../global.css';
 
 // Initialize Sentry before anything else (with error handling)
-try {
-  initializeSentry();
-} catch (error) {
-  console.error('Failed to initialize Sentry:', error);
-}
+// Temporarily disabled for production build
+// try {
+//   initializeSentry();
+// } catch (error) {
+//   console.error('Failed to initialize Sentry:', error);
+// }
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);

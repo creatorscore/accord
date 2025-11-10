@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 
 const HOBBY_OPTIONS = [
   '🎨 Art & Design',
@@ -260,7 +261,7 @@ export default function Interests() {
         <View className="flex-row gap-3">
           <TouchableOpacity
             className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
-            onPress={() => router.back()}
+            onPress={() => goToPreviousOnboardingStep('/(onboarding)/interests')}
             disabled={loading}
           >
             <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>

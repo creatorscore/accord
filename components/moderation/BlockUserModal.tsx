@@ -49,6 +49,9 @@ export default function BlockUserModal({
       if (profileError) throw profileError;
 
       // Block the user
+      // Note: A database trigger automatically handles:
+      // 1. Deleting all messages between users (prevents screenshot blackmail)
+      // 2. Deleting the match record (removes from both users' match lists)
       const { error: blockError } = await supabase
         .from('blocks')
         .insert({
@@ -66,27 +69,9 @@ export default function BlockUserModal({
         throw blockError;
       }
 
-      // Optionally unmatch if they were matched
-      const { error: unmatchError } = await supabase
-        .from('matches')
-        .update({
-          status: 'unmatched',
-          unmatched_by: blockerProfile.id,
-          unmatched_at: new Date().toISOString(),
-        })
-        .or(
-          `and(profile1_id.eq.${blockerProfile.id},profile2_id.eq.${blockedProfileId}),and(profile1_id.eq.${blockedProfileId},profile2_id.eq.${blockerProfile.id})`
-        )
-        .eq('status', 'active');
-
-      // Don't throw on unmatch error - blocking is more important
-      if (unmatchError) {
-        console.error('Error unmatching:', unmatchError);
-      }
-
       Alert.alert(
         'User Blocked',
-        `${blockedProfileName} has been blocked. They will no longer be able to see your profile or send you messages.`,
+        `${blockedProfileName} has been blocked. Your conversation has been permanently deleted and they can no longer see your profile.`,
         [
           {
             text: 'OK',
@@ -141,9 +126,9 @@ export default function BlockUserModal({
               </Text>
             </View>
             <View style={styles.bulletPoint}>
-              <MaterialCommunityIcons name="check" size={20} color="#6B7280" />
-              <Text style={styles.bulletText}>
-                Remove any existing match
+              <MaterialCommunityIcons name="check" size={20} color="#EF4444" />
+              <Text style={[styles.bulletText, { color: '#EF4444', fontWeight: '600' }]}>
+                Permanently delete all messages (cannot be undone)
               </Text>
             </View>
             <View style={styles.bulletPoint}>

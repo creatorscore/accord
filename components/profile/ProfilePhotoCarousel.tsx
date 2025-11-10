@@ -123,7 +123,7 @@ export default function ProfilePhotoCarousel({
                       </MotiView>
                     )}
                   </View>
-                  {distance && (
+                  {(distance !== undefined && distance !== null) && (
                     <Text style={styles.distance}>
                       📍 {distance < 1 ? '< 1 mile away' : `${Math.round(distance)} miles away`}
                     </Text>
@@ -161,7 +161,7 @@ export default function ProfilePhotoCarousel({
       )}
 
       {/* Compatibility Score Badge */}
-      {compatibilityScore && (
+      {(compatibilityScore !== undefined && compatibilityScore !== null) && (
         <MotiView
           from={{ scale: 0, rotate: '-15deg' }}
           animate={{ scale: 1, rotate: '0deg' }}
