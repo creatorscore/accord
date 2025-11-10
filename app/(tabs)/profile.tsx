@@ -182,19 +182,14 @@ export default function Profile() {
         throw error;
       }
 
-      // Add mock captions for demo
-      const enhancedPhotos = data.photos?.sort((a: any, b: any) =>
+      // Sort photos by display order
+      const sortedPhotos = data.photos?.sort((a: any, b: any) =>
         (a.display_order || 0) - (b.display_order || 0)
-      ).map((photo: any, index: number) => ({
-        ...photo,
-        caption: index === 0 ? "Living my best life" :
-                 index === 1 ? "Adventures await" :
-                 index === 2 ? "Cherishing moments" : undefined
-      }));
+      );
 
       setProfile({
         ...data,
-        photos: enhancedPhotos,
+        photos: sortedPhotos,
       });
 
       // Set admin status
@@ -625,6 +620,17 @@ export default function Profile() {
 
         <TouchableOpacity
           style={styles.menuItem}
+          onPress={() => router.push('/settings/screenshot-alerts')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="shield-alert" size={24} color="#EF4444" />
+            <Text style={[styles.menuItemText, { color: '#EF4444', fontWeight: '600' }]}>Screenshot Alerts</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
           onPress={() => router.push('/settings/matching-preferences')}
         >
           <View style={styles.menuItemLeft}>
@@ -757,6 +763,20 @@ export default function Profile() {
                 </View>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: '#FEE2E2', borderLeftWidth: 4, borderLeftColor: '#EF4444' }]}
+              onPress={() => router.push('/admin/screenshot-monitor')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="camera-off" size={24} color="#EF4444" />
+                <View>
+                  <Text style={[styles.menuItemText, { color: '#991B1B', fontWeight: '700' }]}>Screenshot Monitor</Text>
+                  <Text style={{ fontSize: 12, color: '#991B1B', marginTop: 2 }}>Ban users taking screenshots</Text>
+                </View>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
             </TouchableOpacity>
           </>
         )}

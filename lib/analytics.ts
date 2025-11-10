@@ -9,9 +9,10 @@ let posthogClient: PostHog | null = null;
  * Initialize PostHog for analytics and session recording
  */
 export const initializePostHog = async () => {
-  // Don't initialize in development or without API key
-  if (__DEV__ || !POSTHOG_API_KEY) {
-    console.log('PostHog not initialized (development mode or missing API key)');
+  // Don't initialize without API key
+  // TODO: Re-enable __DEV__ check before production to prevent test data pollution
+  if (!POSTHOG_API_KEY) {
+    console.log('PostHog not initialized (missing API key)');
     return null;
   }
 
@@ -164,6 +165,50 @@ export const trackUserAction = {
   // Settings
   settingsChanged: (setting: string, value: any) =>
     trackEvent('settings_changed', { setting, value }),
+
+  // Success Milestones
+  dateScheduled: (matchId: string, daysUntilDate?: number) =>
+    trackEvent('date_scheduled', { matchId, daysUntilDate }),
+  dateCompleted: (matchId: string, rating?: number, wentWell?: boolean) =>
+    trackEvent('date_completed', { matchId, rating, wentWell }),
+  marriageArranged: (matchId: string, daysUntilMarriage?: number) =>
+    trackEvent('marriage_arranged', { matchId, daysUntilMarriage }),
+  relationshipEnded: (matchId: string, reason?: string, durationDays?: number) =>
+    trackEvent('relationship_ended', { matchId, reason, durationDays }),
+
+  // Reviews
+  reviewPromptShown: (matchId: string) =>
+    trackEvent('review_prompt_shown', { matchId }),
+  reviewSubmitted: (matchId: string, overallRating: number) =>
+    trackEvent('review_submitted', { matchId, overallRating }),
+  reviewViewed: (profileId: string, hasReviews: boolean) =>
+    trackEvent('review_viewed', { profileId, hasReviews }),
+
+  // Boost & Premium Features
+  boostActivated: (boostType: 'standard' | 'super', duration: number) =>
+    trackEvent('boost_activated', { boostType, duration }),
+  superLikeUsed: (profileId: string) =>
+    trackEvent('super_like_used', { profileId }),
+  rewindUsed: () =>
+    trackEvent('rewind_used'),
+
+  // Discovery & Filters
+  filtersChanged: (filters: Record<string, any>) =>
+    trackEvent('filters_changed', { filters }),
+  searchPerformed: (searchType: 'location' | 'keyword', query: string) =>
+    trackEvent('search_performed', { searchType, query }),
+
+  // Engagement
+  appSessionStarted: (sessionDuration?: number) =>
+    trackEvent('app_session_started', { sessionDuration }),
+  appSessionEnded: (sessionDuration: number, actionsPerformed: number) =>
+    trackEvent('app_session_ended', { sessionDuration, actionsPerformed }),
+
+  // Content Moderation
+  screenshotDetected: (location: 'profile' | 'chat' | 'discovery') =>
+    trackEvent('screenshot_detected', { location }),
+  screenshotBlocked: (location: string) =>
+    trackEvent('screenshot_blocked', { location }),
 };
 
 /**
@@ -176,6 +221,74 @@ export const trackError = (errorName: string, error: Error, context?: Record<str
     errorStack: error.stack,
     ...context,
   });
+};
+
+/**
+ * Funnel tracking for conversion analysis
+ */
+export const trackFunnel = {
+  // Onboarding Funnel
+  onboardingStep1_BasicInfo: () => trackEvent('funnel_onboarding_step1'),
+  onboardingStep2_Photos: () => trackEvent('funnel_onboarding_step2'),
+  onboardingStep3_Preferences: () => trackEvent('funnel_onboarding_step3'),
+  onboardingStep4_Goals: () => trackEvent('funnel_onboarding_step4'),
+  onboardingStep5_Verification: () => trackEvent('funnel_onboarding_step5'),
+  onboardingCompleted: () => trackEvent('funnel_onboarding_completed'),
+
+  // Matching Funnel
+  discoveryViewed: () => trackEvent('funnel_discovery_viewed'),
+  profileCardSwiped: () => trackEvent('funnel_profile_swiped'),
+  profileLiked: () => trackEvent('funnel_profile_liked'),
+  matchReceived: () => trackEvent('funnel_match_received'),
+  firstMessageSent: () => trackEvent('funnel_first_message_sent'),
+  firstMessageReceived: () => trackEvent('funnel_first_message_received'),
+  conversationStarted: () => trackEvent('funnel_conversation_started'),
+  dateScheduled: () => trackEvent('funnel_date_scheduled'),
+  dateCompleted: () => trackEvent('funnel_date_completed'),
+  marriageArranged: () => trackEvent('funnel_marriage_arranged'),
+
+  // Premium Funnel
+  paywallViewed: () => trackEvent('funnel_paywall_viewed'),
+  pricingViewed: () => trackEvent('funnel_pricing_viewed'),
+  planSelected: (tier: string) => trackEvent('funnel_plan_selected', { tier }),
+  checkoutStarted: (tier: string) => trackEvent('funnel_checkout_started', { tier }),
+  subscriptionCompleted: (tier: string) => trackEvent('funnel_subscription_completed', { tier }),
+
+  // Verification Funnel
+  verificationPromptViewed: () => trackEvent('funnel_verification_prompt'),
+  verificationStarted: () => trackEvent('funnel_verification_started'),
+  identityUploaded: () => trackEvent('funnel_identity_uploaded'),
+  videoSelfieRecorded: () => trackEvent('funnel_video_selfie_recorded'),
+  verificationSubmitted: () => trackEvent('funnel_verification_submitted'),
+  verificationApproved: () => trackEvent('funnel_verification_approved'),
+};
+
+/**
+ * Track feature usage for product analytics
+ */
+export const trackFeatureUsage = {
+  photoBlurEnabled: (enabled: boolean) =>
+    trackEvent('feature_photo_blur', { enabled }),
+  incognitoModeEnabled: (enabled: boolean) =>
+    trackEvent('feature_incognito', { enabled }),
+  locationSharingChanged: (shareExactLocation: boolean) =>
+    trackEvent('feature_location_sharing', { shareExactLocation }),
+  reviewsEnabled: (enabled: boolean) =>
+    trackEvent('feature_reviews', { enabled }),
+  voiceIntroRecorded: () =>
+    trackEvent('feature_voice_intro_recorded'),
+  voiceIntroPlayed: () =>
+    trackEvent('feature_voice_intro_played'),
+};
+
+/**
+ * Track A/B test variant assignment
+ */
+export const trackExperiment = (experimentName: string, variant: string) => {
+  trackEvent('experiment_viewed', { experimentName, variant });
+
+  // Also set as user property for segmentation
+  setUserProperties({ [`experiment_${experimentName}`]: variant });
 };
 
 // Export PostHog client for advanced use cases

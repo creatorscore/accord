@@ -21,6 +21,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { formatDistance } from '@/lib/geolocation';
+import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
+import { logScreenshotEvent } from '@/lib/screenshot-tracking';
 
 const { width, height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.6;
@@ -86,6 +88,8 @@ interface Preferences {
   preferred_cities?: string[];
   public_relationship?: boolean;
   family_involvement?: string;
+  dealbreakers?: string[];
+  must_haves?: string[];
 }
 
 interface CompatibilityBreakdown {
@@ -111,6 +115,7 @@ interface ImmersiveProfileCardProps {
   onSendMessage?: () => void; // Show "Send Message" button instead
   onBlock?: () => void; // Block user
   onReport?: () => void; // Report user
+  currentProfileId?: string; // ID of the user viewing this profile (for screenshot tracking)
 }
 
 // Helper function to format array or string values for display
@@ -222,6 +227,7 @@ export default function ImmersiveProfileCard({
   onSendMessage,
   onBlock,
   onReport,
+  currentProfileId,
 }: ImmersiveProfileCardProps) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -232,6 +238,13 @@ export default function ImmersiveProfileCard({
 
   const photos = profile.photos || [];
   const heroPhoto = photos[0]?.url || 'https://via.placeholder.com/400x600';
+
+  // Screenshot tracking - log when someone screenshots this profile
+  useScreenCaptureProtection(visible, async () => {
+    if (currentProfileId && profile.id) {
+      await logScreenshotEvent(currentProfileId, profile.id, 'swipe_card');
+    }
+  });
 
   useEffect(() => {
     return () => {
@@ -581,6 +594,44 @@ export default function ImmersiveProfileCard({
               </View>
             )}
           </View>
+
+          {/* Must-Haves */}
+          {preferences?.must_haves && preferences.must_haves.length > 0 && (
+            <View style={[styles.section, { backgroundColor: '#F0FDF4', borderRadius: 16, padding: 16, marginTop: 16, borderWidth: 1, borderColor: '#86EFAC' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 24, marginRight: 8 }}>✅</Text>
+                <Text style={[styles.sectionTitle, { color: '#166534', marginBottom: 0 }]}>Must-Haves</Text>
+              </View>
+              <Text style={{ fontSize: 13, color: '#16A34A', marginBottom: 12, fontStyle: 'italic' }}>
+                Important qualities they're looking for
+              </Text>
+              {preferences.must_haves.map((item, index) => (
+                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 15, color: '#15803D', marginRight: 8 }}>•</Text>
+                  <Text style={{ fontSize: 14, color: '#15803D', flex: 1, lineHeight: 20 }}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Dealbreakers */}
+          {preferences?.dealbreakers && preferences.dealbreakers.length > 0 && (
+            <View style={[styles.section, { backgroundColor: '#FEF2F2', borderRadius: 16, padding: 16, marginTop: 16, borderWidth: 1, borderColor: '#FCA5A5' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 24, marginRight: 8 }}>🚫</Text>
+                <Text style={[styles.sectionTitle, { color: '#991B1B', marginBottom: 0 }]}>Dealbreakers</Text>
+              </View>
+              <Text style={{ fontSize: 13, color: '#DC2626', marginBottom: 12, fontStyle: 'italic' }}>
+                Important boundaries to be aware of
+              </Text>
+              {preferences.dealbreakers.map((item, index) => (
+                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 15, color: '#B91C1C', marginRight: 8 }}>•</Text>
+                  <Text style={{ fontSize: 14, color: '#B91C1C', flex: 1, lineHeight: 20 }}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* Photo 4 */}
           {photos[3] && (

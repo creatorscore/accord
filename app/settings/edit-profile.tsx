@@ -164,6 +164,29 @@ const COMMON_LANGUAGES = [
   'Other',
 ];
 
+const HOBBY_OPTIONS = [
+  '🎨 Art & Design',
+  '📚 Reading',
+  '✈️ Travel',
+  '🎵 Music',
+  '🏃 Fitness',
+  '🎮 Gaming',
+  '🍳 Cooking',
+  '📸 Photography',
+  '🧘 Yoga',
+  '🎭 Theater',
+  '🌱 Gardening',
+  '🎬 Film',
+  '💻 Tech',
+  '✍️ Writing',
+  '🐕 Pets',
+  '🎪 Live Events',
+  '🏕️ Outdoors',
+  '🎨 Crafts',
+  '🍷 Wine Tasting',
+  '☕ Coffee',
+];
+
 const PRIMARY_REASONS = [
   { value: 'financial', label: 'Financial Stability' },
   { value: 'immigration', label: 'Immigration/Visa' },
@@ -328,8 +351,10 @@ export default function EditProfile() {
   ]);
   const [showCustomPromptInput, setShowCustomPromptInput] = useState<number | null>(null);
   const [customPromptText, setCustomPromptText] = useState('');
-  const [interests, setInterests] = useState<string[]>([]);
-  const [newInterest, setNewInterest] = useState('');
+  const [favoriteMovies, setFavoriteMovies] = useState('');
+  const [favoriteMusic, setFavoriteMusic] = useState('');
+  const [favoriteBooks, setFavoriteBooks] = useState('');
+  const [favoriteTvShows, setFavoriteTvShows] = useState('');
   const [hobbies, setHobbies] = useState<string[]>([]);
   const [newHobby, setNewHobby] = useState('');
   const [loveLanguage, setLoveLanguage] = useState('');
@@ -465,10 +490,13 @@ export default function EditProfile() {
           ].slice(0, 3));
         }
 
-        if (profileData.interests && Array.isArray(profileData.interests)) {
-          setInterests(profileData.interests);
-        } else {
-          setInterests([]);
+        // Parse interests JSONB object {movies: [], music: [], books: [], tv_shows: []}
+        if (profileData.interests && typeof profileData.interests === 'object') {
+          const interests = profileData.interests as any;
+          setFavoriteMovies(Array.isArray(interests.movies) ? interests.movies.join(', ') : '');
+          setFavoriteMusic(Array.isArray(interests.music) ? interests.music.join(', ') : '');
+          setFavoriteBooks(Array.isArray(interests.books) ? interests.books.join(', ') : '');
+          setFavoriteTvShows(Array.isArray(interests.tv_shows) ? interests.tv_shows.join(', ') : '');
         }
 
         if (profileData.hobbies && Array.isArray(profileData.hobbies)) {
@@ -663,15 +691,17 @@ export default function EditProfile() {
     setShowCustomPromptInput(null);
   };
 
-  const addInterest = () => {
-    if (newInterest.trim() && interests.length < 10) {
-      setInterests([...interests, newInterest.trim()]);
-      setNewInterest('');
-    }
-  };
 
-  const removeInterest = (index: number) => {
-    setInterests(interests.filter((_, i) => i !== index));
+  const toggleHobby = (hobby: string) => {
+    if (hobbies.includes(hobby)) {
+      setHobbies(hobbies.filter((h) => h !== hobby));
+    } else {
+      if (hobbies.length >= 10) {
+        Alert.alert('Maximum Hobbies', 'You can select up to 10 hobbies');
+        return;
+      }
+      setHobbies([...hobbies, hobby]);
+    }
   };
 
   const addHobby = () => {
@@ -817,7 +847,12 @@ export default function EditProfile() {
         height_inches: totalHeightInches,
         personality_type: personality,
         prompt_answers: validPromptAnswers.length > 0 ? validPromptAnswers : null,
-        interests: interests.length > 0 ? interests : null,
+        interests: {
+          movies: favoriteMovies.split(',').map(s => s.trim()).filter(Boolean),
+          music: favoriteMusic.split(',').map(s => s.trim()).filter(Boolean),
+          books: favoriteBooks.split(',').map(s => s.trim()).filter(Boolean),
+          tv_shows: favoriteTvShows.split(',').map(s => s.trim()).filter(Boolean),
+        },
         hobbies: hobbies.length > 0 ? hobbies : null,
         love_language: loveLanguage ? [loveLanguage] : null,
         languages_spoken: languagesSpoken.length > 0 ? languagesSpoken : null,
@@ -1615,28 +1650,60 @@ export default function EditProfile() {
         {/* Hobbies Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Hobbies</Text>
-          <Text style={styles.sectionSubtitle}>Add up to 10 hobbies</Text>
+          <Text style={styles.sectionSubtitle}>Select from options or add your own (up to 10)</Text>
 
+          {/* Predefined Hobby Options */}
           <View style={styles.interestsContainer}>
-            {hobbies.map((hobby, index) => (
+            {HOBBY_OPTIONS.map((hobby) => (
               <TouchableOpacity
-                key={index}
-                style={styles.interestChip}
-                onPress={() => removeHobby(index)}
+                key={hobby}
+                style={[
+                  styles.optionChip,
+                  hobbies.includes(hobby) && styles.optionChipSelected,
+                ]}
+                onPress={() => toggleHobby(hobby)}
               >
-                <Text style={styles.interestText}>{hobby}</Text>
-                <MaterialCommunityIcons name="close" size={16} color="#9B87CE" />
+                <Text
+                  style={[
+                    styles.optionChipText,
+                    hobbies.includes(hobby) && styles.optionChipTextSelected,
+                  ]}
+                >
+                  {hobby}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
 
+          {/* Selected/Custom Hobbies */}
+          {hobbies.some(h => !HOBBY_OPTIONS.includes(h)) && (
+            <>
+              <Text style={[styles.sectionSubtitle, { marginTop: 16, marginBottom: 8 }]}>Custom Hobbies</Text>
+              <View style={styles.interestsContainer}>
+                {hobbies
+                  .filter(h => !HOBBY_OPTIONS.includes(h))
+                  .map((hobby, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.interestChip}
+                      onPress={() => setHobbies(hobbies.filter((h) => h !== hobby))}
+                    >
+                      <Text style={styles.interestText}>{hobby}</Text>
+                      <MaterialCommunityIcons name="close" size={16} color="#9B87CE" />
+                    </TouchableOpacity>
+                  ))}
+              </View>
+            </>
+          )}
+
+          {/* Add Custom Hobby */}
           {hobbies.length < 10 && (
             <View style={styles.addInterestContainer}>
               <TextInput
                 style={[styles.input, { flex: 1 }]}
                 value={newHobby}
                 onChangeText={setNewHobby}
-                placeholder="Add a hobby..."
+                placeholder="Add a custom hobby..."
                 placeholderTextColor="#9CA3AF"
                 onSubmitEditing={addHobby}
               />
@@ -1647,39 +1714,66 @@ export default function EditProfile() {
           )}
         </View>
 
-        {/* Interests Section */}
+        {/* Favorites Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Interests & Favorites</Text>
-          <Text style={styles.sectionSubtitle}>Add up to 10 interests (movies, music, books, etc.)</Text>
+          <Text style={styles.sectionTitle}>Your Favorites</Text>
+          <Text style={styles.sectionSubtitle}>Share what you love (optional)</Text>
 
-          <View style={styles.interestsContainer}>
-            {interests.map((interest, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.interestChip}
-                onPress={() => removeInterest(index)}
-              >
-                <Text style={styles.interestText}>{interest}</Text>
-                <MaterialCommunityIcons name="close" size={16} color="#9B87CE" />
-              </TouchableOpacity>
-            ))}
+          {/* Movies */}
+          <View style={{ marginBottom: 16 }}>
+            <Text style={styles.fieldLabel}>🎬 Favorite Movies</Text>
+            <TextInput
+              style={styles.input}
+              value={favoriteMovies}
+              onChangeText={setFavoriteMovies}
+              placeholder="e.g., Moonlight, Carol, The Half of It"
+              placeholderTextColor="#9CA3AF"
+              multiline
+            />
+            <Text style={styles.helperText}>Separate with commas</Text>
           </View>
 
-          {interests.length < 10 && (
-            <View style={styles.addInterestContainer}>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={newInterest}
-                onChangeText={setNewInterest}
-                placeholder="Add an interest..."
-                placeholderTextColor="#9CA3AF"
-                onSubmitEditing={addInterest}
-              />
-              <TouchableOpacity style={styles.addButton} onPress={addInterest}>
-                <MaterialCommunityIcons name="plus" size={24} color="#9B87CE" />
-              </TouchableOpacity>
-            </View>
-          )}
+          {/* Music */}
+          <View style={{ marginBottom: 16 }}>
+            <Text style={styles.fieldLabel}>🎵 Favorite Music Artists</Text>
+            <TextInput
+              style={styles.input}
+              value={favoriteMusic}
+              onChangeText={setFavoriteMusic}
+              placeholder="e.g., Hayley Kiyoko, Troye Sivan, Chappell Roan"
+              placeholderTextColor="#9CA3AF"
+              multiline
+            />
+            <Text style={styles.helperText}>Separate with commas</Text>
+          </View>
+
+          {/* Books */}
+          <View style={{ marginBottom: 16 }}>
+            <Text style={styles.fieldLabel}>📚 Favorite Books</Text>
+            <TextInput
+              style={styles.input}
+              value={favoriteBooks}
+              onChangeText={setFavoriteBooks}
+              placeholder="e.g., Red White & Royal Blue, Stone Butch Blues"
+              placeholderTextColor="#9CA3AF"
+              multiline
+            />
+            <Text style={styles.helperText}>Separate with commas</Text>
+          </View>
+
+          {/* TV Shows */}
+          <View>
+            <Text style={styles.fieldLabel}>📺 Favorite TV Shows</Text>
+            <TextInput
+              style={styles.input}
+              value={favoriteTvShows}
+              onChangeText={setFavoriteTvShows}
+              placeholder="e.g., Heartstopper, The L Word, Pose"
+              placeholderTextColor="#9CA3AF"
+              multiline
+            />
+            <Text style={styles.helperText}>Separate with commas</Text>
+          </View>
         </View>
 
         {/* Languages Section */}
@@ -2440,6 +2534,17 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginBottom: 16,
   },
+  fieldLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
   photosScroll: {
     marginHorizontal: -20,
     paddingHorizontal: 20,
@@ -2575,6 +2680,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9B87CE',
     fontWeight: '500',
+  },
+  optionChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  optionChipSelected: {
+    backgroundColor: '#9B87CE',
+    borderColor: '#9B87CE',
+  },
+  optionChipText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  optionChipTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   addInterestContainer: {
     flexDirection: 'row',

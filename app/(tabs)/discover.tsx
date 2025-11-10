@@ -1052,9 +1052,21 @@ export default function Discover() {
             console.error('Failed to send match notification:', err);
           });
         }
-      } else {
-        console.log('ℹ️ Like recorded, waiting for mutual like');
+
+        // Track last swipe for rewind
+        setLastSwipe({
+          profile: targetProfile,
+          action: 'like',
+          index: currentIndex,
+        });
+
+        // DON'T advance the card when there's a match
+        // The modal close handler will advance it
+        return;
       }
+
+      // No match - proceed with normal flow
+      console.log('ℹ️ Like recorded, waiting for mutual like');
 
       // Send like notification to the other user (so they know someone liked them)
       await sendLikeNotification(targetProfile.id, currentUserName, currentProfileId);
@@ -1341,10 +1353,21 @@ export default function Discover() {
     setShowMatchModal(false);
     setMatchedProfile(null);
     setMatchId(null);
+
+    // Advance to next card after closing match modal
+    const newIndex = currentIndex + 1;
+    console.log('➡️ Match modal closed, moving to index:', newIndex);
+    setCurrentIndex(newIndex);
   };
 
   const handleSendMessage = () => {
     setShowMatchModal(false);
+
+    // Advance to next card after going to chat
+    const newIndex = currentIndex + 1;
+    console.log('➡️ Navigating to chat, moving to index:', newIndex);
+    setCurrentIndex(newIndex);
+
     if (matchId) {
       router.push(`/chat/${matchId}`);
     }

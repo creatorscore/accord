@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 import { validatePromptAnswer, validateContent } from '@/lib/content-moderation';
 
 const PROMPTS = [
@@ -345,7 +346,7 @@ export default function Prompts() {
         <View className="flex-row gap-3">
           <TouchableOpacity
             className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
-            onPress={() => router.back()}
+            onPress={() => goToPreviousOnboardingStep('/(onboarding)/prompts')}
             disabled={loading}
           >
             <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>

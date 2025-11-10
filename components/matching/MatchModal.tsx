@@ -148,7 +148,7 @@ export default function MatchModal({
           </View>
 
           {/* Compatibility Score */}
-          {matchedProfile.compatibility_score && (
+          {(matchedProfile.compatibility_score !== undefined && matchedProfile.compatibility_score !== null) && (
             <View className="bg-purple-100 rounded-2xl p-4 mb-6">
               <View className="flex-row items-center justify-center">
                 <MaterialCommunityIcons name="star-circle" size={24} color="#9B87CE" />

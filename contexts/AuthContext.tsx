@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { initializeEncryption, hasEncryptionKeys } from '@/lib/encryption';
-import { setUser as setSentryUser } from '@/lib/sentry';
+// import { setUser as setSentryUser } from '@/lib/sentry'; // Temporarily disabled
 import { identifyUser, resetUser, trackUserAction } from '@/lib/analytics';
 
 interface AuthContextType {
@@ -51,14 +51,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setSession(session);
       setUser(session?.user ?? null);
 
-      // Update user identity in Sentry and PostHog
+      // Update user identity in PostHog
       if (session?.user) {
-        setSentryUser({ id: session.user.id });
+        // setSentryUser({ id: session.user.id }); // Temporarily disabled
         identifyUser(session.user.id, {
           email: session.user.email,
         });
       } else {
-        setSentryUser(null);
+        // setSentryUser(null); // Temporarily disabled
         resetUser();
       }
     });

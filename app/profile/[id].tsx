@@ -15,6 +15,8 @@ import ProfileQuickFacts from '@/components/profile/ProfileQuickFacts';
 import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
 import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
+import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
+import { logScreenshotEvent } from '@/lib/screenshot-tracking';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -86,6 +88,8 @@ interface Preferences {
   willing_to_relocate?: boolean;
   search_globally?: boolean;
   preferred_cities?: string[];
+  dealbreakers?: string[];
+  must_haves?: string[];
 }
 
 // Helper function to format arrays or strings
@@ -185,6 +189,13 @@ export default function ProfileView() {
   const [otherUserRevealed, setOtherUserRevealed] = useState(false); // Profile revealed to current user
   const [revealLoading, setRevealLoading] = useState(false);
 
+  // Screenshot tracking - log when someone screenshots this profile
+  useScreenCaptureProtection(true, async () => {
+    if (currentProfileId && id) {
+      await logScreenshotEvent(currentProfileId, id, 'profile_view');
+    }
+  });
+
   useEffect(() => {
     loadCurrentProfile();
   }, []);
@@ -194,7 +205,7 @@ export default function ProfileView() {
       loadProfile();
       checkIfMatched();
     }
-  }, [id, currentProfileId]);
+  }, [id, currentProfileId, currentPreferences]);
 
   // Refetch profile data when screen comes back into focus (e.g., after editing)
   useFocusEffect(
@@ -203,7 +214,7 @@ export default function ProfileView() {
         loadProfile();
         checkIfMatched();
       }
-    }, [id, currentProfileId])
+    }, [id, currentProfileId, currentPreferences])
   );
 
   const loadCurrentProfile = async () => {
@@ -221,11 +232,17 @@ export default function ProfileView() {
       setCurrentProfile(profileData);
 
       // Load current user's preferences for compatibility calculation
-      const { data: prefsData } = await supabase
+      const { data: prefsData, error: prefsError } = await supabase
         .from('preferences')
         .select('*')
         .eq('profile_id', profileData.id)
         .single();
+
+      if (prefsError) {
+        console.error('Error loading current user preferences:', prefsError);
+      } else {
+        console.log('✅ Current user preferences loaded:', prefsData);
+      }
 
       setCurrentPreferences(prefsData);
     } catch (error: any) {
@@ -356,6 +373,8 @@ export default function ProfileView() {
           sexual_orientation,
           location_city,
           location_state,
+          latitude,
+          longitude,
           bio,
           occupation,
           education,
@@ -424,7 +443,6 @@ export default function ProfileView() {
             lifestyle: breakdown.lifestyle,
             personality: breakdown.personality,
             demographics: breakdown.demographics,
-            orientation: breakdown.orientation,
           });
 
           console.log('Compatibility breakdown calculated:', breakdown);
@@ -961,6 +979,44 @@ export default function ProfileView() {
             />
           )}
 
+          {/* Must-Haves */}
+          {preferences?.must_haves && preferences.must_haves.length > 0 && (
+            <View style={{ marginBottom: 20, backgroundColor: '#F0FDF4', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#86EFAC' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={{ fontSize: 24, marginRight: 8 }}>✅</Text>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#166534' }}>Must-Haves</Text>
+              </View>
+              <Text style={{ fontSize: 14, color: '#16A34A', marginBottom: 12, fontStyle: 'italic' }}>
+                Important qualities they're looking for
+              </Text>
+              {preferences.must_haves.map((item, index) => (
+                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 16, color: '#15803D', marginRight: 8 }}>•</Text>
+                  <Text style={{ fontSize: 15, color: '#15803D', flex: 1, lineHeight: 22 }}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Dealbreakers */}
+          {preferences?.dealbreakers && preferences.dealbreakers.length > 0 && (
+            <View style={{ marginBottom: 20, backgroundColor: '#FEF2F2', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#FCA5A5' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={{ fontSize: 24, marginRight: 8 }}>🚫</Text>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#991B1B' }}>Dealbreakers</Text>
+              </View>
+              <Text style={{ fontSize: 14, color: '#DC2626', marginBottom: 12, fontStyle: 'italic' }}>
+                Important boundaries to be aware of
+              </Text>
+              {preferences.dealbreakers.map((item, index) => (
+                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 16, color: '#B91C1C', marginRight: 8 }}>•</Text>
+                  <Text style={{ fontSize: 15, color: '#B91C1C', flex: 1, lineHeight: 22 }}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Hobbies Section */}
           {profile.hobbies && profile.hobbies.length > 0 && (
             <View style={{ marginBottom: 16 }}>
@@ -1368,12 +1424,6 @@ export default function ProfileView() {
                   icon="account-group"
                   color="#EC4899"
                 />
-                <CompatibilityBar
-                  label="Orientation & Identity"
-                  score={compatibilityBreakdown.orientation}
-                  icon="gender-transgender"
-                  color="#06B6D4"
-                />
               </View>
 
               {/* Detailed Text Breakdown */}
@@ -1465,7 +1515,7 @@ export default function ProfileView() {
                 </View>
 
                 {/* Demographics Analysis */}
-                <View style={{ marginBottom: 16 }}>
+                <View style={{ marginBottom: 0 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                     <MaterialCommunityIcons name="account-group" size={20} color="#EC4899" />
                     <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
@@ -1481,26 +1531,6 @@ export default function ProfileView() {
                       : compatibilityBreakdown.demographics >= 60
                       ? `You have some shared background elements. ${profile.religion !== currentProfile?.religion ? 'You have different religious backgrounds, which can bring diverse perspectives.' : ''} ${profile.political_views !== currentProfile?.political_views ? 'Your political views differ, but mutual respect is what matters most.' : ''} Your differences can be enriching if approached with open minds.`
                       : `You come from different backgrounds, which can offer valuable perspectives. ${profile.religion && currentProfile?.religion && profile.religion !== currentProfile.religion ? `Your ${profile.religion} and ${currentProfile.religion} backgrounds may require extra communication about values.` : ''} ${profile.political_views && currentProfile?.political_views && profile.political_views !== currentProfile.political_views ? 'Your differing political views are worth discussing to ensure mutual respect.' : ''} Diversity can strengthen a partnership when handled thoughtfully.`}
-                  </Text>
-                </View>
-
-                {/* Orientation Analysis */}
-                <View style={{ marginBottom: 0 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="gender-transgender" size={20} color="#06B6D4" />
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                      Identity & Orientation
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#06B6D4', marginLeft: 'auto' }}>
-                      {Math.round(compatibilityBreakdown.orientation)}%
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-                    {compatibilityBreakdown.orientation >= 80
-                      ? `Your identities and orientations are well-aligned. ${profile.gender && currentProfile?.gender ? 'You match each other\'s gender preferences.' : ''} ${profile.sexual_orientation && currentProfile?.sexual_orientation ? 'You understand and respect each other\'s orientations.' : ''} This creates a foundation of mutual understanding and respect for who you are.`
-                      : compatibilityBreakdown.orientation >= 60
-                      ? `You have good compatibility in terms of identity and orientation. ${profile.pronouns && currentProfile?.pronouns ? 'You respect each other\'s pronouns and identity.' : ''} While there may be some differences, mutual respect and understanding are what truly matter in a lavender marriage.`
-                      : `You have some differences in identity or orientation preferences. ${preferences?.gender_preference && preferences.gender_preference.length > 0 ? 'Consider discussing gender expectations and preferences openly.' : ''} Clear communication about identity, boundaries, and expectations will be essential for a successful partnership.`}
                   </Text>
                 </View>
               </View>

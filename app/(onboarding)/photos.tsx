@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { optimizeImage, uriToArrayBuffer, validateImage } from '@/lib/image-optimization';
+import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 
 interface Photo {
   uri: string;
@@ -263,7 +264,7 @@ export default function Photos() {
         <View className="flex-row gap-3">
           <TouchableOpacity
             className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
-            onPress={() => router.back()}
+            onPress={() => goToPreviousOnboardingStep('/(onboarding)/photos')}
             disabled={uploading}
           >
             <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>

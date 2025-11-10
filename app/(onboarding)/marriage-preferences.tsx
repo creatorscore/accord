@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 import { useTranslation } from 'react-i18next';
 
 const PRIMARY_REASONS = [
@@ -631,7 +632,7 @@ export default function MarriagePreferences() {
         <View className="flex-row gap-3 mt-8">
           <TouchableOpacity
             className="flex-1 py-4 rounded-full border border-gray-300"
-            onPress={() => router.back()}
+            onPress={() => goToPreviousOnboardingStep('/(onboarding)/marriage-preferences')}
             disabled={loading}
           >
             <Text className="text-gray-700 text-center font-semibold text-lg">{t('common.back')}</Text>

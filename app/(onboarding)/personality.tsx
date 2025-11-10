@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { GradientButton } from '@/components/shared/GradientButton';
+import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 
 const ZODIAC_SIGNS = [
   'Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo',
@@ -421,7 +422,7 @@ export default function Personality() {
         <View className="flex-row gap-3 mt-8">
           <TouchableOpacity
             className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
-            onPress={() => router.back()}
+            onPress={() => goToPreviousOnboardingStep('/(onboarding)/personality')}
             disabled={loading}
           >
             <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>

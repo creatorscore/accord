@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
-import { captureException } from '@/lib/sentry';
+// import { captureException } from '@/lib/sentry'; // Temporarily disabled
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -34,15 +34,15 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
 
-    // Send error to Sentry
-    try {
-      captureException(error, {
-        errorInfo: errorInfo.componentStack,
-        errorBoundary: true,
-      });
-    } catch (sentryError) {
-      console.error('Failed to send error to Sentry:', sentryError);
-    }
+    // Send error to Sentry (temporarily disabled)
+    // try {
+    //   captureException(error, {
+    //     errorInfo: errorInfo.componentStack,
+    //     errorBoundary: true,
+    //   });
+    // } catch (sentryError) {
+    //   console.error('Failed to send error to Sentry:', sentryError);
+    // }
   }
 
   handleReload = async () => {
