@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		26A948BD2EC51C860071D021 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 26A948BC2EC51C860071D021 /* StoreKit.framework */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		46D6C78035124B838E71977B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C5D4BA42E2FE4D01B8430DA5 /* PrivacyInfo.xcprivacy */; };
 		9F8301EBBA2AF1AEA61CFDEE /* libPods-AccordLavenderMarriage.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BEA93DC648E359EAD862EC96 /* libPods-AccordLavenderMarriage.a */; };
@@ -21,12 +22,13 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = AccordLavenderMarriage/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = AccordLavenderMarriage/Info.plist; sourceTree = "<group>"; };
 		1DD560C9B0A04AB5BC510B08 /* Pods-AccordLavenderMarriage.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AccordLavenderMarriage.debug.xcconfig"; path = "Target Support Files/Pods-AccordLavenderMarriage/Pods-AccordLavenderMarriage.debug.xcconfig"; sourceTree = "<group>"; };
+		26A948BC2EC51C860071D021 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		3ED29EC37E2156500C59FB10 /* Pods-AccordLavenderMarriage.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AccordLavenderMarriage.release.xcconfig"; path = "Target Support Files/Pods-AccordLavenderMarriage/Pods-AccordLavenderMarriage.release.xcconfig"; sourceTree = "<group>"; };
 		7330E52DE8E9CED57715D0A2 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-AccordLavenderMarriage/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = AccordLavenderMarriage/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		BEA93DC648E359EAD862EC96 /* libPods-AccordLavenderMarriage.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-AccordLavenderMarriage.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		C5D4BA42E2FE4D01B8430DA5 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = PrivacyInfo.xcprivacy; path = AccordLavenderMarriage/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C5D4BA42E2FE4D01B8430DA5 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = PrivacyInfo.xcprivacy; path = AccordLavenderMarriage/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = AccordLavenderMarriage/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* AccordLavenderMarriage-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "AccordLavenderMarriage-Bridging-Header.h"; path = "AccordLavenderMarriage/AccordLavenderMarriage-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -38,6 +40,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9F8301EBBA2AF1AEA61CFDEE /* libPods-AccordLavenderMarriage.a in Frameworks */,
+				26A948BD2EC51C860071D021 /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -50,7 +53,6 @@
 				1DD560C9B0A04AB5BC510B08 /* Pods-AccordLavenderMarriage.debug.xcconfig */,
 				3ED29EC37E2156500C59FB10 /* Pods-AccordLavenderMarriage.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -71,6 +73,7 @@
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				26A948BC2EC51C860071D021 /* StoreKit.framework */,
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				BEA93DC648E359EAD862EC96 /* libPods-AccordLavenderMarriage.a */,
 			);
@@ -372,7 +375,7 @@
 				CODE_SIGN_ENTITLEMENTS = AccordLavenderMarriage/AccordLavenderMarriage.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = 9ZLQKAZ6TT;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -411,7 +414,7 @@
 				CODE_SIGN_ENTITLEMENTS = AccordLavenderMarriage/AccordLavenderMarriage.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = 9ZLQKAZ6TT;
 				INFOPLIST_FILE = AccordLavenderMarriage/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;

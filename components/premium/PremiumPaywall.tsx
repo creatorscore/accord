@@ -258,6 +258,14 @@ export default function PremiumPaywall({
       }
     } catch (error: any) {
       console.error('Purchase error:', error);
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        readableErrorCode: error.readableErrorCode,
+        underlyingErrorMessage: error.underlyingErrorMessage,
+        userCancelled: error.userCancelled,
+        fullError: JSON.stringify(error, null, 2)
+      });
 
       // Check if user cancelled
       if (error.userCancelled || error.code === 'E_USER_CANCELLED') {
@@ -304,7 +312,25 @@ export default function PremiumPaywall({
       } else if (errorMessage.includes('network')) {
         Alert.alert('Error', 'Network error. Please check your connection and try again.', [{ text: 'OK' }]);
       } else {
-        Alert.alert('Error', 'Something went wrong. Please try again or contact support.', [{ text: 'OK' }]);
+        // Show detailed error for debugging in TestFlight
+        const debugInfo = `Code: ${errorCode}\nMessage: ${errorMessage}\nReadable: ${error.readableErrorCode || 'N/A'}\nUnderlying: ${error.underlyingErrorMessage || 'N/A'}`;
+
+        Alert.alert(
+          'Purchase Error',
+          __DEV__
+            ? debugInfo
+            : 'Something went wrong. Please try again or contact support.\n\nError: ' + errorMessage,
+          [
+            {
+              text: 'Copy Error',
+              onPress: () => {
+                // Note: In production, you'd use Clipboard.setString(debugInfo)
+                console.log('Error to copy:', debugInfo);
+              }
+            },
+            { text: 'OK' }
+          ]
+        );
       }
     } finally {
       setLoading(false);
@@ -464,6 +490,17 @@ export default function PremiumPaywall({
             Subscription automatically renews unless cancelled at least 24 hours before the end of the current
             period. Payment charged to your Apple or Google account. Manage in Account Settings.
           </Text>
+
+          {/* Terms of Use & Privacy Policy (Required by App Store) */}
+          <View style={styles.legalLinks}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/terms')}>
+              <Text style={styles.legalLinkText}>Terms of Use</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalLinkSeparator}>•</Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/privacy')}>
+              <Text style={styles.legalLinkText}>Privacy Policy</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
           </SafeAreaView>
         </LinearGradient>
@@ -645,5 +682,21 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  legalLinks: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 8,
+  },
+  legalLinkText: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textDecorationLine: 'underline',
+  },
+  legalLinkSeparator: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.5)',
   },
 });

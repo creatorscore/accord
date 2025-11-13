@@ -222,19 +222,19 @@ export default function Profile() {
 
   const handleSignOut = async () => {
     Alert.alert(
-      t('profile.signOut'),
-      t('profile.signOutConfirmation'),
+      t('profile.signOutDialog.title'),
+      t('profile.signOutDialog.message'),
       [
-        { text: t('profile.cancel'), style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: t('profile.signOut'),
+          text: t('profile.signOutDialog.confirm'),
           style: 'destructive',
           onPress: async () => {
             try {
               await signOut();
               router.replace('/(auth)/welcome');
             } catch (error) {
-              Alert.alert(t('profile.error'), t('profile.signOutError'));
+              Alert.alert(t('common.error'), t('profile.signOutDialog.error'));
             }
           },
         },

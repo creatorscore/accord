@@ -17,8 +17,9 @@ export default function SubscriptionManagement() {
   const [loadingOfferings, setLoadingOfferings] = useState(true);
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annual'>('annual'); // Default to annual (best value)
 
-  // Check if in development mode
-  const isDevelopmentMode = process.env.EXPO_PUBLIC_APP_ENV === 'development' || __DEV__;
+  // ALWAYS use RevenueCat - no development mode bypass
+  // This ensures subscriptions work in TestFlight and Production
+  const isDevelopmentMode = false;
 
   useEffect(() => {
     // Only load offerings if not in development mode
@@ -34,8 +35,17 @@ export default function SubscriptionManagement() {
       setLoadingOfferings(true);
       const available = await getOfferings();
       setOfferings(available);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading offerings:', error);
+      // Show user-friendly error message
+      Alert.alert(
+        'Unable to Load Subscriptions',
+        error.message || 'Please check your internet connection and try again.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Try Again', onPress: loadOfferings }
+        ]
+      );
     } finally {
       setLoadingOfferings(false);
     }
@@ -599,6 +609,23 @@ export default function SubscriptionManagement() {
               </Text>
             </View>
           </View>
+        </View>
+
+        {/* Terms of Use & Privacy Policy (Required by App Store) */}
+        <View className="mt-4 flex-row justify-center items-center space-x-4">
+          <TouchableOpacity
+            onPress={() => Linking.openURL('https://joinaccord.app/terms')}
+            className="py-2"
+          >
+            <Text className="text-purple-600 text-sm font-medium underline">Terms of Use</Text>
+          </TouchableOpacity>
+          <Text className="text-gray-400">•</Text>
+          <TouchableOpacity
+            onPress={() => Linking.openURL('https://joinaccord.app/privacy')}
+            className="py-2"
+          >
+            <Text className="text-purple-600 text-sm font-medium underline">Privacy Policy</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Development Mode Notice */}
