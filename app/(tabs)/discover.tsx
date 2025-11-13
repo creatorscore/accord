@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
+import { useScreenProtection } from '@/hooks/useScreenProtection';
 import SwipeCard from '@/components/matching/SwipeCard';
 import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
 import MatchModal from '@/components/matching/MatchModal';
@@ -79,6 +80,9 @@ const hashPhoneNumber = async (phoneNumber: string): Promise<string> => {
 };
 
 export default function Discover() {
+  // Protect user profiles from screenshots
+  useScreenProtection();
+
   const { t } = useTranslation();
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();

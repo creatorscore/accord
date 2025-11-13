@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
+import { useScreenProtection } from '@/hooks/useScreenProtection';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import { sendMessageNotification } from '@/lib/notifications';
@@ -73,6 +74,11 @@ interface MatchStatus {
 }
 
 export default function Chat() {
+  // Enable screenshot and screen recording protection for privacy
+  useScreenProtection(true, {
+    customMessage: 'Private conversations are protected'
+  });
+
   const { t } = useTranslation();
   const { matchId } = useLocalSearchParams();
   const { user } = useAuth();

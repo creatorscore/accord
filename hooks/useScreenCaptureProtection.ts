@@ -1,84 +1,70 @@
-import { useEffect, useState } from 'react';
-import { Platform, Alert, AppState } from 'react-native';
+import { useEffect } from 'react';
+import CaptureProtection from 'react-native-capture-protection';
 
 /**
- * Hook to protect against screenshots and screen recording
+ * Hook to protect against screenshots and screen recording using react-native-capture-protection
  *
- * Android: Completely blocks screenshots and screen recording (FLAG_SECURE)
- * iOS:
- *   - Makes screenshots appear black by overlaying content when app is inactive
- *   - Detects screenshots and logs security alert
- *   - Black overlay shown during app switcher/background (Telegram-style)
+ * iOS & Android:
+ *   - Screenshots appear BLACK (not just overlayed)
+ *   - Screen recording shows custom message or blank screen
+ *   - App switcher preview is protected
  *
- * Note: iOS does not provide an API to detect active screen recording or prevent
- * screenshots while the app is in the foreground. This is a platform limitation.
+ * This is a more powerful solution than expo-screen-capture as it uses native
+ * APIs to actually make screenshots appear black, rather than just overlaying content.
  *
- * @param enabled - Whether screenshot protection is enabled
- * @param onScreenshot - Optional callback when screenshot is detected (receives no params)
+ * @param enabled - Whether screenshot protection is enabled (default: true)
+ * @param onScreenshot - Optional callback when screenshot is detected (legacy compatibility)
+ * @param customMessage - Custom message to show during screen recording
  *
- * Returns: showOverlay state for iOS (use with ScreenCaptureOverlay component)
+ * @deprecated Use useScreenProtection hook instead for new code
  */
 export function useScreenCaptureProtection(
   enabled: boolean = true,
-  onScreenshot?: () => void | Promise<void>
+  onScreenshot?: () => void | Promise<void>,
+  customMessage?: string
 ) {
-  const [showSecurityOverlay, setShowSecurityOverlay] = useState(false);
-
   useEffect(() => {
     if (!enabled) return;
 
-    if (Platform.OS === 'ios') {
-      // iOS: Overlay screen content to make screenshots appear black
-      const ScreenCapture = require('expo-screen-capture');
-
-      // Listen for app state changes (inactive = screenshot/app switcher)
-      const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
-        if (nextAppState === 'inactive' || nextAppState === 'background') {
-          // App is going to background or inactive - show security overlay
-          // This makes screenshots and app switcher previews appear black
-          setShowSecurityOverlay(true);
-        } else if (nextAppState === 'active') {
-          // App is active again - hide security overlay
-          setShowSecurityOverlay(false);
-        }
-      });
-
-      // Detect screenshots and warn user
-      let screenshotSubscription: any;
-      if (ScreenCapture.addScreenshotListener) {
-        screenshotSubscription = ScreenCapture.addScreenshotListener(async () => {
-          // Screenshot was taken
-          console.warn('[SECURITY] Screenshot detected');
-
-          // Call the callback to log the event
-          if (onScreenshot) {
-            try {
-              await onScreenshot();
-            } catch (error) {
-              console.error('Error logging screenshot event:', error);
-            }
-          }
-
-          // Optional: Show subtle warning (don't interrupt user flow)
-          setTimeout(() => {
-            Alert.alert(
-              'Privacy Notice',
-              'Screenshots are logged for security. Please respect other users\' privacy.',
-              [{ text: 'Understood' }]
-            );
-          }, 500);
-        });
-      }
-
-      return () => {
-        appStateSubscription?.remove();
-        screenshotSubscription?.remove();
-      };
+    // Check if native module is available
+    if (!CaptureProtection || typeof CaptureProtection.prevent !== 'function') {
+      console.warn('⚠️ react-native-capture-protection native module not available. Screenshot protection disabled.');
+      return;
     }
 
-    // Android: Screenshots are blocked at native level (MainActivity.kt with FLAG_SECURE)
-    // No JS code needed - screenshots will fail completely
-  }, [enabled, onScreenshot]);
+    try {
+      // Enable screen protection with react-native-capture-protection
+      CaptureProtection.prevent({
+        screenshot: true,      // Screenshots appear black
+        record: {
+          text: customMessage || 'Content is protected',
+          textColor: '#FFFFFF',
+          backgroundColor: '#9B87CE'
+        },
+        appSwitcher: true,     // App switcher preview protected
+      });
 
-  return showSecurityOverlay;
+      // Note: onScreenshot callback is deprecated as react-native-capture-protection
+      // doesn't provide screenshot detection on iOS (Apple limitation)
+      if (onScreenshot) {
+        console.warn('onScreenshot callback is deprecated and will not be called');
+      }
+
+      // Cleanup: Allow screenshots when leaving the screen
+      return () => {
+        try {
+          if (CaptureProtection && typeof CaptureProtection.allow === 'function') {
+            CaptureProtection.allow();
+          }
+        } catch (error) {
+          console.error('Error disabling screenshot protection:', error);
+        }
+      };
+    } catch (error) {
+      console.error('Error enabling screenshot protection:', error);
+    }
+  }, [enabled, customMessage]);
+
+  // Return false for backward compatibility (no overlay needed anymore)
+  return false;
 }

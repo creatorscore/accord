@@ -57,18 +57,41 @@ export const initializeRevenueCat = async (userId?: string) => {
  */
 export const getOfferings = async (): Promise<PurchasesOffering | null> => {
   if (!isInitialized) {
-    return null;
+    console.error('❌ getOfferings failed: RevenueCat not initialized');
+    throw new Error('RevenueCat not initialized. Please check API key configuration.');
   }
 
   try {
+    console.log('📦 Fetching offerings from RevenueCat...');
     const offerings = await Purchases.getOfferings();
-    if (offerings.current !== null) {
+
+    console.log('📦 Offerings response:', {
+      hasOfferings: !!offerings,
+      hasCurrent: !!offerings.current,
+      currentIdentifier: offerings.current?.identifier,
+      allOfferingIds: Object.keys(offerings.all || {}),
+      packageCount: offerings.current?.availablePackages?.length || 0,
+    });
+
+    if (offerings.current !== null && offerings.current.availablePackages.length > 0) {
+      console.log('✅ Successfully loaded offerings');
       return offerings.current;
     }
-    return null;
-  } catch (error) {
-    console.error('Error getting offerings:', error);
-    return null;
+
+    console.warn('⚠️ No current offering available. Check RevenueCat dashboard configuration.');
+    console.warn('Available offerings:', Object.keys(offerings.all || {}));
+    throw new Error('No subscription packages configured in RevenueCat. Please configure offerings in the RevenueCat dashboard.');
+  } catch (error: any) {
+    console.error('❌ Error getting offerings:', {
+      message: error.message,
+      code: error.code,
+      readableErrorCode: error.readableErrorCode,
+      underlyingErrorMessage: error.underlyingErrorMessage,
+      userInfo: error.userInfo,
+      domain: error.domain,
+      errorKeys: Object.keys(error)
+    });
+    throw error;
   }
 };
 
@@ -83,7 +106,7 @@ export const purchasePackage = async (pkg: PurchasesPackage): Promise<CustomerIn
 
   try {
     const { customerInfo } = await Purchases.purchasePackage(pkg);
-    console.log('Purchase successful:', {
+    console.log('✅ Purchase successful:', {
       hasActiveSubscriptions: Object.keys(customerInfo.entitlements.active).length > 0,
       activeEntitlements: Object.keys(customerInfo.entitlements.active),
     });
@@ -94,7 +117,16 @@ export const purchasePackage = async (pkg: PurchasesPackage): Promise<CustomerIn
       // Return null for user cancellation (not an error)
       return null;
     } else {
-      console.error('Error purchasing package:', error);
+      console.error('❌ Error purchasing package:', error);
+      console.error('RevenueCat error details:', {
+        code: error.code,
+        message: error.message,
+        readableErrorCode: error.readableErrorCode,
+        underlyingErrorMessage: error.underlyingErrorMessage,
+        userCancelled: error.userCancelled,
+        domain: error.domain,
+        errorKeys: Object.keys(error)
+      });
       // Re-throw the error so it can be caught by the caller
       throw error;
     }

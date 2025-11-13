@@ -36,8 +36,9 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [dbPremiumStatus, setDbPremiumStatus] = useState(false);
   const [dbPlatinumStatus, setDbPlatinumStatus] = useState(false);
 
-  // Check if we should use database-only mode (development only)
-  const isDatabaseOnlyMode = process.env.EXPO_PUBLIC_APP_ENV === 'development';
+  // ALWAYS use RevenueCat - no development mode bypass
+  // This ensures subscriptions work in TestFlight and Production
+  const isDatabaseOnlyMode = false;
 
   // Load premium status from database (for both dev and production as fallback)
   useEffect(() => {

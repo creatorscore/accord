@@ -34,6 +34,7 @@ import '../global.css';
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
   const [i18nInitialized, setI18nInitialized] = useState(false);
+  const [splashAnimationDone, setSplashAnimationDone] = useState(false);
 
   // Enable screenshot protection app-wide (returns true when overlay should show)
   const showSecurityOverlay = useScreenCaptureProtection(true);
@@ -75,6 +76,13 @@ export default function RootLayout() {
     initialize();
   }, []);
 
+  // Only hide splash when BOTH animation is done AND i18n is initialized
+  useEffect(() => {
+    if (splashAnimationDone && i18nInitialized) {
+      setShowSplash(false);
+    }
+  }, [splashAnimationDone, i18nInitialized]);
+
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -87,8 +95,8 @@ export default function RootLayout() {
                 <StatusBar style="auto" />
 
                 {/* Overlay splash screen while initializing */}
-                {(showSplash || !i18nInitialized) && (
-                  <SplashScreen onFinish={() => setShowSplash(false)} />
+                {showSplash && (
+                  <SplashScreen onFinish={() => setSplashAnimationDone(true)} />
                 )}
 
                 {/* Security overlay for screenshot protection (iOS) */}

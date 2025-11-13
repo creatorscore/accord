@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
+import { useScreenProtection } from '@/hooks/useScreenProtection';
 import { isOnline, getLastActiveText } from '@/lib/online-status';
 import { realtimeManager } from '@/lib/realtime-manager';
 
@@ -38,6 +39,9 @@ interface Match {
 }
 
 export default function Matches() {
+  // Protect match list from screenshots
+  useScreenProtection();
+
   const { t } = useTranslation();
   const { user } = useAuth();
   const { isPremium } = useSubscription();

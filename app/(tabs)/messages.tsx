@@ -12,6 +12,7 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import { getPrivateKey, decryptMessage } from '@/lib/encryption';
+import { useScreenProtection } from '@/hooks/useScreenProtection';
 
 interface Conversation {
   match_id: string;
@@ -51,6 +52,9 @@ export default function Messages() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showActionSheet, setShowActionSheet] = useState(false);
+
+  // Protect conversation list from screenshots
+  useScreenProtection();
 
   useEffect(() => {
     loadCurrentProfile();
