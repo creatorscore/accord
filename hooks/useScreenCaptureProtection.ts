@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import CaptureProtection from 'react-native-capture-protection';
+import { CaptureProtection } from 'react-native-capture-protection';
 
 /**
  * Hook to protect against screenshots and screen recording using react-native-capture-protection
@@ -32,37 +32,51 @@ export function useScreenCaptureProtection(
       return;
     }
 
-    try {
-      // Enable screen protection with react-native-capture-protection
-      CaptureProtection.prevent({
-        screenshot: true,      // Screenshots appear black
-        record: {
-          text: customMessage || 'Content is protected',
-          textColor: '#FFFFFF',
-          backgroundColor: '#9B87CE'
-        },
-        appSwitcher: true,     // App switcher preview protected
-      });
+    let isActive = true;
 
-      // Note: onScreenshot callback is deprecated as react-native-capture-protection
-      // doesn't provide screenshot detection on iOS (Apple limitation)
-      if (onScreenshot) {
-        console.warn('onScreenshot callback is deprecated and will not be called');
+    // Enable protection asynchronously
+    const enableProtection = async () => {
+      try {
+        // Enable screen protection with react-native-capture-protection
+        await CaptureProtection.prevent({
+          screenshot: true,      // Screenshots appear black
+          record: {
+            text: customMessage || 'Content is protected',
+            textColor: '#FFFFFF',
+            backgroundColor: '#9B87CE'
+          },
+          appSwitcher: true,     // App switcher preview protected
+        });
+
+        console.log('✅ Screen protection enabled');
+
+        // Note: onScreenshot callback is deprecated as react-native-capture-protection
+        // doesn't provide screenshot detection on iOS (Apple limitation)
+        if (onScreenshot) {
+          console.warn('onScreenshot callback is deprecated and will not be called');
+        }
+      } catch (error) {
+        console.error('Error enabling screenshot protection:', error);
       }
+    };
 
-      // Cleanup: Allow screenshots when leaving the screen
-      return () => {
+    enableProtection();
+
+    // Cleanup: Allow screenshots when leaving the screen
+    return () => {
+      isActive = false;
+      const disableProtection = async () => {
         try {
           if (CaptureProtection && typeof CaptureProtection.allow === 'function') {
-            CaptureProtection.allow();
+            await CaptureProtection.allow();
+            console.log('✅ Screen protection disabled');
           }
         } catch (error) {
           console.error('Error disabling screenshot protection:', error);
         }
       };
-    } catch (error) {
-      console.error('Error enabling screenshot protection:', error);
-    }
+      disableProtection();
+    };
   }, [enabled, customMessage]);
 
   // Return false for backward compatibility (no overlay needed anymore)
