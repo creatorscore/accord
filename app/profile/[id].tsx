@@ -753,6 +753,7 @@ export default function ProfileView() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* Enhanced Photo Carousel */}
         <ProfilePhotoCarousel
+          profileId={id}
           photos={photos}
           name={profile.display_name}
           age={profile.age}

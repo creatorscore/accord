@@ -23,6 +23,8 @@ import * as Haptics from 'expo-haptics';
 import { formatDistance } from '@/lib/geolocation';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import { logScreenshotEvent } from '@/lib/screenshot-tracking';
+import { DynamicWatermark } from '@/components/security/DynamicWatermark';
+import { useWatermark } from '@/hooks/useWatermark';
 
 const { width, height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.6;
@@ -229,6 +231,7 @@ export default function ImmersiveProfileCard({
   onReport,
   currentProfileId,
 }: ImmersiveProfileCardProps) {
+  const { viewerUserId, isReady: watermarkReady } = useWatermark();
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0);
@@ -368,6 +371,14 @@ export default function ImmersiveProfileCard({
             resizeMode="cover"
             blurRadius={profile.photo_blur_enabled ? 20 : 0}
           />
+          {/* Dynamic Watermark over hero image */}
+          {watermarkReady && (
+            <DynamicWatermark
+              userId={profile.id}
+              viewerUserId={viewerUserId}
+              visible={true}
+            />
+          )}
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.8)']}
             style={styles.heroGradient}

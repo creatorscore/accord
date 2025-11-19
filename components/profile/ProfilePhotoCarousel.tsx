@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { DynamicWatermark } from '@/components/security/DynamicWatermark';
+import { useWatermark } from '@/hooks/useWatermark';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PHOTO_HEIGHT = SCREEN_WIDTH * 1.3;
@@ -26,6 +28,7 @@ interface Photo {
 }
 
 interface ProfilePhotoCarouselProps {
+  profileId: string; // Added for watermark
   photos: Photo[];
   name?: string;
   age?: number;
@@ -37,6 +40,7 @@ interface ProfilePhotoCarouselProps {
 }
 
 export default function ProfilePhotoCarousel({
+  profileId,
   photos,
   name,
   age,
@@ -46,6 +50,7 @@ export default function ProfilePhotoCarousel({
   photoBlurEnabled = false,
   isRevealed = false,
 }: ProfilePhotoCarouselProps) {
+  const { viewerUserId, isReady: watermarkReady } = useWatermark();
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
@@ -77,6 +82,15 @@ export default function ProfilePhotoCarousel({
               resizeMode="cover"
               blurRadius={photoBlurEnabled && !isRevealed ? 30 : 0}
             />
+
+            {/* Dynamic Watermark over photo */}
+            {watermarkReady && (
+              <DynamicWatermark
+                userId={profileId}
+                viewerUserId={viewerUserId}
+                visible={true}
+              />
+            )}
 
             {/* Gradient Overlay */}
             <LinearGradient
