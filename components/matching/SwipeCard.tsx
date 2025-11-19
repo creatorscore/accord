@@ -17,6 +17,8 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DynamicWatermark } from '@/components/security/DynamicWatermark';
+import { useWatermark } from '@/hooks/useWatermark';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.3;
@@ -53,6 +55,7 @@ export default function SwipeCard({
   onSwipeUp,
   onPress,
 }: SwipeCardProps) {
+  const { viewerUserId, isReady: watermarkReady } = useWatermark();
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
@@ -260,6 +263,15 @@ export default function SwipeCard({
               resizeMode="cover"
               blurRadius={profile.photo_blur_enabled ? 30 : 0}
             />
+
+            {/* Dynamic Watermark - renders on top of the image */}
+            {watermarkReady && (
+              <DynamicWatermark
+                userId={profile.id}
+                viewerUserId={viewerUserId}
+                visible={true}
+              />
+            )}
 
             {/* Photo Navigation Zones with Visible Hints */}
             {allPhotos.length > 1 && (
