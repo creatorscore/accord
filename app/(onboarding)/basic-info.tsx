@@ -877,51 +877,35 @@ export default function BasicInfo() {
               </Text>
             </View>
 
-            <Text className="text-xs text-gray-500 mb-2 text-center">— or enter manually —</Text>
-
-            {/* City */}
-            <TextInput
-              className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900 mb-2"
-              placeholder={t('onboarding.city')}
-              value={locationCity}
-              onChangeText={(text) => {
-                setLocationCity(text);
-                // Clear stored coordinates when user manually edits location
-                setLocationCoords(null);
-                // Clear suggestions
-                setShowSuggestions(false);
-                setLocationSuggestions([]);
-              }}
-              editable={!searchingLocation}
-            />
-
-            {/* State/Province and Country */}
-            <View className="flex-row gap-2">
-              <TextInput
-                className="flex-1 bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                placeholder={t('onboarding.state')}
-                value={locationState}
-                onChangeText={(text) => {
-                  setLocationState(text);
-                  // Clear stored coordinates when user manually edits location
-                  setLocationCoords(null);
-                }}
-                autoCapitalize="words"
-                editable={!searchingLocation}
-              />
-              <TextInput
-                className="flex-1 bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                placeholder={t('onboarding.country')}
-                value={locationCountry}
-                onChangeText={(text) => {
-                  setLocationCountry(text);
-                  // Clear stored coordinates when user manually edits location
-                  setLocationCoords(null);
-                }}
-                autoCapitalize="words"
-                editable={!searchingLocation}
-              />
-            </View>
+            {/* Selected Location Display */}
+            {(locationCity || locationState || locationCountry) && (
+              <View className="bg-primary-50 border border-primary-200 rounded-xl px-4 py-3 mt-3">
+                <View className="flex-row items-center">
+                  <MaterialCommunityIcons name="map-marker-check" size={20} color="#9B87CE" />
+                  <View className="ml-3 flex-1">
+                    <Text className="text-gray-900 font-semibold">
+                      {locationCity}
+                      {locationState && `, ${locationState}`}
+                    </Text>
+                    <Text className="text-gray-600 text-sm">
+                      {locationCountry}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setLocationCity('');
+                      setLocationState('');
+                      setLocationCountry('');
+                      setLocationCoords(null);
+                      setLocationSearch('');
+                    }}
+                    className="ml-2"
+                  >
+                    <MaterialCommunityIcons name="close-circle" size={24} color="#9B87CE" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         </View>
 
