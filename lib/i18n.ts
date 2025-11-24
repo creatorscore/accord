@@ -58,7 +58,7 @@ const initI18n = async () => {
       react: {
         useSuspense: false,
       },
-    });
+    } as any);
 
   return i18n;
 };

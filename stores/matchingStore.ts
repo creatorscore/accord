@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { Profile } from '@/types/database.types';
+import { Database } from '@/types/database.types';
+
+type Profile = Database['public']['Tables']['profiles']['Row'];
 
 interface MatchingState {
   discoveryQueue: Profile[];
