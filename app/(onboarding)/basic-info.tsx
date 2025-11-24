@@ -9,7 +9,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { validateDisplayName, getModerationErrorMessage } from '@/lib/content-moderation';
 import { initializeEncryption } from '@/lib/encryption';
 import { useTranslation } from 'react-i18next';
-import DateTimePicker, { DateType } from 'react-native-ui-datepicker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
 
 const GENDERS = [
@@ -117,7 +117,7 @@ export default function BasicInfo() {
   const router = useRouter();
   const { user } = useAuth();
   const [displayName, setDisplayName] = useState('');
-  const [birthDate, setBirthDate] = useState<DateType>(null);
+  const [birthDate, setBirthDate] = useState<Date | undefined>(undefined);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [gender, setGender] = useState<string[]>([]);
@@ -255,7 +255,7 @@ export default function BasicInfo() {
       console.log('📍 Coordinates:', location.coords.latitude, location.coords.longitude);
 
       // Check if we got accurate coordinates (iOS can return approximate)
-      if (!location.coords || location.coords.accuracy > 100) {
+      if (!location.coords || (location.coords.accuracy !== null && location.coords.accuracy > 100)) {
         Alert.alert(
           'Precise Location Required',
           `Location accuracy is too low (${Math.round(location.coords?.accuracy || 0)} meters). Please enable "Precise Location" for Accord in your iPhone Settings:\n\n1. Open Settings\n2. Scroll to Accord\n3. Tap Location\n4. Enable "Precise Location"\n\nOr use the search feature to find your city instead.`,
@@ -668,11 +668,16 @@ export default function BasicInfo() {
                 {/* Calendar Date Picker */}
                 <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 8 }}>
                   <DateTimePicker
-                    mode="single"
-                    date={birthDate}
-                    onChange={({ date }) => setBirthDate(date)}
-                    maxDate={maxBirthDate}
-                    minDate={minBirthDate}
+                    mode="date"
+                    value={birthDate || new Date()}
+                    onChange={(event, selectedDate) => {
+                      if (event.type === 'set' && selectedDate) {
+                        setBirthDate(selectedDate);
+                      }
+                    }}
+                    maximumDate={maxBirthDate}
+                    minimumDate={minBirthDate}
+                    display="spinner"
                   />
                 </View>
 

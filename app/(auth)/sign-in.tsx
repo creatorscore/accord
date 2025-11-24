@@ -76,7 +76,31 @@ export default function SignIn() {
       await new Promise(resolve => setTimeout(resolve, 300));
       router.replace('/');
     } catch (error: any) {
-      const errorMessage = error.message || 'Failed to sign in';
+      console.error('Sign-in error:', error);
+
+      // Parse error message - handle JSON errors and extract user-friendly message
+      let errorMessage = 'Failed to sign in';
+      try {
+        if (error.message) {
+          errorMessage = error.message;
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        } else if (error.error_description) {
+          errorMessage = error.error_description;
+        }
+      } catch (parseError) {
+        console.error('Error parsing error message:', parseError);
+      }
+
+      // Handle rate limiting errors
+      if (errorMessage.includes('rate limit') || errorMessage.includes('too many requests') || error.status === 429) {
+        Alert.alert(
+          'Too Many Attempts',
+          'You\'ve made too many sign-in attempts. Please wait a few minutes and try again.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
 
       // Check if the error is because of invalid credentials
       if (errorMessage.includes('Invalid login credentials')) {
@@ -166,7 +190,7 @@ export default function SignIn() {
       // Let the root index.tsx handle navigation based on profile status
       if (result) {
         // Check if user is banned before proceeding
-        const userEmail = result.user?.email;
+        const userEmail = 'user' in result ? result.user?.email : undefined;
         if (userEmail) {
           const canProceed = await checkBanAndProceed(userEmail);
           if (!canProceed) {
@@ -182,8 +206,28 @@ export default function SignIn() {
         router.replace('/');
       }
     } catch (error: any) {
+      console.error('Google sign-in error:', error);
       if (error.message !== 'User cancelled') {
-        Alert.alert(t('common.error'), error.message || 'Failed to sign in with Google');
+        // Parse error message
+        let errorMessage = 'Failed to sign in with Google';
+        try {
+          if (error.message) errorMessage = error.message;
+          else if (error.error_description) errorMessage = error.error_description;
+        } catch (parseError) {
+          console.error('Error parsing Google error:', parseError);
+        }
+
+        // Handle rate limiting
+        if (errorMessage.includes('rate limit') || errorMessage.includes('too many requests') || error.status === 429) {
+          Alert.alert(
+            'Too Many Attempts',
+            'Please wait a few minutes before trying to sign in again.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+
+        Alert.alert(t('common.error'), errorMessage);
       }
     } finally {
       setLoading(false);
@@ -212,7 +256,27 @@ export default function SignIn() {
         router.replace('/');
       }
     } catch (error: any) {
-      Alert.alert(t('common.error'), error.message || 'Failed to sign in with Apple');
+      console.error('Apple sign-in error:', error);
+      // Parse error message
+      let errorMessage = 'Failed to sign in with Apple';
+      try {
+        if (error.message) errorMessage = error.message;
+        else if (error.error_description) errorMessage = error.error_description;
+      } catch (parseError) {
+        console.error('Error parsing Apple error:', parseError);
+      }
+
+      // Handle rate limiting
+      if (errorMessage.includes('rate limit') || errorMessage.includes('too many requests') || error.status === 429) {
+        Alert.alert(
+          'Too Many Attempts',
+          'Please wait a few minutes before trying to sign in again.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      Alert.alert(t('common.error'), errorMessage);
     } finally {
       setLoading(false);
     }

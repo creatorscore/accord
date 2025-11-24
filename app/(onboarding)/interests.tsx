@@ -36,6 +36,7 @@ export default function Interests() {
   const [loading, setLoading] = useState(false);
 
   const [hobbies, setHobbies] = useState<string[]>([]);
+  const [customHobby, setCustomHobby] = useState('');
   const [favoriteMovies, setFavoriteMovies] = useState('');
   const [favoriteMusic, setFavoriteMusic] = useState('');
   const [favoriteBooks, setFavoriteBooks] = useState('');
@@ -49,12 +50,34 @@ export default function Interests() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, hobbies, interests')
         .eq('user_id', user?.id)
         .single();
 
       if (error) throw error;
       setProfileId(data.id);
+
+      // Load existing hobbies
+      if (data.hobbies && data.hobbies.length > 0) {
+        console.log('📋 Loaded existing hobbies:', data.hobbies);
+        setHobbies(data.hobbies);
+      }
+
+      // Load existing interests
+      if (data.interests) {
+        if (data.interests.movies && data.interests.movies.length > 0) {
+          setFavoriteMovies(data.interests.movies.join(', '));
+        }
+        if (data.interests.music && data.interests.music.length > 0) {
+          setFavoriteMusic(data.interests.music.join(', '));
+        }
+        if (data.interests.books && data.interests.books.length > 0) {
+          setFavoriteBooks(data.interests.books.join(', '));
+        }
+        if (data.interests.tv_shows && data.interests.tv_shows.length > 0) {
+          setFavoriteTvShows(data.interests.tv_shows.join(', '));
+        }
+      }
     } catch (error: any) {
       Alert.alert('Error', 'Failed to load profile');
     }
@@ -70,6 +93,37 @@ export default function Interests() {
       }
       setHobbies([...hobbies, hobby]);
     }
+  };
+
+  const addCustomHobby = () => {
+    const trimmedHobby = customHobby.trim();
+
+    if (!trimmedHobby) {
+      return;
+    }
+
+    if (hobbies.length >= 10) {
+      Alert.alert('Maximum Hobbies', 'You can select up to 10 hobbies');
+      return;
+    }
+
+    // Check if hobby already exists (case insensitive)
+    const hobbyExists = hobbies.some(h =>
+      h.toLowerCase().replace(/[^\w\s]/g, '') === trimmedHobby.toLowerCase()
+    );
+
+    if (hobbyExists) {
+      Alert.alert('Duplicate Hobby', 'You\'ve already added this hobby');
+      return;
+    }
+
+    // Add custom emoji prefix if user didn't include one
+    const hobbyWithEmoji = /\p{Emoji}/u.test(trimmedHobby)
+      ? trimmedHobby
+      : `✨ ${trimmedHobby}`;
+
+    setHobbies([...hobbies, hobbyWithEmoji]);
+    setCustomHobby('');
   };
 
   const handleContinue = async () => {
@@ -161,6 +215,7 @@ export default function Interests() {
             Select 1-10 hobbies • {hobbies.length} selected
           </Text>
           <View className="flex-row flex-wrap gap-2">
+            {/* Predefined hobbies */}
             {HOBBY_OPTIONS.map((hobby) => (
               <TouchableOpacity
                 key={hobby}
@@ -180,6 +235,53 @@ export default function Interests() {
                 </Text>
               </TouchableOpacity>
             ))}
+
+            {/* Custom hobbies (not in predefined list) */}
+            {hobbies
+              .filter(hobby => !HOBBY_OPTIONS.includes(hobby))
+              .map((hobby) => (
+                <TouchableOpacity
+                  key={hobby}
+                  className="px-4 py-3 rounded-full border-2 bg-primary-500 border-primary-500"
+                  onPress={() => toggleHobby(hobby)}
+                >
+                  <Text className="text-sm font-semibold text-white">
+                    {hobby}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+          </View>
+
+          {/* Add Custom Hobby */}
+          <View className="mt-4">
+            <View className="flex-row gap-2">
+              <TextInput
+                className="flex-1 bg-white border-2 border-gray-300 rounded-full px-4 py-3 text-gray-900"
+                placeholder="Add your own hobby..."
+                value={customHobby}
+                onChangeText={setCustomHobby}
+                placeholderTextColor="#9CA3AF"
+                returnKeyType="done"
+                onSubmitEditing={addCustomHobby}
+                maxLength={30}
+              />
+              <TouchableOpacity
+                className={`px-6 py-3 rounded-full ${
+                  customHobby.trim() ? 'bg-primary-500' : 'bg-gray-300'
+                }`}
+                onPress={addCustomHobby}
+                disabled={!customHobby.trim()}
+              >
+                <MaterialCommunityIcons
+                  name="plus-circle"
+                  size={24}
+                  color="white"
+                />
+              </TouchableOpacity>
+            </View>
+            <Text className="text-xs text-gray-500 mt-1 ml-4">
+              Add custom hobbies not listed above
+            </Text>
           </View>
         </View>
 
