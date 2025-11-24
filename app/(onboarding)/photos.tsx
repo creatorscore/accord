@@ -35,14 +35,45 @@ export default function Photos() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, photo_blur_enabled')
         .eq('user_id', user?.id)
         .single();
 
       if (error) throw error;
       setProfileId(data.id);
+
+      // Set photo blur preference if it exists
+      if (data.photo_blur_enabled !== null) {
+        setPhotoBlurEnabled(data.photo_blur_enabled);
+      }
+
+      // Load existing photos
+      await loadExistingPhotos(data.id);
     } catch (error: any) {
       Alert.alert('Error', 'Failed to load profile');
+    }
+  };
+
+  const loadExistingPhotos = async (profileId: string) => {
+    try {
+      const { data: existingPhotos, error } = await supabase
+        .from('photos')
+        .select('url, display_order')
+        .eq('profile_id', profileId)
+        .order('display_order', { ascending: true });
+
+      if (error) {
+        console.error('Error loading existing photos:', error);
+        return;
+      }
+
+      if (existingPhotos && existingPhotos.length > 0) {
+        console.log('📸 Loaded existing photos:', existingPhotos.length);
+        const photoUris = existingPhotos.map(photo => ({ uri: photo.url }));
+        setPhotos(photoUris);
+      }
+    } catch (error) {
+      console.error('Failed to load existing photos:', error);
     }
   };
 
@@ -113,60 +144,71 @@ export default function Photos() {
       setUploading(true);
       setUploadProgress(0);
 
-      // Upload each photo to Supabase Storage
-      for (let i = 0; i < photos.length; i++) {
-        const photo = photos[i];
-        const timestamp = Date.now();
-        const fileExt = 'jpg';
-        const fileName = `${profileId}/${timestamp}_${i}.${fileExt}`;
+      // Filter out photos that are already uploaded (have http URLs)
+      const newPhotos = photos.filter(photo => !photo.uri.startsWith('http'));
 
-        try {
-          // Convert URI to ArrayBuffer using optimized utility
-          const arrayBuffer = await uriToArrayBuffer(photo.uri);
+      if (newPhotos.length === 0) {
+        console.log('✅ All photos already uploaded, skipping upload step');
+        setUploadProgress(100);
+      } else {
+        console.log(`📤 Uploading ${newPhotos.length} new photos...`);
 
-          // Upload to Supabase Storage
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('profile-photos')
-            .upload(fileName, arrayBuffer, {
-              contentType: 'image/jpeg',
-              upsert: false,
-            });
+        // Upload each new photo to Supabase Storage
+        for (let i = 0; i < newPhotos.length; i++) {
+          const photo = newPhotos[i];
+          const timestamp = Date.now();
+          const fileExt = 'jpg';
+          const fileName = `${profileId}/${timestamp}_${i}.${fileExt}`;
 
-          if (uploadError) {
-            console.error(`Upload error for photo ${i}:`, uploadError);
-            throw new Error(`Failed to upload photo ${i + 1}: ${uploadError.message}`);
+          try {
+            // Convert URI to ArrayBuffer using optimized utility
+            const arrayBuffer = await uriToArrayBuffer(photo.uri);
+
+            // Upload to Supabase Storage
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('profile-photos')
+              .upload(fileName, arrayBuffer, {
+                contentType: 'image/jpeg',
+                upsert: false,
+              });
+
+            if (uploadError) {
+              console.error(`Upload error for photo ${i}:`, uploadError);
+              throw new Error(`Failed to upload photo ${i + 1}: ${uploadError.message}`);
+            }
+
+            // Get public URL for the photo
+            const { data: { publicUrl } } = supabase.storage
+              .from('profile-photos')
+              .getPublicUrl(fileName);
+
+            // Save to photos table
+            const { error: dbError } = await supabase
+              .from('photos')
+              .insert({
+                profile_id: profileId,
+                storage_path: fileName,
+                url: publicUrl,
+                display_order: photos.length - newPhotos.length + i, // Maintain correct order
+                is_primary: photos.length - newPhotos.length + i === 0,
+              });
+
+            if (dbError) {
+              console.error(`Database error for photo ${i}:`, dbError);
+              throw new Error(`Failed to save photo ${i + 1} to database: ${dbError.message}`);
+            }
+
+            // Update progress
+            setUploadProgress(Math.round(((i + 1) / newPhotos.length) * 100));
+          } catch (photoError: any) {
+            console.error(`Error processing photo ${i}:`, photoError);
+            throw photoError;
           }
-
-          // Get public URL for the photo
-          const { data: { publicUrl } } = supabase.storage
-            .from('profile-photos')
-            .getPublicUrl(fileName);
-
-          // Save to photos table
-          const { error: dbError } = await supabase
-            .from('photos')
-            .insert({
-              profile_id: profileId,
-              storage_path: fileName,
-              url: publicUrl,
-              display_order: i,
-              is_primary: i === 0,
-            });
-
-          if (dbError) {
-            console.error(`Database error for photo ${i}:`, dbError);
-            throw new Error(`Failed to save photo ${i + 1} to database: ${dbError.message}`);
-          }
-
-          // Update progress
-          setUploadProgress(Math.round(((i + 1) / photos.length) * 100));
-        } catch (photoError: any) {
-          console.error(`Error processing photo ${i}:`, photoError);
-          throw photoError;
         }
       }
 
       // Update onboarding step and photo blur preference
+      console.log('💠 Photo blur setting:', photoBlurEnabled ? 'ENABLED' : 'DISABLED');
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
@@ -177,9 +219,15 @@ export default function Photos() {
 
       if (updateError) {
         console.error('Error updating onboarding step:', updateError);
+      } else {
+        console.log('✅ Photo blur preference saved:', photoBlurEnabled);
       }
 
-      // Navigate to next step immediately
+      // Reset upload state
+      setUploading(false);
+      setUploadProgress(0);
+
+      // Navigate to next step
       router.push('/(onboarding)/about');
     } catch (error: any) {
       console.error('Upload failed:', error);
@@ -278,7 +326,10 @@ export default function Photos() {
             </View>
             <Switch
               value={photoBlurEnabled}
-              onValueChange={setPhotoBlurEnabled}
+              onValueChange={(value) => {
+                console.log('🔒 Photo blur toggled:', value ? 'ON' : 'OFF');
+                setPhotoBlurEnabled(value);
+              }}
               trackColor={{ false: '#D1D5DB', true: '#9B87CE' }}
               thumbColor={photoBlurEnabled ? '#ffffff' : '#f4f3f4'}
             />
