@@ -306,8 +306,8 @@ export default function ImmersiveProfileCard({
 
   const handleAction = useCallback((action: 'pass' | 'like' | 'superlike') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (action === 'pass') onSwipeLeft();
-    else if (action === 'like') onSwipeRight();
+    if (action === 'pass' && onSwipeLeft) onSwipeLeft();
+    else if (action === 'like' && onSwipeRight) onSwipeRight();
     else if (action === 'superlike' && onSuperLike) onSuperLike();
   }, [onSwipeLeft, onSwipeRight, onSuperLike]);
 
@@ -707,14 +707,14 @@ export default function ImmersiveProfileCard({
               {profile.political_views && (
                 <LifestyleItem icon="vote" label="Politics" value={profile.political_views} />
               )}
-              {(preferences?.drinking || preferences?.lifestyle_preferences?.drinking) && (
-                <LifestyleItem icon="glass-wine" label="Drinking" value={formatLabel(preferences?.drinking || preferences?.lifestyle_preferences?.drinking)} />
+              {preferences?.drinking && (
+                <LifestyleItem icon="glass-wine" label="Drinking" value={formatLabel(preferences.drinking)} />
               )}
-              {(preferences?.smoking || preferences?.lifestyle_preferences?.smoking) && (
-                <LifestyleItem icon="smoking" label="Smoking" value={formatLabel(preferences?.smoking || preferences?.lifestyle_preferences?.smoking)} />
+              {preferences?.smoking && (
+                <LifestyleItem icon="smoking" label="Smoking" value={formatLabel(preferences.smoking)} />
               )}
-              {(preferences?.pets || preferences?.lifestyle_preferences?.pets) && (
-                <LifestyleItem icon="paw" label="Pets" value={formatLabel(preferences?.pets || preferences?.lifestyle_preferences?.pets)} />
+              {preferences?.pets && (
+                <LifestyleItem icon="paw" label="Pets" value={formatLabel(preferences.pets)} />
               )}
             </View>
           </View>
@@ -735,10 +735,10 @@ export default function ImmersiveProfileCard({
 
           {/* Favorites - Movies, Music, Books, TV Shows */}
           {profile.interests && (
-            profile.interests.movies?.length > 0 ||
-            profile.interests.music?.length > 0 ||
-            profile.interests.books?.length > 0 ||
-            profile.interests.tv_shows?.length > 0
+            (profile.interests.movies?.length ?? 0) > 0 ||
+            (profile.interests.music?.length ?? 0) > 0 ||
+            (profile.interests.books?.length ?? 0) > 0 ||
+            (profile.interests.tv_shows?.length ?? 0) > 0
           ) && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Favorites</Text>

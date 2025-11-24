@@ -28,9 +28,9 @@ interface Profile {
   id: string;
   display_name: string;
   age: number;
-  gender?: string[]; // Array: users can select multiple gender identities
-  sexual_orientation?: string[]; // Array: users can select multiple orientations
-  ethnicity?: string[]; // Array: users can select multiple ethnicities
+  gender?: string | string[]; // Can be single or array: users can select multiple gender identities
+  sexual_orientation?: string | string[]; // Can be single or array: users can select multiple orientations
+  ethnicity?: string | string[]; // Can be single or array: users can select multiple ethnicities
   location_city?: string;
   location_state?: string;
   bio?: string;
@@ -39,14 +39,14 @@ interface Profile {
   height_inches?: number;
   zodiac_sign?: string;
   personality_type?: string;
-  love_language?: string[]; // Array: users can select multiple love languages
+  love_language?: string | string[]; // Can be single or array: users can select multiple love languages
   languages_spoken?: string[];
   my_story?: string;
   religion?: string;
   political_views?: string;
   hobbies?: string[];
   interests?: any; // JSONB object with arrays
-  photos?: Array<{ url: string; is_primary: boolean }>;
+  photos?: Array<{ url: string; is_primary: boolean; display_order?: number }>;
   compatibility_score?: number;
   compatibilityBreakdown?: {
     total: number; // Changed from 'overall' to match matching-algorithm.ts
@@ -58,13 +58,14 @@ interface Profile {
     orientation: number;
   };
   is_verified?: boolean;
-  distance?: number;
+  distance?: number | null;
   prompt_answers?: Array<{ prompt: string; answer: string }>;
   voice_intro_url?: string;
   voice_intro_duration?: number;
   photo_blur_enabled?: boolean;
   hide_distance?: boolean;
   hide_last_active?: boolean;
+  preferences?: any;
 }
 
 // Daily swipe limit for free users (fair for everyone)
@@ -1139,7 +1140,7 @@ export default function Discover() {
           setShowMatchModal(true);
 
           // Send match notification (don't await to avoid blocking modal)
-          sendMatchNotification(targetProfile.id, currentUserName, currentProfileId, matchData?.id).catch(err => {
+          sendMatchNotification(targetProfile.id, currentUserName, matchData?.id || '').catch(err => {
             console.error('Failed to send match notification:', err);
           });
         }
@@ -1567,7 +1568,7 @@ export default function Discover() {
         },
         {
           text: t('common.submit'),
-          onPress: async (reason: string) => {
+          onPress: async (reason?: string) => {
             if (!reason || reason.trim() === '') {
               Alert.alert(t('common.error'), 'Please provide a reason for reporting.');
               return;

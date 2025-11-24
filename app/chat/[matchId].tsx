@@ -78,9 +78,7 @@ interface MatchStatus {
 
 export default function Chat() {
   // Enable screenshot and screen recording protection for privacy
-  useScreenProtection(true, {
-    customMessage: 'Private conversations are protected'
-  });
+  useScreenProtection(true);
 
   const { t } = useTranslation();
   const { matchId } = useLocalSearchParams();
@@ -308,7 +306,7 @@ export default function Chat() {
         .eq('id', matchId)
         .single();
 
-      const matchProfileData = {
+      const matchProfileData: MatchProfile = {
         id: profile.id,
         display_name: profile.display_name,
         age: profile.age,
@@ -317,7 +315,7 @@ export default function Chat() {
         occupation: profile.occupation,
         location_city: profile.location_city,
         compatibility_score: matchCompatibility?.compatibility_score,
-        distance: distance,
+        distance: distance ?? undefined,
         last_active_at: profile.last_active_at,
         hide_last_active: profile.hide_last_active,
       };
@@ -1586,10 +1584,10 @@ export default function Chat() {
       {/* Review Prompt Banner */}
       {matchProfile && (
         <ReviewPromptBanner
-          matchId={matchId as string}
-          reviewerId={currentProfileId || ''}
-          revieweeId={matchProfile.id}
-          revieweeName={matchProfile.display_name}
+          onReviewPress={(prompt) => {
+            // Navigate to review screen when user taps review prompt
+            router.push(`/reviews/create?matchId=${prompt.match_id}&revieweeId=${prompt.profile1_id === currentProfileId ? prompt.profile2_id : prompt.profile1_id}`);
+          }}
         />
       )}
 

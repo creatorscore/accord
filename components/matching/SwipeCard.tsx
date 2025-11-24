@@ -133,7 +133,7 @@ export default function SwipeCard({
     translateX.value = 0;
     translateY.value = 0;
     setCurrentPhotoIndex(0);
-    setShowNavigationHints(profile.photos && profile.photos.length > 1);
+    setShowNavigationHints(!!(profile.photos && profile.photos.length > 1));
   }, [profile.id]);
 
   const allPhotos = profile.photos || [];

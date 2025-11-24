@@ -314,6 +314,7 @@ export default function Profile() {
         {/* Enhanced Photo Carousel */}
         {profile?.photos && profile.photos.length > 0 ? (
           <ProfilePhotoCarousel
+            profileId={profile.id}
             photos={profile.photos}
             name={profile.display_name}
             age={profile.age}
@@ -871,7 +872,7 @@ export default function Profile() {
               ...profile,
               compatibility_score: undefined, // Don't show compatibility for own profile
               distance: undefined,
-            }}
+            } as any}
             preferences={preferences}
             onClose={() => setShowPreview(false)}
             visible={showPreview}
