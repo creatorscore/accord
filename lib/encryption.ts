@@ -162,7 +162,7 @@ export async function encryptMessage(
     // Import key for Web Crypto API (polyfilled by expo-standard-web-crypto)
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      sharedKeyBytes,
+      sharedKeyBytes as any,
       { name: 'AES-GCM' },
       false,
       ['encrypt']
@@ -176,7 +176,7 @@ export async function encryptMessage(
     const encrypted = await crypto.subtle.encrypt(
       {
         name: 'AES-GCM',
-        iv: iv,
+        iv: iv as any,
         tagLength: 128, // 128-bit authentication tag
       },
       cryptoKey,
@@ -258,7 +258,7 @@ export async function decryptMessage(
     // Import key for Web Crypto API (polyfilled by expo-standard-web-crypto)
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      sharedKeyBytes,
+      sharedKeyBytes as any,
       { name: 'AES-GCM' },
       false,
       ['decrypt']
@@ -271,7 +271,7 @@ export async function decryptMessage(
     const decrypted = await crypto.subtle.decrypt(
       {
         name: 'AES-GCM',
-        iv: iv,
+        iv: iv as any,
         tagLength: 128,
       },
       cryptoKey,

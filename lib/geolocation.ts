@@ -207,12 +207,12 @@ export async function updateUserLocation(): Promise<{
     // CRITICAL: Reject poor accuracy (iOS approximate location issue)
     // If accuracy > 100 meters, user likely has "Approximate Location" enabled
     // This prevents storing fake/generalized coordinates
-    if (location.coords.accuracy > 100) {
+    if (location.coords.accuracy !== null && location.coords.accuracy > 100) {
       console.error('❌ Location accuracy too low:', location.coords.accuracy, 'meters');
       return {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
-        accuracy: location.coords.accuracy,
+        accuracy: location.coords.accuracy ?? undefined,
         error: 'approximate_location'
       };
     }
@@ -229,14 +229,14 @@ export async function updateUserLocation(): Promise<{
         longitude: location.coords.longitude,
         city: address.city || undefined,
         state: address.region || undefined,
-        accuracy: location.coords.accuracy,
+        accuracy: location.coords.accuracy ?? undefined,
       };
     } catch (geocodeError) {
       // If geocoding fails, still return coordinates
       return {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
-        accuracy: location.coords.accuracy,
+        accuracy: location.coords.accuracy ?? undefined,
       };
     }
   } catch (error) {

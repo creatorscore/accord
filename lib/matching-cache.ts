@@ -53,7 +53,7 @@ export async function getOrCalculateCompatibility(
     }
 
     // Calculate score (slow path)
-    const score = calculateCompatibilityScore(profile1, profile2, prefs1, prefs2);
+    const score = calculateCompatibilityScore(profile1 as any, profile2 as any, prefs1 as any, prefs2 as any);
 
     // Cache for future lookups (fire and forget - don't await)
     cacheCompatibilityScore(profile1.id, profile2.id, score).catch(err => {
@@ -64,7 +64,7 @@ export async function getOrCalculateCompatibility(
   } catch (error) {
     console.error('Error in getOrCalculateCompatibility:', error);
     // Fallback: calculate without caching
-    return calculateCompatibilityScore(profile1, profile2, prefs1, prefs2);
+    return calculateCompatibilityScore(profile1 as any, profile2 as any, prefs1 as any, prefs2 as any);
   }
 }
 
@@ -115,10 +115,10 @@ export async function batchCacheScores(
 ): Promise<void> {
   const promises = targetProfiles.map(async ({ profile, preferences }) => {
     const score = calculateCompatibilityScore(
-      sourceProfile,
-      profile,
-      sourcePrefs,
-      preferences
+      sourceProfile as any,
+      profile as any,
+      sourcePrefs as any,
+      preferences as any
     );
 
     return cacheCompatibilityScore(sourceProfile.id, profile.id, score);

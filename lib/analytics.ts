@@ -24,11 +24,9 @@ export const initializePostHog = async () => {
   try {
     posthogClient = new PostHog(POSTHOG_API_KEY, {
       host: POSTHOG_HOST,
-      // Enable autocapture for button clicks, screen changes, etc.
-      autocapture: true,
       // Enable debug mode to see what's being sent
       ...__DEV__ && { debug: true },
-    });
+    } as any);
 
     console.log('✅ PostHog initialized successfully!');
     console.log('PostHog client:', posthogClient ? 'Ready' : 'Failed');
