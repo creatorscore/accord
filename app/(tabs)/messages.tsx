@@ -399,7 +399,7 @@ export default function Messages() {
         },
         {
           text: t('messages.reportDialog.submit'),
-          onPress: async (reason: string) => {
+          onPress: async (reason?: string) => {
             if (!reason || reason.trim() === '') {
               Alert.alert(t('common.error'), t('messages.reportDialog.errorEmpty'));
               return;
