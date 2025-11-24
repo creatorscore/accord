@@ -47,6 +47,12 @@ export function GradientButton({
         }`}
         style={{
           minHeight: 56,
+          borderRadius: 9999,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingVertical: 16,
+          paddingHorizontal: 32,
         }}
       >
         {loading ? (

@@ -135,24 +135,28 @@ export default function SafetyCenter() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <LinearGradient
-        colors={['#9B87CE', '#B8A9DD']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <MaterialCommunityIcons name="chevron-left" size={28} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <MaterialCommunityIcons name="shield-check" size={40} color="#fff" />
-          <Text style={styles.headerTitle}>Safety Center</Text>
-          <Text style={styles.headerSubtitle}>Your safety is our priority</Text>
-        </View>
-      </LinearGradient>
+        {/* Header - now scrolls with content */}
+        <LinearGradient
+          colors={['#9B87CE', '#B8A9DD']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+        >
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <MaterialCommunityIcons name="chevron-left" size={28} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <MaterialCommunityIcons name="shield-check" size={40} color="#fff" />
+            <Text style={styles.headerTitle}>Safety Center</Text>
+            <Text style={styles.headerSubtitle}>Your safety is our priority</Text>
+          </View>
+        </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Safety Tips */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Safety Tips</Text>
@@ -335,7 +339,7 @@ export default function SafetyCenter() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#9B87CE', // Match header for smooth bounce effect
   },
   header: {
     paddingTop: 60,
@@ -366,8 +370,13 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+    backgroundColor: '#F9FAFB',
+  },
   section: {
     padding: 20,
+    backgroundColor: '#F9FAFB',
   },
   sectionTitle: {
     fontSize: 20,
@@ -533,6 +542,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 32,
     paddingHorizontal: 20,
+    backgroundColor: '#F9FAFB',
   },
   footerText: {
     fontSize: 14,

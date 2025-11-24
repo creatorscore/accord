@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
 import { useAuth } from './AuthContext';
 import {
   registerForPushNotifications,
@@ -64,6 +65,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         setNotificationsEnabled(true);
 
         // Save token to database
+        // Note: This may fail for new users during onboarding (no profile yet)
+        // The token will be saved again at onboarding completion
         await savePushToken(user.id, token);
 
         // Set up notification listeners
@@ -73,6 +76,29 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       console.error('Error initializing push notifications:', error);
     }
   };
+
+  // Retry saving push token for existing users who may not have one
+  // This handles users who completed onboarding before this fix
+  const retrySavePushToken = async () => {
+    if (!user?.id || !pushToken) return;
+
+    try {
+      await savePushToken(user.id, pushToken);
+    } catch (error) {
+      // Silently fail - not critical
+    }
+  };
+
+  // Check periodically if push token needs to be saved (for existing users)
+  useEffect(() => {
+    if (user && pushToken) {
+      // Retry saving after a short delay to ensure profile exists
+      const timer = setTimeout(() => {
+        retrySavePushToken();
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [user, pushToken]);
 
   const setupListeners = () => {
     // Handle notifications received while app is in foreground
@@ -98,8 +124,38 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     pendingNavigation.current = data;
 
     console.log('Notification tapped:', data.type);
-    // Navigation is now handled by screens checking pendingNavigation
-    // This avoids router context issues during app initialization
+
+    // Handle navigation based on notification type
+    try {
+      switch (data.type) {
+        case 'review_ready':
+        case 'review_reminder':
+          // Navigate to reviews screen
+          router.push('/reviews/my-reviews');
+          break;
+        case 'new_match':
+          // Navigate to matches tab
+          router.push('/(tabs)/matches');
+          break;
+        case 'new_message':
+          // Navigate to chat if matchId is available
+          if (data.matchId) {
+            router.push(`/chat/${data.matchId}`);
+          } else {
+            router.push('/(tabs)/messages');
+          }
+          break;
+        case 'new_like':
+          // Navigate to likes tab
+          router.push('/(tabs)/likes');
+          break;
+        default:
+          // For unknown types, store for screens to handle
+          break;
+      }
+    } catch (error) {
+      console.error('Error navigating from notification:', error);
+    }
   };
 
   return (

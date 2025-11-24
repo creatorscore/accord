@@ -162,13 +162,16 @@ export default function Likes() {
   const handleLikeBack = async (likeProfileId: string) => {
     if (!currentProfileId) return;
 
+    // Optimistically remove from UI
+    setLikes(prev => prev.filter(l => l.profile_id !== likeProfileId));
+
     try {
       // Create a like back
       const { error: likeError } = await supabase
         .from('likes')
         .insert({
-          from_profile_id: currentProfileId,
-          to_profile_id: likeProfileId,
+          liker_profile_id: currentProfileId,
+          liked_profile_id: likeProfileId,
           like_type: 'standard',
         });
 
@@ -195,7 +198,6 @@ export default function Likes() {
           {
             text: t('likes.keepBrowsing'),
             style: 'cancel',
-            onPress: () => loadLikes(), // Refresh list
           },
           {
             text: t('likes.goToMatches'),
@@ -205,6 +207,8 @@ export default function Likes() {
       );
     } catch (error) {
       console.error('Error creating match:', error);
+      // Restore the like back to UI on error
+      loadLikes();
       Alert.alert(t('common.error'), t('likes.errorCreatingMatch'));
     }
   };

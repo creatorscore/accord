@@ -8,19 +8,25 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Image,
+  Alert,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
+import { supabase } from '@/lib/supabase';
+import { optimizeImage, uriToArrayBuffer } from '@/lib/image-optimization';
 
 interface ReportModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (reason: string, description: string) => Promise<void>;
+  onSubmit: (reason: string, description: string, evidenceUrls?: string[]) => Promise<void>;
   profileName: string;
 }
 
 const REPORT_REASONS = [
+  { id: 'blackmail', label: 'Blackmail / Screenshot sharing', icon: 'shield-alert', requiresEvidence: true },
   { id: 'harassment', label: 'Harassment or bullying', icon: 'alert-circle' },
   { id: 'fake_profile', label: 'Fake profile or scam', icon: 'account-alert' },
   { id: 'inappropriate_content', label: 'Inappropriate photos or messages', icon: 'image-off' },
@@ -39,16 +45,101 @@ export default function ReportModal({
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [evidencePhotos, setEvidencePhotos] = useState<string[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const handlePickImage = async () => {
+    try {
+      // Request permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library to upload evidence.');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        exif: false,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        setUploadingPhoto(true);
+
+        // Upload each selected image
+        const uploadedUrls: string[] = [];
+        for (const asset of result.assets) {
+          try {
+            // Optimize image
+            const { optimized } = await optimizeImage(asset.uri, {
+              maxWidth: 1200,
+              maxHeight: 1600,
+              quality: 0.8,
+            });
+
+            // Upload to Supabase Storage
+            const fileName = `evidence_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+            const filePath = `report-evidence/${fileName}`;
+            const arrayBuffer = await uriToArrayBuffer(optimized.uri);
+
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('reports')
+              .upload(filePath, arrayBuffer, {
+                contentType: 'image/jpeg',
+                upsert: false,
+              });
+
+            if (uploadError) throw uploadError;
+
+            // Get public URL
+            const { data: { publicUrl } } = supabase.storage
+              .from('reports')
+              .getPublicUrl(filePath);
+
+            uploadedUrls.push(publicUrl);
+          } catch (error: any) {
+            console.error('Error uploading photo:', error);
+            Alert.alert('Upload Failed', 'Failed to upload one or more photos. Please try again.');
+          }
+        }
+
+        // Add uploaded URLs to evidence photos
+        setEvidencePhotos((prev) => [...prev, ...uploadedUrls]);
+        setUploadingPhoto(false);
+      }
+    } catch (error: any) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to select photos. Please try again.');
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setEvidencePhotos((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async () => {
     if (!selectedReason || !description.trim()) return;
 
+    // Check if blackmail report requires evidence
+    const reason = REPORT_REASONS.find(r => r.id === selectedReason);
+    if (reason?.requiresEvidence && evidencePhotos.length === 0) {
+      Alert.alert(
+        'Evidence Required',
+        'Blackmail reports require screenshot evidence. Please upload at least one photo.'
+      );
+      return;
+    }
+
     try {
       setSubmitting(true);
-      await onSubmit(selectedReason, description.trim());
+      await onSubmit(selectedReason, description.trim(), evidencePhotos);
       // Reset form
       setSelectedReason(null);
       setDescription('');
+      setEvidencePhotos([]);
       onClose();
     } catch (error) {
       console.error('Error submitting report:', error);
@@ -60,6 +151,7 @@ export default function ReportModal({
   const handleClose = () => {
     setSelectedReason(null);
     setDescription('');
+    setEvidencePhotos([]);
     onClose();
   };
 
@@ -147,6 +239,58 @@ export default function ReportModal({
                 editable={!submitting}
               />
               <Text style={styles.charCount}>{description.length}/500</Text>
+            </View>
+
+            {/* Photo Evidence Upload */}
+            <View style={styles.evidenceSection}>
+              <View style={styles.evidenceHeader}>
+                <Text style={styles.sectionTitle}>
+                  Evidence Photos
+                  {REPORT_REASONS.find(r => r.id === selectedReason)?.requiresEvidence && (
+                    <Text style={styles.required}> *</Text>
+                  )}
+                </Text>
+                <TouchableOpacity
+                  style={styles.uploadButton}
+                  onPress={handlePickImage}
+                  disabled={submitting || uploadingPhoto}
+                >
+                  {uploadingPhoto ? (
+                    <ActivityIndicator size="small" color="#9B87CE" />
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons name="camera-plus" size={20} color="#9B87CE" />
+                      <Text style={styles.uploadButtonText}>Upload</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {selectedReason === 'blackmail' && (
+                <View style={styles.evidenceInfo}>
+                  <MaterialCommunityIcons name="information" size={16} color="#3B82F6" />
+                  <Text style={styles.evidenceInfoText}>
+                    Upload screenshots showing your profile with watermark visible. This helps us identify who shared it.
+                  </Text>
+                </View>
+              )}
+
+              {/* Evidence Photos Grid */}
+              {evidencePhotos.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoGrid}>
+                  {evidencePhotos.map((uri, index) => (
+                    <View key={index} style={styles.photoContainer}>
+                      <Image source={{ uri }} style={styles.evidencePhoto} />
+                      <TouchableOpacity
+                        style={styles.removePhotoButton}
+                        onPress={() => handleRemovePhoto(index)}
+                      >
+                        <MaterialCommunityIcons name="close-circle" size={24} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
             </View>
 
             {/* Info */}
@@ -344,5 +488,70 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: 'white',
+  },
+  evidenceSection: {
+    marginBottom: 16,
+  },
+  evidenceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F3E8FF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#9B87CE',
+  },
+  uploadButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9B87CE',
+  },
+  evidenceInfo: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  evidenceInfoText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1E40AF',
+    lineHeight: 16,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  photoContainer: {
+    position: 'relative',
+    marginRight: 8,
+  },
+  evidencePhoto: {
+    width: 100,
+    height: 150,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
 });

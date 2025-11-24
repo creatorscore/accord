@@ -108,6 +108,13 @@ export default function LanguageSelection() {
           className={`rounded-full py-4 px-8 items-center shadow-lg ${
             loading ? 'bg-gray-300' : 'bg-primary-500'
           }`}
+          style={{
+            borderRadius: 9999,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 16,
+            paddingHorizontal: 32,
+          }}
           onPress={handleContinue}
           disabled={loading}
         >

@@ -3,7 +3,10 @@ import { View, Text, TextInput, TouchableOpacity, Alert, Platform } from 'react-
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
+import { supabase } from '@/lib/supabase';
 import { useTranslation } from 'react-i18next';
+import { trackUserAction, identifyUser } from '@/lib/analytics';
+import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 
 export default function SignIn() {
   const { t } = useTranslation();
@@ -11,7 +14,7 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, signOut } = useAuth();
 
   useEffect(() => {
     checkAppleAuth();
@@ -20,6 +23,34 @@ export default function SignIn() {
   const checkAppleAuth = async () => {
     const available = await isAppleAuthAvailable();
     setAppleAuthAvailable(available);
+  };
+
+  // Check if user is banned and sign them out if so
+  const checkBanAndProceed = async (userEmail: string): Promise<boolean> => {
+    try {
+      const deviceId = await getDeviceFingerprint();
+
+      const { data: banCheck } = await supabase.rpc('is_banned', {
+        check_email: userEmail.toLowerCase(),
+        check_device_id: deviceId,
+      });
+
+      if (banCheck === true) {
+        // Sign out the banned user
+        await signOut();
+        Alert.alert(
+          'Account Restricted',
+          'This account has been restricted from using Accord. If you believe this is an error, please contact support at hello@joinaccord.app.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error checking ban status:', error);
+      // If we can't check, allow them to proceed (fail open, but index.tsx will also check)
+      return true;
+    }
   };
 
   const handleSignIn = async () => {
@@ -31,6 +62,16 @@ export default function SignIn() {
     setLoading(true);
     try {
       await signIn(email, password);
+
+      // Check if user is banned before proceeding
+      const canProceed = await checkBanAndProceed(email);
+      if (!canProceed) {
+        setLoading(false);
+        return;
+      }
+
+      // Track successful sign-in
+      trackUserAction.signIn('email');
       // Let index.tsx handle navigation based on profile status
       await new Promise(resolve => setTimeout(resolve, 300));
       router.replace('/');
@@ -124,6 +165,18 @@ export default function SignIn() {
 
       // Let the root index.tsx handle navigation based on profile status
       if (result) {
+        // Check if user is banned before proceeding
+        const userEmail = result.user?.email;
+        if (userEmail) {
+          const canProceed = await checkBanAndProceed(userEmail);
+          if (!canProceed) {
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Track successful Google sign-in
+        trackUserAction.signIn('google');
         // Wait for auth state to update, then let index.tsx redirect
         await new Promise(resolve => setTimeout(resolve, 300));
         router.replace('/');
@@ -142,6 +195,18 @@ export default function SignIn() {
     try {
       const result = await signInWithApple();
       if (result) {
+        // Check if user is banned before proceeding
+        const userEmail = result.user?.email;
+        if (userEmail) {
+          const canProceed = await checkBanAndProceed(userEmail);
+          if (!canProceed) {
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Track successful Apple sign-in
+        trackUserAction.signIn('apple');
         // Let index.tsx handle navigation based on profile status
         await new Promise(resolve => setTimeout(resolve, 300));
         router.replace('/');
@@ -170,8 +235,9 @@ export default function SignIn() {
         <View>
           <Text className="text-gray-700 mb-2 font-medium">{t('auth.signIn.email')}</Text>
           <TextInput
-            className="border border-gray-300 rounded-lg px-4 py-3"
+            className="border border-gray-300 rounded-lg px-4 py-3 bg-white text-gray-900"
             placeholder={t('auth.signIn.emailPlaceholder')}
+            placeholderTextColor="#9CA3AF"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -182,8 +248,9 @@ export default function SignIn() {
         <View>
           <Text className="text-gray-700 mb-2 font-medium">{t('auth.signIn.password')}</Text>
           <TextInput
-            className="border border-gray-300 rounded-lg px-4 py-3"
+            className="border border-gray-300 rounded-lg px-4 py-3 bg-white text-gray-900"
             placeholder={t('auth.signIn.passwordPlaceholder')}
+            placeholderTextColor="#9CA3AF"
             value={password}
             onChangeText={setPassword}
             secureTextEntry

@@ -21,6 +21,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { formatDistance } from '@/lib/geolocation';
+import { formatHeight, HeightUnit } from '@/lib/height-utils';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import { logScreenshotEvent } from '@/lib/screenshot-tracking';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
@@ -74,6 +75,7 @@ interface Profile {
 
 interface Preferences {
   primary_reason?: string;
+  primary_reasons?: string[]; // New multi-select field
   relationship_type?: string;
   wants_children?: boolean;
   children_arrangement?: string | string[]; // Can be single or array for multi-select
@@ -114,6 +116,7 @@ interface ImmersiveProfileCardProps {
   onClose: () => void;
   visible: boolean;
   isMatched?: boolean; // Hide swipe actions if already matched
+  heightUnit?: HeightUnit; // User's preferred height unit for display
   onSendMessage?: () => void; // Show "Send Message" button instead
   onBlock?: () => void; // Block user
   onReport?: () => void; // Report user
@@ -226,6 +229,7 @@ export default function ImmersiveProfileCard({
   onClose,
   visible,
   isMatched = false,
+  heightUnit = 'imperial',
   onSendMessage,
   onBlock,
   onReport,
@@ -513,11 +517,13 @@ export default function ImmersiveProfileCard({
               <Text style={styles.criticalTitle}>Marriage Goals & Expectations</Text>
             </View>
 
-            {preferences?.primary_reason && (
+            {(preferences?.primary_reasons?.length || preferences?.primary_reason) && (
               <View style={styles.criticalItem}>
-                <Text style={styles.criticalLabel}>Primary reason for partnership</Text>
+                <Text style={styles.criticalLabel}>Primary reason{preferences?.primary_reasons && preferences.primary_reasons.length > 1 ? 's' : ''} for partnership</Text>
                 <Text style={styles.criticalValue}>
-                  {formatLabel(preferences.primary_reason)}
+                  {preferences?.primary_reasons && preferences.primary_reasons.length > 0
+                    ? preferences.primary_reasons.map(r => formatLabel(r)).join(', ')
+                    : formatLabel(preferences.primary_reason || '')}
                 </Text>
               </View>
             )}
@@ -680,7 +686,7 @@ export default function ImmersiveProfileCard({
                 <LifestyleItem
                   icon="human-male-height"
                   label="Height"
-                  value={`${Math.floor(profile.height_inches / 12)}'${profile.height_inches % 12}"`}
+                  value={formatHeight(profile.height_inches, heightUnit)}
                 />
               )}
               {profile.zodiac_sign && (

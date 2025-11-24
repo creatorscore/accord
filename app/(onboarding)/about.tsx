@@ -257,6 +257,12 @@ export default function About() {
                 ? 'bg-gray-400'
                 : 'bg-primary-500'
             }`}
+            style={{
+              borderRadius: 9999,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 16,
+            }}
             onPress={handleContinue}
             disabled={loading || bio.length < 50}
           >

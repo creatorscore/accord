@@ -76,6 +76,7 @@ interface ProfileData {
   ethnicity?: string;
   sexual_orientation?: string;
   height_inches?: number;
+  height_unit?: string;
   zodiac_sign?: string;
   personality_type?: string;
   is_verified: boolean;
@@ -149,6 +150,7 @@ export default function Profile() {
           ethnicity,
           sexual_orientation,
           height_inches,
+          height_unit,
           zodiac_sign,
           personality_type,
           is_verified,
@@ -734,6 +736,17 @@ export default function Profile() {
           <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push('/settings/country-blocking')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="earth-off" size={24} color="#6B7280" />
+            <Text style={styles.menuItemText}>Block Countries</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+        </TouchableOpacity>
+
         {/* Admin Panel - Only visible to admins */}
         {isAdmin && (
           <>
@@ -863,6 +876,7 @@ export default function Profile() {
             onClose={() => setShowPreview(false)}
             visible={showPreview}
             isMatched={true} // Hide swipe actions for self-preview
+            heightUnit={(profile?.height_unit as 'imperial' | 'metric') || 'imperial'}
             onSendMessage={undefined} // No message button for self-preview
           />
         )}

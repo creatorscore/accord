@@ -8,6 +8,7 @@ import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { calculateCompatibilityScore, getCompatibilityBreakdown } from '@/lib/matching-algorithm';
+import { formatHeight, HeightUnit } from '@/lib/height-utils';
 import ProfilePhotoCarousel from '@/components/profile/ProfilePhotoCarousel';
 import ProfileStoryCard from '@/components/profile/ProfileStoryCard';
 import ProfileInteractiveSection from '@/components/profile/ProfileInteractiveSection';
@@ -51,6 +52,7 @@ interface Profile {
   distance?: number;
   compatibility_score?: number;
   height_cm?: number;
+  height_inches?: number;
   languages?: string[];
   zodiac_sign?: string;
   personality_type?: string;
@@ -67,10 +69,12 @@ interface Profile {
   my_story?: string;
   religion?: string;
   political_views?: string;
+  photo_blur_enabled?: boolean;
 }
 
 interface Preferences {
   primary_reason?: string;
+  primary_reasons?: string[]; // New multi-select field
   relationship_type?: string;
   wants_children?: boolean;
   housing_preference?: string | string[]; // Multi-select support
@@ -90,6 +94,18 @@ interface Preferences {
   preferred_cities?: string[];
   dealbreakers?: string[];
   must_haves?: string[];
+  // Matching preferences
+  age_min?: number;
+  age_max?: number;
+  gender_preference?: string[];
+  max_distance_miles?: number;
+  // Lifestyle preferences object
+  lifestyle_preferences?: {
+    smoking?: string;
+    drinking?: string;
+    pets?: string;
+    exercise?: string;
+  };
 }
 
 // Helper function to format arrays or strings
@@ -184,6 +200,7 @@ export default function ProfileView() {
   const [isLiked, setIsLiked] = useState(false);
   const [isSuperLiked, setIsSuperLiked] = useState(false);
   const [isMatched, setIsMatched] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false); // Admin can view any profile
   const [matchId, setMatchId] = useState<string | null>(null);
   const [hasRevealedPhotos, setHasRevealedPhotos] = useState(false); // Current user revealed to profile
   const [otherUserRevealed, setOtherUserRevealed] = useState(false); // Profile revealed to current user
@@ -230,6 +247,7 @@ export default function ProfileView() {
 
       setCurrentProfileId(profileData.id);
       setCurrentProfile(profileData);
+      setIsAdmin(profileData.is_admin === true); // Set admin status
 
       // Load current user's preferences for compatibility calculation
       const { data: prefsData, error: prefsError } = await supabase
@@ -254,6 +272,20 @@ export default function ProfileView() {
     if (!currentProfileId || !id) return;
 
     try {
+      // First check if current user is an admin - admins can view any profile
+      const { data: adminCheck } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', currentProfileId)
+        .single();
+
+      if (adminCheck?.is_admin === true) {
+        console.log('👑 Admin user - bypassing match check');
+        setIsAdmin(true);
+        setIsMatched(true); // Treat as "matched" for UI purposes
+        return; // Admin can view any profile
+      }
+
       // Check if there's an active match between current user and viewed profile
       const { data: match } = await supabase
         .from('matches')
@@ -420,6 +452,7 @@ export default function ProfileView() {
         compatibility_score: 0, // Will be calculated below
         distance: Math.floor(Math.random() * 50) + 1,
         // Use real data from database (no more mocking)
+        height_inches: profileData.height_inches,
         height_cm: profileData.height_inches ? profileData.height_inches * 2.54 : undefined,
         languages: profileData.languages_spoken || [],
         zodiac_sign: profileData.zodiac_sign,
@@ -687,14 +720,14 @@ export default function ProfileView() {
   const photos = profile.photos || [];
 
   // Prepare quick facts
+  // Use viewer's height unit preference to display height
+  const viewerHeightUnit: HeightUnit = currentProfile?.height_unit || 'imperial';
   const quickFacts = [];
-  if (profile.height_cm) {
-    const feet = Math.floor(profile.height_cm / 30.48);
-    const inches = Math.round((profile.height_cm % 30.48) / 2.54);
+  if (profile.height_inches) {
     quickFacts.push({
       emoji: '📏',
       label: 'Height',
-      value: `${feet}'${inches}"`,
+      value: formatHeight(profile.height_inches, viewerHeightUnit),
     });
   }
   if (profile.zodiac_sign) {
@@ -762,6 +795,7 @@ export default function ProfileView() {
           compatibilityScore={profile.compatibility_score}
           photoBlurEnabled={profile.photo_blur_enabled}
           isRevealed={otherUserRevealed}
+          isAdmin={isAdmin}
         />
 
         {/* Location Intent Badges */}
@@ -938,10 +972,12 @@ export default function ProfileView() {
             <ProfileInteractiveSection
               title="Partnership Vision"
               items={[
-                ...(preferences.primary_reason ? [{
+                ...((preferences.primary_reasons?.length || preferences.primary_reason) ? [{
                   emoji: '🎯',
-                  label: 'Primary Goal',
-                  value: formatLabel(preferences.primary_reason),
+                  label: preferences.primary_reasons && preferences.primary_reasons.length > 1 ? 'Primary Goals' : 'Primary Goal',
+                  value: preferences.primary_reasons && preferences.primary_reasons.length > 0
+                    ? preferences.primary_reasons.map(r => formatLabel(r)).join(', ')
+                    : formatLabel(preferences.primary_reason || ''),
                   detail: 'What brings us together'
                 }] : []),
                 ...(preferences.relationship_type ? [{
@@ -1273,7 +1309,7 @@ export default function ProfileView() {
           )}
 
           {/* Dealbreakers & Must-Haves */}
-          {preferences && (preferences.dealbreakers?.length > 0 || preferences.must_haves?.length > 0) && (
+          {preferences && ((preferences.dealbreakers?.length ?? 0) > 0 || (preferences.must_haves?.length ?? 0) > 0) && (
             <View style={{ marginBottom: 16 }}>
               {preferences.dealbreakers && preferences.dealbreakers.length > 0 && (
                 <>
@@ -1468,9 +1504,9 @@ export default function ProfileView() {
                   </View>
                   <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
                     {compatibilityBreakdown.goals >= 80
-                      ? `You're highly aligned on marriage goals! ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both seek this arrangement primarily for ${formatLabel(preferences.primary_reason || '')}.` : ''} ${preferences?.relationship_type === currentPreferences?.relationship_type ? `You both envision a ${formatLabel(preferences.relationship_type || '')} partnership.` : ''} ${preferences?.wants_children === currentPreferences?.wants_children ? (preferences.wants_children ? 'You both want children' : 'You both prefer not to have children') + ', making family planning straightforward.' : ''}`
+                      ? `You're highly aligned on marriage goals! ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both seek this arrangement primarily for ${formatLabel(preferences?.primary_reason || '')}.` : ''} ${preferences?.relationship_type === currentPreferences?.relationship_type ? `You both envision a ${formatLabel(preferences?.relationship_type || '')} partnership.` : ''} ${preferences?.wants_children === currentPreferences?.wants_children ? (preferences?.wants_children ? 'You both want children' : 'You both prefer not to have children') + ', making family planning straightforward.' : ''}`
                       : compatibilityBreakdown.goals >= 60
-                      ? `You share common ground on key goals. ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both primarily seek ${formatLabel(preferences.primary_reason || '')}.` : 'Your primary reasons differ but may complement each other.'} ${preferences?.relationship_type && currentPreferences?.relationship_type ? `Your relationship style preferences (${formatLabel(preferences.relationship_type)} vs ${formatLabel(currentPreferences.relationship_type)}) could work with open communication.` : ''}`
+                      ? `You share common ground on key goals. ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both primarily seek ${formatLabel(preferences?.primary_reason || '')}.` : 'Your primary reasons differ but may complement each other.'} ${preferences?.relationship_type && currentPreferences?.relationship_type ? `Your relationship style preferences (${formatLabel(preferences?.relationship_type)} vs ${formatLabel(currentPreferences?.relationship_type)}) could work with open communication.` : ''}`
                       : `Your marriage goals differ in some areas. ${preferences?.wants_children !== currentPreferences?.wants_children ? 'You have different views on children, which is important to discuss.' : ''} ${preferences?.relationship_type !== currentPreferences?.relationship_type ? `You envision different relationship styles (${formatLabel(preferences?.relationship_type || '')} vs ${formatLabel(currentPreferences?.relationship_type || '')}), but compromise may be possible.` : ''} Open and honest conversation about expectations will be key.`}
                   </Text>
                 </View>

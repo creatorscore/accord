@@ -106,6 +106,7 @@ export default function ProfilePreview() {
         visible={cardVisible}
         onClose={() => router.back()}
         isMatched={true}
+        heightUnit={profile?.height_unit || 'imperial'}
         // No swipe actions or send message button for profile preview
       />
     </View>

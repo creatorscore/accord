@@ -96,6 +96,9 @@ android {
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+
+        // Specify which capture protection flavor to use
+        missingDimensionStrategy 'react-native-capture-protection', 'fullMediaCapture'
     }
     signingConfigs {
         debug {
@@ -155,6 +158,9 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+
+    // Play Integrity API
+    implementation("com.google.android.play:integrity:1.4.0")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

@@ -393,6 +393,64 @@ export function setupNotificationListener(
 }
 
 /**
+ * Send notification to reporter when their report results in action (ban)
+ */
+export async function sendReportActionNotification(
+  reporterProfileId: string,
+  action: 'banned' | 'resolved'
+): Promise<void> {
+  try {
+    // Get reporter's push token
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('push_token, push_enabled')
+      .eq('id', reporterProfileId)
+      .single();
+
+    if (error || !profile?.push_token || !profile.push_enabled) {
+      console.log('Reporter does not have push notifications enabled');
+      return;
+    }
+
+    let title: string;
+    let body: string;
+
+    if (action === 'banned') {
+      title = 'Thank you for keeping Accord safe 💜';
+      body = 'The user you reported has been removed from our community. We appreciate you looking out for others.';
+    } else {
+      title = 'Report Update';
+      body = 'We reviewed your report and have taken appropriate action. Thank you for helping keep Accord safe.';
+    }
+
+    // Send notification
+    await sendPushNotification(
+      profile.push_token,
+      title,
+      body,
+      {
+        type: 'report_action',
+        action,
+        screen: 'discover',
+      }
+    );
+
+    // Log notification
+    await supabase.from('push_notifications').insert({
+      profile_id: reporterProfileId,
+      notification_type: 'report_action',
+      title,
+      body,
+      data: { type: 'report_action', action },
+    });
+
+    console.log(`Report action notification sent to reporter (${action})`);
+  } catch (error) {
+    console.error('Error sending report action notification:', error);
+  }
+}
+
+/**
  * Remove push token (on logout or disable notifications)
  */
 export async function removePushToken(userId: string): Promise<void> {

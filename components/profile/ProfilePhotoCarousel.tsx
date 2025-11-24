@@ -37,6 +37,7 @@ interface ProfilePhotoCarouselProps {
   compatibilityScore?: number;
   photoBlurEnabled?: boolean;
   isRevealed?: boolean;
+  isAdmin?: boolean; // Admins always see unblurred photos for safety review
 }
 
 export default function ProfilePhotoCarousel({
@@ -49,6 +50,7 @@ export default function ProfilePhotoCarousel({
   compatibilityScore,
   photoBlurEnabled = false,
   isRevealed = false,
+  isAdmin = false,
 }: ProfilePhotoCarouselProps) {
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -80,7 +82,7 @@ export default function ProfilePhotoCarousel({
               source={{ uri: photo.url }}
               style={styles.photo}
               resizeMode="cover"
-              blurRadius={photoBlurEnabled && !isRevealed ? 30 : 0}
+              blurRadius={photoBlurEnabled && !isRevealed && !isAdmin ? 30 : 0}
             />
 
             {/* Dynamic Watermark over photo */}

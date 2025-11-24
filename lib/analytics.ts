@@ -12,9 +12,14 @@ export const initializePostHog = async () => {
   // Don't initialize without API key
   // TODO: Re-enable __DEV__ check before production to prevent test data pollution
   if (!POSTHOG_API_KEY) {
-    console.log('PostHog not initialized (missing API key)');
+    console.error('❌ PostHog not initialized: Missing EXPO_PUBLIC_POSTHOG_API_KEY');
+    console.log('Add to .env: EXPO_PUBLIC_POSTHOG_API_KEY=your_key_here');
     return null;
   }
+
+  console.log('🔄 Initializing PostHog...');
+  console.log('API Key:', POSTHOG_API_KEY.substring(0, 10) + '...');
+  console.log('Host:', POSTHOG_HOST);
 
   try {
     posthogClient = new PostHog(POSTHOG_API_KEY, {
@@ -23,12 +28,24 @@ export const initializePostHog = async () => {
       captureMode: 'screen',
       // Enable autocapture for button clicks, screen changes, etc.
       autocapture: true,
+      // Enable debug mode to see what's being sent
+      ...__DEV__ && { debug: true },
     });
 
-    console.log('✅ PostHog initialized');
+    console.log('✅ PostHog initialized successfully!');
+    console.log('PostHog client:', posthogClient ? 'Ready' : 'Failed');
+
+    // Send test event to verify it's working
+    if (posthogClient) {
+      posthogClient.capture('posthog_initialized', {
+        timestamp: new Date().toISOString(),
+      });
+      console.log('📊 Test event sent to PostHog');
+    }
+
     return posthogClient;
   } catch (error) {
-    console.error('Failed to initialize PostHog:', error);
+    console.error('❌ Failed to initialize PostHog:', error);
     return null;
   }
 };
@@ -38,13 +55,21 @@ export const initializePostHog = async () => {
  */
 export const trackEvent = (eventName: string, properties?: Record<string, any>) => {
   if (!posthogClient) {
+    console.warn(`⚠️  PostHog not initialized, event not sent: ${eventName}`);
     if (__DEV__) {
-      console.log(`📊 Event: ${eventName}`, properties);
+      console.log(`📊 Event (not sent): ${eventName}`, properties);
     }
     return;
   }
 
-  posthogClient.capture(eventName, properties);
+  try {
+    posthogClient.capture(eventName, properties);
+    if (__DEV__) {
+      console.log(`✅ Event sent to PostHog: ${eventName}`, properties);
+    }
+  } catch (error) {
+    console.error(`❌ Error sending event to PostHog: ${eventName}`, error);
+  }
 };
 
 /**

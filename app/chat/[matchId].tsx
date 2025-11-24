@@ -26,6 +26,8 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { useScreenProtection } from '@/hooks/useScreenProtection';
 import * as ImagePicker from 'expo-image-picker';
+import { DynamicWatermark } from '@/components/security/DynamicWatermark';
+import { useWatermark } from '@/hooks/useWatermark';
 import { Audio } from 'expo-av';
 import { sendMessageNotification } from '@/lib/notifications';
 import BlockModal from '@/components/safety/BlockModal';
@@ -38,6 +40,7 @@ import ReviewPromptBanner from '@/components/reviews/ReviewPromptBanner';
 import { validateMessage, containsContactInfo, validateContent } from '@/lib/content-moderation';
 import { encryptMessage, decryptMessage, getPrivateKey } from '@/lib/encryption';
 import { getLastActiveText, isOnline, getOnlineStatusColor } from '@/lib/online-status';
+import { trackUserAction, trackFunnel } from '@/lib/analytics';
 
 interface Message {
   id: string;
@@ -117,6 +120,7 @@ export default function Chat() {
   const [currentUserPhotoBlur, setCurrentUserPhotoBlur] = useState(false);
   const [matchProfilePhotoBlur, setMatchProfilePhotoBlur] = useState(false);
   const [revealLoading, setRevealLoading] = useState(false);
+  const { viewerUserId, isReady: watermarkReady } = useWatermark();
 
   useEffect(() => {
     loadCurrentProfile();
@@ -593,6 +597,14 @@ export default function Chat() {
       if (error) {
         console.error('DATABASE ERROR:', error);
         throw error;
+      }
+
+      // Track message sent
+      trackUserAction.messageSent(matchId as string, 'text');
+
+      // Track first message in funnel if this is the first message
+      if (messages.length === 0) {
+        trackFunnel.firstMessageSent();
       }
 
       console.log('Message sent successfully!');
@@ -1475,6 +1487,15 @@ export default function Chat() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}
     >
+      {/* Dynamic Watermark Overlay for chat */}
+      {watermarkReady && matchProfile && (
+        <DynamicWatermark
+          userId={matchProfile.id}
+          viewerUserId={viewerUserId}
+          visible={true}
+        />
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>

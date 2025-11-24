@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { GradientButton } from '@/components/shared/GradientButton';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
+import { HeightUnit, cmToInches, getHeightRange } from '@/lib/height-utils';
 
 const ZODIAC_SIGNS = [
   'Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo',
@@ -53,6 +54,8 @@ export default function Personality() {
   const [zodiacSign, setZodiacSign] = useState('');
   const [heightFeet, setHeightFeet] = useState('');
   const [heightInches, setHeightInches] = useState('');
+  const [heightCm, setHeightCm] = useState('');
+  const [heightUnit, setHeightUnit] = useState<HeightUnit>('imperial');
   const [personalityType, setPersonalityType] = useState('');
   const [loveLanguage, setLoveLanguage] = useState<string[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
@@ -99,7 +102,8 @@ export default function Personality() {
 
   const handleContinue = async () => {
     // Validation - at least some fields should be filled
-    if (!zodiacSign && !heightFeet && !personalityType && loveLanguage.length === 0 && selectedLanguages.length === 0) {
+    const hasHeight = heightUnit === 'metric' ? !!heightCm : !!heightFeet;
+    if (!zodiacSign && !hasHeight && !personalityType && loveLanguage.length === 0 && selectedLanguages.length === 0) {
       Alert.alert('Required', 'Please fill in at least a few fields to continue');
       return;
     }
@@ -127,9 +131,12 @@ export default function Personality() {
         activeProfileId = profileData.id;
       }
 
-      // Calculate total height in inches
+      // Calculate total height in inches based on selected unit
       let totalHeightInches = null;
-      if (heightFeet) {
+      if (heightUnit === 'metric' && heightCm) {
+        // Convert cm to inches for storage
+        totalHeightInches = cmToInches(parseInt(heightCm) || 0);
+      } else if (heightUnit === 'imperial' && heightFeet) {
         const feet = parseInt(heightFeet) || 0;
         const inches = parseInt(heightInches) || 0;
         totalHeightInches = (feet * 12) + inches;
@@ -140,6 +147,7 @@ export default function Personality() {
         .update({
           zodiac_sign: zodiacSign || null,
           height_inches: totalHeightInches,
+          height_unit: heightUnit,
           personality_type: personalityType || null,
           love_language: loveLanguage.length > 0 ? loveLanguage : null,
           languages_spoken: selectedLanguages.length > 0 ? selectedLanguages : null,
@@ -223,30 +231,85 @@ export default function Personality() {
             <Text className="text-sm font-medium text-gray-700 mb-2">
               Height <Text className="text-gray-400">(optional)</Text>
             </Text>
-            <View className="flex-row gap-3 items-center">
-              <View className="flex-1">
-                <TextInput
-                  className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                  placeholder="Feet (e.g., 5)"
-                  value={heightFeet}
-                  onChangeText={setHeightFeet}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                />
-              </View>
-              <Text className="text-gray-500 font-bold">ft</Text>
-              <View className="flex-1">
-                <TextInput
-                  className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                  placeholder="Inches (e.g., 10)"
-                  value={heightInches}
-                  onChangeText={setHeightInches}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                />
-              </View>
-              <Text className="text-gray-500 font-bold">in</Text>
+
+            {/* Height Unit Toggle */}
+            <View className="flex-row gap-2 mb-3">
+              <TouchableOpacity
+                className={`flex-1 py-3 rounded-xl border ${
+                  heightUnit === 'imperial'
+                    ? 'bg-primary-500 border-primary-500'
+                    : 'bg-white border-gray-300'
+                }`}
+                onPress={() => setHeightUnit('imperial')}
+              >
+                <Text
+                  className={`text-center font-medium ${
+                    heightUnit === 'imperial' ? 'text-white' : 'text-gray-700'
+                  }`}
+                >
+                  Feet / Inches
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className={`flex-1 py-3 rounded-xl border ${
+                  heightUnit === 'metric'
+                    ? 'bg-primary-500 border-primary-500'
+                    : 'bg-white border-gray-300'
+                }`}
+                onPress={() => setHeightUnit('metric')}
+              >
+                <Text
+                  className={`text-center font-medium ${
+                    heightUnit === 'metric' ? 'text-white' : 'text-gray-700'
+                  }`}
+                >
+                  Centimeters
+                </Text>
+              </TouchableOpacity>
             </View>
+
+            {/* Height Input - Imperial (feet/inches) */}
+            {heightUnit === 'imperial' ? (
+              <View className="flex-row gap-3 items-center">
+                <View className="flex-1">
+                  <TextInput
+                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+                    placeholder="Feet (e.g., 5)"
+                    value={heightFeet}
+                    onChangeText={setHeightFeet}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                  />
+                </View>
+                <Text className="text-gray-500 font-bold">ft</Text>
+                <View className="flex-1">
+                  <TextInput
+                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+                    placeholder="Inches (e.g., 10)"
+                    value={heightInches}
+                    onChangeText={setHeightInches}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                  />
+                </View>
+                <Text className="text-gray-500 font-bold">in</Text>
+              </View>
+            ) : (
+              /* Height Input - Metric (cm) */
+              <View className="flex-row gap-3 items-center">
+                <View className="flex-1">
+                  <TextInput
+                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+                    placeholder="Height in cm (e.g., 175)"
+                    value={heightCm}
+                    onChangeText={setHeightCm}
+                    keyboardType="number-pad"
+                    maxLength={3}
+                  />
+                </View>
+                <Text className="text-gray-500 font-bold">cm</Text>
+              </View>
+            )}
           </View>
 
           {/* MBTI/Personality Type */}

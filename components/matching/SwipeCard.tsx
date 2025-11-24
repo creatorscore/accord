@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
@@ -19,6 +19,7 @@ import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
+import { formatDistance, DistanceUnit } from '@/lib/distance-utils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.3;
@@ -42,10 +43,11 @@ interface Profile {
 
 interface SwipeCardProps {
   profile: Profile;
-  onSwipeLeft: () => void;
-  onSwipeRight: () => void;
-  onSwipeUp: () => void;
+  onSwipeLeft: () => Promise<boolean> | void;
+  onSwipeRight: () => Promise<boolean> | void;
+  onSwipeUp: () => Promise<boolean> | void;
   onPress: () => void;
+  distanceUnit?: DistanceUnit;
 }
 
 export default function SwipeCard({
@@ -54,6 +56,7 @@ export default function SwipeCard({
   onSwipeRight,
   onSwipeUp,
   onPress,
+  distanceUnit = 'miles',
 }: SwipeCardProps) {
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
   const translateX = useSharedValue(0);
@@ -154,20 +157,21 @@ export default function SwipeCard({
       translateY.value = event.translationY;
     })
     .onEnd((event) => {
-      // Swipe up for "Obsessed"
+      // Swipe up for "Obsessed" (super like)
       if (translateY.value < -SWIPE_THRESHOLD && Math.abs(translateX.value) < SWIPE_THRESHOLD) {
+        // Start animation optimistically, async handler will spring back if it fails
         translateY.value = withTiming(-SCREEN_HEIGHT);
-        runOnJS(onSwipeUp)();
+        runOnJS(handleAsyncSwipeUp)();
       }
       // Swipe right for "Like"
       else if (translateX.value > SWIPE_THRESHOLD) {
         translateX.value = withTiming(SCREEN_WIDTH * 1.5);
-        runOnJS(onSwipeRight)();
+        runOnJS(handleAsyncSwipeRight)();
       }
       // Swipe left for "Pass"
       else if (translateX.value < -SWIPE_THRESHOLD) {
         translateX.value = withTiming(-SCREEN_WIDTH * 1.5);
-        runOnJS(onSwipeLeft)();
+        runOnJS(handleAsyncSwipeLeft)();
       }
       // Return to center if not swiped far enough
       else {
@@ -240,13 +244,50 @@ export default function SwipeCard({
     opacity: tutorialOpacity.value,
   }));
 
-  const distance = profile.hide_distance
-    ? 'Nearby'
-    : profile.distance
-    ? profile.distance < 1
-      ? '< 1 mile away'
-      : `${Math.round(profile.distance)} miles away`
-    : '';
+  const distance = formatDistance(profile.distance, distanceUnit, profile.hide_distance);
+
+  // Async swipe handlers that animate based on callback result
+  const handleAsyncSwipeUp = async () => {
+    try {
+      const result = await Promise.resolve(onSwipeUp());
+      if (result === false) {
+        // Callback failed, spring back to center
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+      }
+      // If result is true or void (undefined), keep the animation going (card already moving)
+    } catch (error) {
+      // Error occurred, spring back to center
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+    }
+  };
+
+  const handleAsyncSwipeRight = async () => {
+    try {
+      const result = await Promise.resolve(onSwipeRight());
+      if (result === false) {
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+      }
+    } catch (error) {
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+    }
+  };
+
+  const handleAsyncSwipeLeft = async () => {
+    try {
+      const result = await Promise.resolve(onSwipeLeft());
+      if (result === false) {
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+      }
+    } catch (error) {
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+    }
+  };
 
   return (
     <GestureDetector gesture={panGesture}>
