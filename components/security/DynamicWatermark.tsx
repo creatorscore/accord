@@ -167,7 +167,7 @@ function WatermarkInstance({ text, position, delay }: WatermarkInstanceProps) {
   );
 }
 
-function getPositionStyle(position: WatermarkInstanceProps['position']) {
+function getPositionStyle(position: WatermarkInstanceProps['position']): any {
   switch (position) {
     case 'top-left':
       return { top: 40, left: 20 };

@@ -267,6 +267,6 @@ const styles = StyleSheet.create({
   alternativeText: {
     fontSize: 13,
     color: '#8B5CF6',
-    textDecoration: 'underline',
+    textDecorationLine: 'underline',
   },
 });
