@@ -119,7 +119,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       listener = Purchases.addCustomerInfoUpdateListener((info) => {
         setCustomerInfo(info);
-      });
+      }) as any;
     } catch (error) {
       console.error('Failed to add RevenueCat listener:', error);
     }

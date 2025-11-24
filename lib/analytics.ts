@@ -24,8 +24,6 @@ export const initializePostHog = async () => {
   try {
     posthogClient = new PostHog(POSTHOG_API_KEY, {
       host: POSTHOG_HOST,
-      // Enable session recording (be mindful of privacy)
-      captureMode: 'screen',
       // Enable autocapture for button clicks, screen changes, etc.
       autocapture: true,
       // Enable debug mode to see what's being sent

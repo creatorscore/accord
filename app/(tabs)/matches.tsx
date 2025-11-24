@@ -206,7 +206,7 @@ export default function Matches() {
       );
 
       // Filter out any null values (profiles that failed to load)
-      const validMatches = matchesWithProfiles.filter((m): m is Match => m !== null);
+      const validMatches = matchesWithProfiles.filter(m => m !== null) as Match[];
       setMatches(validMatches);
     } catch (error: any) {
       console.error('Error loading matches:', error);
