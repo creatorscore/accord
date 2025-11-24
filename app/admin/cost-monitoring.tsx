@@ -64,7 +64,7 @@ export default function CostMonitoring() {
         setTableSizes(sizes || []);
 
         // Calculate total DB size
-        const totalBytes = (sizes || []).reduce((sum, t) => sum + t.size_bytes, 0);
+        const totalBytes = (sizes || []).reduce((sum: number, t: any) => sum + t.size_bytes, 0);
         const totalGB = (totalBytes / (1024 * 1024 * 1024)).toFixed(2);
         setTotalDbSize(`${totalGB} GB`);
       }

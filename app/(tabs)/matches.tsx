@@ -473,7 +473,7 @@ export default function Matches() {
         },
         {
           text: t('matches.reportDialog.submit'),
-          onPress: async (reason) => {
+          onPress: async (reason: string) => {
             if (!reason || reason.trim() === '') {
               Alert.alert(t('common.error'), t('matches.reportDialog.errorEmpty'));
               return;
