@@ -180,6 +180,10 @@ export default function Matches() {
 
           const isRevealed = !!revealData;
 
+          if (!profile) {
+            return null;
+          }
+
           return {
             id: match.id,
             profile: {
@@ -201,7 +205,9 @@ export default function Matches() {
         })
       );
 
-      setMatches(matchesWithProfiles);
+      // Filter out any null values (profiles that failed to load)
+      const validMatches = matchesWithProfiles.filter((m): m is Match => m !== null);
+      setMatches(validMatches);
     } catch (error: any) {
       console.error('Error loading matches:', error);
     } finally {

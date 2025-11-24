@@ -1902,7 +1902,7 @@ export default function Discover() {
         )}
 
         <SwipeCard
-          profile={currentProfile}
+          profile={currentProfile as any}
           onSwipeLeft={handleSwipeLeft}
           onSwipeRight={handleSwipeRight}
           onSwipeUp={handleSwipeUp}
@@ -1987,7 +1987,7 @@ export default function Discover() {
       >
         {currentIndex < profiles.length && (
           <ImmersiveProfileCard
-            profile={profiles[currentIndex]}
+            profile={profiles[currentIndex] as any}
             preferences={currentProfilePreferences}
             compatibilityBreakdown={profiles[currentIndex].compatibilityBreakdown}
             onSwipeLeft={handleImmersiveSwipeLeft}
