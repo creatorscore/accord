@@ -478,7 +478,7 @@ export default function Discover() {
 
           // Use 'overlaps' operator for array-to-array matching
           // Format as PostgreSQL array literal with quoted values: {"value1","value2"}
-          const pgArrayLiteral = `{${genderPrefArray.map(g => `"${g}"`).join(',')}}`;
+          const pgArrayLiteral = `{${genderPrefArray.map((g: string) => `"${g}"`).join(',')}}`;
           console.log('🔍 Applying gender filter:', genderPrefArray, '→', pgArrayLiteral);
           query = query.filter('gender', 'ov', pgArrayLiteral);
         }
@@ -1567,7 +1567,7 @@ export default function Discover() {
         },
         {
           text: t('common.submit'),
-          onPress: async (reason) => {
+          onPress: async (reason: string) => {
             if (!reason || reason.trim() === '') {
               Alert.alert(t('common.error'), 'Please provide a reason for reporting.');
               return;

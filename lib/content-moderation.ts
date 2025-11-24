@@ -1,4 +1,4 @@
-import Filter from 'bad-words';
+import { Filter } from 'bad-words';
 
 // LGBTQ+-specific terms that should NOT be filtered
 const lgbtqAllowList = [
