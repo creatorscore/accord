@@ -97,7 +97,7 @@ interface Preferences {
 }
 
 interface CompatibilityBreakdown {
-  overall: number;
+  total: number; // Changed from 'overall' to match matching-algorithm.ts
   location: number;
   goals: number;
   lifestyle: number;

@@ -940,6 +940,7 @@ export function getCompatibilityBreakdown(
   lifestyle: number;
   personality: number;
   demographics: number;
+  orientation: number;
   total: number;
 } {
   return {
@@ -948,6 +949,7 @@ export function getCompatibilityBreakdown(
     location: calculateLocationScore(profile1, profile2, prefs1, prefs2), // 20%
     demographics: calculateDemographicsScore(profile1, profile2, prefs1, prefs2), // 15%
     personality: calculatePersonalityScore(profile1, profile2), // 5%
+    orientation: 100, // Orientation compatibility is factored into demographics score
     total: calculateCompatibilityScore(profile1, profile2, prefs1, prefs2),
   };
 }
