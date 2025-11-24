@@ -275,7 +275,7 @@ export async function decryptMessage(
         tagLength: 128,
       },
       cryptoKey,
-      ciphertextWithTag
+      ciphertextWithTag as any
     );
 
     return new TextDecoder().decode(decrypted);
