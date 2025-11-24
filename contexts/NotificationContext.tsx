@@ -36,10 +36,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       // Register for push notifications when user logs in
       initializePushNotifications();
     } else {
-      // Clean up when user logs out
-      if (pushToken && user?.id) {
-        removePushToken(user.id);
-      }
+      // Clean up when user logs out (no need to remove token as user is null)
       setPushToken(null);
       setNotificationsEnabled(false);
     }

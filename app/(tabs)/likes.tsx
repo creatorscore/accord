@@ -129,20 +129,24 @@ export default function Likes() {
           !matchedProfileIds.has(like.liker_profile_id) &&
           !blockedProfileIds.has(like.liker_profile_id)
         )
-        .map(like => ({
-          id: like.id,
-          profile_id: like.liker_profile_id,
-          liked_at: like.created_at,
-          profile: {
-            display_name: like.liker_profile.display_name,
-            age: like.liker_profile.age,
-            location_city: like.liker_profile.location_city,
-            location_state: like.liker_profile.location_state,
-            occupation: like.liker_profile.occupation,
-            bio: like.liker_profile.bio,
-            photos: like.liker_profile.photos || [],
-          },
-        }));
+        .map(like => {
+          // Supabase returns joined data as array, extract first element
+          const likerProfile = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
+          return {
+            id: like.id,
+            profile_id: like.liker_profile_id,
+            liked_at: like.created_at,
+            profile: {
+              display_name: likerProfile.display_name,
+              age: likerProfile.age,
+              location_city: likerProfile.location_city,
+              location_state: likerProfile.location_state,
+              occupation: likerProfile.occupation,
+              bio: likerProfile.bio,
+              photos: likerProfile.photos || [],
+            },
+          };
+        });
 
       setLikes(formattedLikes);
     } catch (error) {

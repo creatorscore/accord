@@ -183,7 +183,13 @@ export default function Matches() {
           return {
             id: match.id,
             profile: {
-              ...profile,
+              id: profile.id,
+              display_name: profile.display_name,
+              age: profile.age,
+              is_verified: profile.is_verified,
+              last_active_at: profile.last_active_at,
+              hide_last_active: profile.hide_last_active,
+              photo_blur_enabled: profile.photo_blur_enabled,
               photos: profile?.photos?.sort((a: any, b: any) => a.display_order - b.display_order),
               is_revealed: isRevealed,
             },
@@ -473,7 +479,7 @@ export default function Matches() {
         },
         {
           text: t('matches.reportDialog.submit'),
-          onPress: async (reason: string) => {
+          onPress: async (reason?: string) => {
             if (!reason || reason.trim() === '') {
               Alert.alert(t('common.error'), t('matches.reportDialog.errorEmpty'));
               return;
