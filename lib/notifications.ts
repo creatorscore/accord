@@ -386,7 +386,7 @@ export function setupNotificationListener(
     return { remove: () => {} }; // Return mock subscription
   }
 
-  return Notifications.addNotificationResponseReceivedListener((response) => {
+  return Notifications.addNotificationResponseReceivedListener((response: any) => {
     const data = response.notification.request.content.data;
     onNotificationTap(data);
   });
