@@ -86,7 +86,7 @@ export default function MarriagePreferences() {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const [primaryReason, setPrimaryReason] = useState('');
+  const [primaryReason, setPrimaryReason] = useState<string[]>([]);
   const [relationshipType, setRelationshipType] = useState('');
   const [wantsChildren, setWantsChildren] = useState<boolean | null | undefined>(undefined);
   const [childrenArrangement, setChildrenArrangement] = useState<string[]>([]);
@@ -120,6 +120,14 @@ export default function MarriagePreferences() {
   };
 
   // Toggle functions for multi-select fields
+  const togglePrimaryReason = (value: string) => {
+    if (primaryReason.includes(value)) {
+      setPrimaryReason(primaryReason.filter(item => item !== value));
+    } else {
+      setPrimaryReason([...primaryReason, value]);
+    }
+  };
+
   const toggleChildrenArrangement = (value: string) => {
     if (childrenArrangement.includes(value)) {
       setChildrenArrangement(childrenArrangement.filter(item => item !== value));
@@ -145,8 +153,8 @@ export default function MarriagePreferences() {
   };
 
   const handleContinue = async () => {
-    if (!primaryReason) {
-      Alert.alert('Required', 'Please select your primary reason');
+    if (primaryReason.length === 0) {
+      Alert.alert('Required', 'Please select at least one reason');
       return;
     }
 
@@ -188,7 +196,8 @@ export default function MarriagePreferences() {
         .from('preferences')
         .upsert({
           profile_id: profileId,
-          primary_reason: primaryReason,
+          primary_reasons: primaryReason.length > 0 ? primaryReason : null,
+          primary_reason: primaryReason.length > 0 ? primaryReason[0] : null, // Keep legacy column for backward compat
           relationship_type: relationshipType,
           wants_children: wantsChildren,
           children_arrangement: childrenArrangement.length > 0 ? childrenArrangement : null,
@@ -246,25 +255,26 @@ export default function MarriagePreferences() {
 
         {/* Form */}
         <View className="space-y-8">
-          {/* Primary Reason */}
+          {/* Primary Reason - Multi-select */}
           <View>
             <Text className="text-sm font-medium text-gray-700 mb-3">
-              Primary reason for seeking a lavender marriage?
+              Reasons for seeking a lavender marriage?
             </Text>
+            <Text className="text-xs text-gray-500 mb-2">Select all that apply</Text>
             <View className="space-y-2">
               {PRIMARY_REASONS.map((reason) => (
                 <TouchableOpacity
                   key={reason.value}
                   className={`px-4 py-3 rounded-xl border ${
-                    primaryReason === reason.value
+                    primaryReason.includes(reason.value)
                       ? 'bg-primary-50 border-primary-500'
                       : 'bg-white border-gray-300'
                   }`}
-                  onPress={() => setPrimaryReason(reason.value)}
+                  onPress={() => togglePrimaryReason(reason.value)}
                 >
                   <Text
                     className={`${
-                      primaryReason === reason.value
+                      primaryReason.includes(reason.value)
                         ? 'text-primary-500 font-semibold'
                         : 'text-gray-700'
                     }`}
@@ -274,6 +284,11 @@ export default function MarriagePreferences() {
                 </TouchableOpacity>
               ))}
             </View>
+            {primaryReason.length > 0 && (
+              <Text className="text-xs text-primary-500 mt-2">
+                Selected: {primaryReason.map(val => PRIMARY_REASONS.find(r => r.value === val)?.label).join(', ')}
+              </Text>
+            )}
           </View>
 
           {/* Relationship Type */}
@@ -640,12 +655,18 @@ export default function MarriagePreferences() {
 
           <TouchableOpacity
             className={`flex-1 py-4 rounded-full ${
-              loading || !primaryReason || !relationshipType || wantsChildren === undefined || !housingPreference || !financialArrangement
+              loading || primaryReason.length === 0 || !relationshipType || wantsChildren === undefined || housingPreference.length === 0 || financialArrangement.length === 0
                 ? 'bg-gray-400'
                 : 'bg-primary-500'
             }`}
+            style={{
+              borderRadius: 9999,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 16,
+            }}
             onPress={handleContinue}
-            disabled={loading || !primaryReason || !relationshipType || wantsChildren === undefined || !housingPreference || !financialArrangement}
+            disabled={loading || primaryReason.length === 0 || !relationshipType || wantsChildren === undefined || housingPreference.length === 0 || financialArrangement.length === 0}
           >
             <Text className="text-white text-center font-semibold text-lg">
               {loading ? t('common.loading') : t('common.continue')}

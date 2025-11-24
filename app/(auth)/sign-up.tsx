@@ -6,6 +6,7 @@ import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/a
 import { supabase } from '@/lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
+import { trackUserAction, identifyUser } from '@/lib/analytics';
 
 export default function SignUp() {
   const { t } = useTranslation();
@@ -86,11 +87,17 @@ export default function SignUp() {
       if (result.user && !result.session) {
         // Email verification required - show success message
         console.log('Email confirmation required for:', email);
+        // Track sign-up (even though not yet verified)
+        trackUserAction.signUp('email');
+        identifyUser(result.user.id, { email: email.toLowerCase() });
         setUserEmail(email);
         setShowVerificationMessage(true);
       } else if (result.session) {
         // Direct sign in successful (email confirmation disabled)
         console.log('Direct sign in successful');
+        // Track successful sign-up
+        trackUserAction.signUp('email');
+        identifyUser(result.user!.id, { email: email.toLowerCase() });
         setTimeout(() => {
           router.replace('/(onboarding)/language');
         }, 500);
@@ -139,6 +146,11 @@ export default function SignUp() {
     try {
       const result = await signInWithGoogle();
       if (result) {
+        // Track successful Google sign-up
+        trackUserAction.signUp('google');
+        if ('user' in result && result.user) {
+          identifyUser(result.user.id, { email: result.user.email });
+        }
         // Let the root layout handle navigation based on profile/onboarding status
         // Don't force navigate to onboarding - the app will route correctly
         setTimeout(() => {
@@ -162,6 +174,11 @@ export default function SignUp() {
     try {
       const result = await signInWithApple();
       if (result) {
+        // Track successful Apple sign-up
+        trackUserAction.signUp('apple');
+        if ('user' in result && result.user) {
+          identifyUser(result.user.id, { email: result.user.email });
+        }
         // Let the root layout handle navigation based on profile/onboarding status
         setTimeout(() => {
           router.replace('/');
@@ -249,8 +266,9 @@ export default function SignUp() {
         <View>
           <Text className="text-gray-700 mb-2 font-medium">{t('auth.signUp.email')}</Text>
           <TextInput
-            className="border border-gray-300 rounded-lg px-4 py-3"
+            className="border border-gray-300 rounded-lg px-4 py-3 bg-white text-gray-900"
             placeholder={t('auth.signUp.emailPlaceholder')}
+            placeholderTextColor="#9CA3AF"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -261,8 +279,9 @@ export default function SignUp() {
         <View>
           <Text className="text-gray-700 mb-2 font-medium">{t('auth.signUp.password')}</Text>
           <TextInput
-            className="border border-gray-300 rounded-lg px-4 py-3"
+            className="border border-gray-300 rounded-lg px-4 py-3 bg-white text-gray-900"
             placeholder={t('auth.signUp.passwordPlaceholder')}
+            placeholderTextColor="#9CA3AF"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -277,8 +296,9 @@ export default function SignUp() {
             {t('auth.signUp.confirmPassword')}
           </Text>
           <TextInput
-            className="border border-gray-300 rounded-lg px-4 py-3"
+            className="border border-gray-300 rounded-lg px-4 py-3 bg-white text-gray-900"
             placeholder={t('auth.signUp.passwordPlaceholder')}
+            placeholderTextColor="#9CA3AF"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry

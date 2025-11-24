@@ -59,6 +59,7 @@ With anti-LGBTQ+ sentiment rising 112%, **women increasingly rejecting cis-heter
 ```
 accord/
 ├── CLAUDE.md                 # AI assistant context & technical docs
+├── DATABASE_MIGRATION_RULES.md # Database migration best practices
 ├── accord-prd.md             # Complete product requirements
 ├── README.md                 # This file
 ├── app/                      # Expo Router screens

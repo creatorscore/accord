@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Alert } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 
 export default function Index() {
-  const { user, loading } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const [checking, setChecking] = useState(true);
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null);
   const [onboardingStep, setOnboardingStep] = useState<number>(0);
+  const [isBanned, setIsBanned] = useState(false);
 
   useEffect(() => {
     // Only check once when auth is ready
@@ -24,10 +26,35 @@ export default function Index() {
         return;
       }
 
-      // Check if profile is complete
+      // Check if user is banned (secondary safeguard)
+      try {
+        const deviceId = await getDeviceFingerprint();
+        const { data: banCheck } = await supabase.rpc('is_banned', {
+          check_email: user.email?.toLowerCase(),
+          check_device_id: deviceId,
+        });
+
+        if (banCheck === true) {
+          console.log('🚫 User is banned, signing out');
+          setIsBanned(true);
+          await signOut();
+          Alert.alert(
+            'Account Restricted',
+            'This account has been restricted from using Accord. If you believe this is an error, please contact support at hello@joinaccord.app.',
+            [{ text: 'OK' }]
+          );
+          setChecking(false);
+          return;
+        }
+      } catch (banError) {
+        console.error('Error checking ban status:', banError);
+        // Continue if we can't check - other safeguards will catch it
+      }
+
+      // Check if profile is complete and if user is active
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('profile_complete, onboarding_step')
+        .select('profile_complete, onboarding_step, is_active')
         .eq('user_id', user.id)
         .single();
 
@@ -37,6 +64,20 @@ export default function Index() {
         // If there's an error, default to onboarding
         setOnboardingStep(0);
         setProfileComplete(false);
+        setChecking(false);
+        return;
+      }
+
+      // Check if profile is deactivated (banned)
+      if (profile?.is_active === false) {
+        console.log('🚫 Profile is deactivated, signing out');
+        setIsBanned(true);
+        await signOut();
+        Alert.alert(
+          'Account Restricted',
+          'This account has been restricted from using Accord. If you believe this is an error, please contact support at hello@joinaccord.app.',
+          [{ text: 'OK' }]
+        );
         setChecking(false);
         return;
       }
@@ -63,7 +104,7 @@ export default function Index() {
   }
 
   // Redirect based on user and profile status
-  if (!user) {
+  if (!user || isBanned) {
     return <Redirect href="/(auth)/welcome" />;
   }
 

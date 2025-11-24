@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
+import { formatDistanceSlider, DistanceUnit } from '@/lib/distance-utils';
+import { registerForPushNotifications, savePushToken } from '@/lib/notifications';
 import Slider from '@react-native-community/slider';
 
 const GENDER_OPTIONS = [
@@ -34,6 +36,7 @@ export default function MatchingPreferences() {
   const [ageMin, setAgeMin] = useState(25);
   const [ageMax, setAgeMax] = useState(45);
   const [maxDistance, setMaxDistance] = useState(50);
+  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('miles');
   const [willingToRelocate, setWillingToRelocate] = useState(false);
   const [genderPreference, setGenderPreference] = useState<string[]>([]);
 
@@ -85,6 +88,7 @@ export default function MatchingPreferences() {
           age_min: ageMin,
           age_max: ageMax,
           max_distance_miles: maxDistance,
+          distance_unit: distanceUnit,
           willing_to_relocate: willingToRelocate,
           gender_preference: genderPreference,
         })
@@ -102,6 +106,19 @@ export default function MatchingPreferences() {
         .eq('id', profileId);
 
       if (profileError) throw profileError;
+
+      // Register for push notifications now that profile exists
+      // This is critical - the initial registration during signup fails because profile doesn't exist yet
+      try {
+        const token = await registerForPushNotifications();
+        if (token && user?.id) {
+          await savePushToken(user.id, token);
+          console.log('✅ Push token saved after onboarding completion');
+        }
+      } catch (pushError) {
+        // Don't block onboarding completion if push registration fails
+        console.warn('Push notification registration failed:', pushError);
+      }
 
       // Navigate to main app
       router.replace('/(tabs)/discover');
@@ -174,10 +191,51 @@ export default function MatchingPreferences() {
             </View>
           </View>
 
+          {/* Distance Unit Toggle */}
+          <View>
+            <Text className="text-sm font-medium text-gray-700 mb-3">
+              Distance Unit
+            </Text>
+            <View className="flex-row gap-2">
+              <TouchableOpacity
+                className={`flex-1 py-3 rounded-xl border ${
+                  distanceUnit === 'miles'
+                    ? 'bg-primary-500 border-primary-500'
+                    : 'bg-white border-gray-300'
+                }`}
+                onPress={() => setDistanceUnit('miles')}
+              >
+                <Text
+                  className={`text-center font-medium ${
+                    distanceUnit === 'miles' ? 'text-white' : 'text-gray-700'
+                  }`}
+                >
+                  Miles
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className={`flex-1 py-3 rounded-xl border ${
+                  distanceUnit === 'km'
+                    ? 'bg-primary-500 border-primary-500'
+                    : 'bg-white border-gray-300'
+                }`}
+                onPress={() => setDistanceUnit('km')}
+              >
+                <Text
+                  className={`text-center font-medium ${
+                    distanceUnit === 'km' ? 'text-white' : 'text-gray-700'
+                  }`}
+                >
+                  Kilometers
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Distance */}
           <View>
             <Text className="text-sm font-medium text-gray-700 mb-3">
-              Maximum Distance: {maxDistance} miles
+              Maximum Distance: {formatDistanceSlider(maxDistance, distanceUnit)}
             </Text>
             <Slider
               minimumValue={10}
@@ -267,6 +325,12 @@ export default function MatchingPreferences() {
             className={`flex-1 py-4 rounded-full ${
               loading || genderPreference.length === 0 ? 'bg-gray-400' : 'bg-primary-500'
             }`}
+            style={{
+              borderRadius: 9999,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 16,
+            }}
             onPress={handleFinish}
             disabled={loading || genderPreference.length === 0}
           >

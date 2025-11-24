@@ -273,6 +273,12 @@ export default function Interests() {
                 ? 'bg-gray-400'
                 : 'bg-primary-500'
             }`}
+            style={{
+              borderRadius: 9999,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 16,
+            }}
             onPress={handleContinue}
             disabled={loading || hobbies.length === 0}
           >

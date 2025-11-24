@@ -134,13 +134,26 @@ export default function ContactBlocking() {
     setBlocking(true);
 
     try {
+      console.log('📱 Fetching contacts...');
+
       // Fetch all contacts with phone numbers
+      // Note: On Android, we need to explicitly request PhoneNumbers field
       const { data: contactsData } = await Contacts.getContactsAsync({
         fields: [Contacts.Fields.PhoneNumbers],
+        pageSize: 10000, // Fetch all contacts at once
+        pageOffset: 0,
       });
 
+      console.log(`📱 Found ${contactsData?.length || 0} contacts`);
+
       if (!contactsData || contactsData.length === 0) {
-        Alert.alert('No Contacts', 'No phone numbers found in your contacts.');
+        Alert.alert(
+          'No Contacts Found',
+          'No contacts were found on your device. This could happen if:\n\n' +
+          '• Your contacts are stored in a cloud account that\'s not synced\n' +
+          '• Contacts permission was partially granted\n\n' +
+          'Try syncing your contacts and try again.'
+        );
         setBlocking(false);
         return;
       }
@@ -157,8 +170,13 @@ export default function ContactBlocking() {
         }
       }
 
+      console.log(`📱 Extracted ${phoneNumbers.length} phone numbers from contacts`);
+
       if (phoneNumbers.length === 0) {
-        Alert.alert('No Phone Numbers', 'No phone numbers found in your contacts.');
+        Alert.alert(
+          'No Phone Numbers',
+          'Your contacts don\'t have any phone numbers saved. Contact blocking only works with contacts that have phone numbers.'
+        );
         setBlocking(false);
         return;
       }
@@ -168,17 +186,29 @@ export default function ContactBlocking() {
         phoneNumbers.map(num => hashPhoneNumber(num))
       );
 
+      console.log(`🔐 Hashed ${hashedNumbers.length} phone numbers`);
+
       // Insert into database (upsert to avoid duplicates)
       const blocksToInsert = hashedNumbers.map(hash => ({
         profile_id: currentProfileId,
         phone_number: hash,
       }));
 
-      const { error } = await supabase
-        .from('contact_blocks')
-        .upsert(blocksToInsert, { onConflict: 'profile_id,phone_number' });
+      console.log(`💾 Upserting ${blocksToInsert.length} contact blocks to database...`);
 
-      if (error) throw error;
+      const { error, count } = await supabase
+        .from('contact_blocks')
+        .upsert(blocksToInsert, {
+          onConflict: 'profile_id,phone_number',
+          ignoreDuplicates: true,
+        });
+
+      if (error) {
+        console.error('Database upsert error:', error);
+        throw error;
+      }
+
+      console.log(`✅ Successfully saved contact blocks`);
 
       setContactsBlocked(hashedNumbers.length);
       setIsEnabled(true);
@@ -192,7 +222,23 @@ export default function ContactBlocking() {
       );
     } catch (error: any) {
       console.error('Error blocking contacts:', error);
-      Alert.alert('Error', 'Failed to block contacts. Please try again.');
+
+      // Provide more specific error messages
+      let errorMessage = 'Failed to block contacts. Please try again.';
+
+      if (error?.message?.includes('permission')) {
+        errorMessage = 'Contacts permission was denied. Please enable it in your device settings.';
+      } else if (error?.message?.includes('network') || error?.code === 'NETWORK_ERROR') {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (error?.code === 'PGRST301' || error?.message?.includes('JWT')) {
+        errorMessage = 'Session expired. Please sign out and sign back in.';
+      } else if (error?.code === '42501' || error?.message?.includes('policy')) {
+        errorMessage = 'Permission denied. Please try signing out and back in.';
+      } else if (error?.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+
+      Alert.alert('Error', errorMessage);
     } finally {
       setBlocking(false);
     }

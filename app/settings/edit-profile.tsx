@@ -24,6 +24,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { optimizeImage, uriToArrayBuffer, validateImage } from '@/lib/image-optimization';
+import { HeightUnit, cmToInches, inchesToCm } from '@/lib/height-utils';
 
 interface Photo {
   id?: string;
@@ -341,6 +342,8 @@ export default function EditProfile() {
   const [sexualOrientation, setSexualOrientation] = useState<string[]>([]);
   const [heightFeet, setHeightFeet] = useState('');
   const [heightInches, setHeightInches] = useState('');
+  const [heightCm, setHeightCm] = useState('');
+  const [heightUnit, setHeightUnit] = useState<HeightUnit>('imperial');
   const [zodiac, setZodiac] = useState('');
   const [personality, setPersonality] = useState('');
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -369,7 +372,7 @@ export default function EditProfile() {
 
   // Preferences fields
   const [preferencesId, setPreferencesId] = useState<string>('');
-  const [primaryReason, setPrimaryReason] = useState('');
+  const [primaryReason, setPrimaryReason] = useState<string[]>([]);
   const [relationshipType, setRelationshipType] = useState('');
   const [wantsChildren, setWantsChildren] = useState<boolean | null>(null);
   const [childrenArrangement, setChildrenArrangement] = useState<string[]>([]);
@@ -412,6 +415,7 @@ export default function EditProfile() {
           ethnicity,
           sexual_orientation,
           height_inches,
+          height_unit,
           zodiac_sign,
           personality_type,
           prompt_answers,
@@ -456,12 +460,22 @@ export default function EditProfile() {
         setEthnicity(profileData.ethnicity || []);
         setSexualOrientation(profileData.sexual_orientation || []);
 
-        // Convert height_inches to feet and inches
+        // Load height unit preference and convert height_inches to the appropriate format
+        const savedHeightUnit = profileData.height_unit || 'imperial';
+        setHeightUnit(savedHeightUnit as HeightUnit);
+
         if (profileData.height_inches) {
-          const feet = Math.floor(profileData.height_inches / 12);
-          const inches = profileData.height_inches % 12;
-          setHeightFeet(feet.toString());
-          setHeightInches(inches.toString());
+          if (savedHeightUnit === 'metric') {
+            // Convert inches to cm for metric users
+            const cm = inchesToCm(profileData.height_inches);
+            setHeightCm(cm.toString());
+          } else {
+            // Convert to feet and inches for imperial users
+            const feet = Math.floor(profileData.height_inches / 12);
+            const inches = profileData.height_inches % 12;
+            setHeightFeet(feet.toString());
+            setHeightInches(inches.toString());
+          }
         }
 
         setZodiac(profileData.zodiac_sign || '');
@@ -534,7 +548,14 @@ export default function EditProfile() {
 
           if (prefsData) {
             setPreferencesId(prefsData.id);
-            setPrimaryReason(prefsData.primary_reason || '');
+            // Prefer new primary_reasons column, fallback to legacy primary_reason
+            if (prefsData.primary_reasons && Array.isArray(prefsData.primary_reasons)) {
+              setPrimaryReason(prefsData.primary_reasons);
+            } else if (prefsData.primary_reason) {
+              setPrimaryReason([prefsData.primary_reason]); // Convert legacy single value to array
+            } else {
+              setPrimaryReason([]);
+            }
             setRelationshipType(prefsData.relationship_type || '');
             setWantsChildren(prefsData.wants_children);
             setChildrenArrangement(prefsData.children_arrangement || []);
@@ -817,9 +838,12 @@ export default function EditProfile() {
       const calculatedAge = calculateAge(birthDate);
       const calculatedZodiac = calculateZodiac(birthDate);
 
-      // Calculate total height in inches from feet and inches
+      // Calculate total height in inches based on selected unit
       let totalHeightInches = null;
-      if (heightFeet) {
+      if (heightUnit === 'metric' && heightCm) {
+        // Convert cm to inches for storage
+        totalHeightInches = cmToInches(parseInt(heightCm) || 0);
+      } else if (heightUnit === 'imperial' && heightFeet) {
         const feet = parseInt(heightFeet) || 0;
         const inches = parseInt(heightInches) || 0;
         totalHeightInches = (feet * 12) + inches;
@@ -845,6 +869,7 @@ export default function EditProfile() {
         ethnicity: ethnicity.length > 0 ? ethnicity : null,
         sexual_orientation: sexualOrientation.length > 0 ? sexualOrientation : null,
         height_inches: totalHeightInches,
+        height_unit: heightUnit,
         personality_type: personality,
         prompt_answers: validPromptAnswers.length > 0 ? validPromptAnswers : null,
         interests: {
@@ -1020,7 +1045,8 @@ export default function EditProfile() {
 
         const preferencesPayload = {
           profile_id: finalProfileId,
-          primary_reason: primaryReason || null,
+          primary_reasons: primaryReason.length > 0 ? primaryReason : null,
+          primary_reason: primaryReason.length > 0 ? primaryReason[0] : null, // Keep legacy column for backward compat
           relationship_type: relationshipType || null,
           wants_children: wantsChildren,
           children_arrangement: childrenArrangement.length > 0 ? childrenArrangement : null,
@@ -1450,32 +1476,80 @@ export default function EditProfile() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Height</Text>
-            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-              <View style={{ flex: 1 }}>
-                <TextInput
-                  style={styles.input}
-                  value={heightFeet}
-                  onChangeText={setHeightFeet}
-                  placeholder="Feet (e.g., 5)"
-                  keyboardType="number-pad"
-                  placeholderTextColor="#9CA3AF"
-                  maxLength={1}
-                />
-              </View>
-              <Text style={{ fontWeight: 'bold', color: '#6B7280' }}>ft</Text>
-              <View style={{ flex: 1 }}>
-                <TextInput
-                  style={styles.input}
-                  value={heightInches}
-                  onChangeText={setHeightInches}
-                  placeholder="Inches (e.g., 10)"
-                  keyboardType="number-pad"
-                  placeholderTextColor="#9CA3AF"
-                  maxLength={2}
-                />
-              </View>
-              <Text style={{ fontWeight: 'bold', color: '#6B7280' }}>in</Text>
+
+            {/* Height Unit Toggle */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              <TouchableOpacity
+                style={[
+                  styles.unitToggleButton,
+                  heightUnit === 'imperial' && styles.unitToggleButtonActive
+                ]}
+                onPress={() => setHeightUnit('imperial')}
+              >
+                <Text style={[
+                  styles.unitToggleText,
+                  heightUnit === 'imperial' && styles.unitToggleTextActive
+                ]}>Feet / Inches</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.unitToggleButton,
+                  heightUnit === 'metric' && styles.unitToggleButtonActive
+                ]}
+                onPress={() => setHeightUnit('metric')}
+              >
+                <Text style={[
+                  styles.unitToggleText,
+                  heightUnit === 'metric' && styles.unitToggleTextActive
+                ]}>Centimeters</Text>
+              </TouchableOpacity>
             </View>
+
+            {/* Height Input - Imperial (feet/inches) */}
+            {heightUnit === 'imperial' ? (
+              <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                <View style={{ flex: 1 }}>
+                  <TextInput
+                    style={styles.input}
+                    value={heightFeet}
+                    onChangeText={setHeightFeet}
+                    placeholder="Feet (e.g., 5)"
+                    keyboardType="number-pad"
+                    placeholderTextColor="#9CA3AF"
+                    maxLength={1}
+                  />
+                </View>
+                <Text style={{ fontWeight: 'bold', color: '#6B7280' }}>ft</Text>
+                <View style={{ flex: 1 }}>
+                  <TextInput
+                    style={styles.input}
+                    value={heightInches}
+                    onChangeText={setHeightInches}
+                    placeholder="Inches (e.g., 10)"
+                    keyboardType="number-pad"
+                    placeholderTextColor="#9CA3AF"
+                    maxLength={2}
+                  />
+                </View>
+                <Text style={{ fontWeight: 'bold', color: '#6B7280' }}>in</Text>
+              </View>
+            ) : (
+              /* Height Input - Metric (cm) */
+              <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                <View style={{ flex: 1 }}>
+                  <TextInput
+                    style={styles.input}
+                    value={heightCm}
+                    onChangeText={setHeightCm}
+                    placeholder="Height in cm (e.g., 175)"
+                    keyboardType="number-pad"
+                    placeholderTextColor="#9CA3AF"
+                    maxLength={3}
+                  />
+                </View>
+                <Text style={{ fontWeight: 'bold', color: '#6B7280' }}>cm</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -1977,24 +2051,36 @@ export default function EditProfile() {
           <Text style={styles.sectionSubtitle}>What are you looking for in a partnership?</Text>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Primary Reason</Text>
+            <Text style={styles.inputLabel}>Primary Reasons</Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {PRIMARY_REASONS.map((reason) => (
                 <TouchableOpacity
                   key={reason.value}
                   style={[
                     styles.interestChip,
-                    primaryReason === reason.value && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    primaryReason.includes(reason.value) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
                   ]}
-                  onPress={() => setPrimaryReason(reason.value)}
+                  onPress={() => {
+                    if (primaryReason.includes(reason.value)) {
+                      setPrimaryReason(primaryReason.filter(r => r !== reason.value));
+                    } else {
+                      setPrimaryReason([...primaryReason, reason.value]);
+                    }
+                  }}
                 >
                   <Text style={[
                     styles.interestText,
-                    primaryReason === reason.value && { color: '#FFFFFF' }
+                    primaryReason.includes(reason.value) && { color: '#FFFFFF' }
                   ]}>{reason.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+            {primaryReason.length > 0 && (
+              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
+                Selected: {primaryReason.map(val => PRIMARY_REASONS.find(r => r.value === val)?.label).join(', ')}
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -2869,5 +2955,26 @@ const styles = StyleSheet.create({
   },
   modalButtonDisabledText: {
     color: '#9CA3AF',
+  },
+  unitToggleButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  unitToggleButtonActive: {
+    backgroundColor: '#9B87CE',
+    borderColor: '#9B87CE',
+  },
+  unitToggleText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  unitToggleTextActive: {
+    color: '#FFFFFF',
   },
 });

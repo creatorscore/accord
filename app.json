@@ -2,7 +2,7 @@
   "expo": {
     "name": "Accord - Lavender Marriage",
     "slug": "accord",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.privyreviews.accord",
-      "buildNumber": "31",
+      "buildNumber": "32",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Accord needs access to your photos to upload profile pictures.",
@@ -28,6 +28,7 @@
           "PreciseLocationPrompt": "Accord needs precise location to accurately calculate distances to potential matches. We respect your privacy and never share your exact coordinates."
         },
         "NSMicrophoneUsageDescription": "Accord needs access to your microphone to record your voice introduction.",
+        "NSContactsUsageDescription": "Accord uses your contacts to help you avoid seeing people you know in your discovery feed. Phone numbers are encrypted on your device and never shared.",
         "NSUserTrackingUsageDescription": "We use this to understand which features work best and improve your match quality. Your personal information always stays private.",
         "CFBundleURLTypes": [
           {
@@ -65,18 +66,21 @@
         "backgroundColor": "#9B87CE"
       },
       "package": "com.privyreviews.accord",
-      "versionCode": 31,
+      "versionCode": 26,
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_CONTACTS"
       ],
       "googleServicesFile": "./google-services.json",
-      "useNextNotificationsApi": true
+      "useNextNotificationsApi": true,
+      "compileSdkVersion": 35,
+      "targetSdkVersion": 35,
+      "buildToolsVersion": "35.0.0"
     },
     "web": {
       "bundler": "metro"
@@ -114,9 +118,21 @@
       "expo-secure-store",
       "expo-tracking-transparency",
       [
+        "expo-contacts",
+        {
+          "contactsPermission": "Accord uses your contacts to help you avoid seeing people you know in your discovery feed. Phone numbers are encrypted on your device and never shared."
+        }
+      ],
+      [
         "react-native-capture-protection",
         {
           "captureType": "fullMediaCapture"
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.609854216709-81grqvlc66iahvd56749ot511p9agh09"
         }
       ]
     ],

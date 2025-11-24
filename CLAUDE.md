@@ -62,6 +62,8 @@ Accord is a native mobile dating application (iOS + Android) designed specifical
 
 ## Database Schema
 
+**IMPORTANT:** When making database changes, always follow the rules in [DATABASE_MIGRATION_RULES.md](./DATABASE_MIGRATION_RULES.md) to ensure backward compatibility across app versions.
+
 ### Core Tables
 
 ```sql

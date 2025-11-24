@@ -6,9 +6,9 @@ import { Platform } from 'react-native';
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
 
-  // Add extra padding for Android navigation bar
-  const tabBarHeight = Platform.OS === 'android' ? 60 + insets.bottom : 60;
-  const paddingBottom = Platform.OS === 'android' ? insets.bottom + 5 : 5;
+  // Add extra padding for safe area (home indicator on iPhone X+, navigation bar on Android)
+  const tabBarHeight = 60 + insets.bottom;
+  const paddingBottom = insets.bottom + 5;
 
   return (
     <Tabs

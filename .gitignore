@@ -33,6 +33,12 @@ logs
 
 # EAS
 eas.json
+credentials.json
+
+# Android signing
+*.jks
+*.keystore
+!android/app/debug.keystore
 
 # Temporary files
 *.tmp
@@ -52,3 +58,8 @@ supabase/.temp
 # Firebase
 google-services.json
 GoogleService-Info.plist
+
+# Vim swap files
+*.swp
+*.swo
+*~

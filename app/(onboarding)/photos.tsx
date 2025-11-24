@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Image, ScrollView, Alert, Switch } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -21,6 +21,7 @@ export default function Photos() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [photoBlurEnabled, setPhotoBlurEnabled] = useState(false);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -165,10 +166,13 @@ export default function Photos() {
         }
       }
 
-      // Update onboarding step
+      // Update onboarding step and photo blur preference
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ onboarding_step: 2 })
+        .update({
+          onboarding_step: 2,
+          photo_blur_enabled: photoBlurEnabled,
+        })
         .eq('id', profileId);
 
       if (updateError) {
@@ -249,7 +253,7 @@ export default function Photos() {
         </View>
 
         {/* Tips */}
-        <View className="bg-blue-50 border-2 border-blue-200 rounded-3xl p-5 mb-8">
+        <View className="bg-blue-50 border-2 border-blue-200 rounded-3xl p-5 mb-6">
           <View className="flex-row items-center mb-3">
             <Text className="text-3xl mr-2">📷</Text>
             <Text className="text-blue-900 font-bold text-lg">Photo Tips</Text>
@@ -258,6 +262,27 @@ export default function Photos() {
           <Text className="text-blue-800 text-sm mb-2">😊 Show your face clearly</Text>
           <Text className="text-blue-800 text-sm mb-2">🎨 Include variety (close-up, full body, activity)</Text>
           <Text className="text-blue-800 text-sm">👥 Avoid group photos as your first photo</Text>
+        </View>
+
+        {/* Privacy Option - Photo Blur */}
+        <View className="bg-purple-50 border-2 border-purple-200 rounded-3xl p-5 mb-8">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1 mr-4">
+              <View className="flex-row items-center mb-2">
+                <Text className="text-2xl mr-2">🔒</Text>
+                <Text className="text-purple-900 font-bold text-lg">Privacy Mode</Text>
+              </View>
+              <Text className="text-purple-800 text-sm">
+                Blur your photos until you match with someone. They'll only see clear photos after you both like each other.
+              </Text>
+            </View>
+            <Switch
+              value={photoBlurEnabled}
+              onValueChange={setPhotoBlurEnabled}
+              trackColor={{ false: '#D1D5DB', true: '#9B87CE' }}
+              thumbColor={photoBlurEnabled ? '#ffffff' : '#f4f3f4'}
+            />
+          </View>
         </View>
 
         {/* Buttons */}
@@ -276,6 +301,12 @@ export default function Photos() {
                 ? 'bg-gray-400'
                 : 'bg-primary-500'
             }`}
+            style={{
+              borderRadius: 9999,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 16,
+            }}
             onPress={handleContinue}
             disabled={uploading || photos.length < 2}
           >

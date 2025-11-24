@@ -14,9 +14,11 @@ import { SplashScreen } from '@/components/shared/SplashScreen';
 import { ActivityTracker } from '@/components/shared/ActivityTracker';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { ScreenCaptureOverlay } from '@/components/shared/ScreenCaptureOverlay';
+import AppUpdateChecker from '@/components/AppUpdateChecker';
 import { initI18n, isRTL } from '@/lib/i18n';
 // import { initializeSentry } from '@/lib/sentry'; // Temporarily disabled for production build
 import { initializePostHog, trackAppLifecycle } from '@/lib/analytics';
+import { configureGoogleSignIn } from '@/lib/auth-providers';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Application from 'expo-application';
@@ -50,6 +52,9 @@ export default function RootLayout() {
         initializePostHog().catch(err => {
           console.error('PostHog initialization error:', err);
         });
+
+        // Configure Google Sign-In for native authentication
+        configureGoogleSignIn();
 
         // Track app install/launch
         if (isFirstLaunch) {
@@ -91,8 +96,14 @@ export default function RootLayout() {
             <SubscriptionProvider>
               <NotificationProvider>
                 <ActivityTracker />
-                <Stack screenOptions={{ headerShown: false }} />
+                {/* Only render Stack after i18n is initialized to prevent showing raw translation keys */}
+                {i18nInitialized ? (
+                  <Stack screenOptions={{ headerShown: false }} />
+                ) : null}
                 <StatusBar style="auto" />
+
+                {/* Check for app updates */}
+                {!showSplash && <AppUpdateChecker />}
 
                 {/* Overlay splash screen while initializing */}
                 {showSplash && (

@@ -9,6 +9,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { validateDisplayName, getModerationErrorMessage } from '@/lib/content-moderation';
 import { initializeEncryption } from '@/lib/encryption';
 import { useTranslation } from 'react-i18next';
+import DateTimePicker, { DateType } from 'react-native-ui-datepicker';
+import { trackUserAction, trackFunnel } from '@/lib/analytics';
 
 const GENDERS = [
   'Man',
@@ -105,27 +107,18 @@ function calculateZodiac(birthDate: Date): string {
   return 'Pisces'; // Feb 19 - Mar 20
 }
 
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
-
-const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
-const currentYear = new Date().getFullYear();
-const YEARS = Array.from({ length: 100 }, (_, i) => currentYear - 18 - i); // Start from 18 years ago
+// Calculate date limits for DOB picker (18-100 years old)
+const today = new Date();
+const maxBirthDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate()); // Must be at least 18
+const minBirthDate = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate()); // Max 100 years old
 
 export default function BasicInfo() {
   const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
   const [displayName, setDisplayName] = useState('');
-  const [birthDate, setBirthDate] = useState<Date | null>(null);
+  const [birthDate, setBirthDate] = useState<DateType>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
-
-  // Individual date components for custom picker
-  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   const [gender, setGender] = useState<string[]>([]);
   const [pronouns, setPronouns] = useState('');
@@ -203,11 +196,7 @@ export default function BasicInfo() {
       if (profile) {
         if (profile.display_name) setDisplayName(profile.display_name);
         if (profile.birth_date) {
-          const date = new Date(profile.birth_date);
-          setBirthDate(date);
-          setSelectedMonth(date.getMonth());
-          setSelectedDay(date.getDate());
-          setSelectedYear(date.getFullYear());
+          setBirthDate(new Date(profile.birth_date));
         }
         if (profile.gender) setGender(Array.isArray(profile.gender) ? profile.gender : [profile.gender]);
         if (profile.pronouns) setPronouns(profile.pronouns);
@@ -225,14 +214,6 @@ export default function BasicInfo() {
       }
     } catch (error) {
       console.error('Error loading existing profile:', error);
-    }
-  };
-
-  const handleDateConfirm = () => {
-    if (selectedMonth !== null && selectedDay !== null && selectedYear !== null) {
-      const date = new Date(selectedYear, selectedMonth, selectedDay);
-      setBirthDate(date);
-      setShowDatePicker(false);
     }
   };
 
@@ -430,7 +411,8 @@ export default function BasicInfo() {
       return;
     }
 
-    const age = calculateAge(birthDate);
+    const birthDateObj = new Date(birthDate as Date);
+    const age = calculateAge(birthDateObj);
     if (age < 18) {
       Alert.alert('Age Requirement', 'You must be at least 18 years old to use Accord');
       return;
@@ -509,8 +491,9 @@ export default function BasicInfo() {
       }
 
       // Calculate age and zodiac sign from birth date
-      const age = calculateAge(birthDate);
-      const zodiac_sign = calculateZodiac(birthDate);
+      const birthDateObj = new Date(birthDate as Date);
+      const age = calculateAge(birthDateObj);
+      const zodiac_sign = calculateZodiac(birthDateObj);
 
       // Initialize encryption keys for this user
       // This generates a private key (stored securely on device) and public key (stored in DB)
@@ -530,7 +513,7 @@ export default function BasicInfo() {
         .upsert({
           user_id: currentUser.id,
           display_name: displayName,
-          birth_date: birthDate.toISOString().split('T')[0], // Store as YYYY-MM-DD
+          birth_date: birthDateObj.toISOString().split('T')[0], // Store as YYYY-MM-DD
           age, // Calculated age
           zodiac_sign, // Calculated zodiac
           gender: gender, // Always store as array (TEXT[])
@@ -549,6 +532,10 @@ export default function BasicInfo() {
         });
 
       if (error) throw error;
+
+      // Track onboarding step completion
+      trackUserAction.onboardingStepCompleted(1, 'basic-info');
+      trackFunnel.onboardingStep1_BasicInfo();
 
       router.push('/(onboarding)/photos');
     } catch (error: any) {
@@ -617,7 +604,7 @@ export default function BasicInfo() {
               onPress={() => setShowDatePicker(true)}
             >
               <Text className={birthDate ? "text-gray-900" : "text-gray-500"}>
-                {birthDate ? birthDate.toLocaleDateString('en-US', {
+                {birthDate ? new Date(birthDate as Date).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric'
@@ -627,7 +614,7 @@ export default function BasicInfo() {
             </TouchableOpacity>
             {birthDate && (
               <Text className="text-xs text-gray-600 mt-1">
-                Age: {calculateAge(birthDate)} • {calculateZodiac(birthDate)}
+                Age: {calculateAge(new Date(birthDate as Date))} • {calculateZodiac(new Date(birthDate as Date))}
               </Text>
             )}
           </View>
@@ -657,7 +644,7 @@ export default function BasicInfo() {
             </TouchableOpacity>
           )}
 
-          {/* Custom Date Picker Modal */}
+          {/* Calendar Date Picker Modal */}
           <Modal
             visible={showDatePicker}
             transparent
@@ -667,93 +654,39 @@ export default function BasicInfo() {
             <View className="flex-1 bg-black/50 justify-end">
               <View className="bg-white rounded-t-3xl p-6 pb-8">
                 {/* Header */}
-                <View className="flex-row items-center justify-between mb-6">
+                <View className="flex-row items-center justify-between mb-4">
                   <Text className="text-2xl font-bold text-gray-900">Select Birth Date</Text>
                   <TouchableOpacity onPress={() => setShowDatePicker(false)}>
                     <MaterialCommunityIcons name="close" size={28} color="#6B7280" />
                   </TouchableOpacity>
                 </View>
 
-                {/* Date Selectors */}
-                <View className="flex-row gap-3 mb-6">
-                  {/* Month */}
-                  <View className="flex-1">
-                    <Text className="text-xs font-medium text-gray-600 mb-2">Month</Text>
-                    <ScrollView className="max-h-48 bg-gray-50 rounded-xl border border-gray-200">
-                      {MONTHS.map((month, index) => (
-                        <TouchableOpacity
-                          key={month}
-                          className={`px-4 py-3 border-b border-gray-100 ${
-                            selectedMonth === index ? 'bg-primary-100' : ''
-                          }`}
-                          onPress={() => setSelectedMonth(index)}
-                        >
-                          <Text className={`${
-                            selectedMonth === index ? 'text-primary-500 font-bold' : 'text-gray-700'
-                          }`}>
-                            {month}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
+                <Text className="text-sm text-gray-500 mb-4">
+                  You must be at least 18 years old to use Accord
+                </Text>
 
-                  {/* Day */}
-                  <View className="w-20">
-                    <Text className="text-xs font-medium text-gray-600 mb-2">Day</Text>
-                    <ScrollView className="max-h-48 bg-gray-50 rounded-xl border border-gray-200">
-                      {DAYS.map((day) => (
-                        <TouchableOpacity
-                          key={day}
-                          className={`px-4 py-3 border-b border-gray-100 items-center ${
-                            selectedDay === day ? 'bg-primary-100' : ''
-                          }`}
-                          onPress={() => setSelectedDay(day)}
-                        >
-                          <Text className={`${
-                            selectedDay === day ? 'text-primary-500 font-bold' : 'text-gray-700'
-                          }`}>
-                            {day}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-
-                  {/* Year */}
-                  <View className="w-24">
-                    <Text className="text-xs font-medium text-gray-600 mb-2">Year</Text>
-                    <ScrollView className="max-h-48 bg-gray-50 rounded-xl border border-gray-200">
-                      {YEARS.map((year) => (
-                        <TouchableOpacity
-                          key={year}
-                          className={`px-4 py-3 border-b border-gray-100 items-center ${
-                            selectedYear === year ? 'bg-primary-100' : ''
-                          }`}
-                          onPress={() => setSelectedYear(year)}
-                        >
-                          <Text className={`${
-                            selectedYear === year ? 'text-primary-500 font-bold' : 'text-gray-700'
-                          }`}>
-                            {year}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
+                {/* Calendar Date Picker */}
+                <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 8 }}>
+                  <DateTimePicker
+                    mode="single"
+                    date={birthDate}
+                    onChange={({ date }) => setBirthDate(date)}
+                    maxDate={maxBirthDate}
+                    minDate={minBirthDate}
+                  />
                 </View>
 
                 {/* Confirm Button */}
                 <TouchableOpacity
-                  className={`rounded-full py-4 items-center ${
-                    selectedMonth !== null && selectedDay !== null && selectedYear !== null
-                      ? 'bg-primary-500'
-                      : 'bg-gray-300'
+                  className={`rounded-full py-4 items-center mt-4 ${
+                    birthDate ? 'bg-primary-500' : 'bg-gray-300'
                   }`}
-                  onPress={handleDateConfirm}
-                  disabled={selectedMonth === null || selectedDay === null || selectedYear === null}
+                  onPress={() => setShowDatePicker(false)}
+                  disabled={!birthDate}
                 >
-                  <Text className="text-white font-bold text-lg">Confirm</Text>
+                  <Text className="text-white font-bold text-lg">
+                    {birthDate ? 'Confirm' : 'Select a date'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>

@@ -136,7 +136,7 @@ serve(async (req) => {
     if (existingPrompt) {
       reviewPrompt = existingPrompt;
 
-      // Check if review period has started (3 days after match)
+      // Check if review period has started (7 days after match)
       const triggerDate = new Date(reviewPrompt.trigger_date);
       if (triggerDate > new Date()) {
         const daysRemaining = Math.ceil((triggerDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
@@ -150,17 +150,17 @@ serve(async (req) => {
       }
     } else {
       // Create new review prompt
-      // Trigger date is 3 days after match (users must wait 3 days before reviewing)
+      // Trigger date is 7 days after match (users must wait 7 days before reviewing)
       const triggerDate = new Date(match.matched_at);
-      triggerDate.setDate(triggerDate.getDate() + 3);
+      triggerDate.setDate(triggerDate.getDate() + 7);
 
-      // Check if 3 days have passed since match
+      // Check if 7 days have passed since match
       if (triggerDate > new Date()) {
         const daysRemaining = Math.ceil((triggerDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
         throw new Error(`You can submit a review ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} after matching.`);
       }
 
-      // Window expires 3 days after trigger (total 6 days after match)
+      // Window expires 3 days after trigger (total 10 days after match)
       const expiresAt = new Date(triggerDate);
       expiresAt.setDate(expiresAt.getDate() + 3);
 

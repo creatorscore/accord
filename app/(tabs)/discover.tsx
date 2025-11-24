@@ -18,8 +18,11 @@ import ProfileBoostModal from '@/components/premium/ProfileBoostModal';
 import { sendMatchNotification, sendLikeNotification } from '@/lib/notifications';
 import { calculateCompatibilityScore, getCompatibilityBreakdown } from '@/lib/matching-algorithm';
 import { initializeTracking } from '@/lib/tracking-permissions';
+import { DistanceUnit } from '@/lib/distance-utils';
+import { HeightUnit } from '@/lib/height-utils';
 import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
+import { trackUserAction, trackFunnel } from '@/lib/analytics';
 
 interface Profile {
   id: string;
@@ -121,6 +124,8 @@ export default function Discover() {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
+  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('miles');
+  const [heightUnit, setHeightUnit] = useState<HeightUnit>('imperial');
 
   useEffect(() => {
     loadCurrentProfile();
@@ -162,6 +167,7 @@ export default function Discover() {
           id,
           display_name,
           gender,
+          height_unit,
           photos (
             url,
             is_primary,
@@ -196,12 +202,19 @@ export default function Discover() {
         financialArrangement: [],
       } : filters;
 
+      // Load distance unit preference (default to 'miles' for backward compatibility)
+      const userDistanceUnit = userPreferences?.distance_unit || 'miles';
+      // Load height unit preference from profile (default to 'imperial' for backward compatibility)
+      const userHeightUnit = data.height_unit || 'imperial';
+
       // Update all state at once to prevent multiple re-renders
       setCurrentProfileId(profileId);
       setCurrentUserName(displayName);
       setCurrentUserGender(userGender);
       setCurrentUserPhoto(photoUrl);
       setFilters(initialFilters);
+      setDistanceUnit(userDistanceUnit as DistanceUnit);
+      setHeightUnit(userHeightUnit as HeightUnit);
 
       // Immediately start loading profiles to reduce perceived lag
       // Don't wait for next render cycle
@@ -289,7 +302,12 @@ export default function Discover() {
     return true;
   };
 
-  const loadProfiles = async () => {
+  const loadProfiles = async (searchModeOverride?: boolean, searchKeywordOverride?: string) => {
+    // Use override values if provided, otherwise fall back to state
+    // This fixes the React state timing issue where state updates are async
+    const effectiveSearchMode = searchModeOverride !== undefined ? searchModeOverride : isSearchMode;
+    const effectiveSearchKeyword = searchKeywordOverride !== undefined ? searchKeywordOverride : searchKeyword;
+
     try {
       setLoading(true);
 
@@ -299,6 +317,7 @@ export default function Discover() {
       }
 
       console.log('🔍 Loading profiles for:', currentProfileId);
+      console.log('🔍 Search mode:', effectiveSearchMode, 'Keyword:', effectiveSearchKeyword);
 
       // Get profiles that:
       // 1. Are active
@@ -406,7 +425,13 @@ export default function Discover() {
         console.log('🔍 DEBUG: No Vanessa/Lisa profiles found');
       }
 
+      // Check if user has global search enabled
+      const isSearchingGlobally = currentUserData.preferences?.search_globally === true;
+      console.log('🌍 Global search enabled:', isSearchingGlobally);
+
       // Get potential matches with all fields needed for compatibility
+      // When searching globally or in search mode, fetch more profiles
+      const shouldFetchMore = isSearchingGlobally || effectiveSearchMode;
       let query = supabase
         .from('profiles')
         .select(`
@@ -420,39 +445,47 @@ export default function Discover() {
         `)
         .neq('id', currentProfileId)
         .eq('incognito_mode', false)
-        .limit(20)
+        .limit(shouldFetchMore ? 200 : 20) // Fetch more profiles when searching
         .order('created_at', { ascending: false });
 
       if (swipedIds.length > 0) {
         query = query.not('id', 'in', `(${swipedIds.join(',')})`);
       }
 
-      // Apply strict age filters (no buffer - respect user preferences exactly)
-      // Safety: Always enforce minimum age of 18
-      console.log('🔍 Applying age filter:', Math.max(18, filters.ageMin), '-', filters.ageMax);
-      console.log('📋 Current user age:', currentUserData.age);
-      query = query
-        .gte('age', Math.max(18, filters.ageMin))
-        .lte('age', filters.ageMax);
+      // In SEARCH MODE: Skip age/gender filters at database level to get more potential matches
+      // The keyword search + client-side filters will narrow down results
+      if (effectiveSearchMode) {
+        console.log('🔍 SEARCH MODE: Skipping database-level age/gender filters');
+        // Only apply safety minimum age of 18
+        query = query.gte('age', 18);
+      } else {
+        // Apply strict age filters (no buffer - respect user preferences exactly)
+        // Safety: Always enforce minimum age of 18
+        console.log('🔍 Applying age filter:', Math.max(18, filters.ageMin), '-', filters.ageMax);
+        console.log('📋 Current user age:', currentUserData.age);
+        query = query
+          .gte('age', Math.max(18, filters.ageMin))
+          .lte('age', filters.ageMax);
 
-      // Apply gender preference filter (hard filter for all users)
-      // Users can multi-select genders, so this should be a hard requirement
-      // Use array overlap operator since gender is now an array in the database
-      if (currentUserData.preferences?.gender_preference && currentUserData.preferences.gender_preference.length > 0) {
-        // Convert gender_preference to array if it's a string (handles legacy data)
-        const genderPrefArray = Array.isArray(currentUserData.preferences.gender_preference)
-          ? currentUserData.preferences.gender_preference
-          : currentUserData.preferences.gender_preference.split(',').map((g: string) => g.trim());
+        // Apply gender preference filter (hard filter for all users)
+        // Users can multi-select genders, so this should be a hard requirement
+        // Use array overlap operator since gender is now an array in the database
+        if (currentUserData.preferences?.gender_preference && currentUserData.preferences.gender_preference.length > 0) {
+          // Convert gender_preference to array if it's a string (handles legacy data)
+          const genderPrefArray = Array.isArray(currentUserData.preferences.gender_preference)
+            ? currentUserData.preferences.gender_preference
+            : currentUserData.preferences.gender_preference.split(',').map((g: string) => g.trim());
 
-        // Use 'overlaps' operator for array-to-array matching
-        // Format as PostgreSQL array literal with quoted values: {"value1","value2"}
-        const pgArrayLiteral = `{${genderPrefArray.map(g => `"${g}"`).join(',')}}`;
-        console.log('🔍 Applying gender filter:', genderPrefArray, '→', pgArrayLiteral);
-        query = query.filter('gender', 'ov', pgArrayLiteral);
+          // Use 'overlaps' operator for array-to-array matching
+          // Format as PostgreSQL array literal with quoted values: {"value1","value2"}
+          const pgArrayLiteral = `{${genderPrefArray.map(g => `"${g}"`).join(',')}}`;
+          console.log('🔍 Applying gender filter:', genderPrefArray, '→', pgArrayLiteral);
+          query = query.filter('gender', 'ov', pgArrayLiteral);
+        }
       }
 
-      // Apply premium filters (only if user is premium AND filters are set)
-      if (isPremium) {
+      // Apply premium filters (only if user is premium AND filters are set AND not in search mode)
+      if (isPremium && !effectiveSearchMode) {
         // Religion filter
         if (filters.religion.length > 0) {
           query = query.in('religion', filters.religion);
@@ -519,6 +552,28 @@ export default function Discover() {
         filteredData = filterResults.filter(p => p !== null);
 
         console.log('📱 Profiles after contact filtering:', filteredData.length, '(filtered out', (data?.length || 0) - filteredData.length, ')');
+      }
+
+      // SAFETY: Filter out profiles that have blocked viewer's country
+      // This protects users who don't want to be seen by people in specific countries
+      const userCountry = currentUserData.location_country || 'US';
+      console.log('🌍 Current user country:', userCountry);
+
+      if (userCountry && filteredData.length > 0) {
+        // Get profile IDs that have blocked the viewer's country
+        const profileIds = filteredData.map((p: any) => p.id);
+        const { data: countryBlockedProfiles } = await supabase
+          .from('country_blocks')
+          .select('profile_id')
+          .eq('country_code', userCountry)
+          .in('profile_id', profileIds);
+
+        if (countryBlockedProfiles && countryBlockedProfiles.length > 0) {
+          const countryBlockedIds = new Set(countryBlockedProfiles.map(cb => cb.profile_id));
+          const beforeCount = filteredData.length;
+          filteredData = filteredData.filter((p: any) => !countryBlockedIds.has(p.id));
+          console.log('🌍 Profiles after country blocking filter:', filteredData.length, '(filtered out', beforeCount - filteredData.length, ')');
+        }
       }
 
       // Transform and calculate real compatibility scores
@@ -638,11 +693,12 @@ export default function Discover() {
           // ====================================================================
           // KEYWORD SEARCH FILTER (if in search mode)
           // ====================================================================
-          if (isSearchMode && searchKeyword.trim()) {
-            const keyword = searchKeyword.toLowerCase().trim();
+          if (effectiveSearchMode && effectiveSearchKeyword.trim()) {
+            const keyword = effectiveSearchKeyword.toLowerCase().trim();
 
             // Build searchable text from all profile fields
             const searchableFields = [
+              profile.display_name, // Allow searching by name
               profile.bio,
               profile.my_story,
               profile.occupation,
@@ -654,6 +710,9 @@ export default function Discover() {
               profile.political_views,
               profile.location_city,
               profile.location_state,
+              profile.gender, // Allow searching by gender
+              profile.sexual_orientation, // Allow searching by orientation
+              profile.ethnicity, // Allow searching by ethnicity
               ...(profile.hobbies || []),
               ...(profile.languages_spoken || []),
               ...(profile.prompt_answers?.map((pa: any) => pa.answer) || []),
@@ -672,7 +731,8 @@ export default function Discover() {
             if (profile.preferences) {
               const prefs = profile.preferences;
               searchableFields.push(
-                prefs.primary_reason,
+                // Support both legacy primary_reason and new primary_reasons array
+                prefs.primary_reasons ? prefs.primary_reasons.join(' ') : prefs.primary_reason,
                 prefs.relationship_type,
                 prefs.financial_arrangement,
                 prefs.housing_preference,
@@ -692,11 +752,18 @@ export default function Discover() {
               return false; // Keyword not found
             }
 
-            // IMPORTANT: Even in search mode, apply critical safety filters below
+            // In search mode, skip preference filters - show all keyword matches
+            // Only apply critical safety filters (minimum age 18)
+            if (profile.age < 18) {
+              return false;
+            }
+
+            // Search matched and passes safety check - include this profile!
+            return true;
           }
 
           // ====================================================================
-          // DEALBREAKER FILTERS (ALWAYS APPLIED - even in search mode)
+          // DEALBREAKER FILTERS (only in NORMAL mode, not search mode)
           // ====================================================================
 
           // 1. STRICT AGE FILTER (no buffer, exact preferences)
@@ -758,10 +825,16 @@ export default function Discover() {
           // FILTER DISABLED - Gender preference is the only relevant matching criteria.
 
           // 4. LOCATION/DISTANCE FILTER (ALWAYS APPLIED - even in search mode unless global)
-          const userSearchGlobally = currentUserData.preferences?.search_globally || false;
+          // Use the pre-computed isSearchingGlobally flag from the outer scope
+          const userSearchGlobally = isSearchingGlobally;
           const profileSearchGlobally = profile.preferences?.search_globally || false;
           const userPreferredCities = currentUserData.preferences?.preferred_cities || [];
           const profilePreferredCities = profile.preferences?.preferred_cities || [];
+
+          // Log when global search allows a match
+          if (userSearchGlobally || profileSearchGlobally) {
+            console.log(`🌍 Global match allowed: ${profile.display_name} (user global: ${userSearchGlobally}, profile global: ${profileSearchGlobally})`);
+          }
 
           // Check if profile is in user's preferred cities (exact match)
           const profileMatchesPreferredCity = userPreferredCities.length > 0 &&
@@ -901,8 +974,8 @@ export default function Discover() {
         });
 
       // Log search results if in search mode
-      if (isSearchMode) {
-        console.log('🔍 Search results:', transformedProfiles.length, 'profiles matched keyword:', searchKeyword);
+      if (effectiveSearchMode) {
+        console.log('🔍 Search results:', transformedProfiles.length, 'profiles matched keyword:', effectiveSearchKeyword);
       }
 
       // Sort profiles:
@@ -945,16 +1018,16 @@ export default function Discover() {
     }
   };
 
-  const handleSwipeLeft = useCallback(async () => {
+  const handleSwipeLeft = useCallback(async (): Promise<boolean> => {
     console.log('👈 Swipe left - Current index:', currentIndex, 'Total profiles:', profiles.length);
 
     if (!currentProfileId || currentIndex >= profiles.length) {
       console.log('❌ Cannot swipe - no profile or out of range');
-      return;
+      return false;
     }
 
     // Check swipe limit
-    if (!checkSwipeLimit()) return;
+    if (!checkSwipeLimit()) return false;
 
     const targetProfile = profiles[currentIndex];
     console.log('👈 Passing on:', targetProfile.display_name);
@@ -965,6 +1038,10 @@ export default function Discover() {
         passer_profile_id: currentProfileId,
         passed_profile_id: targetProfile.id,
       });
+
+      // Track swipe left
+      trackUserAction.swipedLeft(targetProfile.id);
+      trackFunnel.profileCardSwiped();
 
       // Increment swipe count
       await incrementSwipeCount();
@@ -980,21 +1057,23 @@ export default function Discover() {
       const newIndex = currentIndex + 1;
       console.log('➡️ Moving to index:', newIndex);
       setCurrentIndex(newIndex);
+      return true;
     } catch (error: any) {
       console.error('❌ Error recording pass:', error);
+      return false;
     }
   }, [currentProfileId, currentIndex, profiles, swipeCount, isPremium]);
 
-  const handleSwipeRight = useCallback(async () => {
+  const handleSwipeRight = useCallback(async (): Promise<boolean> => {
     console.log('👉 Swipe right - Current index:', currentIndex, 'Total profiles:', profiles.length);
 
     if (!currentProfileId || currentIndex >= profiles.length) {
       console.log('❌ Cannot swipe - no profile or out of range');
-      return;
+      return false;
     }
 
     // Check swipe limit
-    if (!checkSwipeLimit()) return;
+    if (!checkSwipeLimit()) return false;
 
     const targetProfile = profiles[currentIndex];
     console.log('❤️ Liking:', targetProfile.display_name);
@@ -1007,6 +1086,10 @@ export default function Discover() {
       });
 
       if (likeError) throw likeError;
+
+      // Track swipe right (like)
+      trackUserAction.swipedRight(targetProfile.id);
+      trackFunnel.profileLiked();
 
       // Increment swipe count
       await incrementSwipeCount();
@@ -1046,6 +1129,10 @@ export default function Discover() {
         } else {
           console.log('✅ Match created:', matchData?.id);
 
+          // Track match
+          trackUserAction.matched(matchData?.id || '');
+          trackFunnel.matchReceived();
+
           // Store match ID and show match modal
           setMatchId(matchData?.id || null);
           setMatchedProfile(targetProfile);
@@ -1066,7 +1153,7 @@ export default function Discover() {
 
         // DON'T advance the card when there's a match
         // The modal close handler will advance it
-        return;
+        return true;
       }
 
       // No match - proceed with normal flow
@@ -1086,13 +1173,15 @@ export default function Discover() {
       const newIndex = currentIndex + 1;
       console.log('➡️ Moving to index:', newIndex);
       setCurrentIndex(newIndex);
+      return true;
     } catch (error: any) {
       console.error('❌ Error recording like:', error);
+      return false;
     }
   }, [currentProfileId, currentIndex, profiles, swipeCount, isPremium]);
 
-  const handleSwipeUp = useCallback(async () => {
-    if (!currentProfileId || currentIndex >= profiles.length) return;
+  const handleSwipeUp = useCallback(async (): Promise<boolean> => {
+    if (!currentProfileId || currentIndex >= profiles.length) return false;
 
     const targetProfile = profiles[currentIndex];
 
@@ -1107,7 +1196,7 @@ export default function Discover() {
           { text: 'Upgrade', onPress: () => setShowPaywall(true) },
         ]
       );
-      return; // Don't proceed with the swipe
+      return false; // Don't proceed with the swipe
     }
 
     try {
@@ -1146,7 +1235,7 @@ export default function Discover() {
             `You've used all 5 super likes this week. Your super likes will reset next ${getDayName((resetDate.getDay() + 7) % 7)}.`,
             [{ text: 'OK' }]
           );
-          return; // Don't proceed with the swipe
+          return false; // Don't proceed with the swipe
         }
       }
 
@@ -1158,6 +1247,9 @@ export default function Discover() {
       });
 
       if (likeError) throw likeError;
+
+      // Track super like
+      trackUserAction.superLikeUsed(targetProfile.id);
 
       // Increment super like count
       await supabase
@@ -1218,9 +1310,11 @@ export default function Discover() {
 
       // Move to next card
       setCurrentIndex(prev => prev + 1);
+      return true;
     } catch (error: any) {
       console.error('Error recording super like:', error);
       Alert.alert(t('common.error'), 'Failed to send super like. Please try again.');
+      return false;
     }
   }, [currentProfileId, currentIndex, profiles, isPremium]);
 
@@ -1325,6 +1419,9 @@ export default function Discover() {
     if (currentIndex >= profiles.length) return;
     const targetProfile = profiles[currentIndex];
 
+    // Track profile view
+    trackUserAction.profileViewed(targetProfile.id);
+
     // Use preferences that are already embedded in the profile
     // from the main query (line 267: preferences:preferences(*))
     const prefs = (targetProfile as any).preferences;
@@ -1342,7 +1439,8 @@ export default function Discover() {
     if (searchKeyword.trim()) {
       setIsSearchMode(true);
       setCurrentIndex(0);
-      loadProfiles();
+      // Pass true directly to avoid state timing issue
+      loadProfiles(true, searchKeyword.trim());
     }
   };
 
@@ -1350,7 +1448,8 @@ export default function Discover() {
     setSearchKeyword('');
     setIsSearchMode(false);
     setCurrentIndex(0);
-    loadProfiles();
+    // Pass false directly to avoid state timing issue
+    loadProfiles(false, '');
   };
 
   const handleCloseMatchModal = () => {
@@ -1807,6 +1906,7 @@ export default function Discover() {
           onSwipeRight={handleSwipeRight}
           onSwipeUp={handleSwipeUp}
           onPress={handleProfilePress}
+          distanceUnit={distanceUnit}
         />
       </View>
 
@@ -1894,6 +1994,7 @@ export default function Discover() {
             onSuperLike={handleImmersiveSwipeUp}
             onClose={handleCloseImmersiveProfile}
             visible={showImmersiveProfile}
+            heightUnit={heightUnit}
             onBlock={handleBlock}
             onReport={handleReport}
             currentProfileId={currentProfileId || undefined}

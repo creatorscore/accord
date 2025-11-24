@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, RefreshControl, Image, Modal, Dimensions } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
+import { sendReportActionNotification } from '@/lib/notifications';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface Report {
   id: string;
@@ -17,6 +20,7 @@ interface Report {
   reported_name: string;
   reported_profile_id: string;
   reporter_profile_id: string;
+  evidence_urls?: string[];
 }
 
 export default function AdminReports() {
@@ -26,6 +30,7 @@ export default function AdminReports() {
   const [reports, setReports] = useState<Report[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending' | 'reviewed'>('pending');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   useEffect(() => {
     checkAdminStatus();
@@ -73,6 +78,7 @@ export default function AdminReports() {
           details,
           status,
           created_at,
+          evidence_urls,
           reporter:reporter_profile_id(id, display_name),
           reported:reported_profile_id(id, display_name)
         `)
@@ -98,6 +104,7 @@ export default function AdminReports() {
         reported_name: report.reported?.display_name || 'Unknown',
         reported_profile_id: report.reported?.id,
         reporter_profile_id: report.reporter?.id,
+        evidence_urls: report.evidence_urls || [],
       }));
 
       setReports(transformedReports);
@@ -168,17 +175,18 @@ export default function AdminReports() {
 
         if (!reportedProfile) throw new Error('Reported user not found');
 
-        // Get user's email from auth.users
-        const { data: authUser } = await supabase
-          .from('profiles')
-          .select('user_id')
-          .eq('id', report.reported_profile_id)
-          .single();
-
+        // Get user's email using admin-only RPC function
         let userEmail = null;
-        if (authUser?.user_id) {
-          const { data } = await supabase.auth.admin.getUserById(authUser.user_id);
-          userEmail = data?.user?.email;
+        if (reportedProfile?.user_id) {
+          const { data: emailData, error: emailError } = await supabase.rpc(
+            'get_user_email_for_admin',
+            { target_user_id: reportedProfile.user_id }
+          );
+          if (!emailError && emailData) {
+            userEmail = emailData;
+          } else {
+            console.warn('Could not retrieve user email:', emailError?.message);
+          }
         }
 
         // Get admin's device ID for logging
@@ -216,11 +224,20 @@ export default function AdminReports() {
 
         if (profileError) throw profileError;
 
+        // Notify the reporter that action was taken
+        try {
+          await sendReportActionNotification(report.reporter_profile_id, 'banned');
+        } catch (notifyError) {
+          console.warn('Could not notify reporter:', notifyError);
+          // Don't fail the ban if notification fails
+        }
+
         Alert.alert(
           '✅ User Banned',
           `${report.reported_name} has been permanently banned.\n\n` +
           `🔒 Banned by: Email${userEmail ? ', Phone' : ''}${reportedProfile.phone_number ? ', Device ID' : ''}\n\n` +
-          `They cannot re-register with the same credentials.`
+          `They cannot re-register with the same credentials.\n\n` +
+          `📱 The reporter has been notified.`
         );
       } else {
         Alert.alert('Report Updated', `Report has been marked as ${newStatus}.`);
@@ -251,11 +268,14 @@ export default function AdminReports() {
 
   const getReasonLabel = (reason: string) => {
     const labels: { [key: string]: string } = {
+      blackmail: 'Blackmail / Screenshot Sharing',
       harassment: 'Harassment',
       fake_profile: 'Fake Profile',
       inappropriate_content: 'Inappropriate Content',
       scam: 'Scam',
       underage: 'Underage',
+      spam: 'Spam',
+      hate_speech: 'Hate Speech',
       other: 'Other',
     };
     return labels[reason] || reason;
@@ -263,11 +283,14 @@ export default function AdminReports() {
 
   const getReasonIcon = (reason: string) => {
     const icons: { [key: string]: string } = {
+      blackmail: 'shield-alert',
       harassment: 'bullhorn',
       fake_profile: 'account-alert',
       inappropriate_content: 'alert-circle',
       scam: 'cash-remove',
       underage: 'account-cancel',
+      spam: 'message-alert',
+      hate_speech: 'thumb-down',
       other: 'help-circle',
     };
     return icons[reason] || 'alert';
@@ -387,6 +410,35 @@ export default function AdminReports() {
                 </View>
               </View>
 
+              {/* Evidence Photos */}
+              {report.evidence_urls && report.evidence_urls.length > 0 && (
+                <View style={styles.evidenceContainer}>
+                  <Text style={styles.detailsLabel}>Evidence:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.evidenceScroll}>
+                    {report.evidence_urls.map((url, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={() => setViewingImage(url)}
+                        style={styles.evidenceThumbnailContainer}
+                      >
+                        <Image source={{ uri: url }} style={styles.evidenceThumbnail} />
+                        <View style={styles.evidenceBadge}>
+                          <MaterialCommunityIcons name="magnify-plus" size={16} color="white" />
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  {report.reason === 'blackmail' && (
+                    <View style={styles.watermarkHint}>
+                      <MaterialCommunityIcons name="water" size={14} color="#9B87CE" />
+                      <Text style={styles.watermarkHintText}>
+                        Look for watermarks in corners showing user ID + timestamp
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
               {/* Details */}
               {report.details && (
                 <View style={styles.detailsContainer}>
@@ -451,6 +503,34 @@ export default function AdminReports() {
           ))
         )}
       </ScrollView>
+
+      {/* Image Viewer Modal */}
+      <Modal
+        visible={!!viewingImage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setViewingImage(null)}
+      >
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity
+            style={styles.imageViewerCloseButton}
+            onPress={() => setViewingImage(null)}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="close" size={32} color="#fff" />
+          </TouchableOpacity>
+          {viewingImage && (
+            <Image
+              source={{ uri: viewingImage }}
+              style={styles.imageViewerImage}
+              resizeMode="contain"
+            />
+          )}
+          <Text style={styles.imageViewerHint}>
+            💡 Tip: Increase brightness to see watermark more clearly
+          </Text>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -640,6 +720,79 @@ const styles = StyleSheet.create({
   banButtonText: {
     fontSize: 13,
     fontWeight: '600',
+    color: 'white',
+  },
+  evidenceContainer: {
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  evidenceScroll: {
+    marginTop: 8,
+  },
+  evidenceThumbnailContainer: {
+    position: 'relative',
+    marginRight: 8,
+  },
+  evidenceThumbnail: {
+    width: 100,
+    height: 150,
+    borderRadius: 8,
+    backgroundColor: '#E5E7EB',
+  },
+  evidenceBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(155, 135, 206, 0.9)',
+    borderRadius: 12,
+    padding: 4,
+  },
+  watermarkHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#F3E8FF',
+    borderRadius: 6,
+  },
+  watermarkHintText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#6B7280',
+  },
+  imageViewerContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerCloseButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerImage: {
+    width: SCREEN_WIDTH,
+    height: '80%',
+  },
+  imageViewerHint: {
+    position: 'absolute',
+    bottom: 40,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 20,
+    fontSize: 14,
     color: 'white',
   },
 });

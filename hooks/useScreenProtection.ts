@@ -1,8 +1,11 @@
 import { useEffect } from 'react';
-import CaptureProtection from 'react-native-capture-protection';
+import { CaptureProtection } from 'react-native-capture-protection';
 
 /**
  * Custom hook to protect screens from screenshots and screen recording
+ *
+ * On iOS: Screenshots will appear as a black screen
+ * On Android: Screenshots are blocked entirely
  *
  * Usage:
  * ```tsx
@@ -21,53 +24,33 @@ export function useScreenProtection(
     screenshot?: boolean;
     record?: boolean;
     appSwitcher?: boolean;
-    customMessage?: string;
   }
 ) {
   useEffect(() => {
     if (!enabled) {
-      console.log('📸 Screenshot protection disabled (enabled=false)');
       return;
     }
 
     // Check if native module is available
     if (!CaptureProtection) {
-      console.warn('⚠️ react-native-capture-protection native module not available. Screenshot protection disabled.');
+      console.warn('react-native-capture-protection native module not available');
       return;
     }
 
-    console.log('📸 Attempting to enable screenshot protection...');
-    console.log('📸 CaptureProtection module:', {
-      hasPreventScreenshot: typeof CaptureProtection.preventScreenshot === 'function',
-      hasPrevent: typeof CaptureProtection.prevent === 'function',
-      hasAllow: typeof CaptureProtection.allow === 'function',
-      hasAllowScreenshot: typeof CaptureProtection.allowScreenshot === 'function',
-    });
-
-    // Enable screenshot protection using the preventScreenshot() API
+    // Enable screenshot protection
     const enableProtection = async () => {
       try {
-        if (typeof CaptureProtection.preventScreenshot === 'function') {
-          console.log('📸 Calling CaptureProtection.preventScreenshot()...');
-          await CaptureProtection.preventScreenshot();
-          console.log('✅ Screenshot protection enabled successfully (black screen mode)');
-        } else if (typeof CaptureProtection.prevent === 'function') {
-          console.log('📸 Calling CaptureProtection.prevent() as fallback...');
-          CaptureProtection.prevent({
-            screenshot: true,
-            record: options?.record !== false ? {
-              text: options?.customMessage || 'Accord protects your privacy',
-              textColor: '#FFFFFF',
-              backgroundColor: '#9B87CE'
-            } : false,
-            appSwitcher: options?.appSwitcher ?? true,
-          });
-          console.log('✅ Screenshot protection enabled (prevent mode)');
-        } else {
-          console.warn('⚠️ No screenshot protection methods available');
-        }
+        // Prevent screenshots and screen recording
+        // On iOS: screenshots will appear as black images
+        // On Android: screenshots are blocked entirely
+        await CaptureProtection.prevent({
+          screenshot: options?.screenshot !== false,
+          record: options?.record !== false,
+          appSwitcher: options?.appSwitcher !== false,
+        });
       } catch (error) {
-        console.error('❌ Error enabling screenshot protection:', error);
+        // Silently fail in development/Expo Go
+        console.warn('Screenshot protection not available:', error);
       }
     };
 
@@ -75,20 +58,20 @@ export function useScreenProtection(
 
     // Cleanup: Allow screenshots when leaving the screen
     return () => {
-      console.log('📸 Disabling screenshot protection (cleanup)...');
-      try {
-        if (typeof CaptureProtection.allowScreenshot === 'function') {
-          CaptureProtection.allowScreenshot();
-          console.log('✅ Screenshot protection disabled (allowScreenshot)');
-        } else if (typeof CaptureProtection.allow === 'function') {
-          CaptureProtection.allow();
-          console.log('✅ Screenshot protection disabled (allow)');
+      const disableProtection = async () => {
+        try {
+          await CaptureProtection.allow({
+            screenshot: true,
+            record: true,
+            appSwitcher: true,
+          });
+        } catch (error) {
+          // Silently fail
         }
-      } catch (error) {
-        console.error('❌ Error disabling screenshot protection:', error);
-      }
+      };
+      disableProtection();
     };
-  }, [enabled, options?.screenshot, options?.record, options?.appSwitcher, options?.customMessage]);
+  }, [enabled, options?.screenshot, options?.record, options?.appSwitcher]);
 }
 
 /**
@@ -96,13 +79,12 @@ export function useScreenProtection(
  */
 export async function isScreenRecording(): Promise<boolean> {
   try {
-    if (!CaptureProtection || typeof CaptureProtection.isScreenRecording !== 'function') {
-      console.warn('react-native-capture-protection native module not available');
+    if (!CaptureProtection) {
       return false;
     }
-    return await CaptureProtection.isScreenRecording();
+    const result = await CaptureProtection.isScreenRecording();
+    return result ?? false;
   } catch (error) {
-    console.warn('Failed to check screen recording status:', error);
     return false;
   }
 }

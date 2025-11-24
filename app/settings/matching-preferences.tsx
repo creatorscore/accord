@@ -19,6 +19,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { formatDistanceSlider, DistanceUnit } from '@/lib/distance-utils';
 
 interface MatchingPreferences {
   gender_preference: string[];
@@ -27,6 +28,7 @@ interface MatchingPreferences {
   age_min: number;
   age_max: number;
   max_distance_miles: number;
+  distance_unit: DistanceUnit;
   willing_to_relocate: boolean;
   search_globally: boolean;
   preferred_cities: string[];
@@ -156,6 +158,7 @@ export default function MatchingPreferences() {
     age_min: 22,
     age_max: 50,
     max_distance_miles: 100,
+    distance_unit: 'miles',
     willing_to_relocate: false,
     search_globally: false,
     preferred_cities: [],
@@ -185,9 +188,10 @@ export default function MatchingPreferences() {
         .from('preferences')
         .select('*')
         .eq('profile_id', profileData.id)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      // PGRST116 means no rows found - that's OK, we'll use defaults
+      if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
         setPreferences({
@@ -197,12 +201,14 @@ export default function MatchingPreferences() {
           age_min: data.age_min || 22,
           age_max: data.age_max || 50,
           max_distance_miles: data.max_distance_miles || 100,
+          distance_unit: data.distance_unit || 'miles',
           willing_to_relocate: data.willing_to_relocate || false,
           search_globally: data.search_globally || false,
           preferred_cities: data.preferred_cities || [],
           lifestyle_preferences: data.lifestyle_preferences || {},
         });
       }
+      // If no data, keep the default preferences already set in state
     } catch (error: any) {
       console.error('Error loading matching preferences:', error);
       Alert.alert('Error', 'Failed to load matching preferences');
@@ -532,11 +538,48 @@ export default function MatchingPreferences() {
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>
-                  Within {preferences.max_distance_miles} miles
+                  Within {formatDistanceSlider(preferences.max_distance_miles, preferences.distance_unit)}
                 </Text>
                 <Text style={styles.cardDescription}>Maximum distance for matches</Text>
               </View>
             </View>
+
+            {/* Distance Unit Toggle */}
+            <View style={styles.unitToggleContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.unitToggleButton,
+                  preferences.distance_unit === 'miles' && styles.unitToggleButtonSelected,
+                ]}
+                onPress={() => setPreferences((prev) => ({ ...prev, distance_unit: 'miles' }))}
+              >
+                <Text
+                  style={[
+                    styles.unitToggleText,
+                    preferences.distance_unit === 'miles' && styles.unitToggleTextSelected,
+                  ]}
+                >
+                  Miles
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.unitToggleButton,
+                  preferences.distance_unit === 'km' && styles.unitToggleButtonSelected,
+                ]}
+                onPress={() => setPreferences((prev) => ({ ...prev, distance_unit: 'km' }))}
+              >
+                <Text
+                  style={[
+                    styles.unitToggleText,
+                    preferences.distance_unit === 'km' && styles.unitToggleTextSelected,
+                  ]}
+                >
+                  Kilometers
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.sliderContainer}>
               <Slider
                 style={styles.slider}
@@ -1174,5 +1217,31 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+  unitToggleContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  unitToggleButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  unitToggleButtonSelected: {
+    backgroundColor: '#9B87CE',
+    borderColor: '#9B87CE',
+  },
+  unitToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  unitToggleTextSelected: {
+    color: '#fff',
   },
 });
