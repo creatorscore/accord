@@ -94,7 +94,6 @@
     "plugins": [
       "expo-router",
       "expo-dev-client",
-      "expo-image",
       [
         "expo-image-picker",
         {
