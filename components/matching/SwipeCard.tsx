@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
-import { Image } from 'expo-image';
+import { Image } from '@/components/shared/ConditionalImage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
@@ -302,7 +302,7 @@ export default function SwipeCard({
             <Image
               source={{ uri: currentPhoto?.url || 'https://via.placeholder.com/400' }}
               style={{ width: '100%', height: '100%' }}
-              contentFit="cover"
+              {...(__DEV__ ? { resizeMode: 'cover' } : { contentFit: 'cover' })}
               blurRadius={profile.photo_blur_enabled ? 30 : 0}
             />
 
