@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { View, Text, Image, TouchableOpacity, Modal, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Dimensions } from 'react-native';
+import { Image } from 'expo-image';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
   useAnimatedStyle,
@@ -112,8 +113,8 @@ export default function MatchModal({
               {currentUserPhoto ? (
                 <Image
                   source={{ uri: currentUserPhoto }}
-                  className="w-28 h-28"
-                  resizeMode="cover"
+                  style={{ width: 112, height: 112 }}
+                  contentFit="cover"
                 />
               ) : (
                 <View className="w-28 h-28 bg-gray-200 items-center justify-center">
@@ -136,8 +137,8 @@ export default function MatchModal({
               {matchedProfile.photo_url ? (
                 <Image
                   source={{ uri: matchedProfile.photo_url }}
-                  className="w-28 h-28"
-                  resizeMode="cover"
+                  style={{ width: 112, height: 112 }}
+                  contentFit="cover"
                 />
               ) : (
                 <View className="w-28 h-28 bg-gray-200 items-center justify-center">
