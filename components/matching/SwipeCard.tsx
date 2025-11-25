@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Dimensions, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
+import { Image } from 'expo-image';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
@@ -300,8 +301,8 @@ export default function SwipeCard({
           <View className="relative flex-1">
             <Image
               source={{ uri: currentPhoto?.url || 'https://via.placeholder.com/400' }}
-              className="w-full h-full"
-              resizeMode="cover"
+              style={{ width: '100%', height: '100%' }}
+              contentFit="cover"
               blurRadius={profile.photo_blur_enabled ? 30 : 0}
             />
 
