@@ -1,11 +1,11 @@
 // Edge Function: reviews-notify
-// Sends push notifications when users can submit reviews (7 days after matching)
+// Sends push notifications when users can submit reviews (3 days after matching)
 // Should be triggered by a cron job (e.g., every hour)
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
-const REVIEW_TRIGGER_DAYS = 7;
+const REVIEW_TRIGGER_DAYS = 3;
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -23,13 +23,13 @@ Deno.serve(async (req) => {
     const now = new Date();
 
     // Find matches where:
-    // 1. 7 days have passed since matching (trigger_date <= now)
+    // 1. 3 days have passed since matching (trigger_date <= now)
     // 2. Review window hasn't expired yet
     // 3. Users haven't been notified yet
     // 4. Reviews haven't been revealed yet (match is still in review period)
 
-    // First, get all active matches that are 7+ days old but don't have review_prompts yet
-    const sevenDaysAgo = new Date(now.getTime() - REVIEW_TRIGGER_DAYS * 24 * 60 * 60 * 1000);
+    // First, get all active matches that are 3+ days old but don't have review_prompts yet
+    const triggerDaysAgo = new Date(now.getTime() - REVIEW_TRIGGER_DAYS * 24 * 60 * 60 * 1000);
 
     const { data: matchesWithoutPrompts, error: matchError } = await supabase
       .from('matches')
@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
         profile2:profiles!matches_profile2_id_fkey(display_name, push_token, push_enabled)
       `)
       .eq('status', 'active')
-      .lte('matched_at', sevenDaysAgo.toISOString());
+      .lte('matched_at', triggerDaysAgo.toISOString());
 
     if (matchError) {
       console.error('Error fetching matches:', matchError);

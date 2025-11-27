@@ -51,6 +51,19 @@ export default function Index() {
         // Continue if we can't check - other safeguards will catch it
       }
 
+      // Update device_id on every login (captures fingerprint for existing users)
+      try {
+        const deviceId = await getDeviceFingerprint();
+        await supabase
+          .from('profiles')
+          .update({ device_id: deviceId })
+          .eq('user_id', user.id);
+        console.log('✅ Device fingerprint updated on login');
+      } catch (updateError) {
+        console.warn('⚠️ Failed to update device fingerprint:', updateError);
+        // Don't block login if fingerprint update fails
+      }
+
       // Check if profile is complete and if user is active
       const { data: profile, error } = await supabase
         .from('profiles')

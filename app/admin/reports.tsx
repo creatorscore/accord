@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
-import { sendReportActionNotification } from '@/lib/notifications';
+import { sendReportActionNotification, sendBanNotification } from '@/lib/notifications';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -151,78 +151,133 @@ export default function AdminReports() {
 
       if (!adminProfile) throw new Error('Admin profile not found');
 
-      // Update report status
-      const newStatus = action === 'resolve' ? 'resolved' : action === 'dismiss' ? 'dismissed' : 'resolved';
+      // For non-ban actions, update report status immediately
+      if (action !== 'ban') {
+        const newStatus = action === 'resolve' ? 'resolved' : 'dismissed';
 
-      const { error: reportError } = await supabase
-        .from('reports')
-        .update({
-          status: newStatus,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', reportId);
+        const { error: reportError } = await supabase
+          .from('reports')
+          .update({
+            status: newStatus,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq('id', reportId);
 
-      if (reportError) throw reportError;
+        if (reportError) throw reportError;
 
-      // If banning user, create comprehensive ban record
+        Alert.alert('Report Updated', `Report has been marked as ${newStatus}.`);
+        loadReports();
+        return;
+      }
+
+      // For ban action, perform the ban FIRST, then update report status
       if (action === 'ban') {
-        // Get reported user's full details
-        const { data: reportedProfile } = await supabase
-          .from('profiles')
-          .select('id, user_id, phone_number, device_id')
-          .eq('id', report.reported_profile_id)
-          .single();
-
-        if (!reportedProfile) throw new Error('Reported user not found');
-
-        // Get user's email using admin-only RPC function
-        let userEmail = null;
-        if (reportedProfile?.user_id) {
-          const { data: emailData, error: emailError } = await supabase.rpc(
-            'get_user_email_for_admin',
-            { target_user_id: reportedProfile.user_id }
-          );
-          if (!emailError && emailData) {
-            userEmail = emailData;
-          } else {
-            console.warn('Could not retrieve user email:', emailError?.message);
-          }
-        }
-
         // Get admin's device ID for logging
         const adminDeviceId = await getDeviceFingerprint();
 
-        // Create comprehensive ban record
-        const { error: banInsertError } = await supabase
-          .from('bans')
-          .insert({
-            banned_user_id: reportedProfile.user_id,
-            banned_profile_id: reportedProfile.id,
-            banned_email: userEmail,
-            banned_phone_hash: reportedProfile.phone_number, // Already hashed in DB
-            banned_device_id: reportedProfile.device_id, // Device fingerprint
-            ban_reason: `${report.reason}: ${report.details || 'No additional details'}`,
-            banned_by: adminProfile.id,
-            report_id: reportId,
-            is_permanent: true,
-            admin_notes: `Banned from device: ${adminDeviceId}`,
-          });
+        // Call Edge Function to perform the ban (fetches profile details with service role)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('No active session');
 
-        if (banInsertError) {
-          console.warn('Failed to create ban record:', banInsertError);
-          // Continue with profile deactivation even if ban record fails
+        console.log('🔍 Calling admin-ban-user Edge Function...');
+        console.log('🔍 Profile ID to ban:', report.reported_profile_id);
+
+        const { data: banResponse, error: banError } = await supabase.functions.invoke('admin-ban-user', {
+          body: {
+            banned_profile_id: report.reported_profile_id,
+            ban_reason: `${report.reason}: ${report.details || 'No additional details'}`,
+            banned_by_profile_id: adminProfile.id,
+            report_id: reportId,
+            admin_notes: `Banned from device: ${adminDeviceId}`,
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        console.log('🔍 Edge Function response:', { banResponse, banError });
+
+        if (banError) {
+          console.error('❌ Ban failed:', banError);
+
+          // Try to read the response body from the error context
+          let errorBody = null;
+          try {
+            if (banError.context && banError.context._bodyInit) {
+              const blob = banError.context._bodyBlob || banError.context._bodyInit;
+              // For React Native, try to read the blob data
+              const response = banError.context;
+              if (response && !response.bodyUsed) {
+                errorBody = await response.json();
+                console.log('🔍 Parsed error body:', errorBody);
+              }
+            }
+          } catch (parseError) {
+            console.warn('⚠️ Could not parse error body:', parseError);
+          }
+
+          // Show detailed error from Edge Function
+          const errorDetails = errorBody?.error || banError.message;
+          const errorContext = errorBody?.details || '';
+          const searchedId = errorBody?.searched_for_id || '';
+          const rawError = errorBody?.raw_error || '';
+
+          throw new Error(
+            `Failed to ban user: ${errorDetails}\n` +
+            `Details: ${errorContext}\n` +
+            `Searched for ID: ${searchedId}\n` +
+            `Raw error: ${JSON.stringify(rawError)}`
+          );
         }
 
-        // Deactivate profile
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            is_active: false,
-            ban_reason: `Banned by admin for: ${report.reason}`,
-          })
-          .eq('id', report.reported_profile_id);
+        if (!banResponse?.success) {
+          console.error('❌ Ban response unsuccessful:', banResponse);
+          throw new Error(`Ban operation failed: ${JSON.stringify(banResponse)}`);
+        }
 
-        if (profileError) throw profileError;
+        console.log('✅ User banned successfully:', banResponse);
+
+        // Mark report as resolved AFTER ban succeeds
+        const { error: reportError } = await supabase
+          .from('reports')
+          .update({
+            status: 'resolved',
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq('id', reportId);
+
+        if (reportError) {
+          console.warn('⚠️ User was banned but failed to update report status:', reportError);
+          // Don't throw - ban already succeeded, just warn
+        }
+
+        // Send ban notifications to the banned user (push + email)
+        try {
+          // Send push notification
+          await sendBanNotification(
+            report.reported_profile_id,
+            `${report.reason}: ${report.details || 'No additional details'}`
+          );
+
+          // Send email notification (email returned from Edge Function)
+          if (banResponse.banned_email) {
+            await supabase.functions.invoke('send-ban-email', {
+              body: {
+                email: banResponse.banned_email,
+                displayName: report.reported_name,
+                banReason: `${report.reason}: ${report.details || 'No additional details'}`,
+              },
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            });
+          }
+
+          console.log('✅ Ban notifications sent to banned user (push + email)');
+        } catch (banNotifyError) {
+          console.warn('Could not send ban notifications to user:', banNotifyError);
+          // Don't fail the ban if notification fails
+        }
 
         // Notify the reporter that action was taken
         try {
@@ -235,16 +290,14 @@ export default function AdminReports() {
         Alert.alert(
           '✅ User Banned',
           `${report.reported_name} has been permanently banned.\n\n` +
-          `🔒 Banned by: Email${userEmail ? ', Phone' : ''}${reportedProfile.phone_number ? ', Device ID' : ''}\n\n` +
-          `They cannot re-register with the same credentials.\n\n` +
-          `📱 The reporter has been notified.`
+          `🔒 All authentication methods and devices blocked.\n\n` +
+          `They cannot log in or re-register.\n\n` +
+          `📱 The user and reporter have been notified.`
         );
-      } else {
-        Alert.alert('Report Updated', `Report has been marked as ${newStatus}.`);
-      }
 
-      // Reload reports
-      loadReports();
+        // Reload reports to remove the now-resolved report from the list
+        loadReports();
+      }
     } catch (error: any) {
       console.error('Error executing action:', error);
       Alert.alert('Error', 'Failed to complete action. Please try again.');
@@ -389,7 +442,7 @@ export default function AdminReports() {
               <View style={styles.reportHeader}>
                 <View style={styles.reportHeaderLeft}>
                   <MaterialCommunityIcons
-                    name={getReasonIcon(report.reason)}
+                    name={getReasonIcon(report.reason) as any}
                     size={24}
                     color="#EF4444"
                   />

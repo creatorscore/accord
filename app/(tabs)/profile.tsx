@@ -623,6 +623,17 @@ export default function Profile() {
 
         <TouchableOpacity
           style={styles.menuItem}
+          onPress={() => router.push('/settings/notifications')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="bell-outline" size={24} color="#6B7280" />
+            <Text style={styles.menuItemText}>{t('profile.notifications')}</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
           onPress={() => router.push('/settings/screenshot-alerts')}
         >
           <View style={styles.menuItemLeft}>
@@ -678,11 +689,11 @@ export default function Profile() {
 
         <TouchableOpacity
           style={styles.menuItem}
-          onPress={() => Alert.alert(t('profile.verification'), t('profile.verificationComingSoon'))}
+          onPress={() => router.push('/settings/privacy')}
         >
           <View style={styles.menuItemLeft}>
             <MaterialCommunityIcons name="shield-check-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.identityVerification')}</Text>
+            <Text style={styles.menuItemText}>{t('profile.photoVerification')}</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
         </TouchableOpacity>
@@ -791,6 +802,20 @@ export default function Profile() {
                 </View>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: '#F3E8FF', borderLeftWidth: 4, borderLeftColor: '#9B87CE' }]}
+              onPress={() => router.push('/admin/push-notifications')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="bell-ring" size={24} color="#9B87CE" />
+                <View>
+                  <Text style={[styles.menuItemText, { color: '#6B21A8', fontWeight: '700' }]}>Push Notifications</Text>
+                  <Text style={{ fontSize: 12, color: '#6B21A8', marginTop: 2 }}>Send messages to users</Text>
+                </View>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
             </TouchableOpacity>
           </>
         )}

@@ -35,6 +35,7 @@ interface Profile {
   photos?: Array<{ url: string; is_primary: boolean }>;
   compatibility_score?: number;
   is_verified?: boolean;
+  photo_verified?: boolean;
   occupation?: string;
   distance?: number;
   photo_blur_enabled?: boolean;
@@ -49,6 +50,7 @@ interface SwipeCardProps {
   onSwipeUp: () => Promise<boolean> | void;
   onPress: () => void;
   distanceUnit?: DistanceUnit;
+  isAdmin?: boolean;
 }
 
 export default function SwipeCard({
@@ -58,6 +60,7 @@ export default function SwipeCard({
   onSwipeUp,
   onPress,
   distanceUnit = 'miles',
+  isAdmin = false,
 }: SwipeCardProps) {
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
   const translateX = useSharedValue(0);
@@ -138,7 +141,7 @@ export default function SwipeCard({
   }, [profile.id]);
 
   const allPhotos = profile.photos || [];
-  const currentPhoto = allPhotos[currentPhotoIndex] || allPhotos[0];
+  const currentPhoto = allPhotos[currentPhotoIndex] || allPhotos[0] || { url: 'https://via.placeholder.com/400' };
 
   const handlePreviousPhoto = () => {
     if (currentPhotoIndex > 0) {
@@ -302,8 +305,8 @@ export default function SwipeCard({
             <Image
               source={{ uri: currentPhoto?.url || 'https://via.placeholder.com/400' }}
               style={{ width: '100%', height: '100%' }}
-              {...(__DEV__ ? { resizeMode: 'cover' } : { contentFit: 'cover' })}
-              blurRadius={profile.photo_blur_enabled ? 30 : 0}
+              contentFit="cover"
+              blurRadius={profile.photo_blur_enabled && !isAdmin ? 30 : 0}
             />
 
             {/* Dynamic Watermark - renders on top of the image */}
@@ -492,6 +495,9 @@ export default function SwipeCard({
                 </Text>
                 {profile.is_verified && (
                   <MaterialCommunityIcons name="check-decagram" size={28} color="#3B82F6" />
+                )}
+                {profile.photo_verified && (
+                  <MaterialCommunityIcons name="camera-check" size={28} color="#22c55e" />
                 )}
               </View>
 

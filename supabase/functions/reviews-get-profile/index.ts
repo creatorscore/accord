@@ -92,36 +92,52 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get aggregate data
-    const { data: aggregate } = await supabase
-      .from('profile_review_aggregates')
-      .select('*')
-      .eq('profile_id', profileId)
+    // Get aggregate data from profiles table
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('review_aggregate_score, review_count')
+      .eq('id', profileId)
       .single();
 
     // Check if minimum reviews threshold is met
-    const reviewCount = aggregate?.review_count || 0;
+    const reviewCount = profile?.review_count || 0;
     const meetsThreshold = reviewCount >= settings.minimum_reviews_threshold;
 
     // Build response
     const response: any = {
       reviews_enabled: true,
-      aggregate_score: meetsThreshold && settings.show_aggregate_publicly ? aggregate?.aggregate_score : null,
+      aggregate_score: meetsThreshold && settings.show_aggregate_publicly ? profile?.review_aggregate_score : null,
       review_count: meetsThreshold ? reviewCount : 0,
       has_matched: hasMatched,
     };
 
     // Add detailed reviews if matched and settings allow
-    if (hasMatched && settings.show_detailed_after_match && aggregate) {
-      response.detailed_reviews = {
-        category_averages: {
-          communication_responsiveness: aggregate.avg_communication_responsiveness,
-          honesty_authenticity: aggregate.avg_honesty_authenticity,
-          respect_boundaries: aggregate.avg_respect_boundaries,
-          compatibility_intent: aggregate.avg_compatibility_intent,
-          reliability_followthrough: aggregate.avg_reliability_followthrough,
-        },
-      };
+    if (hasMatched && settings.show_detailed_after_match && reviewCount > 0) {
+      // Get category averages from actual reviews
+      const { data: reviews } = await supabase
+        .from('reviews')
+        .select('communication_responsiveness, honesty_authenticity, respect_boundaries, compatibility_intent, reliability_followthrough')
+        .eq('reviewee_id', profileId)
+        .eq('is_visible', true);
+
+      if (reviews && reviews.length > 0) {
+        // Calculate averages for each category
+        const avgComm = reviews.reduce((sum, r) => sum + r.communication_responsiveness, 0) / reviews.length;
+        const avgHonesty = reviews.reduce((sum, r) => sum + r.honesty_authenticity, 0) / reviews.length;
+        const avgRespect = reviews.reduce((sum, r) => sum + r.respect_boundaries, 0) / reviews.length;
+        const avgCompat = reviews.reduce((sum, r) => sum + r.compatibility_intent, 0) / reviews.length;
+        const avgReliab = reviews.reduce((sum, r) => sum + r.reliability_followthrough, 0) / reviews.length;
+
+        response.detailed_reviews = {
+          category_averages: {
+            communication_responsiveness: Math.round(avgComm * 10) / 10,
+            honesty_authenticity: Math.round(avgHonesty * 10) / 10,
+            respect_boundaries: Math.round(avgRespect * 10) / 10,
+            compatibility_intent: Math.round(avgCompat * 10) / 10,
+            reliability_followthrough: Math.round(avgReliab * 10) / 10,
+          },
+        };
+      }
     }
 
     return new Response(JSON.stringify(response), {

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Accord - Lavender Marriage",
     "slug": "accord",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.privyreviews.accord",
-      "buildNumber": "33",
+      "buildNumber": "36",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Accord needs access to your photos to upload profile pictures.",
@@ -66,7 +66,7 @@
         "backgroundColor": "#9B87CE"
       },
       "package": "com.privyreviews.accord",
-      "versionCode": 28,
+      "versionCode": 29,
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.CAMERA",
@@ -148,7 +148,9 @@
       "googleIosClientId": "609854216709-81grqvlc66iahvd56749ot511p9agh09.apps.googleusercontent.com",
       "googleWebClientId": "609854216709-ff54d58803kcbvpudv7aet8vo1bpq07g.apps.googleusercontent.com",
       "revenueCatAppleApiKey": "appl_enRnexAwhhNNHTGSZFUKzQBQefF",
-      "revenueCatGoogleApiKey": "goog_mVpASFlCoMcDalaCseIhNnrnGto"
+      "revenueCatGoogleApiKey": "goog_mVpASFlCoMcDalaCseIhNnrnGto",
+      "postHogApiKey": "phc_3KdZG8HkLD0v1YIGuR6khBLQGO41A8cerUmxa6EIEUG",
+      "postHogHost": "https://us.i.posthog.com"
     },
     "owner": "vfranz"
   }

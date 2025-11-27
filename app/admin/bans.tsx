@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { sendBanNotification } from '@/lib/notifications';
 
 interface Ban {
   id: string;
@@ -12,9 +13,9 @@ interface Ban {
   banned_phone_hash: string | null;
   banned_device_id: string | null;
   ban_reason: string;
-  is_permanent: boolean;
+  is_permanent: boolean | null;
   expires_at: string | null;
-  created_at: string;
+  created_at: string | null;
   banned_profile: {
     display_name: string;
   } | null;
@@ -33,6 +34,10 @@ export default function AdminBans() {
   const [newBanEmail, setNewBanEmail] = useState('');
   const [newBanReason, setNewBanReason] = useState('');
   const [addingBan, setAddingBan] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     checkAdminStatus();
@@ -90,7 +95,21 @@ export default function AdminBans() {
 
       if (error) throw error;
 
-      setBans(data || []);
+      // Transform the data to handle Supabase joined data (returns arrays)
+      const transformedBans: Ban[] = (data || []).map((ban: any) => ({
+        id: ban.id,
+        banned_email: ban.banned_email,
+        banned_phone_hash: ban.banned_phone_hash,
+        banned_device_id: ban.banned_device_id,
+        ban_reason: ban.ban_reason,
+        is_permanent: ban.is_permanent,
+        expires_at: ban.expires_at,
+        created_at: ban.created_at,
+        banned_profile: Array.isArray(ban.banned_profile) ? ban.banned_profile[0] || null : ban.banned_profile,
+        banner: Array.isArray(ban.banner) ? ban.banner[0] || null : ban.banner,
+      }));
+
+      setBans(transformedBans);
     } catch (error: any) {
       console.error('Error loading bans:', error);
       Alert.alert('Error', 'Failed to load bans.');
@@ -137,6 +156,55 @@ export default function AdminBans() {
     }
   };
 
+  const handleSearchUsers = async () => {
+    if (!searchQuery.trim()) {
+      console.log('Search query is empty');
+      return;
+    }
+
+    console.log('🔍 Searching for:', searchQuery.trim());
+    setSearching(true);
+    try {
+      // Use RPC function to search users (includes email from auth.users)
+      const { data: results, error } = await supabase.rpc('search_users_for_ban', {
+        search_name: searchQuery.trim(),
+      });
+
+      console.log('🔍 Search results:', results);
+      console.log('🔍 Search error:', error);
+
+      if (error) throw error;
+
+      // Map to expected format
+      const formattedResults = results?.map((result: any) => ({
+        id: result.profile_id,
+        user_id: result.user_id,
+        display_name: result.display_name,
+        email: result.email || 'Email not found',
+        phone: result.phone || null,
+        device_id: result.device_id,
+        is_active: result.is_active,
+      })) || [];
+
+      console.log('✅ Formatted results:', formattedResults.length, 'users found');
+      setSearchResults(formattedResults);
+    } catch (error: any) {
+      console.error('❌ Error searching users:', error);
+      Alert.alert('Error', error.message || 'Failed to search users');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleBanFromSearch = (selectedUser: any) => {
+    // Pre-fill the ban modal with the selected user's email
+    setNewBanEmail(selectedUser.email);
+    setShowSearchModal(false);
+    setShowAddBanModal(true);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
   const handleAddBan = async () => {
     if (!newBanEmail.trim()) {
       Alert.alert('Error', 'Please enter an email address.');
@@ -150,6 +218,7 @@ export default function AdminBans() {
 
     setAddingBan(true);
     try {
+      // Get admin profile
       const { data: adminProfile } = await supabase
         .from('profiles')
         .select('id')
@@ -158,25 +227,151 @@ export default function AdminBans() {
 
       if (!adminProfile) throw new Error('Admin profile not found');
 
-      const { error } = await supabase
-        .from('bans')
-        .insert({
-          banned_email: newBanEmail.toLowerCase().trim(),
-          ban_reason: newBanReason.trim(),
-          banned_by: adminProfile.id,
-          is_permanent: true,
+      const emailToCheck = newBanEmail.toLowerCase().trim();
+
+      // Step 1: Check if user exists by email using RPC function
+      let existingUser = null;
+      let existingUserProfile = null;
+
+      try {
+        // Use our RPC function to get user by email (it can access auth.users)
+        const { data: searchResults, error: searchError } = await supabase.rpc('get_user_by_email', {
+          search_email: emailToCheck,
         });
 
-      if (error) throw error;
+        if (searchError) {
+          console.error('Error searching users:', searchError);
+        } else if (searchResults && searchResults.length > 0) {
+          const matchedUser = searchResults[0];
 
-      Alert.alert('✅ Ban Added', `${newBanEmail} has been banned and cannot register.`);
+          existingUser = {
+            id: matchedUser.user_id,
+            email: matchedUser.email
+          };
+          existingUserProfile = {
+            id: matchedUser.profile_id,
+            user_id: matchedUser.user_id,
+            device_id: matchedUser.device_id,
+            display_name: matchedUser.display_name,
+            phone_number: matchedUser.phone || null,
+          };
+
+          console.log('✅ Found existing user:', matchedUser.display_name);
+        } else {
+          console.log('ℹ️ No user found with email:', emailToCheck);
+        }
+      } catch (searchError) {
+        console.log('Error searching for user:', searchError);
+      }
+
+      if (existingUser && existingUserProfile) {
+        // USER EXISTS - Execute full ban
+        console.log('⚠️ User exists - executing full ban');
+
+        // Step 2a: Ban in Supabase Auth (prevents login)
+        const { error: authBanError } = await supabase.auth.admin.updateUserById(
+          existingUser.id,
+          {
+            ban_duration: '876000h', // ~100 years (permanent)
+          }
+        );
+
+        if (authBanError) {
+          console.error('Auth ban error:', authBanError);
+          throw new Error('Failed to ban user in authentication system');
+        }
+
+        // Step 2b: Deactivate profile (prevents showing in discovery)
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            is_active: false,
+            ban_reason: `Manually banned by admin: ${newBanReason.trim()}`,
+          })
+          .eq('id', existingUserProfile.id);
+
+        if (profileError) {
+          console.error('Profile deactivation error:', profileError);
+          throw new Error('Failed to deactivate profile');
+        }
+
+        // Step 2c: Create comprehensive ban record
+        const { error: banInsertError } = await supabase
+          .from('bans')
+          .insert({
+            banned_user_id: existingUser.id,
+            banned_profile_id: existingUserProfile.id,
+            banned_email: emailToCheck,
+            banned_phone_hash: existingUserProfile.phone_number || null,
+            banned_device_id: existingUserProfile.device_id || null,
+            ban_reason: newBanReason.trim(),
+            banned_by: adminProfile.id,
+            is_permanent: true,
+            admin_notes: `Manual ban of existing user "${existingUserProfile.display_name}"`,
+          });
+
+        if (banInsertError) throw banInsertError;
+
+        // Step 2d: Send ban notifications (push + email)
+        try {
+          // Send push notification
+          await sendBanNotification(existingUserProfile.id, newBanReason.trim());
+
+          // Send email notification
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            await supabase.functions.invoke('send-ban-email', {
+              body: {
+                email: emailToCheck,
+                displayName: existingUserProfile.display_name,
+                banReason: newBanReason.trim(),
+              },
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            });
+          }
+
+          console.log('✅ Ban notifications sent (push + email)');
+        } catch (notifError) {
+          console.error('⚠️ Failed to send ban notifications:', notifError);
+          // Don't block the ban if notifications fail
+        }
+
+        Alert.alert(
+          '✅ User Banned',
+          `${existingUserProfile.display_name} (${emailToCheck}) has been completely banned:\n\n• Auth banned (cannot login)\n• Profile deactivated\n• All identifiers recorded\n• Notifications sent`
+        );
+      } else {
+        // USER DOESN'T EXIST - Create preventive ban
+        console.log('ℹ️ No existing user - creating preventive ban');
+
+        const { error } = await supabase
+          .from('bans')
+          .insert({
+            banned_email: emailToCheck,
+            ban_reason: newBanReason.trim(),
+            banned_by: adminProfile.id,
+            is_permanent: true,
+            admin_notes: 'Preventive ban - user does not exist yet',
+          });
+
+        if (error) throw error;
+
+        Alert.alert(
+          '✅ Preventive Ban Added',
+          `${emailToCheck} has been banned and cannot register in the future.`
+        );
+      }
+
+      // Reset form and reload
       setShowAddBanModal(false);
       setNewBanEmail('');
       setNewBanReason('');
       loadBans();
     } catch (error: any) {
       console.error('Error adding ban:', error);
-      Alert.alert('Error', 'Failed to add ban.');
+      Alert.alert('Error', error.message || 'Failed to add ban.');
     } finally {
       setAddingBan(false);
     }
@@ -222,9 +417,14 @@ export default function AdminBans() {
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Ban Management</Text>
-        <TouchableOpacity onPress={() => setShowAddBanModal(true)}>
-          <MaterialCommunityIcons name="plus-circle" size={24} color="white" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <TouchableOpacity onPress={() => setShowSearchModal(true)}>
+            <MaterialCommunityIcons name="account-search" size={24} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowAddBanModal(true)}>
+            <MaterialCommunityIcons name="plus-circle" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       {/* Stats */}
@@ -308,7 +508,7 @@ export default function AdminBans() {
                   Banned by: {ban.banner?.display_name || 'System'}
                 </Text>
                 <Text style={styles.metaText}>
-                  {formatDate(ban.created_at)}
+                  {ban.created_at ? formatDate(ban.created_at) : 'Unknown date'}
                 </Text>
               </View>
 
@@ -324,6 +524,115 @@ export default function AdminBans() {
           ))
         )}
       </ScrollView>
+
+      {/* Search User Modal */}
+      <Modal
+        visible={showSearchModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowSearchModal(false);
+          setSearchQuery('');
+          setSearchResults([]);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%', minHeight: 400 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Search User to Ban</Text>
+              <TouchableOpacity onPress={() => {
+                setShowSearchModal(false);
+                setSearchQuery('');
+                setSearchResults([]);
+              }}>
+                <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputLabel}>Search by Name</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="Enter display name..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="words"
+                autoCorrect={false}
+                onSubmitEditing={handleSearchUsers}
+              />
+              <TouchableOpacity
+                style={[styles.modalButton, styles.banButton, { flex: 0, paddingHorizontal: 16 }]}
+                onPress={handleSearchUsers}
+                disabled={searching || !searchQuery.trim()}
+              >
+                {searching ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <MaterialCommunityIcons name="magnify" size={20} color="white" />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Results */}
+            <View style={{ flex: 1, minHeight: 200 }}>
+              <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+              {console.log('📱 Rendering search results UI, count:', searchResults.length)}
+              {searchResults.length === 0 && searchQuery && !searching && (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <MaterialCommunityIcons name="account-off" size={48} color="#D1D5DB" />
+                  <Text style={{ color: '#6B7280', marginTop: 12 }}>No users found</Text>
+                </View>
+              )}
+
+              {searchResults.length > 0 && (
+                <View style={{ paddingTop: 8 }}>
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8, paddingHorizontal: 4 }}>
+                    {searchResults.length} user{searchResults.length > 1 ? 's' : ''} found - tap to ban
+                  </Text>
+                </View>
+              )}
+
+              {searchResults.map((user, index) => {
+                console.log('🎨 Rendering user card:', index, user.display_name);
+                return (
+                  <TouchableOpacity
+                    key={user.id}
+                    style={styles.searchResultCard}
+                    onPress={() => handleBanFromSearch(user)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.searchResultName}>{user.display_name}</Text>
+                      <Text style={styles.searchResultEmail}>{user.email}</Text>
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                        {user.device_id && (
+                          <View style={styles.identifier}>
+                            <MaterialCommunityIcons name="cellphone" size={12} color="#6B7280" />
+                            <Text style={styles.identifierText}>Device</Text>
+                          </View>
+                        )}
+                        {user.phone && (
+                          <View style={styles.identifier}>
+                            <MaterialCommunityIcons name="phone" size={12} color="#6B7280" />
+                            <Text style={styles.identifierText}>Phone</Text>
+                          </View>
+                        )}
+                        {!user.is_active && (
+                          <View style={[styles.identifier, { backgroundColor: '#FEE2E2' }]}>
+                            <MaterialCommunityIcons name="account-off" size={12} color="#DC2626" />
+                            <Text style={[styles.identifierText, { color: '#DC2626' }]}>Inactive</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
+                  </TouchableOpacity>
+                );
+              })}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Add Ban Modal */}
       <Modal
@@ -628,5 +937,26 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  searchResultCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchResultName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  searchResultEmail: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
   },
 });

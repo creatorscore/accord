@@ -13,6 +13,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import { useTranslation } from 'react-i18next';
+import Constants from 'expo-constants';
 import ReviewCategorySlider from './ReviewCategorySlider';
 import StarRating from './StarRating';
 import { supabase } from '@/lib/supabase';
@@ -100,8 +101,19 @@ export default function ReviewSubmissionModal({
     try {
       setIsSubmitting(true);
 
-      // Get Supabase URL and anon key
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      // Get Supabase URL with fallback to app.json extra config
+      const supabaseUrl =
+        process.env.EXPO_PUBLIC_SUPABASE_URL ||
+        Constants.expoConfig?.extra?.supabaseUrl ||
+        '';
+
+      if (!supabaseUrl) {
+        console.error('[Reviews] Supabase URL not configured');
+        Alert.alert('Error', 'Configuration error. Please try again later.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
