@@ -93,33 +93,46 @@ serve(async (req) => {
       });
     }
 
-    // Get user's email
+    // Get user's email and check if already banned
     const { data: { user: targetUser }, error: userError } = await supabaseAdmin.auth.admin.getUserById(profile.user_id);
     const userEmail = targetUser?.email || null;
+    const isAlreadyBanned = targetUser?.banned_until !== null;
 
-    console.log('[Ban User] Profile found:', { user_id: profile.user_id, email: userEmail });
+    console.log('[Ban User] Profile found:', {
+      user_id: profile.user_id,
+      email: userEmail,
+      already_banned: isAlreadyBanned,
+      banned_until: targetUser?.banned_until
+    });
 
     // 1. BAN USER IN SUPABASE AUTH (CRITICAL - prevents all future logins)
-    console.log('[Ban User] Banning user in Auth...');
-    const { error: authBanError } = await supabaseAdmin.auth.admin.updateUserById(
-      profile.user_id,
-      {
-        ban_duration: '876000h', // ~100 years (permanent ban)
+    let authBanError = null;
+
+    if (isAlreadyBanned) {
+      console.log('[Ban User] ⚠️ User already banned in Auth - skipping auth ban step');
+    } else {
+      console.log('[Ban User] Banning user in Auth...');
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(
+        profile.user_id,
+        {
+          ban_duration: '876000h', // ~100 years (permanent ban)
+        }
+      );
+      authBanError = error;
+
+      if (authBanError) {
+        console.error('[Ban User] Failed to ban in Auth:', authBanError);
+        return new Response(JSON.stringify({
+          error: 'Failed to ban user in authentication system',
+          details: authBanError.message
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500,
+        });
       }
-    );
 
-    if (authBanError) {
-      console.error('[Ban User] Failed to ban in Auth:', authBanError);
-      return new Response(JSON.stringify({
-        error: 'Failed to ban user in authentication system',
-        details: authBanError.message
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      });
+      console.log('[Ban User] ✓ User banned in Auth successfully');
     }
-
-    console.log('[Ban User] ✓ User banned in Auth successfully');
 
     // 2. DEACTIVATE PROFILE (prevents discovery, matching, messaging)
     console.log('[Ban User] Deactivating profile...');
@@ -184,11 +197,12 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      message: 'User banned successfully',
+      message: isAlreadyBanned ? 'User was already banned - updated ban record' : 'User banned successfully',
       banned_user_id: profile.user_id,
       banned_profile_id: payload.banned_profile_id,
       banned_email: userEmail,
-      auth_banned: !authBanError,
+      auth_banned: isAlreadyBanned || !authBanError,
+      was_already_banned: isAlreadyBanned,
       profile_deactivated: !profileError,
       ban_record_created: !banRecordError,
     }), {

@@ -265,52 +265,65 @@ export default function AdminBans() {
       }
 
       if (existingUser && existingUserProfile) {
-        // USER EXISTS - Execute full ban
-        console.log('⚠️ User exists - executing full ban');
+        // USER EXISTS - Execute full ban using Edge Function
+        console.log('⚠️ User exists - executing full ban via Edge Function');
 
-        // Step 2a: Ban in Supabase Auth (prevents login)
-        const { error: authBanError } = await supabase.auth.admin.updateUserById(
-          existingUser.id,
-          {
-            ban_duration: '876000h', // ~100 years (permanent)
+        // Get current session for Edge Function auth
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error('No active session');
+        }
+
+        // Call admin-ban-user Edge Function (handles auth ban, profile deactivation, ban record creation)
+        const { data: banResponse, error: banError } = await supabase.functions.invoke('admin-ban-user', {
+          body: {
+            banned_profile_id: existingUserProfile.id,
+            ban_reason: `Manually banned by admin: ${newBanReason.trim()}`,
+            banned_by_profile_id: adminProfile.id,
+            admin_notes: `Manual ban from bans.tsx of existing user "${existingUserProfile.display_name}"`,
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        console.log('🔍 Edge Function response:', { banResponse, banError });
+
+        if (banError) {
+          // Try to read the response body from the error context
+          let errorBody = null;
+          try {
+            if (banError.context && banError.context._bodyInit) {
+              const response = banError.context;
+              if (response && !response.bodyUsed) {
+                errorBody = await response.json();
+                console.log('🔍 Parsed error body:', errorBody);
+              }
+            }
+          } catch (parseError) {
+            console.warn('⚠️ Could not parse error body:', parseError);
           }
-        );
 
-        if (authBanError) {
-          console.error('Auth ban error:', authBanError);
+          // Show detailed error from Edge Function
+          const errorDetails = errorBody?.error || banError.message;
+          const errorContext = errorBody?.details || '';
+          const searchedId = errorBody?.searched_for_id || '';
+          const rawError = errorBody?.raw_error || '';
+
+          throw new Error(
+            `Failed to ban user: ${errorDetails}\n` +
+            `Details: ${errorContext}\n` +
+            `Searched for ID: ${searchedId}\n` +
+            `Raw error: ${JSON.stringify(rawError)}`
+          );
+        }
+
+        if (!banResponse || !banResponse.success) {
+          console.error('Ban failed:', banResponse);
           throw new Error('Failed to ban user in authentication system');
         }
 
-        // Step 2b: Deactivate profile (prevents showing in discovery)
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            is_active: false,
-            ban_reason: `Manually banned by admin: ${newBanReason.trim()}`,
-          })
-          .eq('id', existingUserProfile.id);
-
-        if (profileError) {
-          console.error('Profile deactivation error:', profileError);
-          throw new Error('Failed to deactivate profile');
-        }
-
-        // Step 2c: Create comprehensive ban record
-        const { error: banInsertError } = await supabase
-          .from('bans')
-          .insert({
-            banned_user_id: existingUser.id,
-            banned_profile_id: existingUserProfile.id,
-            banned_email: emailToCheck,
-            banned_phone_hash: existingUserProfile.phone_number || null,
-            banned_device_id: existingUserProfile.device_id || null,
-            ban_reason: newBanReason.trim(),
-            banned_by: adminProfile.id,
-            is_permanent: true,
-            admin_notes: `Manual ban of existing user "${existingUserProfile.display_name}"`,
-          });
-
-        if (banInsertError) throw banInsertError;
+        console.log('✅ User banned successfully via Edge Function:', banResponse);
 
         // Step 2d: Send ban notifications (push + email)
         try {
@@ -340,7 +353,7 @@ export default function AdminBans() {
 
         Alert.alert(
           '✅ User Banned',
-          `${existingUserProfile.display_name} (${emailToCheck}) has been completely banned:\n\n• Auth banned (cannot login)\n• Profile deactivated\n• All identifiers recorded\n• Notifications sent`
+          `${existingUserProfile.display_name} (${emailToCheck}) has been completely banned:\n\n• Auth banned: ${banResponse.auth_banned ? '✅' : '❌'}\n• Profile deactivated: ${banResponse.profile_deactivated ? '✅' : '❌'}\n• Ban record created: ${banResponse.ban_record_created ? '✅' : '❌'}\n• Sessions terminated: ✅\n• Notifications sent`
         );
       } else {
         // USER DOESN'T EXIST - Create preventive ban
