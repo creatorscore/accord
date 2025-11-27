@@ -26,6 +26,7 @@ import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import { logScreenshotEvent } from '@/lib/screenshot-tracking';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
+import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 
 const { width, height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.6;
@@ -50,6 +51,7 @@ interface Profile {
   photos?: Array<{ url: string; is_primary: boolean }>;
   compatibility_score?: number;
   is_verified?: boolean;
+  photo_verified?: boolean;
   distance?: number;
   height_inches?: number;
   zodiac_sign?: string;
@@ -393,6 +395,9 @@ export default function ImmersiveProfileCard({
               {profile.is_verified && (
                 <MaterialCommunityIcons name="check-decagram" size={28} color="#3B82F6" />
               )}
+              {profile.photo_verified && (
+                <MaterialCommunityIcons name="camera-check" size={28} color="#22c55e" />
+              )}
             </View>
             {(profile.gender || profile.pronouns || profile.ethnicity) && (
               <View style={styles.heroIdentity}>
@@ -499,6 +504,13 @@ export default function ImmersiveProfileCard({
               <Text style={styles.bioText}>{profile.my_story}</Text>
             </View>
           )}
+
+          {/* Reviews Section */}
+          <ProfileReviewDisplay
+            profileId={profile.id}
+            isMatched={false}
+            compact={false}
+          />
 
           {/* Photo 2 */}
           {photos[1] && (

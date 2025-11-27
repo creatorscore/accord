@@ -19,6 +19,7 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { updateUserLocation } from '@/lib/geolocation';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
+import PhotoVerificationCard from '@/components/security/PhotoVerificationCard';
 
 interface PrivacySettings {
   photo_blur_enabled: boolean;
@@ -292,6 +293,14 @@ export default function PrivacySettings() {
           premium
           requiresPremium
         />
+      </View>
+
+      {/* Photo Verification */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Verification</Text>
+        <View style={{ paddingHorizontal: 20 }}>
+          <PhotoVerificationCard />
+        </View>
       </View>
 
       {/* Activity Privacy */}

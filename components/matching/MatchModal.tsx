@@ -114,7 +114,7 @@ export default function MatchModal({
                 <Image
                   source={{ uri: currentUserPhoto }}
                   style={{ width: 112, height: 112 }}
-                  {...(__DEV__ ? { resizeMode: 'cover' } : { contentFit: 'cover' })}
+                  contentFit="cover"
                 />
               ) : (
                 <View className="w-28 h-28 bg-gray-200 items-center justify-center">
@@ -138,7 +138,7 @@ export default function MatchModal({
                 <Image
                   source={{ uri: matchedProfile.photo_url }}
                   style={{ width: 112, height: 112 }}
-                  {...(__DEV__ ? { resizeMode: 'cover' } : { contentFit: 'cover' })}
+                  contentFit="cover"
                 />
               ) : (
                 <View className="w-28 h-28 bg-gray-200 items-center justify-center">

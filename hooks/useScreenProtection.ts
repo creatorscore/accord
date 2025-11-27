@@ -1,11 +1,17 @@
 import { useEffect } from 'react';
 import { CaptureProtection } from 'react-native-capture-protection';
+import * as ScreenCapture from 'expo-screen-capture';
+import Constants from 'expo-constants';
 
 /**
  * Custom hook to protect screens from screenshots and screen recording
  *
- * On iOS: Screenshots will appear as a black screen
- * On Android: Screenshots are blocked entirely
+ * Uses BOTH packages for maximum protection:
+ * 1. expo-screen-capture: OS-level screenshot blocking
+ * 2. react-native-capture-protection: Makes screenshots BLACK on iOS
+ *
+ * On iOS: Screenshots will appear as BLACK screens
+ * On Android: Screenshots are blocked entirely via FLAG_SECURE in MainActivity.kt
  *
  * Usage:
  * ```tsx
@@ -31,23 +37,48 @@ export function useScreenProtection(
       return;
     }
 
-    // Check if native module is available
-    if (!CaptureProtection) {
-      console.warn('react-native-capture-protection native module not available');
-      return;
-    }
-
     // Enable screenshot protection
     const enableProtection = async () => {
       try {
-        // Prevent screenshots and screen recording
-        // On iOS: screenshots will appear as black images
-        // On Android: screenshots are blocked entirely
-        await CaptureProtection.prevent({
-          screenshot: options?.screenshot !== false,
-          record: options?.record !== false,
-          appSwitcher: options?.appSwitcher !== false,
-        });
+        // In development mode: explicitly ALLOW screenshots (in case it was blocked before)
+        // Use Constants.appOwnership to reliably detect production vs development
+        // 'standalone' = App Store/Play Store build, 'expo' = Expo Go
+        const isProduction = Constants.appOwnership === 'standalone';
+
+        if (!isProduction || __DEV__) {
+          console.log('⚠️ Screenshot protection DISABLED in development mode');
+
+          // Explicitly allow screen capture in dev mode
+          try {
+            await ScreenCapture.allowScreenCaptureAsync();
+            console.log('✅ Explicitly allowed screen capture in dev mode');
+          } catch (e) {
+            console.log('Could not enable screen capture:', e);
+          }
+          return;
+        }
+
+        // STEP 1: Enable expo-screen-capture (OS-level blocking)
+        if (options?.screenshot !== false) {
+          await ScreenCapture.preventScreenCaptureAsync();
+          console.log('✅ expo-screen-capture enabled');
+        }
+
+        // STEP 2: Enable react-native-capture-protection (makes screenshots BLACK on iOS)
+        if (CaptureProtection) {
+          if (options?.screenshot !== false) {
+            await CaptureProtection.preventScreenshot();
+            console.log('✅ react-native-capture-protection enabled (iOS screenshots will be BLACK)');
+          }
+
+          // Prevent screen recording
+          if (options?.record !== false) {
+            await CaptureProtection.preventScreenRecord();
+            console.log('✅ Screen recording protection enabled');
+          }
+        } else {
+          console.warn('react-native-capture-protection native module not available');
+        }
       } catch (error) {
         // Silently fail in development/Expo Go
         console.warn('Screenshot protection not available:', error);
@@ -60,11 +91,22 @@ export function useScreenProtection(
     return () => {
       const disableProtection = async () => {
         try {
-          await CaptureProtection.allow({
-            screenshot: true,
-            record: true,
-            appSwitcher: true,
-          });
+          // Skip disabling in dev mode (nothing was enabled)
+          const isProduction = Constants.appOwnership === 'standalone';
+          if (!isProduction || __DEV__) {
+            return;
+          }
+
+          // Disable expo-screen-capture
+          if (options?.screenshot !== false) {
+            await ScreenCapture.allowScreenCaptureAsync();
+          }
+
+          // Disable react-native-capture-protection
+          if (CaptureProtection && options?.screenshot !== false) {
+            await CaptureProtection.allowScreenshot();
+          }
+          console.log('✅ Screenshot protection disabled');
         } catch (error) {
           // Silently fail
         }

@@ -16,7 +16,7 @@ import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { ScreenCaptureOverlay } from '@/components/shared/ScreenCaptureOverlay';
 import AppUpdateChecker from '@/components/AppUpdateChecker';
 import { initI18n, isRTL } from '@/lib/i18n';
-// import { initializeSentry } from '@/lib/sentry'; // Temporarily disabled for production build
+import { initializeSentry } from '@/lib/sentry';
 import { initializePostHog, trackAppLifecycle } from '@/lib/analytics';
 import { configureGoogleSignIn } from '@/lib/auth-providers';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
@@ -26,12 +26,11 @@ import { Platform } from 'react-native';
 import '../global.css';
 
 // Initialize Sentry before anything else (with error handling)
-// Temporarily disabled for production build
-// try {
-//   initializeSentry();
-// } catch (error) {
-//   console.error('Failed to initialize Sentry:', error);
-// }
+try {
+  initializeSentry();
+} catch (error) {
+  console.error('Failed to initialize Sentry:', error);
+}
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);

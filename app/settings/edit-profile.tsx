@@ -1112,7 +1112,7 @@ export default function EditProfile() {
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Profile</Text>
-        <TouchableOpacity onPress={saveProfile} disabled={saving}>
+        <TouchableOpacity onPress={() => saveProfile()} disabled={saving}>
           {saving ? (
             <ActivityIndicator size="small" color="white" />
           ) : (
@@ -1875,10 +1875,13 @@ export default function EditProfile() {
                 Alert.alert(
                   'Select a Language',
                   '',
-                  COMMON_LANGUAGES.filter(lang => !languagesSpoken.includes(lang)).map(lang => ({
-                    text: lang,
-                    onPress: () => addLanguage(lang)
-                  })).concat([{ text: 'Cancel', style: 'cancel' }])
+                  [
+                    ...COMMON_LANGUAGES.filter(lang => !languagesSpoken.includes(lang)).map(lang => ({
+                      text: lang,
+                      onPress: () => addLanguage(lang)
+                    })),
+                    { text: 'Cancel', style: 'cancel' as const }
+                  ]
                 );
               }}
             >
@@ -2448,7 +2451,12 @@ export default function EditProfile() {
               political_views: politicalViews,
               photos: photos.filter(p => !p.to_delete),
               prompt_answers: promptAnswers.filter(pa => pa.prompt && pa.answer),
-              interests,
+              interests: {
+                movies: favoriteMovies.split(',').map(s => s.trim()).filter(Boolean),
+                music: favoriteMusic.split(',').map(s => s.trim()).filter(Boolean),
+                books: favoriteBooks.split(',').map(s => s.trim()).filter(Boolean),
+                tv_shows: favoriteTvShows.split(',').map(s => s.trim()).filter(Boolean),
+              },
               hobbies,
               voice_intro_url: voiceIntroUrl,
               voice_intro_duration: voiceDuration,

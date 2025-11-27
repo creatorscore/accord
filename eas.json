@@ -12,7 +12,12 @@
       "distribution": "internal"
     },
     "production": {
+      "developmentClient": false,
       "autoIncrement": false,
+      "env": {
+        "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_3KdZG8HkLD0v1YIGuR6khBLQGO41A8cerUmxa6EIEUG",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+      },
       "android": {
         "buildType": "app-bundle"
       }

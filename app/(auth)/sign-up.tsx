@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
@@ -250,19 +250,27 @@ export default function SignUp() {
   }
 
   return (
-    <View className="flex-1 bg-cream px-6 pt-16">
-      <TouchableOpacity onPress={() => router.back()} className="mb-8">
-        <Text className="text-primary-500 text-lg font-semibold">{t('auth.signUp.backButton')}</Text>
-      </TouchableOpacity>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className="flex-1 bg-cream"
+    >
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 64, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <TouchableOpacity onPress={() => router.back()} className="mb-8">
+          <Text className="text-primary-500 text-lg font-semibold">{t('auth.signUp.backButton')}</Text>
+        </TouchableOpacity>
 
-      <Text className="text-4xl font-bold text-charcoal mb-2">
-        {t('auth.signUp.title')}
-      </Text>
-      <Text className="text-gray-600 text-lg mb-8">
-        {t('auth.signUp.subtitle')}
-      </Text>
+        <Text className="text-4xl font-bold text-charcoal mb-2">
+          {t('auth.signUp.title')}
+        </Text>
+        <Text className="text-gray-600 text-lg mb-8">
+          {t('auth.signUp.subtitle')}
+        </Text>
 
-      <View className="space-y-4">
+        <View className="space-y-4">
         <View>
           <Text className="text-gray-700 mb-2 font-medium">{t('auth.signUp.email')}</Text>
           <TextInput
@@ -363,6 +371,7 @@ export default function SignUp() {
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

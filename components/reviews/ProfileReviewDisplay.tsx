@@ -6,6 +6,7 @@ import { MotiView } from 'moti';
 import { useTranslation } from 'react-i18next';
 import StarRating from './StarRating';
 import { supabase } from '@/lib/supabase';
+import Constants from 'expo-constants';
 
 interface ProfileReviewDisplayProps {
   profileId: string;
@@ -77,7 +78,19 @@ export default function ProfileReviewDisplay({
     try {
       setLoading(true);
 
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      // Get Supabase URL with fallback to app.json extra config
+      const supabaseUrl =
+        process.env.EXPO_PUBLIC_SUPABASE_URL ||
+        Constants.expoConfig?.extra?.supabaseUrl ||
+        '';
+
+      if (!supabaseUrl) {
+        console.error('[Reviews] Supabase URL not configured');
+        setReviewData(null);
+        setLoading(false);
+        return;
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
@@ -103,6 +116,13 @@ export default function ProfileReviewDisplay({
         return;
       }
 
+      // Debug logging
+      if (result.aggregate_score) {
+        console.log(`[Reviews] Profile ${profileId}: ${result.aggregate_score.toFixed(1)} stars (${result.review_count} reviews)`);
+      } else {
+        console.log(`[Reviews] Profile ${profileId}: No reviews to display`);
+      }
+
       setReviewData(result);
     } catch (error) {
       // Fail silently if edge function not deployed
@@ -121,18 +141,37 @@ export default function ProfileReviewDisplay({
     );
   }
 
-  if (!reviewData || !reviewData.reviews_enabled || !reviewData.aggregate_score) {
+  // Don't show if:
+  // 1. No review data
+  // 2. Reviews disabled
+  // 3. No aggregate score OR it's not a valid number
+  // 4. Review count is 0 or less than 1
+  // 5. Aggregate score is less than 1 or greater than 5 (invalid)
+  if (!reviewData ||
+      !reviewData.reviews_enabled ||
+      !reviewData.aggregate_score ||
+      typeof reviewData.aggregate_score !== 'number' ||
+      isNaN(reviewData.aggregate_score) ||
+      reviewData.aggregate_score < 1 ||
+      reviewData.aggregate_score > 5 ||
+      reviewData.review_count < 1 ||
+      typeof reviewData.review_count !== 'number') {
     return null; // Don't show anything if reviews disabled or not enough reviews
   }
 
   // Compact view (for profile cards in discovery)
   if (compact) {
+    // Debug logging for compact badge
+    const scoreText = reviewData.aggregate_score.toFixed(1);
+    const countText = `(${reviewData.review_count})`;
+    console.log(`[Reviews] Compact badge for ${profileId}: ${scoreText} ${countText}`);
+
     return (
       <View style={styles.compactContainer}>
         <View style={styles.compactBadge}>
           <MaterialCommunityIcons name="star" size={14} color="#F59E0B" />
-          <Text style={styles.compactScore}>{reviewData.aggregate_score.toFixed(1)}</Text>
-          <Text style={styles.compactCount}>({reviewData.review_count})</Text>
+          <Text style={styles.compactScore}>{scoreText}</Text>
+          <Text style={styles.compactCount}>{countText}</Text>
         </View>
       </View>
     );

@@ -1,7 +1,15 @@
 import PostHog from 'posthog-react-native';
+import Constants from 'expo-constants';
 
-const POSTHOG_API_KEY = process.env.EXPO_PUBLIC_POSTHOG_API_KEY;
-const POSTHOG_HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
+// Get PostHog config from environment OR app.json extra config (fallback)
+const POSTHOG_API_KEY =
+  process.env.EXPO_PUBLIC_POSTHOG_API_KEY ||
+  Constants.expoConfig?.extra?.postHogApiKey;
+
+const POSTHOG_HOST =
+  process.env.EXPO_PUBLIC_POSTHOG_HOST ||
+  Constants.expoConfig?.extra?.postHogHost ||
+  'https://us.i.posthog.com';
 
 let posthogClient: PostHog | null = null;
 
@@ -24,8 +32,10 @@ export const initializePostHog = async () => {
   try {
     posthogClient = new PostHog(POSTHOG_API_KEY, {
       host: POSTHOG_HOST,
-      // Enable debug mode to see what's being sent
-      ...__DEV__ && { debug: true },
+      // Enable debug mode in development
+      ...(__DEV__ ? { debug: true } : {}),
+      // Enable autocapture for automatic event tracking
+      captureNativeAppLifecycleEvents: true,
     } as any);
 
     console.log('✅ PostHog initialized successfully!');
@@ -35,8 +45,12 @@ export const initializePostHog = async () => {
     if (posthogClient) {
       posthogClient.capture('posthog_initialized', {
         timestamp: new Date().toISOString(),
+        environment: __DEV__ ? 'development' : 'production',
       });
       console.log('📊 Test event sent to PostHog');
+
+      // Flush events immediately to ensure they're sent
+      posthogClient.flush();
     }
 
     return posthogClient;
@@ -62,6 +76,8 @@ export const trackEvent = (eventName: string, properties?: Record<string, any>) 
     posthogClient.capture(eventName, properties);
     if (__DEV__) {
       console.log(`✅ Event sent to PostHog: ${eventName}`, properties);
+      // Flush in development to see events immediately
+      posthogClient.flush();
     }
   } catch (error) {
     console.error(`❌ Error sending event to PostHog: ${eventName}`, error);

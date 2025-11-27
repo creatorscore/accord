@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
+import { AppState, AppStateStatus } from 'react-native';
 import { useAuth } from './AuthContext';
 import {
   registerForPushNotifications,
   savePushToken,
   setupNotificationListener,
   removePushToken,
+  ensurePushTokenSaved,
 } from '@/lib/notifications';
 
 interface NotificationContextType {
@@ -30,6 +32,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
   const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
   const pendingNavigation = useRef<any>(null);
+  const appState = useRef<AppStateStatus>(AppState.currentState);
+  const retryCount = useRef<number>(0);
+  const maxRetries = 10; // Will retry up to 10 times with exponential backoff
 
   useEffect(() => {
     if (user) {
@@ -74,26 +79,64 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  // Retry saving push token for existing users who may not have one
-  // This handles users who completed onboarding before this fix
+  // Aggressive retry mechanism with exponential backoff
+  // This ensures push tokens are ALWAYS saved, even if profile creation is delayed
   const retrySavePushToken = async () => {
     if (!user?.id || !pushToken) return;
+    if (retryCount.current >= maxRetries) {
+      console.warn('⚠️  Max retries reached for push token save');
+      return;
+    }
 
     try {
-      await savePushToken(user.id, pushToken);
+      const success = await ensurePushTokenSaved(user.id, pushToken);
+      if (success) {
+        console.log('✅ Push token saved successfully on retry', retryCount.current);
+        retryCount.current = 0; // Reset on success
+      } else {
+        // Token not saved yet, schedule another retry
+        retryCount.current++;
+        const delay = Math.min(1000 * Math.pow(2, retryCount.current), 60000); // Exponential backoff, max 60s
+        console.log(`⏰ Retry ${retryCount.current}/${maxRetries} in ${delay}ms`);
+        setTimeout(retrySavePushToken, delay);
+      }
     } catch (error) {
-      // Silently fail - not critical
+      console.error('❌ Error in retry push token:', error);
+      // Still retry on error
+      retryCount.current++;
+      if (retryCount.current < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount.current), 60000);
+        setTimeout(retrySavePushToken, delay);
+      }
     }
   };
 
-  // Check periodically if push token needs to be saved (for existing users)
+  // Retry saving push token when app comes to foreground
+  // This catches users who completed onboarding while app was in background
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('📱 App foregrounded - checking push token');
+        if (user?.id && pushToken) {
+          // Reset retry count and try again
+          retryCount.current = 0;
+          retrySavePushToken();
+        }
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user, pushToken]);
+
+  // Initial retry mechanism - start retrying immediately after token is obtained
   useEffect(() => {
     if (user && pushToken) {
-      // Retry saving after a short delay to ensure profile exists
-      const timer = setTimeout(() => {
-        retrySavePushToken();
-      }, 5000);
-      return () => clearTimeout(timer);
+      // Start aggressive retry loop
+      retryCount.current = 0;
+      retrySavePushToken();
     }
   }, [user, pushToken]);
 

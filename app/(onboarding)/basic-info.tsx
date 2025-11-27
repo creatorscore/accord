@@ -8,6 +8,7 @@ import { GradientButton } from '@/components/shared/GradientButton';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { validateDisplayName, getModerationErrorMessage } from '@/lib/content-moderation';
 import { initializeEncryption } from '@/lib/encryption';
+import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { useTranslation } from 'react-i18next';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
@@ -507,6 +508,16 @@ export default function BasicInfo() {
         // Encryption will be attempted again if needed when sending first message
       }
 
+      // Get device fingerprint for ban evasion prevention
+      let deviceFingerprint: string | null = null;
+      try {
+        deviceFingerprint = await getDeviceFingerprint();
+        console.log('✅ Device fingerprint captured for ban prevention');
+      } catch (fingerprintError) {
+        console.error('⚠️ Failed to get device fingerprint:', fingerprintError);
+        // Don't block onboarding if fingerprinting fails
+      }
+
       // Create or update profile
       const { error } = await supabase
         .from('profiles')
@@ -526,6 +537,7 @@ export default function BasicInfo() {
           latitude: coords?.latitude || null,
           longitude: coords?.longitude || null,
           encryption_public_key: encryptionPublicKey, // Store public key for E2E encryption
+          device_id: deviceFingerprint, // Store device fingerprint for ban evasion prevention
           onboarding_step: 1,
         }, {
           onConflict: 'user_id'

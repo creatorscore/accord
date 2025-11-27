@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    // Deno TypeScript configuration for Supabase Edge Functions
+    "strict": true,
+    "lib": ["deno.window"],
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "imports": {
+    // Supabase dependencies
+    "supabase": "jsr:@supabase/supabase-js@2"
+  },
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --watch index.ts"
+  }
+}

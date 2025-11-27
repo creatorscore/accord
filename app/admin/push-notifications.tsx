@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import Constants from 'expo-constants';
 
 type TargetAudience = 'all' | 'premium' | 'free' | 'verified';
 
@@ -146,8 +147,18 @@ export default function AdminPushNotifications() {
                 throw new Error('No session found');
               }
 
+              // Get Supabase URL with fallback to app.json extra config
+              const supabaseUrl =
+                process.env.EXPO_PUBLIC_SUPABASE_URL ||
+                Constants.expoConfig?.extra?.supabaseUrl ||
+                '';
+
+              if (!supabaseUrl) {
+                throw new Error('Supabase URL not configured');
+              }
+
               console.log('🔔 Sending notification to:', targetAudience);
-              console.log('📡 URL:', `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/admin-send-notification`);
+              console.log('📡 URL:', `${supabaseUrl}/functions/v1/admin-send-notification`);
 
               // Add timeout to fetch (30 seconds)
               const controller = new AbortController();
@@ -156,7 +167,7 @@ export default function AdminPushNotifications() {
               let result;
               try {
                 const response = await fetch(
-                  `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/admin-send-notification`,
+                  `${supabaseUrl}/functions/v1/admin-send-notification`,
                   {
                     method: 'POST',
                     headers: {
@@ -188,10 +199,11 @@ export default function AdminPushNotifications() {
                 }
               } catch (fetchError: any) {
                 clearTimeout(timeoutId);
+                console.error('❌ Fetch error details:', fetchError);
                 if (fetchError.name === 'AbortError') {
                   throw new Error('Request timed out after 30 seconds. Please try again.');
                 }
-                throw new Error(`Network error: ${fetchError.message}`);
+                throw new Error(`Network error: ${fetchError.message}\n\nPlease check:\n1. Internet connection\n2. Supabase edge function is deployed\n3. Edge function URL is correct`);
               }
 
               Alert.alert(

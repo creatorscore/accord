@@ -15,6 +15,7 @@ import MatchModal from '@/components/matching/MatchModal';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import FilterModal, { FilterOptions } from '@/components/matching/FilterModal';
 import ProfileBoostModal from '@/components/premium/ProfileBoostModal';
+import ReportUserModal from '@/components/moderation/ReportUserModal';
 import { sendMatchNotification, sendLikeNotification } from '@/lib/notifications';
 import { calculateCompatibilityScore, getCompatibilityBreakdown } from '@/lib/matching-algorithm';
 import { initializeTracking } from '@/lib/tracking-permissions';
@@ -58,6 +59,7 @@ interface Profile {
     orientation: number;
   };
   is_verified?: boolean;
+  photo_verified?: boolean;
   distance?: number | null;
   prompt_answers?: Array<{ prompt: string; answer: string }>;
   voice_intro_url?: string;
@@ -127,6 +129,9 @@ export default function Discover() {
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('miles');
   const [heightUnit, setHeightUnit] = useState<HeightUnit>('imperial');
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportingProfile, setReportingProfile] = useState<{ id: string; name: string } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     loadCurrentProfile();
@@ -169,6 +174,7 @@ export default function Discover() {
           display_name,
           gender,
           height_unit,
+          is_admin,
           photos (
             url,
             is_primary,
@@ -216,6 +222,7 @@ export default function Discover() {
       setFilters(initialFilters);
       setDistanceUnit(userDistanceUnit as DistanceUnit);
       setHeightUnit(userHeightUnit as HeightUnit);
+      setIsAdmin(data.is_admin || false);
 
       // Immediately start loading profiles to reduce perceived lag
       // Don't wait for next render cycle
@@ -1240,14 +1247,32 @@ export default function Discover() {
         }
       }
 
-      // Insert "Obsessed" (super like) into database
-      const { error: likeError } = await supabase.from('likes').insert({
-        liker_profile_id: currentProfileId,
-        liked_profile_id: targetProfile.id,
-        like_type: 'super_like',
-      });
+      // Check if a like already exists
+      const { data: existingLike } = await supabase
+        .from('likes')
+        .select('id, like_type')
+        .eq('liker_profile_id', currentProfileId)
+        .eq('liked_profile_id', targetProfile.id)
+        .single();
 
-      if (likeError) throw likeError;
+      if (existingLike) {
+        // Update existing like to super_like
+        const { error: updateError } = await supabase
+          .from('likes')
+          .update({ like_type: 'super_like' })
+          .eq('id', existingLike.id);
+
+        if (updateError) throw updateError;
+      } else {
+        // Insert new super like
+        const { error: likeError } = await supabase.from('likes').insert({
+          liker_profile_id: currentProfileId,
+          liked_profile_id: targetProfile.id,
+          like_type: 'super_like',
+        });
+
+        if (likeError) throw likeError;
+      }
 
       // Track super like
       trackUserAction.superLikeUsed(targetProfile.id);
@@ -1556,61 +1581,12 @@ export default function Discover() {
     const currentProfile = profiles[currentIndex];
     if (!currentProfile) return;
 
+    setReportingProfile({
+      id: currentProfile.id,
+      name: currentProfile.display_name,
+    });
+    setShowReportModal(true);
     setShowImmersiveProfile(false);
-
-    Alert.prompt(
-      'Report User',
-      `Why are you reporting ${currentProfile.display_name}?`,
-      [
-        {
-          text: t('common.cancel'),
-          style: 'cancel',
-        },
-        {
-          text: t('common.submit'),
-          onPress: async (reason?: string) => {
-            if (!reason || reason.trim() === '') {
-              Alert.alert(t('common.error'), 'Please provide a reason for reporting.');
-              return;
-            }
-
-            try {
-              // Get current user's profile ID
-              const { data: myProfile } = await supabase
-                .from('profiles')
-                .select('id')
-                .eq('user_id', user?.id)
-                .single();
-
-              if (!myProfile) {
-                throw new Error('Could not find your profile');
-              }
-
-              // Insert report
-              const { error } = await supabase
-                .from('reports')
-                .insert({
-                  reporter_profile_id: myProfile.id,
-                  reported_profile_id: currentProfile.id,
-                  reason: reason.trim(),
-                  status: 'pending',
-                });
-
-              if (error) throw error;
-
-              Alert.alert(
-                'Report Submitted',
-                'Thank you for helping keep Accord safe. Our team will review this report.'
-              );
-            } catch (error: any) {
-              console.error('Error reporting user:', error);
-              Alert.alert(t('common.error'), 'Failed to submit report. Please try again.');
-            }
-          },
-        },
-      ],
-      'plain-text'
-    );
   };
 
   // Loading state
@@ -1908,6 +1884,7 @@ export default function Discover() {
           onSwipeUp={handleSwipeUp}
           onPress={handleProfilePress}
           distanceUnit={distanceUnit}
+          isAdmin={isAdmin}
         />
       </View>
 
@@ -2041,6 +2018,19 @@ export default function Discover() {
         variant="premium"
         feature="unlimited_swipes"
       />
+
+      {/* Report User Modal */}
+      {reportingProfile && (
+        <ReportUserModal
+          visible={showReportModal}
+          onClose={() => {
+            setShowReportModal(false);
+            setReportingProfile(null);
+          }}
+          reportedProfileId={reportingProfile.id}
+          reportedProfileName={reportingProfile.name}
+        />
+      )}
 
       {/* Swipe Counter for Free Users */}
       {!isPremium && (

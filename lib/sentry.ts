@@ -65,7 +65,7 @@ export const initializeSentry = () => {
       integrations,
 
       // Filter out sensitive data
-      beforeSend(event) {
+      beforeSend(event: any) {
         // Remove potentially sensitive user data
         if (event.user) {
           delete event.user.email;
@@ -74,7 +74,7 @@ export const initializeSentry = () => {
 
         // Filter out password fields from breadcrumbs
         if (event.breadcrumbs) {
-          event.breadcrumbs = event.breadcrumbs.map(breadcrumb => {
+          event.breadcrumbs = event.breadcrumbs.map((breadcrumb: any) => {
             if (breadcrumb.data) {
               const sanitized = { ...breadcrumb.data };
               if ('password' in sanitized) delete sanitized.password;

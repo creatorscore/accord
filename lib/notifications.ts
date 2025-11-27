@@ -125,6 +125,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
 /**
  * Save push token to user's profile in database
+ * Writes to BOTH profiles.push_token (backward compat) AND device_tokens (multi-device support)
  */
 export async function savePushToken(userId: string, token: string): Promise<void> {
   try {
@@ -145,7 +146,9 @@ export async function savePushToken(userId: string, token: string): Promise<void
       throw profileError;
     }
 
-    // Update profile with push token
+    const deviceType = Platform.OS === 'ios' ? 'ios' : 'android';
+
+    // STEP 1: Update profile with push token (backward compatibility for old builds)
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -156,10 +159,132 @@ export async function savePushToken(userId: string, token: string): Promise<void
 
     if (error) throw error;
 
-    console.log('Push token saved successfully');
+    // STEP 2: Upsert to device_tokens table (multi-device support)
+    const { error: deviceError } = await supabase
+      .from('device_tokens')
+      .upsert(
+        {
+          profile_id: profile.id,
+          push_token: token,
+          device_type: deviceType,
+          last_used_at: new Date().toISOString(),
+        },
+        {
+          onConflict: 'profile_id,push_token',
+          ignoreDuplicates: false, // Update last_used_at if exists
+        }
+      );
+
+    if (deviceError) {
+      console.warn('⚠️ Device token save failed (non-critical):', deviceError);
+      // Don't throw - profile token was saved successfully
+    }
+
+    console.log(`✅ Push token saved successfully (${deviceType})`);
   } catch (error) {
     console.error('Error saving push token:', error);
     throw error;
+  }
+}
+
+/**
+ * Ensure push token is saved (returns true if saved, false if needs retry)
+ * This is used by the retry mechanism to know when to stop retrying
+ * Checks BOTH profiles.push_token (legacy) AND device_tokens table (multi-device)
+ */
+export async function ensurePushTokenSaved(userId: string, token: string): Promise<boolean> {
+  try {
+    // Get profile with current push token
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, push_token')
+      .eq('user_id', userId)
+      .single();
+
+    // Profile doesn't exist yet - needs retry
+    if (profileError) {
+      if (profileError.code === 'PGRST116') {
+        console.log('⏰ Profile not found yet - will retry');
+        return false;
+      }
+      throw profileError;
+    }
+
+    const deviceType = Platform.OS === 'ios' ? 'ios' : 'android';
+
+    // Check if token exists in device_tokens table (new multi-device system)
+    const { data: deviceToken } = await supabase
+      .from('device_tokens')
+      .select('id')
+      .eq('profile_id', profile.id)
+      .eq('push_token', token)
+      .single();
+
+    // Token is already saved in new system
+    if (deviceToken) {
+      console.log('✅ Push token already saved in device_tokens');
+      return true;
+    }
+
+    // Legacy check: token saved in old system
+    if (profile.push_token === token) {
+      console.log('✅ Push token already saved in profiles (legacy)');
+      // Migrate to new system while we're here
+      await supabase
+        .from('device_tokens')
+        .upsert(
+          {
+            profile_id: profile.id,
+            push_token: token,
+            device_type: deviceType,
+            last_used_at: new Date().toISOString(),
+          },
+          {
+            onConflict: 'profile_id,push_token',
+            ignoreDuplicates: false,
+          }
+        );
+      return true;
+    }
+
+    // Token not saved - save to BOTH systems (backward compatibility)
+    // STEP 1: Update profile (legacy system)
+    const { error: profileError2 } = await supabase
+      .from('profiles')
+      .update({
+        push_token: token,
+        push_enabled: true,
+      })
+      .eq('id', profile.id);
+
+    if (profileError2) throw profileError2;
+
+    // STEP 2: Add to device_tokens (new system)
+    const { error: deviceError } = await supabase
+      .from('device_tokens')
+      .upsert(
+        {
+          profile_id: profile.id,
+          push_token: token,
+          device_type: deviceType,
+          last_used_at: new Date().toISOString(),
+        },
+        {
+          onConflict: 'profile_id,push_token',
+          ignoreDuplicates: false,
+        }
+      );
+
+    if (deviceError) {
+      console.warn('⚠️ Device token save failed (non-critical):', deviceError);
+      // Don't fail - profile token was saved successfully
+    }
+
+    console.log('✅ Push token saved successfully to both systems');
+    return true;
+  } catch (error) {
+    console.error('❌ Error ensuring push token saved:', error);
+    return false; // Will trigger retry
   }
 }
 
@@ -208,6 +333,7 @@ export async function sendPushNotification(
 
 /**
  * Send notification when a new match occurs
+ * Sends to ALL devices for the user (multi-device support)
  */
 export async function sendMatchNotification(
   recipientProfileId: string,
@@ -215,31 +341,55 @@ export async function sendMatchNotification(
   matchId: string
 ): Promise<void> {
   try {
-    // Get recipient's push token
+    // Get recipient's push settings
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('push_token, push_enabled')
       .eq('id', recipientProfileId)
       .single();
 
-    if (error || !profile?.push_token || !profile.push_enabled) {
+    if (error || !profile?.push_enabled) {
       console.log('Recipient does not have push notifications enabled');
       return;
     }
 
-    // Send notification
-    await sendPushNotification(
-      profile.push_token,
-      "It's a Match! 💜",
-      `You matched with ${matcherName}! Start chatting now.`,
-      {
-        type: 'new_match',
-        matchId,
-        screen: 'matches',
-      }
+    // Get all device tokens for this user (new multi-device system)
+    const { data: deviceTokens } = await supabase
+      .from('device_tokens')
+      .select('push_token')
+      .eq('profile_id', recipientProfileId);
+
+    // Collect all tokens (from both device_tokens and profiles.push_token)
+    const tokens = new Set<string>();
+    if (deviceTokens) {
+      deviceTokens.forEach(dt => tokens.add(dt.push_token));
+    }
+    if (profile.push_token) {
+      tokens.add(profile.push_token);
+    }
+
+    if (tokens.size === 0) {
+      console.log('No push tokens found for recipient');
+      return;
+    }
+
+    // Send notification to all devices
+    const notificationPromises = Array.from(tokens).map(token =>
+      sendPushNotification(
+        token,
+        "It's a Match! 💜",
+        `You matched with ${matcherName}! Start chatting now.`,
+        {
+          type: 'new_match',
+          matchId,
+          screen: 'matches',
+        }
+      )
     );
 
-    // Log notification
+    await Promise.allSettled(notificationPromises);
+
+    // Log notification (once per user, not per device)
     await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_match',
@@ -254,6 +404,7 @@ export async function sendMatchNotification(
 
 /**
  * Send notification when a new message is received
+ * Sends to ALL devices for the user (multi-device support)
  */
 export async function sendMessageNotification(
   recipientProfileId: string,
@@ -262,14 +413,33 @@ export async function sendMessageNotification(
   matchId: string
 ): Promise<void> {
   try {
-    // Get recipient's push token
+    // Get recipient's push settings
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('push_token, push_enabled')
       .eq('id', recipientProfileId)
       .single();
 
-    if (error || !profile?.push_token || !profile.push_enabled) {
+    if (error || !profile?.push_enabled) {
+      return;
+    }
+
+    // Get all device tokens for this user (new multi-device system)
+    const { data: deviceTokens } = await supabase
+      .from('device_tokens')
+      .select('push_token')
+      .eq('profile_id', recipientProfileId);
+
+    // Collect all tokens (from both device_tokens and profiles.push_token)
+    const tokens = new Set<string>();
+    if (deviceTokens) {
+      deviceTokens.forEach(dt => tokens.add(dt.push_token));
+    }
+    if (profile.push_token) {
+      tokens.add(profile.push_token);
+    }
+
+    if (tokens.size === 0) {
       return;
     }
 
@@ -278,19 +448,23 @@ export async function sendMessageNotification(
       ? messagePreview.substring(0, 50) + '...'
       : messagePreview;
 
-    // Send notification
-    await sendPushNotification(
-      profile.push_token,
-      `New message from ${senderName}`,
-      preview,
-      {
-        type: 'new_message',
-        matchId,
-        screen: 'chat',
-      }
+    // Send notification to all devices
+    const notificationPromises = Array.from(tokens).map(token =>
+      sendPushNotification(
+        token,
+        `New message from ${senderName}`,
+        preview,
+        {
+          type: 'new_message',
+          matchId,
+          screen: 'chat',
+        }
+      )
     );
 
-    // Log notification
+    await Promise.allSettled(notificationPromises);
+
+    // Log notification (once per user, not per device)
     await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_message',
@@ -307,6 +481,7 @@ export async function sendMessageNotification(
  * Send notification when someone likes your profile
  * Free users get FOMO notification to drive upgrades
  * Premium users get full details
+ * Sends to ALL devices for the user (multi-device support)
  */
 export async function sendLikeNotification(
   recipientProfileId: string,
@@ -321,7 +496,26 @@ export async function sendLikeNotification(
       .eq('id', recipientProfileId)
       .single();
 
-    if (error || !profile?.push_token || !profile.push_enabled) {
+    if (error || !profile?.push_enabled) {
+      return;
+    }
+
+    // Get all device tokens for this user (new multi-device system)
+    const { data: deviceTokens } = await supabase
+      .from('device_tokens')
+      .select('push_token')
+      .eq('profile_id', recipientProfileId);
+
+    // Collect all tokens (from both device_tokens and profiles.push_token)
+    const tokens = new Set<string>();
+    if (deviceTokens) {
+      deviceTokens.forEach(dt => tokens.add(dt.push_token));
+    }
+    if (profile.push_token) {
+      tokens.add(profile.push_token);
+    }
+
+    if (tokens.size === 0) {
       return;
     }
 
@@ -344,20 +538,24 @@ export async function sendLikeNotification(
       screen = 'likes'; // Will show paywall when they tap
     }
 
-    // Send notification
-    await sendPushNotification(
-      profile.push_token,
-      title,
-      body,
-      {
-        type: 'new_like',
-        likerProfileId: isPremium ? likerProfileId : undefined, // Only send ID to premium users
-        screen,
-        isPremium,
-      }
+    // Send notification to all devices
+    const notificationPromises = Array.from(tokens).map(token =>
+      sendPushNotification(
+        token,
+        title,
+        body,
+        {
+          type: 'new_like',
+          likerProfileId: isPremium ? likerProfileId : undefined, // Only send ID to premium users
+          screen,
+          isPremium,
+        }
+      )
     );
 
-    // Log notification
+    await Promise.allSettled(notificationPromises);
+
+    // Log notification (once per user, not per device)
     await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_like',
@@ -394,21 +592,42 @@ export function setupNotificationListener(
 
 /**
  * Send notification to reporter when their report results in action (ban)
+ * Sends to ALL devices for the user (multi-device support)
  */
 export async function sendReportActionNotification(
   reporterProfileId: string,
   action: 'banned' | 'resolved'
 ): Promise<void> {
   try {
-    // Get reporter's push token
+    // Get reporter's push settings
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('push_token, push_enabled')
       .eq('id', reporterProfileId)
       .single();
 
-    if (error || !profile?.push_token || !profile.push_enabled) {
+    if (error || !profile?.push_enabled) {
       console.log('Reporter does not have push notifications enabled');
+      return;
+    }
+
+    // Get all device tokens for this user (new multi-device system)
+    const { data: deviceTokens } = await supabase
+      .from('device_tokens')
+      .select('push_token')
+      .eq('profile_id', reporterProfileId);
+
+    // Collect all tokens (from both device_tokens and profiles.push_token)
+    const tokens = new Set<string>();
+    if (deviceTokens) {
+      deviceTokens.forEach(dt => tokens.add(dt.push_token));
+    }
+    if (profile.push_token) {
+      tokens.add(profile.push_token);
+    }
+
+    if (tokens.size === 0) {
+      console.log('No push tokens found for reporter');
       return;
     }
 
@@ -423,19 +642,23 @@ export async function sendReportActionNotification(
       body = 'We reviewed your report and have taken appropriate action. Thank you for helping keep Accord safe.';
     }
 
-    // Send notification
-    await sendPushNotification(
-      profile.push_token,
-      title,
-      body,
-      {
-        type: 'report_action',
-        action,
-        screen: 'discover',
-      }
+    // Send notification to all devices
+    const notificationPromises = Array.from(tokens).map(token =>
+      sendPushNotification(
+        token,
+        title,
+        body,
+        {
+          type: 'report_action',
+          action,
+          screen: 'discover',
+        }
+      )
     );
 
-    // Log notification
+    await Promise.allSettled(notificationPromises);
+
+    // Log notification (once per user, not per device)
     await supabase.from('push_notifications').insert({
       profile_id: reporterProfileId,
       notification_type: 'report_action',
@@ -451,7 +674,80 @@ export async function sendReportActionNotification(
 }
 
 /**
+ * Send notification when a user is banned
+ * Sends to ALL devices for the user (multi-device support)
+ */
+export async function sendBanNotification(
+  bannedProfileId: string,
+  banReason: string
+): Promise<void> {
+  try {
+    // Get banned user's push settings
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('push_token, push_enabled, display_name')
+      .eq('id', bannedProfileId)
+      .single();
+
+    if (error || !profile?.push_enabled) {
+      console.log('Banned user does not have push notifications enabled');
+      return;
+    }
+
+    // Get all device tokens for this user (new multi-device system)
+    const { data: deviceTokens } = await supabase
+      .from('device_tokens')
+      .select('push_token')
+      .eq('profile_id', bannedProfileId);
+
+    // Collect all tokens (from both device_tokens and profiles.push_token)
+    const tokens = new Set<string>();
+    if (deviceTokens) {
+      deviceTokens.forEach(dt => tokens.add(dt.push_token));
+    }
+    if (profile.push_token) {
+      tokens.add(profile.push_token);
+    }
+
+    if (tokens.size === 0) {
+      console.log('No push tokens found for banned user');
+      return;
+    }
+
+    // Send notification to all devices
+    const notificationPromises = Array.from(tokens).map(token =>
+      sendPushNotification(
+        token,
+        'Account Restricted',
+        'Your Accord account has been restricted. If you believe this is an error, please contact support at hello@joinaccord.app.',
+        {
+          type: 'account_banned',
+          banReason,
+          screen: 'auth',
+        }
+      )
+    );
+
+    await Promise.allSettled(notificationPromises);
+
+    // Log notification (once per user, not per device)
+    await supabase.from('push_notifications').insert({
+      profile_id: bannedProfileId,
+      notification_type: 'account_banned',
+      title: 'Account Restricted',
+      body: 'Your Accord account has been restricted. If you believe this is an error, please contact support at hello@joinaccord.app.',
+      data: { type: 'account_banned', banReason },
+    });
+
+    console.log(`Ban notification sent to ${profile.display_name}`);
+  } catch (error) {
+    console.error('Error sending ban notification:', error);
+  }
+}
+
+/**
  * Remove push token (on logout or disable notifications)
+ * Removes from BOTH profiles.push_token (legacy) AND device_tokens table (multi-device)
  */
 export async function removePushToken(userId: string): Promise<void> {
   try {
@@ -463,6 +759,7 @@ export async function removePushToken(userId: string): Promise<void> {
 
     if (!profile) return;
 
+    // STEP 1: Update profile (legacy system - clear token and disable push)
     await supabase
       .from('profiles')
       .update({
@@ -471,7 +768,17 @@ export async function removePushToken(userId: string): Promise<void> {
       })
       .eq('id', profile.id);
 
-    console.log('Push token removed');
+    // STEP 2: Delete all device tokens for this user (new multi-device system)
+    const { error: deviceError } = await supabase
+      .from('device_tokens')
+      .delete()
+      .eq('profile_id', profile.id);
+
+    if (deviceError) {
+      console.warn('⚠️ Error removing device tokens (non-critical):', deviceError);
+    }
+
+    console.log('Push token removed from all devices');
   } catch (error) {
     console.error('Error removing push token:', error);
   }

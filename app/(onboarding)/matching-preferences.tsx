@@ -39,6 +39,8 @@ export default function MatchingPreferences() {
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('miles');
   const [willingToRelocate, setWillingToRelocate] = useState(false);
   const [genderPreference, setGenderPreference] = useState<string[]>([]);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationToken, setNotificationToken] = useState<string | null>(null);
 
   useEffect(() => {
     loadProfile();
@@ -64,6 +66,31 @@ export default function MatchingPreferences() {
       setGenderPreference(genderPreference.filter((g) => g !== gender));
     } else {
       setGenderPreference([...genderPreference, gender]);
+    }
+  };
+
+  const handleEnableNotifications = async () => {
+    try {
+      const token = await registerForPushNotifications();
+      if (token) {
+        setNotificationToken(token);
+        setNotificationsEnabled(true);
+        Alert.alert(
+          'Notifications Enabled! 🎉',
+          'You\'ll now receive updates about matches, messages, and activity.'
+        );
+      } else {
+        Alert.alert(
+          'Notifications Not Available',
+          'Notifications require a physical device. You can enable them later in Settings.'
+        );
+      }
+    } catch (error: any) {
+      console.error('Error enabling notifications:', error);
+      Alert.alert(
+        'Permission Denied',
+        'Please enable notifications in your device settings to receive match alerts.'
+      );
     }
   };
 
@@ -107,17 +134,14 @@ export default function MatchingPreferences() {
 
       if (profileError) throw profileError;
 
-      // Register for push notifications now that profile exists
-      // This is critical - the initial registration during signup fails because profile doesn't exist yet
-      try {
-        const token = await registerForPushNotifications();
-        if (token && user?.id) {
-          await savePushToken(user.id, token);
+      // Save notification token if user enabled notifications
+      if (notificationToken && user?.id) {
+        try {
+          await savePushToken(user.id, notificationToken);
           console.log('✅ Push token saved after onboarding completion');
+        } catch (pushError) {
+          console.warn('Push notification save failed:', pushError);
         }
-      } catch (pushError) {
-        // Don't block onboarding completion if push registration fails
-        console.warn('Push notification registration failed:', pushError);
       }
 
       // Navigate to main app
@@ -298,6 +322,42 @@ export default function MatchingPreferences() {
                   </Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          </View>
+
+          {/* Notification Permission */}
+          <View className="mt-6">
+            <View className={`border-2 rounded-2xl p-5 ${
+              notificationsEnabled ? 'bg-primary-50 border-primary-500' : 'bg-gray-50 border-gray-300'
+            }`}>
+              <View className="flex-row items-center mb-3">
+                <Text className="text-2xl mr-2">🔔</Text>
+                <Text className="text-xl font-bold text-gray-900 flex-1">
+                  Stay in the Loop
+                </Text>
+                {notificationsEnabled && (
+                  <View className="bg-primary-500 px-3 py-1 rounded-full">
+                    <Text className="text-white text-xs font-bold">Enabled</Text>
+                  </View>
+                )}
+              </View>
+              <Text className="text-gray-700 mb-4 leading-6">
+                Get instant alerts when you match, receive messages, or someone likes your profile. Don't miss your perfect match!
+              </Text>
+              {!notificationsEnabled ? (
+                <TouchableOpacity
+                  className="bg-primary-500 py-4 rounded-xl"
+                  onPress={handleEnableNotifications}
+                >
+                  <Text className="text-white text-center font-semibold text-base">
+                    Enable Notifications
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View className="flex-row items-center justify-center py-2">
+                  <Text className="text-primary-700 font-semibold">✓ You're all set!</Text>
+                </View>
+              )}
             </View>
           </View>
         </View>

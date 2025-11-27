@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { calculateCompatibilityScore, getCompatibilityBreakdown } from '@/lib/matching-algorithm';
 import { formatHeight, HeightUnit } from '@/lib/height-utils';
 import ProfilePhotoCarousel from '@/components/profile/ProfilePhotoCarousel';
@@ -189,6 +190,7 @@ const CompatibilityBar = ({ label, score, icon, color }: { label: string; score:
 export default function ProfileView() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const { isPremium, isPlatinum } = useSubscription();
   const insets = useSafeAreaInsets();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [currentProfile, setCurrentProfile] = useState<any>(null);
@@ -272,18 +274,17 @@ export default function ProfileView() {
     if (!currentProfileId || !id) return;
 
     try {
-      // First check if current user is an admin - admins can view any profile
+      // First check if current user is an admin
       const { data: adminCheck } = await supabase
         .from('profiles')
         .select('is_admin')
         .eq('id', currentProfileId)
         .single();
 
-      if (adminCheck?.is_admin === true) {
-        console.log('👑 Admin user - bypassing match check');
+      const isAdminUser = adminCheck?.is_admin === true;
+      if (isAdminUser) {
         setIsAdmin(true);
-        setIsMatched(true); // Treat as "matched" for UI purposes
-        return; // Admin can view any profile
+        console.log('👑 Admin user detected');
       }
 
       // Check if there's an active match between current user and viewed profile
@@ -295,11 +296,43 @@ export default function ProfileView() {
         .single();
 
       if (match) {
+        console.log('✅ Found active match - showing matched UI');
         setIsMatched(true);
         setMatchId(match.id);
         checkPhotoRevealStatus();
       } else {
-        // Not matched - redirect back
+        console.log(`🔍 No match found. Premium: ${isPremium}, Platinum: ${isPlatinum}, Admin: ${isAdminUser}`);
+
+        // Check if the viewed profile has liked the current user
+        const { data: theirLike } = await supabase
+          .from('likes')
+          .select('id')
+          .eq('liker_profile_id', id)
+          .eq('liked_profile_id', currentProfileId)
+          .maybeSingle();
+
+        console.log(`🔍 Like check: theirLike exists = ${!!theirLike}`);
+
+        // Allow viewing with like buttons if:
+        // 1. Premium/Platinum user viewing someone who liked them
+        // 2. Admin viewing someone who liked them (for testing)
+        if ((isPremium || isPlatinum || isAdminUser) && theirLike) {
+          console.log('✅ Showing LIKE BUTTONS (premium/admin viewing profile from likes tab)');
+          setIsMatched(false); // Not matched yet, will show like/pass buttons
+          setMatchId(null);
+          return;
+        }
+
+        // Admin can view any profile even without a like (but won't show like buttons)
+        if (isAdminUser) {
+          console.log('👑 Admin viewing profile without incoming like - showing as matched');
+          setIsMatched(true); // Show as "matched" to allow viewing
+          setMatchId(null);
+          return;
+        }
+
+        // Not matched and no permission to view - redirect back
+        console.log('❌ No permission to view this profile - showing alert');
         setIsMatched(false);
         setMatchId(null);
         Alert.alert('Not Matched', 'You can only view full profiles of your matches.', [
@@ -307,7 +340,29 @@ export default function ProfileView() {
         ]);
       }
     } catch (error: any) {
-      // No match found - redirect back
+      // Check if premium user viewing someone who liked them
+      if (isPremium || isPlatinum) {
+        try {
+          const { data: theirLike } = await supabase
+            .from('likes')
+            .select('id')
+            .eq('liker_profile_id', id)
+            .eq('liked_profile_id', currentProfileId)
+            .maybeSingle();
+
+          if (theirLike) {
+            // Premium user viewing someone who liked them - allow it
+            console.log('✅ Premium user viewing profile from likes tab');
+            setIsMatched(false); // Not matched yet, will show like/pass buttons
+            setMatchId(null);
+            return;
+          }
+        } catch (likeCheckError) {
+          console.error('Error checking like status:', likeCheckError);
+        }
+      }
+
+      // No match found and no permission - redirect back
       setIsMatched(false);
       setMatchId(null);
       Alert.alert('Not Matched', 'You can only view full profiles of your matches.', [
@@ -525,17 +580,19 @@ export default function ProfileView() {
         const profile1Id = currentProfileId < id ? currentProfileId : id;
         const profile2Id = currentProfileId < id ? id : currentProfileId;
 
-        await supabase.from('matches').insert({
+        const { data: newMatch, error: matchError } = await supabase.from('matches').insert({
           profile1_id: profile1Id,
           profile2_id: profile2Id,
           initiated_by: currentProfileId,
           compatibility_score: profile?.compatibility_score || 0,
           status: 'active',
-        });
+        }).select('id').single();
+
+        if (matchError) throw matchError;
 
         setTimeout(() => {
           Alert.alert('🎉 It\'s a Match!', `You matched with ${profile?.display_name}!`, [
-            { text: 'Send Message', onPress: () => router.push(`/chat/${profile1Id}_${profile2Id}`) },
+            { text: 'Send Message', onPress: () => router.push(`/chat/${newMatch.id}`) },
             { text: 'Keep Swiping', onPress: () => router.back() }
           ]);
         }, 500);
@@ -588,17 +645,19 @@ export default function ProfileView() {
         const profile1Id = currentProfileId < id ? currentProfileId : id;
         const profile2Id = currentProfileId < id ? id : currentProfileId;
 
-        await supabase.from('matches').insert({
+        const { data: newMatch, error: matchError } = await supabase.from('matches').insert({
           profile1_id: profile1Id,
           profile2_id: profile2Id,
           initiated_by: currentProfileId,
           compatibility_score: profile?.compatibility_score || 0,
           status: 'active',
-        });
+        }).select('id').single();
+
+        if (matchError) throw matchError;
 
         setTimeout(() => {
           Alert.alert('🎉 It\'s a Match!', `You matched with ${profile?.display_name}!`, [
-            { text: 'Send Message', onPress: () => router.push(`/chat/${profile1Id}_${profile2Id}`) },
+            { text: 'Send Message', onPress: () => router.push(`/chat/${newMatch.id}`) },
             { text: 'Keep Swiping', onPress: () => router.back() }
           ]);
         }, 500);
