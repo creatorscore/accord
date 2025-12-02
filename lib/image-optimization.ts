@@ -1,5 +1,6 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Crypto from 'expo-crypto';
 import { decode } from 'base64-arraybuffer';
 
 /**
@@ -320,4 +321,28 @@ export function getRecommendedQuality(fileSizeBytes: number): number {
   if (sizeMb < 6) return 0.75;
   if (sizeMb < 10) return 0.7;
   return 0.6;
+}
+
+/**
+ * Generate SHA-256 hash of image content for duplicate detection
+ * Used to prevent users from uploading the same image twice
+ */
+export async function generateImageHash(uri: string): Promise<string> {
+  try {
+    // Read the image as base64
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    // Generate SHA-256 hash of the content
+    const hash = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      base64
+    );
+
+    return hash;
+  } catch (error) {
+    console.error('Error generating image hash:', error);
+    throw new Error('Failed to generate image hash');
+  }
 }

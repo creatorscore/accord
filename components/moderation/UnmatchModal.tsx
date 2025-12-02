@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
   },
   alternativeText: {
     fontSize: 13,
-    color: '#8B5CF6',
+    color: '#A08AB7',
     textDecorationLine: 'underline',
   },
 });

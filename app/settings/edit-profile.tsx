@@ -23,7 +23,7 @@ import { Audio } from 'expo-av';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { optimizeImage, uriToArrayBuffer, validateImage } from '@/lib/image-optimization';
+import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash } from '@/lib/image-optimization';
 import { HeightUnit, cmToInches, inchesToCm } from '@/lib/height-utils';
 
 interface Photo {
@@ -34,6 +34,7 @@ interface Photo {
   display_order: number;
   is_new?: boolean;
   to_delete?: boolean;
+  contentHash?: string;
 }
 
 interface PromptAnswer {
@@ -147,6 +148,17 @@ const POLITICAL_VIEWS = [
   'Apolitical',
   'Other',
   'Prefer not to say',
+];
+
+const VOICE_PROMPTS = [
+  "A story I love to tell...",
+  "My hot take is...",
+  "The way to my heart is...",
+  "I'm looking for someone who...",
+  "Something that always makes me laugh...",
+  "My perfect Sunday looks like...",
+  "I get way too excited about...",
+  "The best trip I ever took...",
 ];
 
 const COMMON_LANGUAGES = [
@@ -362,10 +374,10 @@ export default function EditProfile() {
   const [newHobby, setNewHobby] = useState('');
   const [loveLanguage, setLoveLanguage] = useState('');
   const [languagesSpoken, setLanguagesSpoken] = useState<string[]>([]);
-  const [myStory, setMyStory] = useState('');
   const [religion, setReligion] = useState('');
   const [politicalViews, setPoliticalViews] = useState('');
   const [voiceIntroUrl, setVoiceIntroUrl] = useState<string | null>(null);
+  const [voiceIntroPrompt, setVoiceIntroPrompt] = useState<string>('');
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [voiceDuration, setVoiceDuration] = useState<number>(0);
@@ -423,11 +435,11 @@ export default function EditProfile() {
           hobbies,
           love_language,
           languages_spoken,
-          my_story,
           religion,
           political_views,
           voice_intro_url,
-          voice_intro_duration
+          voice_intro_duration,
+          voice_intro_prompt
         `)
         .eq('user_id', user?.id)
         .single();
@@ -529,7 +541,6 @@ export default function EditProfile() {
           setLanguagesSpoken([]);
         }
 
-        setMyStory(profileData.my_story || '');
         setReligion(profileData.religion || '');
         setPoliticalViews(profileData.political_views || '');
 
@@ -537,6 +548,7 @@ export default function EditProfile() {
           setVoiceIntroUrl(profileData.voice_intro_url);
           setVoiceDuration(profileData.voice_intro_duration || 0);
         }
+        setVoiceIntroPrompt(profileData.voice_intro_prompt || '');
 
         // Load preferences data
         try {
@@ -638,17 +650,51 @@ export default function EditProfile() {
 
       console.log(`Optimized profile image: ${(optimized.size! / 1024).toFixed(0)}KB`);
 
+      // Generate hash for duplicate detection
+      const contentHash = await generateImageHash(optimized.uri);
+      console.log(`Generated content hash: ${contentHash.substring(0, 16)}...`);
+
+      // Check for duplicate in current selection (local check)
+      const isDuplicateLocal = photos.some(p => !p.to_delete && p.contentHash === contentHash);
+      if (isDuplicateLocal) {
+        Alert.alert('Duplicate Photo', 'You have already selected this photo. Please choose a different one.');
+        return;
+      }
+
+      // Check for duplicate in database (already uploaded photos)
+      if (profileId) {
+        const { data: existingPhoto } = await supabase
+          .from('photos')
+          .select('id')
+          .eq('profile_id', profileId)
+          .eq('content_hash', contentHash)
+          .maybeSingle();
+
+        if (existingPhoto) {
+          Alert.alert('Duplicate Photo', 'You have already uploaded this photo. Please choose a different one.');
+          return;
+        }
+      }
+
       const newPhoto: Photo = {
         url: optimized.uri,
         is_primary: activePhotos.length === 0,
         display_order: activePhotos.length,
         is_new: true,
+        contentHash,
       };
       setPhotos([...photos, newPhoto]);
     }
   };
 
   const removePhoto = (index: number) => {
+    // Count current active photos (not marked for deletion)
+    const currentActivePhotos = photos.filter(p => !p.to_delete);
+    if (currentActivePhotos.length <= 2) {
+      Alert.alert('Minimum Photos Required', 'Your profile must have at least 2 photos. Add another photo before removing this one.');
+      return;
+    }
+
     console.log('🗑️ Before removing photo:', photos.length, photos.map(p => p.url.substring(0, 30)));
     const updatedPhotos = [...photos];
     const photoToRemove = updatedPhotos[index];
@@ -831,6 +877,13 @@ export default function EditProfile() {
       return false;
     }
 
+    // Count active photos (not marked for deletion)
+    const activePhotos = photos.filter(p => !p.to_delete);
+    if (activePhotos.length < 2) {
+      Alert.alert('More Photos Needed', 'Your profile must have at least 2 photos');
+      return false;
+    }
+
     setSaving(true);
 
     try {
@@ -881,10 +934,14 @@ export default function EditProfile() {
         hobbies: hobbies.length > 0 ? hobbies : null,
         love_language: loveLanguage ? [loveLanguage] : null,
         languages_spoken: languagesSpoken.length > 0 ? languagesSpoken : null,
-        my_story: myStory || null,
         religion: religion || null,
         political_views: politicalViews || null,
         voice_intro_url: voiceIntroUrl,
+        voice_intro_prompt: voiceIntroPrompt || null,
+        // Clear photo review flag when user saves their profile (they likely uploaded new photos)
+        photo_review_required: false,
+        photo_review_reason: null,
+        photo_review_requested_at: null,
       };
 
       let finalProfileId = profileId;
@@ -962,7 +1019,7 @@ export default function EditProfile() {
             .from('profile-photos')
             .getPublicUrl(fileName);
 
-          // Insert photo record into database
+          // Insert photo record into database with content hash for duplicate detection
           const { error: insertError } = await supabase
             .from('photos')
             .insert({
@@ -971,6 +1028,7 @@ export default function EditProfile() {
               storage_path: fileName,
               is_primary: photo.is_primary,
               display_order: photo.display_order,
+              content_hash: photo.contentHash,
             });
 
           if (insertError) console.error('Error inserting photo record:', insertError);
@@ -1094,7 +1152,7 @@ export default function EditProfile() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
       </View>
     );
   }
@@ -1105,7 +1163,7 @@ export default function EditProfile() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <LinearGradient
-        colors={['#9B87CE', '#B8A9DD']}
+        colors={['#A08AB7', '#CDC2E5']}
         style={styles.header}
       >
         <TouchableOpacity onPress={() => router.back()}>
@@ -1188,7 +1246,7 @@ export default function EditProfile() {
 
             {photos.filter(p => !p.to_delete).length < 6 && (
               <TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
-                <MaterialCommunityIcons name="camera-plus" size={32} color="#9B87CE" />
+                <MaterialCommunityIcons name="camera-plus" size={32} color="#A08AB7" />
                 <Text style={styles.addPhotoText}>Add Photo</Text>
               </TouchableOpacity>
             )}
@@ -1267,7 +1325,7 @@ export default function EditProfile() {
                           onPress={() => setSelectedMonth(index)}
                         >
                           <Text style={{
-                            color: selectedMonth === index ? '#9B87CE' : '#374151',
+                            color: selectedMonth === index ? '#A08AB7' : '#374151',
                             fontWeight: selectedMonth === index ? 'bold' : 'normal'
                           }}>
                             {month}
@@ -1295,7 +1353,7 @@ export default function EditProfile() {
                           onPress={() => setSelectedDay(day)}
                         >
                           <Text style={{
-                            color: selectedDay === day ? '#9B87CE' : '#374151',
+                            color: selectedDay === day ? '#A08AB7' : '#374151',
                             fontWeight: selectedDay === day ? 'bold' : 'normal'
                           }}>
                             {day}
@@ -1323,7 +1381,7 @@ export default function EditProfile() {
                           onPress={() => setSelectedYear(year)}
                         >
                           <Text style={{
-                            color: selectedYear === year ? '#9B87CE' : '#374151',
+                            color: selectedYear === year ? '#A08AB7' : '#374151',
                             fontWeight: selectedYear === year ? 'bold' : 'normal'
                           }}>
                             {year}
@@ -1340,7 +1398,7 @@ export default function EditProfile() {
                     borderRadius: 16,
                     paddingVertical: 16,
                     alignItems: 'center',
-                    backgroundColor: (selectedMonth !== null && selectedDay !== null && selectedYear !== null) ? '#9B87CE' : '#D1D5DB'
+                    backgroundColor: (selectedMonth !== null && selectedDay !== null && selectedYear !== null) ? '#A08AB7' : '#D1D5DB'
                   }}
                   onPress={handleDateConfirm}
                   disabled={selectedMonth === null || selectedDay === null || selectedYear === null}
@@ -1363,7 +1421,7 @@ export default function EditProfile() {
                   key={g}
                   style={[
                     styles.interestChip,
-                    gender.includes(g) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    gender.includes(g) && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => {
                     if (gender.includes(g)) {
@@ -1381,7 +1439,7 @@ export default function EditProfile() {
               ))}
             </View>
             {gender.length > 0 && (
-              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#A08AB7', marginTop: 8 }}>
                 Selected: {gender.join(', ')}
               </Text>
             )}
@@ -1395,7 +1453,7 @@ export default function EditProfile() {
                   key={p}
                   style={[
                     styles.interestChip,
-                    pronouns === p && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    pronouns === p && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => setPronouns(p)}
                 >
@@ -1417,7 +1475,7 @@ export default function EditProfile() {
                   key={e}
                   style={[
                     styles.interestChip,
-                    ethnicity.includes(e) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    ethnicity.includes(e) && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => {
                     if (ethnicity.includes(e)) {
@@ -1435,7 +1493,7 @@ export default function EditProfile() {
               ))}
             </View>
             {ethnicity.length > 0 && (
-              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#A08AB7', marginTop: 8 }}>
                 Selected: {ethnicity.join(', ')}
               </Text>
             )}
@@ -1450,7 +1508,7 @@ export default function EditProfile() {
                   key={o}
                   style={[
                     styles.interestChip,
-                    sexualOrientation.includes(o) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    sexualOrientation.includes(o) && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => {
                     if (sexualOrientation.includes(o)) {
@@ -1468,7 +1526,7 @@ export default function EditProfile() {
               ))}
             </View>
             {sexualOrientation.length > 0 && (
-              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#A08AB7', marginTop: 8 }}>
                 Selected: {sexualOrientation.join(', ')}
               </Text>
             )}
@@ -1560,7 +1618,7 @@ export default function EditProfile() {
                   key={type}
                   style={[
                     styles.interestChip,
-                    personality === type && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    personality === type && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => setPersonality(type)}
                 >
@@ -1585,20 +1643,6 @@ export default function EditProfile() {
               value={bio}
               onChangeText={setBio}
               placeholder="Tell your story..."
-              placeholderTextColor="#9CA3AF"
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>My Story (Why I'm Here)</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={myStory}
-              onChangeText={setMyStory}
-              placeholder="Share more about your situation..."
               placeholderTextColor="#9CA3AF"
               multiline
               numberOfLines={4}
@@ -1636,7 +1680,7 @@ export default function EditProfile() {
                   key={lang}
                   style={[
                     styles.interestChip,
-                    loveLanguage === lang && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    loveLanguage === lang && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => setLoveLanguage(lang)}
                 >
@@ -1657,7 +1701,7 @@ export default function EditProfile() {
                   key={rel}
                   style={[
                     styles.interestChip,
-                    religion === rel && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    religion === rel && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => setReligion(rel)}
                 >
@@ -1678,7 +1722,7 @@ export default function EditProfile() {
                   key={view}
                   style={[
                     styles.interestChip,
-                    politicalViews === view && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    politicalViews === view && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => setPoliticalViews(view)}
                 >
@@ -1763,7 +1807,7 @@ export default function EditProfile() {
                       onPress={() => setHobbies(hobbies.filter((h) => h !== hobby))}
                     >
                       <Text style={styles.interestText}>{hobby}</Text>
-                      <MaterialCommunityIcons name="close" size={16} color="#9B87CE" />
+                      <MaterialCommunityIcons name="close" size={16} color="#A08AB7" />
                     </TouchableOpacity>
                   ))}
               </View>
@@ -1782,7 +1826,7 @@ export default function EditProfile() {
                 onSubmitEditing={addHobby}
               />
               <TouchableOpacity style={styles.addButton} onPress={addHobby}>
-                <MaterialCommunityIcons name="plus" size={24} color="#9B87CE" />
+                <MaterialCommunityIcons name="plus" size={24} color="#A08AB7" />
               </TouchableOpacity>
             </View>
           )}
@@ -1863,7 +1907,7 @@ export default function EditProfile() {
                 onPress={() => removeLanguage(index)}
               >
                 <Text style={styles.interestText}>{language}</Text>
-                <MaterialCommunityIcons name="close" size={16} color="#9B87CE" />
+                <MaterialCommunityIcons name="close" size={16} color="#A08AB7" />
               </TouchableOpacity>
             ))}
           </View>
@@ -1902,7 +1946,7 @@ export default function EditProfile() {
             <MaterialCommunityIcons
               name={isRecording ? "stop" : "microphone"}
               size={32}
-              color={isRecording ? "#EF4444" : "#9B87CE"}
+              color={isRecording ? "#EF4444" : "#A08AB7"}
             />
             <Text style={[styles.voiceButtonText, isRecording && { color: '#EF4444' }]}>
               {isRecording ? "Stop Recording" : voiceIntroUrl ? "Re-record Voice Intro" : "Record Voice Intro"}
@@ -1913,6 +1957,53 @@ export default function EditProfile() {
             <View style={styles.voiceStatus}>
               <MaterialCommunityIcons name="check-circle" size={20} color="#10B981" />
               <Text style={styles.voiceStatusText}>Voice intro recorded</Text>
+            </View>
+          )}
+
+          {/* Voice Prompt Selection */}
+          {voiceIntroUrl && !isRecording && (
+            <View style={{ marginTop: 16 }}>
+              <Text style={styles.inputLabel}>Voice intro prompt</Text>
+              <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 12 }}>
+                Give your voice intro a creative title
+              </Text>
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                {VOICE_PROMPTS.map((prompt) => (
+                  <TouchableOpacity
+                    key={prompt}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                      backgroundColor: voiceIntroPrompt === prompt ? '#A08AB7' : '#F3F4F6',
+                      borderWidth: 1,
+                      borderColor: voiceIntroPrompt === prompt ? '#A08AB7' : '#E5E7EB',
+                    }}
+                    onPress={() => setVoiceIntroPrompt(prompt)}
+                  >
+                    <Text style={{
+                      fontSize: 13,
+                      color: voiceIntroPrompt === prompt ? '#FFFFFF' : '#374151',
+                    }}>
+                      {prompt}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TextInput
+                style={[styles.input, { marginTop: 8 }]}
+                placeholder="Or write your own prompt..."
+                placeholderTextColor="#9CA3AF"
+                value={voiceIntroPrompt && !VOICE_PROMPTS.includes(voiceIntroPrompt) ? voiceIntroPrompt : ''}
+                onChangeText={(text) => setVoiceIntroPrompt(text)}
+                onFocus={() => {
+                  if (VOICE_PROMPTS.includes(voiceIntroPrompt)) {
+                    setVoiceIntroPrompt('');
+                  }
+                }}
+              />
             </View>
           )}
         </View>
@@ -1960,7 +2051,7 @@ export default function EditProfile() {
                 <Text style={pa.prompt ? styles.promptText : styles.promptPlaceholder}>
                   {pa.prompt || 'Select a prompt...'}
                 </Text>
-                <MaterialCommunityIcons name="chevron-down" size={20} color="#9B87CE" />
+                <MaterialCommunityIcons name="chevron-down" size={20} color="#A08AB7" />
               </TouchableOpacity>
 
               {pa.prompt && (
@@ -1992,7 +2083,7 @@ export default function EditProfile() {
                   key={option.value}
                   style={[
                     styles.interestChip,
-                    smoking === option.value && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    smoking === option.value && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => setSmoking(option.value)}
                 >
@@ -2013,7 +2104,7 @@ export default function EditProfile() {
                   key={option.value}
                   style={[
                     styles.interestChip,
-                    drinking === option.value && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    drinking === option.value && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => setDrinking(option.value)}
                 >
@@ -2034,7 +2125,7 @@ export default function EditProfile() {
                   key={option.value}
                   style={[
                     styles.interestChip,
-                    pets === option.value && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    pets === option.value && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => setPets(option.value)}
                 >
@@ -2062,7 +2153,7 @@ export default function EditProfile() {
                   key={reason.value}
                   style={[
                     styles.interestChip,
-                    primaryReason.includes(reason.value) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    primaryReason.includes(reason.value) && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => {
                     if (primaryReason.includes(reason.value)) {
@@ -2080,7 +2171,7 @@ export default function EditProfile() {
               ))}
             </View>
             {primaryReason.length > 0 && (
-              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#A08AB7', marginTop: 8 }}>
                 Selected: {primaryReason.map(val => PRIMARY_REASONS.find(r => r.value === val)?.label).join(', ')}
               </Text>
             )}
@@ -2094,7 +2185,7 @@ export default function EditProfile() {
                   key={type.value}
                   style={[
                     styles.interestChip,
-                    relationshipType === type.value && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    relationshipType === type.value && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => setRelationshipType(type.value)}
                 >
@@ -2111,22 +2202,22 @@ export default function EditProfile() {
             <Text style={styles.inputLabel}>Children</Text>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity
-                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === true && { backgroundColor: '#E9D5FF', borderColor: '#9B87CE' }]}
+                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === true && { backgroundColor: '#E9D5FF', borderColor: '#A08AB7' }]}
                 onPress={() => setWantsChildren(true)}
               >
-                <Text style={{ color: wantsChildren === true ? '#9B87CE' : '#6B7280', fontWeight: wantsChildren === true ? '600' : '400' }}>Yes</Text>
+                <Text style={{ color: wantsChildren === true ? '#A08AB7' : '#6B7280', fontWeight: wantsChildren === true ? '600' : '400' }}>Yes</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === false && { backgroundColor: '#E9D5FF', borderColor: '#9B87CE' }]}
+                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === false && { backgroundColor: '#E9D5FF', borderColor: '#A08AB7' }]}
                 onPress={() => setWantsChildren(false)}
               >
-                <Text style={{ color: wantsChildren === false ? '#9B87CE' : '#6B7280', fontWeight: wantsChildren === false ? '600' : '400' }}>No</Text>
+                <Text style={{ color: wantsChildren === false ? '#A08AB7' : '#6B7280', fontWeight: wantsChildren === false ? '600' : '400' }}>No</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === null && { backgroundColor: '#E9D5FF', borderColor: '#9B87CE' }]}
+                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === null && { backgroundColor: '#E9D5FF', borderColor: '#A08AB7' }]}
                 onPress={() => setWantsChildren(null)}
               >
-                <Text style={{ color: wantsChildren === null ? '#9B87CE' : '#6B7280', fontWeight: wantsChildren === null ? '600' : '400' }}>Open</Text>
+                <Text style={{ color: wantsChildren === null ? '#A08AB7' : '#6B7280', fontWeight: wantsChildren === null ? '600' : '400' }}>Open</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2141,7 +2232,7 @@ export default function EditProfile() {
                     key={arr.value}
                     style={[
                       styles.interestChip,
-                      childrenArrangement.includes(arr.value) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                      childrenArrangement.includes(arr.value) && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                     ]}
                     onPress={() => {
                       if (childrenArrangement.includes(arr.value)) {
@@ -2159,7 +2250,7 @@ export default function EditProfile() {
                 ))}
               </View>
               {childrenArrangement.length > 0 && (
-                <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
+                <Text style={{ fontSize: 12, color: '#A08AB7', marginTop: 8 }}>
                   Selected: {childrenArrangement.map(val => CHILDREN_ARRANGEMENTS.find(a => a.value === val)?.label).join(', ')}
                 </Text>
               )}
@@ -2175,7 +2266,7 @@ export default function EditProfile() {
                   key={arr.value}
                   style={[
                     styles.interestChip,
-                    financialArrangement.includes(arr.value) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    financialArrangement.includes(arr.value) && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => {
                     if (financialArrangement.includes(arr.value)) {
@@ -2193,7 +2284,7 @@ export default function EditProfile() {
               ))}
             </View>
             {financialArrangement.length > 0 && (
-              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#A08AB7', marginTop: 8 }}>
                 Selected: {financialArrangement.map(val => FINANCIAL_ARRANGEMENTS.find(a => a.value === val)?.label).join(', ')}
               </Text>
             )}
@@ -2208,7 +2299,7 @@ export default function EditProfile() {
                   key={pref.value}
                   style={[
                     styles.interestChip,
-                    housingPreference.includes(pref.value) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    housingPreference.includes(pref.value) && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => {
                     if (housingPreference.includes(pref.value)) {
@@ -2226,7 +2317,7 @@ export default function EditProfile() {
               ))}
             </View>
             {housingPreference.length > 0 && (
-              <Text style={{ fontSize: 12, color: '#9B87CE', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#A08AB7', marginTop: 8 }}>
                 Selected: {housingPreference.map(val => HOUSING_PREFERENCES.find(a => a.value === val)?.label).join(', ')}
               </Text>
             )}
@@ -2273,7 +2364,7 @@ export default function EditProfile() {
                   key={gender}
                   style={[
                     styles.interestChip,
-                    genderPreference.includes(gender) && { backgroundColor: '#9B87CE', borderColor: '#9B87CE' }
+                    genderPreference.includes(gender) && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => toggleGenderPreference(gender)}
                 >
@@ -2308,8 +2399,8 @@ export default function EditProfile() {
                 height: 24,
                 borderRadius: 6,
                 borderWidth: 2,
-                borderColor: willingToRelocate ? '#9B87CE' : '#D1D5DB',
-                backgroundColor: willingToRelocate ? '#9B87CE' : 'transparent',
+                borderColor: willingToRelocate ? '#A08AB7' : '#D1D5DB',
+                backgroundColor: willingToRelocate ? '#A08AB7' : 'transparent',
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
@@ -2353,7 +2444,7 @@ export default function EditProfile() {
                 onSubmitEditing={addDealbreaker}
               />
               <TouchableOpacity style={styles.addButton} onPress={addDealbreaker}>
-                <MaterialCommunityIcons name="plus" size={24} color="#9B87CE" />
+                <MaterialCommunityIcons name="plus" size={24} color="#A08AB7" />
               </TouchableOpacity>
             </View>
           )}
@@ -2388,7 +2479,7 @@ export default function EditProfile() {
                 onSubmitEditing={addMustHave}
               />
               <TouchableOpacity style={styles.addButton} onPress={addMustHave}>
-                <MaterialCommunityIcons name="plus" size={24} color="#9B87CE" />
+                <MaterialCommunityIcons name="plus" size={24} color="#A08AB7" />
               </TouchableOpacity>
             </View>
           )}
@@ -2409,7 +2500,7 @@ export default function EditProfile() {
             disabled={saving}
           >
             <LinearGradient
-              colors={['#9B87CE', '#B8A9DD']}
+              colors={['#A08AB7', '#CDC2E5']}
               style={styles.actionButtonGradient}
             >
               <MaterialCommunityIcons name="content-save" size={20} color="white" />
@@ -2433,7 +2524,6 @@ export default function EditProfile() {
               display_name: displayName,
               age: calculatedAge,
               bio,
-              my_story: myStory,
               occupation,
               education,
               location_city: locationCity,
@@ -2460,6 +2550,7 @@ export default function EditProfile() {
               hobbies,
               voice_intro_url: voiceIntroUrl,
               voice_intro_duration: voiceDuration,
+              voice_intro_prompt: voiceIntroPrompt || null,
               is_verified: false,
               // Include preferences for the preview
               preferences: {
@@ -2494,7 +2585,7 @@ export default function EditProfile() {
             });
           }}
         >
-              <MaterialCommunityIcons name="eye" size={20} color="#9B87CE" />
+              <MaterialCommunityIcons name="eye" size={20} color="#A08AB7" />
               <Text style={styles.previewButtonText}>Live Preview</Text>
             </TouchableOpacity>
           </View>
@@ -2676,7 +2767,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     left: 8,
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -2699,7 +2790,7 @@ const styles = StyleSheet.create({
   },
   addPhotoText: {
     fontSize: 14,
-    color: '#9B87CE',
+    color: '#A08AB7',
     marginTop: 8,
   },
   inputGroup: {
@@ -2772,7 +2863,7 @@ const styles = StyleSheet.create({
   },
   interestText: {
     fontSize: 14,
-    color: '#9B87CE',
+    color: '#A08AB7',
     fontWeight: '500',
   },
   optionChip: {
@@ -2784,8 +2875,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   optionChipSelected: {
-    backgroundColor: '#9B87CE',
-    borderColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
+    borderColor: '#A08AB7',
   },
   optionChipText: {
     fontSize: 14,
@@ -2826,7 +2917,7 @@ const styles = StyleSheet.create({
   voiceButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   voiceStatus: {
     flexDirection: 'row',
@@ -2852,7 +2943,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   savePreviewButton: {
-    shadowColor: '#9B87CE',
+    shadowColor: '#A08AB7',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2877,13 +2968,13 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 16,
     borderWidth: 2,
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
     backgroundColor: 'white',
   },
   previewButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   modalOverlay: {
     flex: 1,
@@ -2946,7 +3037,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   modalSaveButton: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
   },
   modalButtonDisabled: {
     backgroundColor: '#E5E7EB',
@@ -2974,8 +3065,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   unitToggleButtonActive: {
-    backgroundColor: '#9B87CE',
-    borderColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
+    borderColor: '#A08AB7',
   },
   unitToggleText: {
     fontSize: 14,

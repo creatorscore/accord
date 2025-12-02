@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, RefreshControl } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -9,6 +9,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
+import MatchModal from '@/components/matching/MatchModal';
+import { calculateCompatibilityScore } from '@/lib/matching-algorithm';
 
 interface LikeProfile {
   id: string;
@@ -36,6 +38,14 @@ export default function Likes() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showMatchModal, setShowMatchModal] = useState(false);
+  const [matchedProfile, setMatchedProfile] = useState<{
+    display_name: string;
+    photo_url?: string;
+    compatibility_score?: number;
+  } | null>(null);
+  const [matchId, setMatchId] = useState<string | null>(null);
+  const [currentUserPhoto, setCurrentUserPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     loadCurrentProfile();
@@ -53,13 +63,22 @@ export default function Likes() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id')
+        .select(`
+          id,
+          photos (
+            url,
+            is_primary
+          )
+        `)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
       if (data) {
         setCurrentProfileId(data.id);
+        // Get primary photo or first photo
+        const primaryPhoto = data.photos?.find((p: any) => p.is_primary)?.url || data.photos?.[0]?.url;
+        setCurrentUserPhoto(primaryPhoto || null);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -124,10 +143,22 @@ export default function Likes() {
         ...(blockedMe?.map(b => b.blocker_profile_id) || [])
       ]);
 
+      // CRITICAL SAFETY: Filter out banned users
+      const { data: bannedUsers } = await supabase
+        .from('bans')
+        .select('banned_profile_id')
+        .not('banned_profile_id', 'is', null)
+        .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
+
+      const bannedProfileIds = new Set(
+        bannedUsers?.map(b => b.banned_profile_id).filter(Boolean) || []
+      );
+
       const formattedLikes: LikeProfile[] = (likesData || [])
         .filter(like =>
           !matchedProfileIds.has(like.liker_profile_id) &&
-          !blockedProfileIds.has(like.liker_profile_id)
+          !blockedProfileIds.has(like.liker_profile_id) &&
+          !bannedProfileIds.has(like.liker_profile_id)
         )
         .map(like => {
           // Supabase returns joined data as array, extract first element
@@ -181,34 +212,73 @@ export default function Likes() {
 
       if (likeError) throw likeError;
 
-      // Create a match
+      // Fetch both profiles with preferences to calculate compatibility
+      const { data: myProfile } = await supabase
+        .from('profiles')
+        .select(`
+          *,
+          preferences (*)
+        `)
+        .eq('id', currentProfileId)
+        .single();
+
+      const { data: otherProfile } = await supabase
+        .from('profiles')
+        .select(`
+          *,
+          preferences (*),
+          photos (
+            url,
+            is_primary
+          )
+        `)
+        .eq('id', likeProfileId)
+        .single();
+
+      // Calculate compatibility score
+      let compatibilityScore: number | null = null;
+      if (myProfile && otherProfile) {
+        const myPrefs = Array.isArray(myProfile.preferences) ? myProfile.preferences[0] : myProfile.preferences;
+        const otherPrefs = Array.isArray(otherProfile.preferences) ? otherProfile.preferences[0] : otherProfile.preferences;
+
+        if (myPrefs && otherPrefs) {
+          compatibilityScore = calculateCompatibilityScore(
+            myProfile,
+            otherProfile,
+            myPrefs,
+            otherPrefs
+          );
+        }
+      }
+
+      // Create a match with compatibility score
       const profile1Id = currentProfileId < likeProfileId ? currentProfileId : likeProfileId;
       const profile2Id = currentProfileId < likeProfileId ? likeProfileId : currentProfileId;
 
-      const { error: matchError } = await supabase
+      const { data: matchData, error: matchError } = await supabase
         .from('matches')
         .insert({
           profile1_id: profile1Id,
           profile2_id: profile2Id,
           initiated_by: currentProfileId,
-        });
+          compatibility_score: compatibilityScore,
+        })
+        .select('id')
+        .single();
 
       if (matchError) throw matchError;
 
-      Alert.alert(
-        t('likes.itsAMatch'),
-        t('likes.canStartChatting'),
-        [
-          {
-            text: t('likes.keepBrowsing'),
-            style: 'cancel',
-          },
-          {
-            text: t('likes.goToMatches'),
-            onPress: () => router.push('/(tabs)/matches'),
-          },
-        ]
-      );
+      // Get the other person's primary photo
+      const otherPhoto = otherProfile?.photos?.find((p: any) => p.is_primary)?.url || otherProfile?.photos?.[0]?.url;
+
+      // Show match modal
+      setMatchedProfile({
+        display_name: otherProfile?.display_name || 'Someone',
+        photo_url: otherPhoto,
+        compatibility_score: compatibilityScore || undefined,
+      });
+      setMatchId(matchData?.id || null);
+      setShowMatchModal(true);
     } catch (error) {
       console.error('Error creating match:', error);
       // Restore the like back to UI on error
@@ -234,6 +304,21 @@ export default function Likes() {
     }
   };
 
+  const handleCloseMatchModal = () => {
+    setShowMatchModal(false);
+    setMatchedProfile(null);
+    setMatchId(null);
+  };
+
+  const handleSendMessage = () => {
+    setShowMatchModal(false);
+    if (matchId) {
+      router.push(`/chat/${matchId}`);
+    }
+    setMatchedProfile(null);
+    setMatchId(null);
+  };
+
   const handleUpgrade = () => {
     setShowPaywall(true);
   };
@@ -246,37 +331,37 @@ export default function Likes() {
   // Free users see blurred likes
   if (!isPremium && !isPlatinum) {
     return (
-      <View className="flex-1 bg-cream">
-        {/* Purple Header */}
-        <View className="bg-primary-500 px-6 pb-6" style={{ paddingTop: insets.top + 16 }}>
-          <Text className="text-4xl font-bold text-white mb-2">{t('likes.title')}</Text>
-          <Text className="text-white/90 text-base">{t('likes.subtitle')}</Text>
+      <View className="flex-1 bg-background">
+        {/* Header */}
+        <View className="bg-white px-6 pb-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
+          <Text className="text-heading-2xl font-display-bold text-foreground mb-2">{t('likes.title')}</Text>
+          <Text className="text-body-lg font-sans text-muted-foreground">{t('likes.subtitle')}</Text>
         </View>
 
         <ScrollView className="flex-1 px-6 pt-6">
           {/* Teaser - show blurred cards */}
           <View className="mb-6 rounded-3xl overflow-hidden">
             <LinearGradient
-              colors={['#9B87CE', '#B8A9DD']}
+              colors={['#A08AB7', '#CDC2E5']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               className="px-6 pt-8 pb-12"
             >
               <View className="items-center">
-                <MaterialCommunityIcons name="heart-multiple" size={64} color="white" />
-                <Text className="text-2xl font-bold text-white mt-4 text-center">
+                <Ionicons name="heart" size={64} color="white" />
+                <Text className="text-heading-lg font-display-bold text-white mt-4 text-center">
                   {loading ? '...' : likes.length === 1
                     ? t('likes.personLikesYou', { count: likes.length })
                     : t('likes.peopleLikeYou', { count: likes.length })}
                 </Text>
-                <Text className="text-white/90 mt-2 text-center">
+                <Text className="text-body font-sans text-white/90 mt-2 text-center">
                   {t('likes.upgradeToPremium')}
                 </Text>
                 <TouchableOpacity
                   onPress={handleUpgrade}
                   className="bg-white mt-5 px-8 py-3.5 rounded-full shadow-lg"
                 >
-                  <Text className="text-purple-600 font-bold text-lg">{t('likes.seeWhoLikesYou')}</Text>
+                  <Text className="text-lavender-600 font-sans-bold text-body-lg">{t('likes.seeWhoLikesYou')}</Text>
                 </TouchableOpacity>
               </View>
             </LinearGradient>
@@ -285,14 +370,14 @@ export default function Likes() {
           {/* Blurred preview grid */}
           <View className="flex-row flex-wrap gap-3 mb-6">
             {likes.slice(0, 8).map((like, index) => (
-              <View key={like.id} className="w-[47%] aspect-[3/4] rounded-2xl overflow-hidden bg-gray-200">
+              <View key={like.id} className="w-[47%] aspect-[3/4] rounded-2xl overflow-hidden bg-muted">
                 <Image
                   source={{ uri: getPrimaryPhoto(like.profile.photos) }}
                   className="w-full h-full"
                   blurRadius={30}
                 />
                 <View className="absolute inset-0 bg-black/30 items-center justify-center">
-                  <MaterialCommunityIcons name="heart" size={40} color="white" />
+                  <Ionicons name="heart" size={40} color="white" />
                 </View>
               </View>
             ))}
@@ -313,24 +398,24 @@ export default function Likes() {
 
   // Premium users see actual likes
   return (
-    <View className="flex-1 bg-cream">
-      {/* Purple Header */}
-      <View className="bg-primary-500 px-6 pb-6" style={{ paddingTop: insets.top + 16 }}>
-        <Text className="text-4xl font-bold text-white mb-2">
+    <View className="flex-1 bg-background">
+      {/* Header */}
+      <View className="bg-white px-6 pb-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
+        <Text className="text-heading-2xl font-display-bold text-foreground mb-2">
           {t('likes.title')} ({likes.length})
         </Text>
-        <Text className="text-white/90 text-base">{t('likes.subtitleWithCount')}</Text>
+        <Text className="text-body-lg font-sans text-muted-foreground">{t('likes.subtitleWithCount')}</Text>
       </View>
 
       {loading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
         </View>
       ) : likes.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
-          <MaterialCommunityIcons name="heart-outline" size={80} color="#D1D5DB" />
-          <Text className="text-xl font-bold text-gray-700 mt-4">{t('likes.noLikesYet')}</Text>
-          <Text className="text-gray-500 text-center mt-2">
+          <Ionicons name="heart-outline" size={80} color="#A1A1AA" />
+          <Text className="text-heading font-display-bold text-foreground mt-4">{t('likes.noLikesYet')}</Text>
+          <Text className="text-body font-sans text-muted-foreground text-center mt-2">
             {t('likes.noLikesText')}
           </Text>
         </View>
@@ -338,7 +423,7 @@ export default function Likes() {
         <ScrollView
           className="flex-1 px-6 pt-6"
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#9B87CE" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#A08AB7" />
           }
         >
           <View className="flex-row flex-wrap gap-3 pb-6">
@@ -348,18 +433,18 @@ export default function Likes() {
                   activeOpacity={0.9}
                   onPress={() => router.push(`/profile/${like.profile_id}`)}
                 >
-                  <View className="aspect-[3/4] rounded-2xl overflow-hidden bg-white shadow-sm">
+                  <View className="aspect-[3/4] rounded-2xl overflow-hidden bg-card shadow-sm">
                     <Image
                       source={{ uri: getPrimaryPhoto(like.profile.photos) }}
                       className="w-full h-full"
                       resizeMode="cover"
                     />
                     <View className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-                      <Text className="text-white font-bold text-lg">
+                      <Text className="text-white font-sans-bold text-body-lg">
                         {like.profile.display_name}, {like.profile.age}
                       </Text>
                       {like.profile.location_city && (
-                        <Text className="text-white/90 text-sm">
+                        <Text className="text-white/90 font-sans text-body-sm">
                           {like.profile.location_city}
                           {like.profile.location_state && `, ${like.profile.location_state}`}
                         </Text>
@@ -372,21 +457,36 @@ export default function Likes() {
                 <View className="flex-row gap-2 mt-3">
                   <TouchableOpacity
                     onPress={() => handlePass(like.id)}
-                    className="flex-1 bg-gray-200 py-3 rounded-full items-center"
+                    className="flex-1 bg-muted py-3 rounded-full items-center"
                   >
-                    <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
+                    <Ionicons name="close" size={24} color="#71717A" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handleLikeBack(like.profile_id)}
-                    className="flex-1 bg-primary-400 py-3 rounded-full items-center"
+                    className="flex-1 bg-lavender-500 py-3 rounded-full items-center"
                   >
-                    <MaterialCommunityIcons name="heart" size={24} color="white" />
+                    <Ionicons name="heart" size={24} color="white" />
                   </TouchableOpacity>
                 </View>
               </View>
             ))}
           </View>
         </ScrollView>
+      )}
+
+      {/* Match Modal */}
+      {matchedProfile && (
+        <MatchModal
+          visible={showMatchModal}
+          onClose={handleCloseMatchModal}
+          onSendMessage={handleSendMessage}
+          matchedProfile={{
+            display_name: matchedProfile.display_name,
+            photo_url: matchedProfile.photo_url,
+            compatibility_score: matchedProfile.compatibility_score,
+          }}
+          currentUserPhoto={currentUserPhoto || undefined}
+        />
       )}
     </View>
   );

@@ -48,6 +48,7 @@ interface Profile {
   occupation?: string;
   education?: string;
   is_verified?: boolean;
+  photo_verified?: boolean;
   photos?: Photo[];
   prompt_answers?: PromptAnswer[];
   distance?: number;
@@ -67,7 +68,6 @@ interface Profile {
   };
   voice_intro_url?: string;
   voice_intro_duration?: number;
-  my_story?: string;
   religion?: string;
   political_views?: string;
   photo_blur_enabled?: boolean;
@@ -323,11 +323,25 @@ export default function ProfileView() {
           return;
         }
 
-        // Admin can view any profile even without a like (but won't show like buttons)
+        // Admin can view any profile even without a like
         if (isAdminUser) {
-          console.log('👑 Admin viewing profile without incoming like - showing as matched');
-          setIsMatched(true); // Show as "matched" to allow viewing
-          setMatchId(null);
+          // Check if there's an actual match with this profile (admin might be matched)
+          const { data: adminMatch } = await supabase
+            .from('matches')
+            .select('id')
+            .eq('status', 'active')
+            .or(`and(profile1_id.eq.${currentProfileId},profile2_id.eq.${id}),and(profile1_id.eq.${id},profile2_id.eq.${currentProfileId})`)
+            .maybeSingle();
+
+          if (adminMatch) {
+            console.log('👑 Admin has existing match with this profile');
+            setIsMatched(true);
+            setMatchId(adminMatch.id);
+          } else {
+            console.log('👑 Admin viewing profile without match - showing as viewable only');
+            setIsMatched(true); // Show as "matched" to allow viewing full profile
+            setMatchId(null); // But no chat available
+          }
           return;
         }
 
@@ -447,6 +461,25 @@ export default function ProfileView() {
     try {
       setLoading(true);
 
+      // CRITICAL SAFETY: Check if user is banned
+      const { data: banData } = await supabase
+        .from('bans')
+        .select('id')
+        .eq('banned_profile_id', id)
+        .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
+        .maybeSingle();
+
+      if (banData) {
+        // User is banned - don't show their profile
+        Alert.alert(
+          'Error',
+          'This profile is no longer available.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+        setLoading(false);
+        return;
+      }
+
       // Load profile with photos
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -466,6 +499,7 @@ export default function ProfileView() {
           occupation,
           education,
           is_verified,
+          photo_verified,
           prompt_answers,
           interests,
           hobbies,
@@ -476,7 +510,6 @@ export default function ProfileView() {
           personality_type,
           love_language,
           languages_spoken,
-          my_story,
           religion,
           political_views,
           photo_blur_enabled,
@@ -584,7 +617,7 @@ export default function ProfileView() {
           profile1_id: profile1Id,
           profile2_id: profile2Id,
           initiated_by: currentProfileId,
-          compatibility_score: profile?.compatibility_score || 0,
+          compatibility_score: profile?.compatibility_score || null,
           status: 'active',
         }).select('id').single();
 
@@ -649,7 +682,7 @@ export default function ProfileView() {
           profile1_id: profile1Id,
           profile2_id: profile2Id,
           initiated_by: currentProfileId,
-          compatibility_score: profile?.compatibility_score || 0,
+          compatibility_score: profile?.compatibility_score || null,
           status: 'active',
         }).select('id').single();
 
@@ -763,7 +796,7 @@ export default function ProfileView() {
   if (loading) {
     return (
       <View className="flex-1 bg-white items-center justify-center">
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
       </View>
     );
   }
@@ -850,6 +883,7 @@ export default function ProfileView() {
           name={profile.display_name}
           age={profile.age}
           isVerified={profile.is_verified}
+          photoVerified={profile.photo_verified}
           distance={profile.distance}
           compatibilityScore={profile.compatibility_score}
           photoBlurEnabled={profile.photo_blur_enabled}
@@ -878,9 +912,9 @@ export default function ProfileView() {
                   borderWidth: 1,
                   borderColor: '#C4B5FD',
                 }}>
-                  <MaterialCommunityIcons name="earth" size={20} color="#9B87CE" />
+                  <MaterialCommunityIcons name="earth" size={20} color="#A08AB7" />
                   <Text style={{
-                    color: '#9B87CE',
+                    color: '#A08AB7',
                     fontWeight: '600',
                     fontSize: 14,
                   }}>Open to matching anywhere</Text>
@@ -936,19 +970,8 @@ export default function ProfileView() {
               title="My Story"
               icon="book-open-variant"
               content={profile.bio}
-              gradient={['#9B87CE', '#B8A9DD']}
+              gradient={['#A08AB7', '#CDC2E5']}
               delay={100}
-            />
-          )}
-
-          {/* My Full Story */}
-          {profile.my_story && (
-            <ProfileStoryCard
-              title="What Brings Me Here"
-              icon="heart-circle"
-              content={profile.my_story}
-              gradient={['#F59E0B', '#FBBF24']}
-              delay={150}
             />
           )}
 
@@ -1186,7 +1209,7 @@ export default function ProfileView() {
                         }}
                       >
                         <Text style={{
-                          color: '#9B87CE',
+                          color: '#A08AB7',
                           fontWeight: '600',
                           fontSize: 14,
                         }}>{movie}</Text>
@@ -1472,7 +1495,7 @@ export default function ProfileView() {
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                <MaterialCommunityIcons name="heart-multiple" size={24} color="#9B87CE" />
+                <MaterialCommunityIcons name="heart-multiple" size={24} color="#A08AB7" />
                 <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827', marginLeft: 12 }}>
                   Why We Match
                 </Text>
@@ -1480,7 +1503,7 @@ export default function ProfileView() {
 
               {/* Overall Score */}
               <View style={{ alignItems: 'center', marginBottom: 20, paddingVertical: 16, backgroundColor: '#F3E8FF', borderRadius: 12 }}>
-                <Text style={{ fontSize: 48, fontWeight: 'bold', color: '#9B87CE' }}>
+                <Text style={{ fontSize: 48, fontWeight: 'bold', color: '#A08AB7' }}>
                   {Math.round(compatibilityBreakdown.overall)}%
                 </Text>
                 <Text style={{ fontSize: 16, color: '#6B7280', marginTop: 4 }}>
@@ -1512,7 +1535,7 @@ export default function ProfileView() {
                   label="Personality & Interests"
                   score={compatibilityBreakdown.personality}
                   icon="heart"
-                  color="#8B5CF6"
+                  color="#A08AB7"
                 />
                 <CompatibilityBar
                   label="Demographics & Background"
@@ -1593,11 +1616,11 @@ export default function ProfileView() {
                 {/* Personality Analysis */}
                 <View style={{ marginBottom: 16 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="heart" size={20} color="#8B5CF6" />
+                    <MaterialCommunityIcons name="heart" size={20} color="#A08AB7" />
                     <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
                       Personality & Interests
                     </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#8B5CF6', marginLeft: 'auto' }}>
+                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#A08AB7', marginLeft: 'auto' }}>
                       {Math.round(compatibilityBreakdown.personality)}%
                     </Text>
                   </View>
@@ -1678,7 +1701,7 @@ export default function ProfileView() {
                 onPress={handleObsessed}
                 disabled={isLiked || isSuperLiked}
                 style={{
-                  backgroundColor: isSuperLiked ? '#FBBF24' : '#9B87CE',
+                  backgroundColor: isSuperLiked ? '#FBBF24' : '#A08AB7',
                 }}
               >
                 <MaterialCommunityIcons
@@ -1738,13 +1761,13 @@ export default function ProfileView() {
               >
                 <View className="flex-row items-center justify-center gap-2">
                   {revealLoading ? (
-                    <ActivityIndicator size="small" color="#9B87CE" />
+                    <ActivityIndicator size="small" color="#A08AB7" />
                   ) : (
                     <>
                       <MaterialCommunityIcons
                         name={hasRevealedPhotos ? "eye-off" : "eye"}
                         size={22}
-                        color="#9B87CE"
+                        color="#A08AB7"
                       />
                       <Text className="text-purple-600 text-base font-semibold">
                         {hasRevealedPhotos ? 'Blur My Photos' : 'Reveal My Photos'}
@@ -1771,16 +1794,25 @@ export default function ProfileView() {
               </View>
             )}
 
-            {/* Send Message Button */}
-            <TouchableOpacity
-              onPress={() => matchId && router.push(`/chat/${matchId}`)}
-              className="bg-purple-600 rounded-full py-4 shadow-xl"
-            >
-              <View className="flex-row items-center justify-center gap-2">
-                <MaterialCommunityIcons name="message-text" size={24} color="white" />
-                <Text className="text-white text-lg font-bold">Send Message</Text>
+            {/* Send Message Button - Only show if we have a matchId */}
+            {matchId ? (
+              <TouchableOpacity
+                onPress={() => router.push(`/chat/${matchId}`)}
+                className="bg-purple-600 rounded-full py-4 shadow-xl"
+              >
+                <View className="flex-row items-center justify-center gap-2">
+                  <MaterialCommunityIcons name="message-text" size={24} color="white" />
+                  <Text className="text-white text-lg font-bold">Send Message</Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <View className="bg-gray-200 rounded-full py-4">
+                <View className="flex-row items-center justify-center gap-2">
+                  <MaterialCommunityIcons name="eye" size={24} color="#6B7280" />
+                  <Text className="text-gray-500 text-lg font-semibold">Viewing Profile</Text>
+                </View>
               </View>
-            </TouchableOpacity>
+            )}
           </View>
         </LinearGradient>
       )}

@@ -362,11 +362,11 @@ export default function PremiumPaywall({
       <View style={styles.containerFull}>
         <StatusBar
           barStyle="light-content"
-          backgroundColor="#9B87CE"
+          backgroundColor="#A08AB7"
           translucent={true}
           animated={true}
         />
-        <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.containerFull}>
+        <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.containerFull}>
           <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             {/* Close Button */}
             <TouchableOpacity style={[styles.closeButton, { top: insets.top + 8 }]} onPress={onClose}>
@@ -448,7 +448,7 @@ export default function PremiumPaywall({
                 style={styles.featureItem}
               >
                 <View style={styles.featureIcon}>
-                  <MaterialCommunityIcons name={feature.icon as any} size={24} color="#9B87CE" />
+                  <MaterialCommunityIcons name={feature.icon as any} size={24} color="#A08AB7" />
                 </View>
                 <View style={styles.featureText}>
                   <Text style={styles.featureTitle}>{feature.title}</Text>
@@ -512,7 +512,7 @@ export default function PremiumPaywall({
 const styles = StyleSheet.create({
   containerFull: {
     flex: 1,
-    backgroundColor: '#9B87CE', // Purple background to fill status bar area
+    backgroundColor: '#A08AB7', // Purple background to fill status bar area
   },
   container: {
     flex: 1,
@@ -599,7 +599,7 @@ const styles = StyleSheet.create({
   planPrice: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#9B87CE',
+    color: '#A08AB7',
     marginBottom: 4,
   },
   planDescription: {
@@ -664,7 +664,7 @@ const styles = StyleSheet.create({
   ctaButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#9B87CE',
+    color: '#A08AB7',
     marginBottom: 4,
   },
   ctaButtonSubtext: {

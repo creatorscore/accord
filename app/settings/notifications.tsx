@@ -164,6 +164,8 @@ export default function NotificationSettings() {
           text: 'Send Test',
           onPress: async () => {
             try {
+              setSaving(true);
+
               // Get profile ID
               const { data: profile, error: profileError } = await supabase
                 .from('profiles')
@@ -173,6 +175,7 @@ export default function NotificationSettings() {
 
               if (profileError || !profile) {
                 Alert.alert('Error', 'Profile not found');
+                setSaving(false);
                 return;
               }
 
@@ -192,9 +195,12 @@ export default function NotificationSettings() {
               }
 
               if (tokens.size === 0) {
-                Alert.alert('Error', 'No push tokens found');
+                Alert.alert('Error', 'No push tokens found. Try logging out and back in.');
+                setSaving(false);
                 return;
               }
+
+              console.log(`📤 Sending test to ${tokens.size} device(s)...`);
 
               // Create messages for all devices
               const messages = Array.from(tokens).map(token => ({
@@ -202,11 +208,14 @@ export default function NotificationSettings() {
                 sound: 'default',
                 title: 'Test Notification 🔔',
                 body: 'Your notifications are working perfectly!',
-                data: { type: 'test' },
+                data: { type: 'test', timestamp: new Date().toISOString() },
                 priority: 'high' as const,
               }));
 
-              // Send to all devices
+              // Send to all devices with timeout
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 15000);
+
               const response = await fetch('https://exp.host/--/api/v2/push/send', {
                 method: 'POST',
                 headers: {
@@ -214,29 +223,62 @@ export default function NotificationSettings() {
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(messages),
+                signal: controller.signal,
               });
 
-              const result = await response.json();
+              clearTimeout(timeoutId);
 
-              // Count successes
+              const result = await response.json();
+              console.log('📬 Expo Push API response:', JSON.stringify(result, null, 2));
+
+              // Analyze results
               let successCount = 0;
+              let errorMessages: string[] = [];
+
               if (result.data) {
-                result.data.forEach((item: any) => {
-                  if (item.status === 'ok') successCount++;
+                result.data.forEach((item: any, index: number) => {
+                  if (item.status === 'ok') {
+                    successCount++;
+                    console.log(`✅ Device ${index + 1}: Success (ticket: ${item.id})`);
+                  } else {
+                    const errorDetail = item.details?.error || item.message || 'Unknown error';
+                    errorMessages.push(errorDetail);
+                    console.error(`❌ Device ${index + 1}: ${errorDetail}`);
+
+                    // Check for specific errors
+                    if (errorDetail === 'DeviceNotRegistered') {
+                      console.warn('⚠️ Token is invalid - device may have uninstalled app or token expired');
+                    }
+                  }
                 });
               }
 
-              if (successCount > 0) {
+              setSaving(false);
+
+              if (successCount > 0 && errorMessages.length === 0) {
                 Alert.alert(
-                  'Success!',
-                  `Test notification sent to ${successCount} device${successCount > 1 ? 's' : ''}! You should receive it shortly.`
+                  'Success! ✅',
+                  `Test notification sent to ${successCount} device${successCount > 1 ? 's' : ''}! You should receive it within a few seconds.`
+                );
+              } else if (successCount > 0) {
+                Alert.alert(
+                  'Partial Success',
+                  `Sent to ${successCount} device${successCount > 1 ? 's' : ''}, but ${errorMessages.length} failed.\n\nErrors: ${errorMessages.join(', ')}`
                 );
               } else {
-                Alert.alert('Error', 'Failed to send test notification');
+                Alert.alert(
+                  'Failed to Send ❌',
+                  `Expo returned errors:\n\n${errorMessages.join('\n')}\n\nTry logging out and back in to refresh your push token.`
+                );
               }
-            } catch (error) {
+            } catch (error: any) {
+              setSaving(false);
               console.error('Error sending test notification:', error);
-              Alert.alert('Error', 'Failed to send test notification');
+              if (error.name === 'AbortError') {
+                Alert.alert('Timeout', 'Request timed out. Check your internet connection.');
+              } else {
+                Alert.alert('Error', `Failed to send: ${error.message || 'Unknown error'}`);
+              }
             }
           },
         },
@@ -247,7 +289,7 @@ export default function NotificationSettings() {
   if (loading) {
     return (
       <View className="flex-1 bg-white items-center justify-center">
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
       </View>
     );
   }
@@ -255,7 +297,7 @@ export default function NotificationSettings() {
   return (
     <ScrollView className="flex-1 bg-white">
       {/* Header */}
-      <View className="px-6 pt-16 pb-6 bg-primary-500">
+      <View className="px-6 pt-16 pb-6 bg-lavender-500">
         <TouchableOpacity
           onPress={() => router.back()}
           className="mb-6 w-10 h-10 items-center justify-center rounded-full bg-white/20"
@@ -263,7 +305,7 @@ export default function NotificationSettings() {
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
         <Text className="text-3xl font-bold text-white mb-2">Notifications</Text>
-        <Text className="text-primary-100 text-base">
+        <Text className="text-lavender-100 text-base">
           Manage your notification preferences
         </Text>
       </View>
@@ -272,8 +314,8 @@ export default function NotificationSettings() {
         {/* Main Toggle */}
         <View className="bg-gray-50 rounded-2xl p-5 mb-6">
           <View className="flex-row items-center mb-3">
-            <View className="w-12 h-12 bg-primary-100 rounded-full items-center justify-center mr-3">
-              <MaterialCommunityIcons name="bell" size={24} color="#9B87CE" />
+            <View className="w-12 h-12 bg-lavender-100 rounded-full items-center justify-center mr-3">
+              <MaterialCommunityIcons name="bell" size={24} color="#A08AB7" />
             </View>
             <View className="flex-1">
               <Text className="text-lg font-bold text-gray-900 mb-1">
@@ -287,7 +329,7 @@ export default function NotificationSettings() {
               onPress={handleToggleNotifications}
               disabled={saving}
               className={`w-14 h-8 rounded-full ${
-                pushEnabled ? 'bg-primary-500' : 'bg-gray-300'
+                pushEnabled ? 'bg-lavender-500' : 'bg-gray-300'
               }`}
             >
               <View
@@ -300,7 +342,7 @@ export default function NotificationSettings() {
 
           {saving && (
             <View className="mt-2">
-              <ActivityIndicator size="small" color="#9B87CE" />
+              <ActivityIndicator size="small" color="#A08AB7" />
             </View>
           )}
         </View>
@@ -346,7 +388,7 @@ export default function NotificationSettings() {
             <View className="space-y-2">
               {[
                 { icon: 'heart', text: 'New matches', color: '#F43F5E' },
-                { icon: 'message', text: 'New messages', color: '#9B87CE' },
+                { icon: 'message', text: 'New messages', color: '#A08AB7' },
                 { icon: 'star', text: 'Someone likes you', color: '#F59E0B' },
                 { icon: 'shield-check', text: 'Safety alerts', color: '#10B981' },
               ].map((item, index) => (

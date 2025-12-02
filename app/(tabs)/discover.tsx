@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput, Keyboard } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Keyboard, ScrollView, Dimensions } from 'react-native';
+import { MotiView } from 'moti';
+import Slider from '@react-native-community/slider';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,6 +26,8 @@ import { HeightUnit } from '@/lib/height-utils';
 import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
+import { prefetchImages } from '@/components/shared/ConditionalImage';
+import VerificationBanner from '@/components/shared/VerificationBanner';
 
 interface Profile {
   id: string;
@@ -42,7 +46,6 @@ interface Profile {
   personality_type?: string;
   love_language?: string | string[]; // Can be single or array: users can select multiple love languages
   languages_spoken?: string[];
-  my_story?: string;
   religion?: string;
   political_views?: string;
   hobbies?: string[];
@@ -67,6 +70,7 @@ interface Profile {
   photo_blur_enabled?: boolean;
   hide_distance?: boolean;
   hide_last_active?: boolean;
+  last_active_at?: string;
   preferences?: any;
 }
 
@@ -132,6 +136,28 @@ export default function Discover() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportingProfile, setReportingProfile] = useState<{ id: string; name: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showAgeSlider, setShowAgeSlider] = useState(false);
+  const [showIntentionDropdown, setShowIntentionDropdown] = useState(false);
+  const [selectedIntention, setSelectedIntention] = useState<string | null>(null);
+  const [tempAgeMin, setTempAgeMin] = useState(22);
+  const [tempAgeMax, setTempAgeMax] = useState(50);
+  const [activeToday, setActiveToday] = useState(false);
+  const [photoReviewRequired, setPhotoReviewRequired] = useState(false);
+  const [isPhotoVerified, setIsPhotoVerified] = useState(true); // Default to true to hide banner initially
+  const [showVerificationBanner, setShowVerificationBanner] = useState(false);
+
+  // Quick filter options
+  const INTENTIONS = [
+    { label: 'All', value: null },
+    { label: 'Platonic', value: 'platonic' },
+    { label: 'Romantic', value: 'romantic' },
+    { label: 'Open', value: 'open' },
+  ];
+
+  const getCurrentIntentionLabel = () => {
+    const intention = INTENTIONS.find(i => i.value === selectedIntention);
+    return intention ? intention.label : 'All';
+  };
 
   useEffect(() => {
     loadCurrentProfile();
@@ -163,6 +189,51 @@ export default function Discover() {
     }, [currentProfileId, filters])
   );
 
+  // Refresh photo verification status when screen comes into focus
+  // This ensures the banner disappears after user completes verification
+  useFocusEffect(
+    useCallback(() => {
+      const checkVerificationStatus = async () => {
+        if (!user?.id) return;
+
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('photo_verified')
+            .eq('user_id', user.id)
+            .single();
+
+          if (!error && data) {
+            setIsPhotoVerified(data.photo_verified || false);
+            // Auto-hide banner if now verified
+            if (data.photo_verified) {
+              setShowVerificationBanner(false);
+            }
+          }
+        } catch (e) {
+          console.error('Error checking verification status:', e);
+        }
+      };
+
+      checkVerificationStatus();
+    }, [user?.id])
+  );
+
+  // Prefetch images for upcoming profiles as user swipes
+  useEffect(() => {
+    if (profiles.length > 0 && currentIndex < profiles.length) {
+      // Prefetch next 3 profiles ahead
+      const upcomingProfiles = profiles.slice(currentIndex, currentIndex + 3);
+      const imagesToPrefetch = upcomingProfiles
+        .flatMap(p => p.photos?.map(photo => photo.url) || [])
+        .filter(Boolean);
+
+      if (imagesToPrefetch.length > 0) {
+        prefetchImages(imagesToPrefetch);
+      }
+    }
+  }, [currentIndex, profiles]);
+
   const [currentUserName, setCurrentUserName] = useState<string>('');
 
   const loadCurrentProfile = async () => {
@@ -175,6 +246,8 @@ export default function Discover() {
           gender,
           height_unit,
           is_admin,
+          photo_review_required,
+          photo_verified,
           photos (
             url,
             is_primary,
@@ -223,6 +296,16 @@ export default function Discover() {
       setDistanceUnit(userDistanceUnit as DistanceUnit);
       setHeightUnit(userHeightUnit as HeightUnit);
       setIsAdmin(data.is_admin || false);
+      setPhotoReviewRequired(data.photo_review_required || false);
+      setIsPhotoVerified(data.photo_verified || false);
+      // Show verification banner if not verified (check AsyncStorage for dismiss state)
+      if (!data.photo_verified) {
+        AsyncStorage.getItem('verification_banner_dismissed').then((dismissed) => {
+          if (!dismissed) {
+            setShowVerificationBanner(true);
+          }
+        });
+      }
 
       // Immediately start loading profiles to reduce perceived lag
       // Don't wait for next render cycle
@@ -320,74 +403,80 @@ export default function Discover() {
       setLoading(true);
 
       if (!currentProfileId) {
-        console.log('❌ No currentProfileId');
         return;
       }
-
-      console.log('🔍 Loading profiles for:', currentProfileId);
-      console.log('🔍 Search mode:', effectiveSearchMode, 'Keyword:', effectiveSearchKeyword);
 
       // Get profiles that:
       // 1. Are active
       // 2. Haven't been PASSED on yet (but INCLUDE people who liked you!)
       // 3. Match basic preferences
 
-      // Get people you already LIKED (we'll exclude these)
-      const { data: alreadySwipedLikes } = await supabase
-        .from('likes')
-        .select('liked_profile_id')
-        .eq('liker_profile_id', currentProfileId);
-
-      // Get people you already PASSED (we'll exclude these)
-      const { data: alreadySwipedPasses } = await supabase
-        .from('passes')
-        .select('passed_profile_id')
-        .eq('passer_profile_id', currentProfileId);
-
-      // Get people who LIKED YOU (we'll PRIORITIZE these, not exclude!)
-      const { data: peopleWhoLikedMe } = await supabase
-        .from('likes')
-        .select('liker_profile_id')
-        .eq('liked_profile_id', currentProfileId);
+      // Run all exclusion queries in PARALLEL for better performance
+      const [
+        { data: alreadySwipedLikes },
+        { data: alreadySwipedPasses },
+        { data: peopleWhoLikedMe },
+        { data: blockedByMe },
+        { data: blockedMe },
+        { data: contactBlocks },
+        { data: bannedUsers },
+      ] = await Promise.all([
+        // Get people you already LIKED (we'll exclude these)
+        supabase
+          .from('likes')
+          .select('liked_profile_id')
+          .eq('liker_profile_id', currentProfileId),
+        // Get people you already PASSED (we'll exclude these)
+        supabase
+          .from('passes')
+          .select('passed_profile_id')
+          .eq('passer_profile_id', currentProfileId),
+        // Get people who LIKED YOU (we'll PRIORITIZE these, not exclude!)
+        supabase
+          .from('likes')
+          .select('liker_profile_id')
+          .eq('liked_profile_id', currentProfileId),
+        // SAFETY: Users that current user has blocked
+        supabase
+          .from('blocks')
+          .select('blocked_profile_id')
+          .eq('blocker_profile_id', currentProfileId),
+        // SAFETY: Users who have blocked current user
+        supabase
+          .from('blocks')
+          .select('blocker_profile_id')
+          .eq('blocked_profile_id', currentProfileId),
+        // Contact-blocked phone numbers (hashed)
+        supabase
+          .from('contact_blocks')
+          .select('phone_number')
+          .eq('profile_id', currentProfileId),
+        // CRITICAL SAFETY: Get ALL banned users (active bans that haven't expired)
+        supabase
+          .from('bans')
+          .select('banned_profile_id')
+          .not('banned_profile_id', 'is', null)
+          .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString()),
+      ]);
 
       const peopleWhoLikedMeIds = new Set(peopleWhoLikedMe?.map(l => l.liker_profile_id) || []);
-      console.log('❤️ People who liked you:', peopleWhoLikedMeIds.size);
-
-      // SAFETY: Get blocked users (bidirectional blocking)
-      // 1. Users that current user has blocked
-      const { data: blockedByMe } = await supabase
-        .from('blocks')
-        .select('blocked_profile_id')
-        .eq('blocker_profile_id', currentProfileId);
-
-      // 2. Users who have blocked current user
-      const { data: blockedMe } = await supabase
-        .from('blocks')
-        .select('blocker_profile_id')
-        .eq('blocked_profile_id', currentProfileId);
-
-      // 3. Get contact-blocked phone numbers (hashed)
-      const { data: contactBlocks } = await supabase
-        .from('contact_blocks')
-        .select('phone_number')
-        .eq('profile_id', currentProfileId);
 
       const blockedPhoneHashes = new Set(contactBlocks?.map(cb => cb.phone_number) || []);
-      console.log('📱 Contact-blocked phone hashes:', blockedPhoneHashes.size);
 
       const blockedIds = [
         ...(blockedByMe?.map(b => b.blocked_profile_id) || []),
         ...(blockedMe?.map(b => b.blocker_profile_id) || [])
       ];
 
-      console.log('🚫 Blocked users (bidirectional):', blockedIds.length);
+      const bannedProfileIds = bannedUsers?.map(b => b.banned_profile_id).filter(Boolean) || [];
 
-      // Only exclude: already liked, already passed, and blocked users
+      // Only exclude: already liked, already passed, blocked users, AND BANNED USERS
       // DO NOT exclude people who liked you!
       const swipedIds = [
         ...(alreadySwipedLikes?.map(l => l.liked_profile_id) || []),
         ...(alreadySwipedPasses?.map(p => p.passed_profile_id) || []),
-        ...blockedIds
+        ...blockedIds,
+        ...bannedProfileIds
       ];
 
       // Get current user's full profile and preferences for compatibility calculation
@@ -410,29 +499,6 @@ export default function Discover() {
           : currentUserDataRaw.preferences
       };
 
-      // DEBUG: Check if Vanessa and Lisa profiles exist
-      const { data: debugProfiles } = await supabase
-        .from('profiles')
-        .select('id, display_name, age, gender, location_city, incognito_mode, preferences:preferences(age_min, age_max, gender_preference)')
-        .or('display_name.ilike.%vanessa%,display_name.ilike.%lisa%');
-
-      if (debugProfiles && debugProfiles.length > 0) {
-        console.log('🔍 DEBUG: Found Vanessa/Lisa profiles:', debugProfiles.length);
-        debugProfiles.forEach((p: any) => {
-          const prefs = Array.isArray(p.preferences) ? p.preferences[0] : p.preferences;
-          console.log(`  - ${p.display_name}:`, {
-            age: p.age,
-            gender: p.gender,
-            city: p.location_city,
-            incognito: p.incognito_mode,
-            age_pref: prefs ? `${prefs.age_min}-${prefs.age_max}` : 'none',
-            gender_pref: prefs?.gender_preference
-          });
-        });
-      } else {
-        console.log('🔍 DEBUG: No Vanessa/Lisa profiles found');
-      }
-
       // Check if user has global search enabled
       const isSearchingGlobally = currentUserData.preferences?.search_globally === true;
       console.log('🌍 Global search enabled:', isSearchingGlobally);
@@ -453,6 +519,7 @@ export default function Discover() {
         `)
         .neq('id', currentProfileId)
         .eq('incognito_mode', false)
+        .eq('photo_review_required', false) // Hide profiles flagged for photo review
         .limit(shouldFetchMore ? 200 : 20) // Fetch more profiles when searching
         .order('created_at', { ascending: false });
 
@@ -509,22 +576,6 @@ export default function Discover() {
 
       if (error) throw error;
 
-      console.log('📊 Query returned profiles:', data?.length || 0);
-      console.log('🔍 Swiped IDs:', swipedIds.length);
-
-      // Debug: Log profile details
-      if (data && data.length > 0) {
-        console.log('👥 Profiles returned:');
-        data.forEach((p: any) => {
-          const prefs = Array.isArray(p.preferences) ? p.preferences[0] : p.preferences;
-          console.log(`  - ${p.display_name} (age: ${p.age}, gender: ${JSON.stringify(p.gender)}, seeking: ${JSON.stringify(prefs?.gender_preference)}, city: ${p.location_city})`);
-        });
-      } else {
-        console.log('❌ NO PROFILES RETURNED FROM QUERY');
-        console.log('   - Age filter: ', Math.max(18, filters.ageMin), '-', filters.ageMax);
-        console.log('   - Gender preference:', currentUserData.preferences?.gender_preference);
-        console.log('   - Excluded (swiped/blocked):', swipedIds.length);
-      }
 
       // Check for boosted profiles
       const { data: boostedProfiles } = await supabase
@@ -546,7 +597,6 @@ export default function Discover() {
             try {
               const phoneHash = await hashPhoneNumber(profile.phone_number);
               if (blockedPhoneHashes.has(phoneHash)) {
-                console.log('📱 Filtering out contact-blocked profile:', profile.id);
                 return null; // Mark for removal
               }
             } catch (err) {
@@ -558,14 +608,11 @@ export default function Discover() {
 
         const filterResults = await Promise.all(filterPromises);
         filteredData = filterResults.filter(p => p !== null);
-
-        console.log('📱 Profiles after contact filtering:', filteredData.length, '(filtered out', (data?.length || 0) - filteredData.length, ')');
       }
 
       // SAFETY: Filter out profiles that have blocked viewer's country
       // This protects users who don't want to be seen by people in specific countries
       const userCountry = currentUserData.location_country || 'US';
-      console.log('🌍 Current user country:', userCountry);
 
       if (userCountry && filteredData.length > 0) {
         // Get profile IDs that have blocked the viewer's country
@@ -578,9 +625,7 @@ export default function Discover() {
 
         if (countryBlockedProfiles && countryBlockedProfiles.length > 0) {
           const countryBlockedIds = new Set(countryBlockedProfiles.map(cb => cb.profile_id));
-          const beforeCount = filteredData.length;
           filteredData = filteredData.filter((p: any) => !countryBlockedIds.has(p.id));
-          console.log('🌍 Profiles after country blocking filter:', filteredData.length, '(filtered out', beforeCount - filteredData.length, ')');
         }
       }
 
@@ -645,7 +690,6 @@ export default function Discover() {
             personality_type: profile.personality_type,
             love_language: profile.love_language,
             languages_spoken: profile.languages_spoken,
-            my_story: profile.my_story,
             religion: profile.religion,
             political_views: profile.political_views,
             hobbies: profile.hobbies,
@@ -661,6 +705,7 @@ export default function Discover() {
             photo_blur_enabled: profile.photo_blur_enabled || false,
             hide_distance: profile.hide_distance || false,
             hide_last_active: profile.hide_last_active || false,
+            last_active_at: profile.last_active_at,
             // Supabase returns preferences as array when using joined queries, extract first element
             preferences: Array.isArray(profile.preferences) ? profile.preferences[0] : profile.preferences,
           };
@@ -678,7 +723,6 @@ export default function Discover() {
 
           // 2. CRITICAL: Incognito mode double-check (privacy protection)
           if (profile.incognito_mode === true) {
-            console.log('❌ Filtered: Profile in incognito mode');
             return false;
           }
 
@@ -688,13 +732,11 @@ export default function Discover() {
             ...(blockedMe?.map((b: any) => b.blocker_profile_id) || [])
           ];
           if (allBlockedIds.includes(profile.id)) {
-            console.log('🚫 Filtered: Blocked user (safety check)');
             return false;
           }
 
           // 4. CRITICAL: Photo requirement
           if (!profile.photos || profile.photos.length === 0) {
-            console.log('❌ Filtered: No photos');
             return false;
           }
 
@@ -708,7 +750,6 @@ export default function Discover() {
             const searchableFields = [
               profile.display_name, // Allow searching by name
               profile.bio,
-              profile.my_story,
               profile.occupation,
               profile.education,
               profile.zodiac_sign,
@@ -753,9 +794,6 @@ export default function Discover() {
               .join(' ')
               .toLowerCase();
 
-            console.log('🔍 Search keyword:', keyword);
-            console.log('📝 Searchable text sample:', searchableText.substring(0, 200));
-
             if (!searchableText.includes(keyword)) {
               return false; // Keyword not found
             }
@@ -776,8 +814,24 @@ export default function Discover() {
 
           // 1. STRICT AGE FILTER (no buffer, exact preferences)
           if (profile.age < filters.ageMin || profile.age > filters.ageMax) {
-            console.log('❌ Filtered: Age outside preference range');
             return false;
+          }
+
+          // 1b. RELATIONSHIP TYPE / INTENTION FILTER (quick filter)
+          if (selectedIntention && profile.preferences?.relationship_type) {
+            if (profile.preferences.relationship_type !== selectedIntention) {
+              return false;
+            }
+          }
+
+          // 1c. ACTIVE TODAY FILTER (quick filter)
+          if (activeToday && profile.last_active_at) {
+            const lastActive = new Date(profile.last_active_at);
+            const now = new Date();
+            const hoursSinceActive = (now.getTime() - lastActive.getTime()) / (1000 * 60 * 60);
+            if (hoursSinceActive > 24) {
+              return false;
+            }
           }
 
           // 2. BIDIRECTIONAL GENDER PREFERENCE (both directions must match)
@@ -794,7 +848,6 @@ export default function Discover() {
               userGenderPrefArray.includes(g)
             );
             if (!userWantsThisGender) {
-              console.log('❌ Filtered: User gender preference not matched');
               return false;
             }
           }
@@ -814,9 +867,6 @@ export default function Discover() {
               profileGenderPrefArray.includes(g)
             );
             if (!profileWantsMyGender) {
-              console.log('❌ Filtered: Profile gender preference not matched');
-              console.log(`   ${profile.display_name} wants: ${JSON.stringify(profileGenderPrefArray)}`);
-              console.log(`   But current user is: ${JSON.stringify(currentUserGenderArray)}`);
               return false;
             }
           }
@@ -839,10 +889,6 @@ export default function Discover() {
           const userPreferredCities = currentUserData.preferences?.preferred_cities || [];
           const profilePreferredCities = profile.preferences?.preferred_cities || [];
 
-          // Log when global search allows a match
-          if (userSearchGlobally || profileSearchGlobally) {
-            console.log(`🌍 Global match allowed: ${profile.display_name} (user global: ${userSearchGlobally}, profile global: ${profileSearchGlobally})`);
-          }
 
           // Check if profile is in user's preferred cities (exact match)
           const profileMatchesPreferredCity = userPreferredCities.length > 0 &&
@@ -894,7 +940,6 @@ export default function Discover() {
             }
 
             if (realTimeDistance !== null && realTimeDistance > filters.maxDistance) {
-              console.log('❌ Filtered: Distance exceeds max distance');
               return false;
             }
           }
@@ -911,7 +956,6 @@ export default function Discover() {
             // Hard incompatibility: one wants (true), one doesn't want (false)
             if ((userWants === true && profileWants === false) ||
                 (userWants === false && profileWants === true)) {
-              console.log('❌ Filtered: Children preference incompatibility');
               return false;
             }
           }
@@ -936,7 +980,6 @@ export default function Discover() {
           // Religion filter
           if (filters.religion.length > 0 && profile.religion) {
             if (!filters.religion.includes(profile.religion)) {
-              console.log('❌ Filtered: Religion preference');
               return false;
             }
           }
@@ -944,7 +987,6 @@ export default function Discover() {
           // Political views filter
           if (filters.politicalViews.length > 0 && profile.political_views) {
             if (!filters.politicalViews.includes(profile.political_views)) {
-              console.log('❌ Filtered: Political views preference');
               return false;
             }
           }
@@ -958,7 +1000,6 @@ export default function Discover() {
 
             const hasMatch = profileHousing.some((h: string) => filters.housingPreference.includes(h));
             if (!hasMatch) {
-              console.log('❌ Filtered: Housing preference (premium filter)');
               return false;
             }
           }
@@ -972,7 +1013,6 @@ export default function Discover() {
 
             const hasMatch = profileFinancial.some((f: string) => filters.financialArrangement.includes(f));
             if (!hasMatch) {
-              console.log('❌ Filtered: Financial arrangement (premium filter)');
               return false;
             }
           }
@@ -980,11 +1020,6 @@ export default function Discover() {
           // All filters passed
           return true;
         });
-
-      // Log search results if in search mode
-      if (effectiveSearchMode) {
-        console.log('🔍 Search results:', transformedProfiles.length, 'profiles matched keyword:', effectiveSearchKeyword);
-      }
 
       // Sort profiles:
       // 1. People who liked you (highest priority for mutual matching)
@@ -1009,14 +1044,18 @@ export default function Discover() {
         return (b.compatibility_score || 0) - (a.compatibility_score || 0);
       });
 
-      // Count how many profiles who liked you are in the feed
-      const mutualInterestCount = sortedProfiles.filter(p => peopleWhoLikedMeIds.has(p.id)).length;
-
-      console.log('✅ Setting profiles:', sortedProfiles.length);
-      console.log('💕 Mutual interest profiles (liked you):', mutualInterestCount);
-      console.log('🚀 Boosted profiles:', boostedProfileIds.size);
       setProfiles(sortedProfiles);
       setCurrentIndex(0);
+
+      // Prefetch images for the first few profiles for instant loading
+      const imagesToPrefetch = sortedProfiles
+        .slice(0, 5) // Prefetch first 5 profiles
+        .flatMap(p => p.photos?.map(photo => photo.url) || [])
+        .filter(Boolean);
+
+      if (imagesToPrefetch.length > 0) {
+        prefetchImages(imagesToPrefetch);
+      }
     } catch (error: any) {
       console.error('❌ Error loading profiles:', error);
       Alert.alert(t('common.error'), error.message || 'Failed to load profiles');
@@ -1027,10 +1066,7 @@ export default function Discover() {
   };
 
   const handleSwipeLeft = useCallback(async (): Promise<boolean> => {
-    console.log('👈 Swipe left - Current index:', currentIndex, 'Total profiles:', profiles.length);
-
     if (!currentProfileId || currentIndex >= profiles.length) {
-      console.log('❌ Cannot swipe - no profile or out of range');
       return false;
     }
 
@@ -1038,7 +1074,6 @@ export default function Discover() {
     if (!checkSwipeLimit()) return false;
 
     const targetProfile = profiles[currentIndex];
-    console.log('👈 Passing on:', targetProfile.display_name);
 
     try {
       // Insert pass into database
@@ -1063,7 +1098,6 @@ export default function Discover() {
 
       // Move to next card
       const newIndex = currentIndex + 1;
-      console.log('➡️ Moving to index:', newIndex);
       setCurrentIndex(newIndex);
       return true;
     } catch (error: any) {
@@ -1073,10 +1107,7 @@ export default function Discover() {
   }, [currentProfileId, currentIndex, profiles, swipeCount, isPremium]);
 
   const handleSwipeRight = useCallback(async (): Promise<boolean> => {
-    console.log('👉 Swipe right - Current index:', currentIndex, 'Total profiles:', profiles.length);
-
     if (!currentProfileId || currentIndex >= profiles.length) {
-      console.log('❌ Cannot swipe - no profile or out of range');
       return false;
     }
 
@@ -1179,7 +1210,6 @@ export default function Discover() {
 
       // Move to next card
       const newIndex = currentIndex + 1;
-      console.log('➡️ Moving to index:', newIndex);
       setCurrentIndex(newIndex);
       return true;
     } catch (error: any) {
@@ -1522,6 +1552,11 @@ export default function Discover() {
     handleSwipeUp();
   };
 
+  const handleDismissVerificationBanner = async () => {
+    setShowVerificationBanner(false);
+    await AsyncStorage.setItem('verification_banner_dismissed', 'true');
+  };
+
   const handleBlock = async () => {
     const currentProfile = profiles[currentIndex];
     if (!currentProfile) return;
@@ -1589,73 +1624,328 @@ export default function Discover() {
     setShowImmersiveProfile(false);
   };
 
-  // Loading state
+  // Fun loading messages
+  const loadingMessages = [
+    t('discover.findingMatches'),
+    'Scanning the universe...',
+    'Finding your perfect match...',
+    'Almost there...',
+    'Good things take time...',
+  ];
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+
+  // Rotate loading messages
+  useEffect(() => {
+    if (!loading) return;
+    const interval = setInterval(() => {
+      setLoadingMessageIndex((prev) => (prev + 1) % loadingMessages.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [loading]);
+
+  // Loading state with fun animation
   if (loading) {
+    const { width } = Dimensions.get('window');
+
     return (
-      <View className="flex-1 bg-cream items-center justify-center">
-        <ActivityIndicator size="large" color="#9B87CE" />
-        <Text className="text-gray-600 mt-4">{t('discover.findingMatches')}</Text>
+      <View className="flex-1 bg-background items-center justify-center overflow-hidden">
+        {/* Floating hearts background */}
+        {[...Array(8)].map((_, i) => (
+          <MotiView
+            key={i}
+            from={{
+              opacity: 0,
+              translateY: 100,
+              translateX: (i % 2 === 0 ? -1 : 1) * (20 + (i * 15)),
+              scale: 0.5,
+            }}
+            animate={{
+              opacity: [0, 0.6, 0],
+              translateY: -400,
+              translateX: (i % 2 === 0 ? 1 : -1) * (30 + (i * 10)),
+              scale: [0.5, 1, 0.8],
+            }}
+            transition={{
+              type: 'timing',
+              duration: 3000 + (i * 400),
+              loop: true,
+              delay: i * 300,
+            }}
+            style={{
+              position: 'absolute',
+              bottom: 100,
+              left: width / 2 - 12 + ((i - 4) * 25),
+            }}
+          >
+            <Text style={{ fontSize: 24 + (i % 3) * 8 }}>
+              {['💜', '💕', '✨', '💫', '💜', '💕', '✨', '💫'][i]}
+            </Text>
+          </MotiView>
+        ))}
+
+        {/* Pulsing rings */}
+        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+          {[0, 1, 2].map((i) => (
+            <MotiView
+              key={i}
+              from={{ opacity: 0.8, scale: 0.8 }}
+              animate={{ opacity: 0, scale: 2 }}
+              transition={{
+                type: 'timing',
+                duration: 2000,
+                loop: true,
+                delay: i * 600,
+              }}
+              style={{
+                position: 'absolute',
+                width: 100,
+                height: 100,
+                borderRadius: 50,
+                borderWidth: 3,
+                borderColor: '#A08AB7',
+              }}
+            />
+          ))}
+
+          {/* Center heart icon */}
+          <MotiView
+            from={{ scale: 0.9 }}
+            animate={{ scale: 1.1 }}
+            transition={{
+              type: 'timing',
+              duration: 800,
+              loop: true,
+              repeatReverse: true,
+            }}
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              backgroundColor: '#F3E8FF',
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: '#A08AB7',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+          >
+            <MaterialCommunityIcons name="cards-heart" size={40} color="#A08AB7" />
+          </MotiView>
+        </View>
+
+        {/* Animated loading text */}
+        <MotiView
+          from={{ opacity: 0, translateY: 10 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: 500 }}
+          key={loadingMessageIndex}
+          style={{ marginTop: 32 }}
+        >
+          <Text className="text-muted-foreground text-base font-sans-medium text-center px-8">
+            {loadingMessages[loadingMessageIndex]}
+          </Text>
+        </MotiView>
+
+        {/* Animated dots */}
+        <View style={{ flexDirection: 'row', marginTop: 16, gap: 6 }}>
+          {[0, 1, 2].map((i) => (
+            <MotiView
+              key={i}
+              from={{ opacity: 0.3, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1.2 }}
+              transition={{
+                type: 'timing',
+                duration: 500,
+                loop: true,
+                repeatReverse: true,
+                delay: i * 150,
+              }}
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: '#A08AB7',
+              }}
+            />
+          ))}
+        </View>
       </View>
     );
   }
 
   // Empty state - no more profiles
   if (currentIndex >= profiles.length) {
-    console.log('📭 Empty state:', { currentIndex, profilesLength: profiles.length });
     return (
-      <View className="flex-1 bg-cream">
+      <View className="flex-1 bg-background">
         {/* Header with Search/Filter Controls */}
-        <View className="bg-primary-500 pb-4 px-6" style={{ paddingTop: insets.top + 16 }}>
-          <View className="flex-row justify-between items-center mb-3">
-            <View className="flex-1 mr-2">
-              <Text className="text-4xl font-bold text-white mb-1" numberOfLines={1} adjustsFontSizeToFit>
-                {t('discover.title')}
-              </Text>
-              <Text className="text-white/90 text-base" numberOfLines={1}>
-                {isSearchMode ? `Search for "${searchKeyword}"` : 'No more profiles to show'}
-              </Text>
-            </View>
-            <View className="flex-row gap-2">
+        <View className="bg-white pb-4 px-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
+          {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
+          <View className="flex-row items-center mb-3">
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8 }}
+              style={{ flex: 1 }}
+            >
+              <TouchableOpacity
+                className="bg-muted rounded-full p-2.5"
+                onPress={() => setShowFilterModal(true)}
+              >
+                <MaterialCommunityIcons name="filter-variant" size={20} color="#1F2937" />
+              </TouchableOpacity>
+
+              {/* Age Quick Filter */}
+              <TouchableOpacity
+                className="bg-muted rounded-full px-3 py-2 flex-row items-center"
+                onPress={() => {
+                  setTempAgeMin(filters.ageMin);
+                  setTempAgeMax(filters.ageMax);
+                  setShowAgeSlider(!showAgeSlider);
+                  setShowIntentionDropdown(false);
+                }}
+              >
+                <Text className="text-foreground text-sm font-medium">Age</Text>
+                <MaterialCommunityIcons name="chevron-down" size={16} color="#1F2937" style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+
+              {/* Intention Quick Filter */}
+              <TouchableOpacity
+                className="bg-muted rounded-full px-3 py-2 flex-row items-center"
+                onPress={() => {
+                  setShowIntentionDropdown(!showIntentionDropdown);
+                  setShowAgeSlider(false);
+                }}
+              >
+                <Text className="text-foreground text-sm font-medium">Dating Intentions</Text>
+                <MaterialCommunityIcons name="chevron-down" size={16} color="#1F2937" style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+
+              {/* Active Today Toggle */}
+              <TouchableOpacity
+                className={`rounded-full px-3 py-2 flex-row items-center ${activeToday ? 'bg-lavender-500' : 'bg-muted'}`}
+                onPress={() => {
+                  setActiveToday(!activeToday);
+                  loadProfiles();
+                }}
+              >
+                <MaterialCommunityIcons name="clock-outline" size={16} color={activeToday ? 'white' : '#1F2937'} style={{ marginRight: 4 }} />
+                <Text className={`text-sm font-medium ${activeToday ? 'text-white' : 'text-foreground'}`}>Active Today</Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            {/* Right side - Search, Refresh */}
+            <View className="flex-row gap-2 ml-2">
               {!isPremium && (
                 <TouchableOpacity
                   className="bg-gold-500 rounded-full px-3 py-2 flex-row items-center gap-1"
                   style={{ backgroundColor: '#FFD700' }}
                   onPress={() => setShowPaywall(true)}
                 >
-                  <MaterialCommunityIcons name="crown" size={16} color="#9B87CE" />
-                  <Text className="text-primary-500 font-bold text-xs">Upgrade</Text>
+                  <MaterialCommunityIcons name="crown" size={16} color="#A08AB7" />
+                  <Text className="text-lavender-500 font-sans-bold text-xs">Upgrade</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                className="bg-white/20 rounded-full p-2.5"
+                className="bg-muted rounded-full p-2.5"
                 onPress={() => setShowSearchBar(!showSearchBar)}
               >
-                <MaterialCommunityIcons name="magnify" size={20} color="white" />
+                <MaterialCommunityIcons name="magnify" size={20} color="#1F2937" />
               </TouchableOpacity>
               <TouchableOpacity
-                className="bg-white/20 rounded-full p-2.5"
-                onPress={() => setShowFilterModal(true)}
-              >
-                <MaterialCommunityIcons name="filter-variant" size={20} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="bg-white/20 rounded-full p-2.5"
+                className="bg-muted rounded-full p-2.5"
                 onPress={handleRefresh}
               >
-                <MaterialCommunityIcons name="refresh" size={20} color="white" />
+                <MaterialCommunityIcons name="refresh" size={20} color="#1F2937" />
               </TouchableOpacity>
             </View>
           </View>
 
+          {/* Age Slider Panel */}
+          {showAgeSlider && (
+            <View className="mt-3 bg-white rounded-xl shadow-lg border border-gray-200 p-4">
+              <Text className="text-foreground font-semibold mb-3">Age Range: {tempAgeMin} - {tempAgeMax}</Text>
+
+              <View className="mb-4">
+                <Text className="text-muted-foreground text-sm mb-2">Minimum: {tempAgeMin}</Text>
+                <Slider
+                  minimumValue={18}
+                  maximumValue={80}
+                  step={1}
+                  value={tempAgeMin}
+                  onValueChange={(value) => setTempAgeMin(Math.min(value, tempAgeMax - 1))}
+                  minimumTrackTintColor="#A08AB7"
+                  maximumTrackTintColor="#E5E7EB"
+                  thumbTintColor="#A08AB7"
+                />
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-muted-foreground text-sm mb-2">Maximum: {tempAgeMax}</Text>
+                <Slider
+                  minimumValue={18}
+                  maximumValue={80}
+                  step={1}
+                  value={tempAgeMax}
+                  onValueChange={(value) => setTempAgeMax(Math.max(value, tempAgeMin + 1))}
+                  minimumTrackTintColor="#A08AB7"
+                  maximumTrackTintColor="#E5E7EB"
+                  thumbTintColor="#A08AB7"
+                />
+              </View>
+
+              <View className="flex-row gap-2">
+                <TouchableOpacity
+                  className="flex-1 bg-muted rounded-full py-2"
+                  onPress={() => setShowAgeSlider(false)}
+                >
+                  <Text className="text-center text-foreground font-medium">Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="flex-1 bg-lavender-500 rounded-full py-2"
+                  onPress={() => {
+                    setFilters({ ...filters, ageMin: tempAgeMin, ageMax: tempAgeMax });
+                    setShowAgeSlider(false);
+                    loadProfiles();
+                  }}
+                >
+                  <Text className="text-center text-white font-medium">Apply</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Intention Dropdown */}
+          {showIntentionDropdown && (
+            <View className="absolute top-full left-24 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 z-50" style={{ minWidth: 120 }}>
+              {INTENTIONS.map((intention, index) => (
+                <TouchableOpacity
+                  key={index}
+                  className={`px-4 py-3 ${index !== INTENTIONS.length - 1 ? 'border-b border-gray-100' : ''}`}
+                  onPress={() => {
+                    setSelectedIntention(intention.value);
+                    setShowIntentionDropdown(false);
+                    loadProfiles();
+                  }}
+                >
+                  <Text className={`text-sm ${selectedIntention === intention.value ? 'text-lavender-500 font-semibold' : 'text-foreground'}`}>
+                    {intention.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
           {/* Keyword Search Bar - Expanded when showSearchBar is true */}
           {showSearchBar && (
             <View className="mt-3">
-              <View className="flex-row items-center bg-white/20 rounded-full px-4 py-2">
-                <MaterialCommunityIcons name="magnify" size={20} color="white" />
+              <View className="flex-row items-center bg-muted rounded-full px-4 py-2">
+                <MaterialCommunityIcons name="magnify" size={20} color="#71717A" />
                 <TextInput
-                  className="flex-1 ml-2 text-white text-base"
+                  className="flex-1 ml-2 text-foreground text-base"
                   placeholder="Search by keyword (e.g., 'travel', 'vegan')"
-                  placeholderTextColor="rgba(255, 255, 255, 0.6)"
+                  placeholderTextColor="#A1A1AA"
                   value={searchKeyword}
                   onChangeText={setSearchKeyword}
                   onSubmitEditing={handleSearch}
@@ -1664,11 +1954,11 @@ export default function Discover() {
                 />
                 {isSearchMode && (
                   <TouchableOpacity onPress={handleClearSearch} className="ml-2">
-                    <MaterialCommunityIcons name="close-circle" size={20} color="white" />
+                    <MaterialCommunityIcons name="close-circle" size={20} color="#71717A" />
                   </TouchableOpacity>
                 )}
                 {!isSearchMode && searchKeyword.trim() && (
-                  <TouchableOpacity onPress={handleSearch} className="ml-2 bg-white/30 rounded-full px-3 py-1">
+                  <TouchableOpacity onPress={handleSearch} className="ml-2 bg-lavender-500 rounded-full px-3 py-1">
                     <Text className="text-white font-semibold text-sm">Search</Text>
                   </TouchableOpacity>
                 )}
@@ -1681,11 +1971,11 @@ export default function Discover() {
                   }}
                   className="ml-2"
                 >
-                  <MaterialCommunityIcons name="close" size={20} color="white" />
+                  <MaterialCommunityIcons name="close" size={20} color="#71717A" />
                 </TouchableOpacity>
               </View>
               {isSearchMode && (
-                <Text className="text-white/80 text-xs mt-2 text-center">
+                <Text className="text-muted-foreground text-xs mt-2 text-center">
                   💡 Tip: Like or pass to continue searching. Clear search to see all profiles.
                 </Text>
               )}
@@ -1696,10 +1986,10 @@ export default function Discover() {
         {/* Empty State */}
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-6xl mb-6">✨</Text>
-          <Text className="text-2xl font-bold text-charcoal mb-3 text-center">
+          <Text className="text-2xl font-display-bold text-foreground mb-3 text-center">
             {isSearchMode ? `No results for "${searchKeyword}"` : t('discover.allCaughtUp')}
           </Text>
-          <Text className="text-gray-600 mb-8 text-center text-lg">
+          <Text className="text-muted-foreground mb-8 text-center text-lg font-sans">
             {isSearchMode
               ? "Try different keywords or adjust your filters to find more matches."
               : t('discover.checkBackSoon')}
@@ -1707,24 +1997,24 @@ export default function Discover() {
 
           {isSearchMode ? (
             <TouchableOpacity
-              className="bg-primary-500 rounded-full py-4 px-8 shadow-lg"
+              className="bg-lavender-500 rounded-full py-4 px-8 shadow-lg"
               onPress={handleClearSearch}
             >
-              <Text className="text-white font-bold text-lg">Clear Search</Text>
+              <Text className="text-white font-sans-bold text-lg">Clear Search</Text>
             </TouchableOpacity>
           ) : (
             <View className="items-center gap-4">
               <TouchableOpacity
-                className="bg-primary-500 rounded-full py-4 px-8 shadow-lg"
+                className="bg-lavender-500 rounded-full py-4 px-8 shadow-lg"
                 onPress={() => setShowSearchBar(true)}
               >
-                <Text className="text-white font-bold text-lg">Search by Keyword</Text>
+                <Text className="text-white font-sans-bold text-lg">Search by Keyword</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="border-2 border-primary-500 rounded-full py-4 px-8"
+                className="border-2 border-lavender-500 rounded-full py-4 px-8"
                 onPress={handleRefresh}
               >
-                <Text className="text-primary-500 font-bold text-lg">{t('discover.refresh')}</Text>
+                <Text className="text-lavender-500 font-sans-bold text-lg">{t('discover.refresh')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1759,37 +2049,75 @@ export default function Discover() {
   }
 
   const currentProfile = profiles[currentIndex];
-  console.log('🎴 Rendering card:', {
-    currentIndex,
-    profilesLength: profiles.length,
-    currentProfile: currentProfile ? {
-      id: currentProfile.id,
-      name: currentProfile.display_name
-    } : 'null'
-  });
 
   return (
-    <View className="flex-1 bg-cream">
+    <View className="flex-1 bg-background">
       {/* Header */}
-      <View className="bg-primary-500 pb-4 px-6" style={{ paddingTop: insets.top + 16 }}>
-        <View className="flex-row justify-between items-center mb-3">
-          <View className="flex-1 mr-2">
-            <Text className="text-4xl font-bold text-white mb-1" numberOfLines={1} adjustsFontSizeToFit>
-              {t('discover.title')}
-            </Text>
-            <Text className="text-white/90 text-base" numberOfLines={1}>
-              {isSearchMode ? `${profiles.length - currentIndex} matches for "${searchKeyword}"` : t('discover.profilesToExplore', { count: profiles.length - currentIndex })}
-            </Text>
-          </View>
-          <View className="flex-row gap-2">
+      <View className="bg-white pb-4 px-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
+        {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
+        <View className="flex-row items-center mb-3">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8 }}
+            style={{ flex: 1 }}
+          >
+            <TouchableOpacity
+              className="bg-muted rounded-full p-2.5"
+              onPress={() => setShowFilterModal(true)}
+            >
+              <MaterialCommunityIcons name="filter-variant" size={20} color="#1F2937" />
+            </TouchableOpacity>
+
+            {/* Age Quick Filter */}
+            <TouchableOpacity
+              className="bg-muted rounded-full px-3 py-2 flex-row items-center"
+              onPress={() => {
+                setTempAgeMin(filters.ageMin);
+                setTempAgeMax(filters.ageMax);
+                setShowAgeSlider(!showAgeSlider);
+                setShowIntentionDropdown(false);
+              }}
+            >
+              <Text className="text-foreground text-sm font-medium">Age</Text>
+              <MaterialCommunityIcons name="chevron-down" size={16} color="#1F2937" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+
+            {/* Intention Quick Filter */}
+            <TouchableOpacity
+              className="bg-muted rounded-full px-3 py-2 flex-row items-center"
+              onPress={() => {
+                setShowIntentionDropdown(!showIntentionDropdown);
+                setShowAgeSlider(false);
+              }}
+            >
+              <Text className="text-foreground text-sm font-medium">Dating Intentions</Text>
+              <MaterialCommunityIcons name="chevron-down" size={16} color="#1F2937" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+
+            {/* Active Today Toggle */}
+            <TouchableOpacity
+              className={`rounded-full px-3 py-2 flex-row items-center ${activeToday ? 'bg-lavender-500' : 'bg-muted'}`}
+              onPress={() => {
+                setActiveToday(!activeToday);
+                loadProfiles();
+              }}
+            >
+              <MaterialCommunityIcons name="clock-outline" size={16} color={activeToday ? 'white' : '#1F2937'} style={{ marginRight: 4 }} />
+              <Text className={`text-sm font-medium ${activeToday ? 'text-white' : 'text-foreground'}`}>Active Today</Text>
+            </TouchableOpacity>
+          </ScrollView>
+
+          {/* Right side - Search, Refresh */}
+          <View className="flex-row gap-2 ml-2">
             {!isPremium && (
               <TouchableOpacity
                 className="bg-gold-500 rounded-full px-3 py-2 flex-row items-center gap-1"
                 style={{ backgroundColor: '#FFD700' }}
                 onPress={() => setShowPaywall(true)}
               >
-                <MaterialCommunityIcons name="crown" size={16} color="#9B87CE" />
-                <Text className="text-primary-500 font-bold text-xs">Upgrade</Text>
+                <MaterialCommunityIcons name="crown" size={16} color="#A08AB7" />
+                <Text className="text-lavender-500 font-sans-bold text-xs">Upgrade</Text>
               </TouchableOpacity>
             )}
             {isPlatinum && (
@@ -1802,35 +2130,104 @@ export default function Discover() {
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              className="bg-white/20 rounded-full p-2.5"
+              className="bg-muted rounded-full p-2.5"
               onPress={() => setShowSearchBar(!showSearchBar)}
             >
-              <MaterialCommunityIcons name="magnify" size={20} color="white" />
+              <MaterialCommunityIcons name="magnify" size={20} color="#1F2937" />
             </TouchableOpacity>
             <TouchableOpacity
-              className="bg-white/20 rounded-full p-2.5"
-              onPress={() => setShowFilterModal(true)}
-            >
-              <MaterialCommunityIcons name="filter-variant" size={20} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="bg-white/20 rounded-full p-2.5"
+              className="bg-muted rounded-full p-2.5"
               onPress={handleRefresh}
             >
-              <MaterialCommunityIcons name="refresh" size={20} color="white" />
+              <MaterialCommunityIcons name="refresh" size={20} color="#1F2937" />
             </TouchableOpacity>
           </View>
         </View>
 
+        {/* Age Slider Panel */}
+        {showAgeSlider && (
+          <View className="mt-3 bg-white rounded-xl shadow-lg border border-gray-200 p-4">
+            <Text className="text-foreground font-semibold mb-3">Age Range: {tempAgeMin} - {tempAgeMax}</Text>
+
+            <View className="mb-4">
+              <Text className="text-muted-foreground text-sm mb-2">Minimum: {tempAgeMin}</Text>
+              <Slider
+                minimumValue={18}
+                maximumValue={80}
+                step={1}
+                value={tempAgeMin}
+                onValueChange={(value) => setTempAgeMin(Math.min(value, tempAgeMax - 1))}
+                minimumTrackTintColor="#A08AB7"
+                maximumTrackTintColor="#E5E7EB"
+                thumbTintColor="#A08AB7"
+              />
+            </View>
+
+            <View className="mb-4">
+              <Text className="text-muted-foreground text-sm mb-2">Maximum: {tempAgeMax}</Text>
+              <Slider
+                minimumValue={18}
+                maximumValue={80}
+                step={1}
+                value={tempAgeMax}
+                onValueChange={(value) => setTempAgeMax(Math.max(value, tempAgeMin + 1))}
+                minimumTrackTintColor="#A08AB7"
+                maximumTrackTintColor="#E5E7EB"
+                thumbTintColor="#A08AB7"
+              />
+            </View>
+
+            <View className="flex-row gap-2">
+              <TouchableOpacity
+                className="flex-1 bg-muted rounded-full py-2"
+                onPress={() => setShowAgeSlider(false)}
+              >
+                <Text className="text-center text-foreground font-medium">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-lavender-500 rounded-full py-2"
+                onPress={() => {
+                  setFilters({ ...filters, ageMin: tempAgeMin, ageMax: tempAgeMax });
+                  setShowAgeSlider(false);
+                  loadProfiles();
+                }}
+              >
+                <Text className="text-center text-white font-medium">Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Intention Dropdown */}
+        {showIntentionDropdown && (
+          <View className="absolute top-full left-24 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 z-50" style={{ minWidth: 120 }}>
+            {INTENTIONS.map((intention, index) => (
+              <TouchableOpacity
+                key={index}
+                className={`px-4 py-3 ${index !== INTENTIONS.length - 1 ? 'border-b border-gray-100' : ''}`}
+                onPress={() => {
+                  setSelectedIntention(intention.value);
+                  setShowIntentionDropdown(false);
+                  loadProfiles();
+                }}
+              >
+                <Text className={`text-sm ${selectedIntention === intention.value ? 'text-lavender-500 font-semibold' : 'text-foreground'}`}>
+                  {intention.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {/* Keyword Search Bar - Expanded when showSearchBar is true */}
         {showSearchBar && (
           <View className="mt-3">
-            <View className="flex-row items-center bg-white/20 rounded-full px-4 py-2">
-              <MaterialCommunityIcons name="magnify" size={20} color="white" />
+            <View className="flex-row items-center bg-muted rounded-full px-4 py-2">
+              <MaterialCommunityIcons name="magnify" size={20} color="#71717A" />
               <TextInput
-                className="flex-1 ml-2 text-white text-base"
+                className="flex-1 ml-2 text-foreground text-base"
                 placeholder="Search by keyword (e.g., 'travel', 'vegan')"
-                placeholderTextColor="rgba(255, 255, 255, 0.6)"
+                placeholderTextColor="#A1A1AA"
                 value={searchKeyword}
                 onChangeText={setSearchKeyword}
                 onSubmitEditing={handleSearch}
@@ -1839,11 +2236,11 @@ export default function Discover() {
               />
               {isSearchMode && (
                 <TouchableOpacity onPress={handleClearSearch} className="ml-2">
-                  <MaterialCommunityIcons name="close-circle" size={20} color="white" />
+                  <MaterialCommunityIcons name="close-circle" size={20} color="#71717A" />
                 </TouchableOpacity>
               )}
               {!isSearchMode && searchKeyword.trim() && (
-                <TouchableOpacity onPress={handleSearch} className="ml-2 bg-white/30 rounded-full px-3 py-1">
+                <TouchableOpacity onPress={handleSearch} className="ml-2 bg-lavender-500 rounded-full px-3 py-1">
                   <Text className="text-white font-semibold text-sm">Search</Text>
                 </TouchableOpacity>
               )}
@@ -1856,17 +2253,40 @@ export default function Discover() {
                 }}
                 className="ml-2"
               >
-                <MaterialCommunityIcons name="close" size={20} color="white" />
+                <MaterialCommunityIcons name="close" size={20} color="#71717A" />
               </TouchableOpacity>
             </View>
             {isSearchMode && (
-              <Text className="text-white/80 text-xs mt-2 text-center">
+              <Text className="text-muted-foreground text-xs mt-2 text-center">
                 💡 Tip: Like or pass to continue searching. Clear search to see all profiles.
               </Text>
             )}
           </View>
         )}
       </View>
+
+      {/* Verification Banner - Prompt unverified users to verify */}
+      {showVerificationBanner && !isPhotoVerified && (
+        <VerificationBanner onDismiss={handleDismissVerificationBanner} />
+      )}
+
+      {/* Photo Review Required Banner */}
+      {photoReviewRequired && (
+        <TouchableOpacity
+          className="mx-4 mt-2 p-4 bg-amber-50 border border-amber-200 rounded-xl flex-row items-center"
+          onPress={() => router.push('/settings/edit-profile')}
+          activeOpacity={0.8}
+        >
+          <View className="w-10 h-10 bg-amber-100 rounded-full items-center justify-center mr-3">
+            <MaterialCommunityIcons name="camera-off" size={20} color="#F59E0B" />
+          </View>
+          <View className="flex-1">
+            <Text className="text-amber-900 font-semibold text-sm">Profile Hidden</Text>
+            <Text className="text-amber-700 text-xs mt-0.5">Your profile is temporarily hidden. Tap to upload new photos.</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
+        </TouchableOpacity>
+      )}
 
       {/* Card Stack */}
       <View className="flex-1 relative">
@@ -1878,6 +2298,7 @@ export default function Discover() {
         )}
 
         <SwipeCard
+          key={currentProfile.id}
           profile={currentProfile as any}
           onSwipeLeft={handleSwipeLeft}
           onSwipeRight={handleSwipeRight}
@@ -1894,7 +2315,7 @@ export default function Discover() {
           {/* Rewind Button */}
           <TouchableOpacity
             className={`rounded-full w-14 h-14 items-center justify-center shadow-lg ${
-              lastSwipe && isPremium ? 'bg-primary-400' : 'bg-gray-300'
+              lastSwipe && isPremium ? 'bg-lavender-400' : 'bg-gray-300'
             }`}
             onPress={handleRewind}
             disabled={!lastSwipe && isPremium}
@@ -1908,7 +2329,7 @@ export default function Discover() {
 
           {/* Pass Button */}
           <TouchableOpacity
-            className="bg-white rounded-full w-16 h-16 items-center justify-center shadow-lg border-2 border-gray-200"
+            className="bg-white rounded-full w-16 h-16 items-center justify-center shadow-lg border-2 border-border"
             onPress={handleSwipeLeft}
           >
             <MaterialCommunityIcons name="close" size={32} color="#EF4444" />
@@ -1916,7 +2337,7 @@ export default function Discover() {
 
           {/* Obsessed Button (Super Like) */}
           <TouchableOpacity
-            className="bg-primary-500 rounded-full w-16 h-16 items-center justify-center shadow-lg"
+            className="bg-lavender-500 rounded-full w-16 h-16 items-center justify-center shadow-lg"
             onPress={handleSwipeUp}
           >
             <MaterialCommunityIcons name="star" size={32} color="white" />
@@ -1924,7 +2345,7 @@ export default function Discover() {
 
           {/* Like Button */}
           <TouchableOpacity
-            className="bg-white rounded-full w-16 h-16 items-center justify-center shadow-lg border-2 border-gray-200"
+            className="bg-white rounded-full w-16 h-16 items-center justify-center shadow-lg border-2 border-border"
             onPress={handleSwipeRight}
           >
             <MaterialCommunityIcons name="heart" size={32} color="#10B981" />
@@ -1933,10 +2354,10 @@ export default function Discover() {
 
         {/* Action Labels */}
         <View className="flex-row justify-center items-center gap-4 mt-2">
-          <Text className="text-gray-600 text-xs font-medium w-14 text-center">Rewind</Text>
-          <Text className="text-gray-600 text-xs font-medium w-16 text-center">Pass</Text>
-          <Text className="text-primary-500 text-xs font-bold w-16 text-center">Obsessed</Text>
-          <Text className="text-gray-600 text-xs font-medium w-16 text-center">Like</Text>
+          <Text className="text-muted-foreground text-xs font-sans-medium w-14 text-center">Rewind</Text>
+          <Text className="text-muted-foreground text-xs font-sans-medium w-16 text-center">Pass</Text>
+          <Text className="text-lavender-500 text-xs font-sans-bold w-16 text-center">Obsessed</Text>
+          <Text className="text-muted-foreground text-xs font-sans-medium w-16 text-center">Like</Text>
         </View>
       </View>
 
@@ -2034,8 +2455,8 @@ export default function Discover() {
 
       {/* Swipe Counter for Free Users */}
       {!isPremium && (
-        <View className="absolute bottom-32 right-6 bg-white rounded-full px-4 py-2 shadow-lg border-2 border-primary-500">
-          <Text className="text-primary-500 font-bold text-sm">
+        <View className="absolute bottom-32 right-6 bg-white rounded-full px-4 py-2 shadow-lg border-2 border-lavender-500">
+          <Text className="text-lavender-500 font-sans-bold text-sm">
             {t('discover.swipesRemaining', { count: swipeCount, limit: DAILY_SWIPE_LIMIT })}
           </Text>
         </View>
@@ -2043,10 +2464,10 @@ export default function Discover() {
 
       {/* Super Like Counter for Premium Users */}
       {isPremium && (
-        <View className="absolute bottom-32 right-6 bg-white rounded-full px-4 py-2 shadow-lg border-2 border-primary-500">
+        <View className="absolute bottom-32 right-6 bg-white rounded-full px-4 py-2 shadow-lg border-2 border-lavender-500">
           <View className="flex-row items-center gap-1">
-            <MaterialCommunityIcons name="star" size={16} color="#9B87CE" />
-            <Text className="text-primary-500 font-bold text-sm">
+            <MaterialCommunityIcons name="star" size={16} color="#A08AB7" />
+            <Text className="text-lavender-500 font-sans-bold text-sm">
               {t('discover.superLikesRemaining', { count: superLikesRemaining })}
             </Text>
           </View>

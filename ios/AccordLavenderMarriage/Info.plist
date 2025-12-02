@@ -41,7 +41,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>36</string>
+    <string>45</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>LSMinimumSystemVersion</key>
@@ -58,13 +58,20 @@
     <key>NSCameraUsageDescription</key>
     <string>Accord needs access to your camera to take profile photos.</string>
     <key>NSContactsUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your contacts</string>
+    <string>Accord uses your contacts to help you avoid seeing people you know in your discovery feed. Phone numbers are encrypted on your device and never shared.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your location</string>
     <key>NSLocationAlwaysUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your location</string>
+    <key>NSLocationDefaultAccuracyReduced</key>
+    <false/>
+    <key>NSLocationTemporaryUsageDescriptionDictionary</key>
+    <dict>
+      <key>PreciseLocationPrompt</key>
+      <string>Accord needs precise location to accurately calculate distances to potential matches. We respect your privacy and never share your exact coordinates.</string>
+    </dict>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Accord uses your location to find compatible matches nearby.</string>
     <key>NSMicrophoneUsageDescription</key>

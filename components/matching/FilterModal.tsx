@@ -107,7 +107,7 @@ export default function FilterModal({
                 step={1}
                 value={filters.ageMin}
                 onValueChange={(value) => setFilters({ ...filters, ageMin: value })}
-                minimumTrackTintColor="#9B87CE"
+                minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
               <Slider
@@ -117,7 +117,7 @@ export default function FilterModal({
                 step={1}
                 value={filters.ageMax}
                 onValueChange={(value) => setFilters({ ...filters, ageMax: value })}
-                minimumTrackTintColor="#9B87CE"
+                minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
             </View>
@@ -134,14 +134,14 @@ export default function FilterModal({
               step={5}
               value={filters.maxDistance}
               onValueChange={(value) => setFilters({ ...filters, maxDistance: value })}
-              minimumTrackTintColor="#9B87CE"
+              minimumTrackTintColor="#A08AB7"
               maximumTrackTintColor="#E5E7EB"
             />
           </View>
 
           {/* Compatibility Note */}
           <View style={styles.infoBox}>
-            <MaterialCommunityIcons name="information" size={20} color="#9B87CE" />
+            <MaterialCommunityIcons name="information" size={20} color="#A08AB7" />
             <Text style={styles.infoText}>
               {t('filters.dealbreakersInfo')}
             </Text>
@@ -157,7 +157,7 @@ export default function FilterModal({
           >
             <View style={styles.editPreferencesContent}>
               <View style={styles.editPreferencesIcon}>
-                <MaterialCommunityIcons name="heart-cog" size={24} color="#9B87CE" />
+                <MaterialCommunityIcons name="heart-cog" size={24} color="#A08AB7" />
               </View>
               <View style={styles.editPreferencesText}>
                 <Text style={styles.editPreferencesTitle}>{t('filters.editPreferences')}</Text>
@@ -166,7 +166,7 @@ export default function FilterModal({
                 </Text>
               </View>
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
+            <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
           </TouchableOpacity>
 
           {/* Premium Filters */}
@@ -178,7 +178,7 @@ export default function FilterModal({
                   {t('filters.upgradePremium')}
                 </Text>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
             </TouchableOpacity>
           )}
 
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   },
   resetButton: {
     fontSize: 16,
-    color: '#9B87CE',
+    color: '#A08AB7',
     fontWeight: '600',
   },
   content: {
@@ -404,8 +404,8 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   chipSelected: {
-    backgroundColor: '#9B87CE',
-    borderColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
+    borderColor: '#A08AB7',
   },
   chipDisabled: {
     backgroundColor: '#F3F4F6',
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
     borderWidth: 2,
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
   },
   editPreferencesContent: {
     flexDirection: 'row',
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
   editPreferencesTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
     marginBottom: 2,
   },
   editPreferencesDescription: {
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#E5E7EB',
   },
   applyButton: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

@@ -61,7 +61,6 @@ export default function Personality() {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [religion, setReligion] = useState('');
   const [politicalViews, setPoliticalViews] = useState('');
-  const [myStory, setMyStory] = useState('');
   const [loading, setLoading] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
 
@@ -153,7 +152,6 @@ export default function Personality() {
           languages_spoken: selectedLanguages.length > 0 ? selectedLanguages : null,
           religion: religion || null,
           political_views: politicalViews || null,
-          my_story: myStory.trim() || null,
           onboarding_step: 4,
         })
         .eq('id', activeProfileId);
@@ -175,11 +173,11 @@ export default function Personality() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 4 of 9</Text>
-            <Text className="text-sm text-primary-400 font-bold">44%</Text>
+            <Text className="text-sm text-lavender-400 font-bold">44%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
-              className="h-3 bg-primary-400 rounded-full"
+              className="h-3 bg-lavender-400 rounded-full"
               style={{ width: '44%' }}
             />
           </View>
@@ -209,7 +207,7 @@ export default function Personality() {
                   key={sign}
                   className={`px-4 py-2 rounded-full border ${
                     zodiacSign === sign
-                      ? 'bg-primary-500 border-primary-500'
+                      ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => setZodiacSign(sign)}
@@ -237,7 +235,7 @@ export default function Personality() {
               <TouchableOpacity
                 className={`flex-1 py-3 rounded-xl border ${
                   heightUnit === 'imperial'
-                    ? 'bg-primary-500 border-primary-500'
+                    ? 'bg-lavender-500 border-lavender-500'
                     : 'bg-white border-gray-300'
                 }`}
                 onPress={() => setHeightUnit('imperial')}
@@ -253,7 +251,7 @@ export default function Personality() {
               <TouchableOpacity
                 className={`flex-1 py-3 rounded-xl border ${
                   heightUnit === 'metric'
-                    ? 'bg-primary-500 border-primary-500'
+                    ? 'bg-lavender-500 border-lavender-500'
                     : 'bg-white border-gray-300'
                 }`}
                 onPress={() => setHeightUnit('metric')}
@@ -323,7 +321,7 @@ export default function Personality() {
                   key={type}
                   className={`px-4 py-2 rounded-full border ${
                     personalityType === type
-                      ? 'bg-primary-500 border-primary-500'
+                      ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => setPersonalityType(type)}
@@ -352,7 +350,7 @@ export default function Personality() {
                   key={language}
                   className={`px-4 py-2 rounded-full border ${
                     loveLanguage.includes(language)
-                      ? 'bg-primary-500 border-primary-500'
+                      ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => toggleLoveLanguage(language)}
@@ -368,7 +366,7 @@ export default function Personality() {
               ))}
             </View>
             {loveLanguage.length > 0 && (
-              <Text className="text-xs text-primary-500 mt-2">
+              <Text className="text-xs text-lavender-500 mt-2">
                 Selected: {loveLanguage.join(', ')}
               </Text>
             )}
@@ -385,7 +383,7 @@ export default function Personality() {
                   key={language}
                   className={`px-4 py-2 rounded-full border ${
                     selectedLanguages.includes(language)
-                      ? 'bg-primary-500 border-primary-500'
+                      ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => toggleLanguage(language)}
@@ -413,7 +411,7 @@ export default function Personality() {
                   key={rel}
                   className={`px-4 py-2 rounded-full border ${
                     religion === rel
-                      ? 'bg-primary-500 border-primary-500'
+                      ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => setReligion(rel)}
@@ -441,7 +439,7 @@ export default function Personality() {
                   key={view}
                   className={`px-4 py-2 rounded-full border ${
                     politicalViews === view
-                      ? 'bg-primary-500 border-primary-500'
+                      ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => setPoliticalViews(view)}
@@ -458,27 +456,6 @@ export default function Personality() {
             </View>
           </View>
 
-          {/* My Story */}
-          <View>
-            <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-sm font-medium text-gray-700">
-                My Story <Text className="text-gray-400">(optional)</Text>
-              </Text>
-              <Text className="text-sm text-gray-500 font-semibold">{myStory.length}/1000</Text>
-            </View>
-            <TextInput
-              className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900 min-h-32"
-              placeholder="Share a longer story about yourself, your journey, your dreams... This is separate from your bio and gives you space to go deeper."
-              value={myStory}
-              onChangeText={(text) => setMyStory(text.slice(0, 1000))}
-              multiline
-              textAlignVertical="top"
-              placeholderTextColor="#9CA3AF"
-            />
-            <Text className="text-sm text-gray-500 mt-2">
-              This section helps others understand your unique story and what makes you who you are.
-            </Text>
-          </View>
         </View>
 
         {/* Continue Button */}

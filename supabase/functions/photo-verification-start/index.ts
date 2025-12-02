@@ -13,12 +13,29 @@ const AWS_ACCESS_KEY = Deno.env.get('AWS_ACCESS_KEY_ID');
 const AWS_SECRET_KEY = Deno.env.get('AWS_SECRET_ACCESS_KEY');
 const AWS_REGION = Deno.env.get('AWS_REGION') || 'us-east-1';
 
+// Log AWS config status at startup (redacted for security)
+console.log('🔧 AWS Config Check:');
+console.log('  - AWS_ACCESS_KEY_ID:', AWS_ACCESS_KEY ? `SET (${AWS_ACCESS_KEY.substring(0, 4)}...)` : 'NOT SET');
+console.log('  - AWS_SECRET_ACCESS_KEY:', AWS_SECRET_KEY ? 'SET (hidden)' : 'NOT SET');
+console.log('  - AWS_REGION:', AWS_REGION);
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    // Validate AWS credentials first
+    if (!AWS_ACCESS_KEY || !AWS_SECRET_KEY) {
+      console.error('❌ AWS credentials not configured!');
+      return new Response(
+        JSON.stringify({
+          error: 'AWS credentials not configured',
+          details: 'Contact support - AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY is missing'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
@@ -119,12 +136,36 @@ Deno.serve(async (req) => {
 
     // Step 1: Detect face in selfie and check liveness indicators
     console.log('🔍 Step 1: Detecting face in selfie...');
-    const selfieBytes = Uint8Array.from(atob(selfie_base64), c => c.charCodeAt(0));
+    console.log('  - Base64 length:', selfie_base64.length);
 
-    const detectFacesResult = await callRekognition('DetectFaces', {
-      Image: { Bytes: selfieBytes },
-      Attributes: ['ALL']
-    });
+    // Validate base64 is decodable
+    try {
+      const decoded = atob(selfie_base64);
+      console.log('  - Decoded bytes:', decoded.length);
+    } catch (decodeError) {
+      console.error('❌ Failed to decode base64:', decodeError);
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid image format',
+          message: 'Failed to decode selfie image. Please try again.'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    // AWS Rekognition expects base64 string for Bytes, not raw Uint8Array
+    console.log('🚀 Calling AWS Rekognition DetectFaces...');
+    let detectFacesResult;
+    try {
+      detectFacesResult = await callRekognition('DetectFaces', {
+        Image: { Bytes: selfie_base64 },
+        Attributes: ['ALL']
+      });
+      console.log('✅ DetectFaces succeeded');
+    } catch (rekognitionError: any) {
+      console.error('❌ DetectFaces failed:', rekognitionError.message);
+      throw new Error(`Face detection failed: ${rekognitionError.message}`);
+    }
 
     if (!detectFacesResult.FaceDetails || detectFacesResult.FaceDetails.length === 0) {
       await supabase
@@ -185,15 +226,17 @@ Deno.serve(async (req) => {
 
     for (const photo of photos) {
       try {
-        // Download profile photo
+        // Download profile photo and convert to base64
+        console.log('  - Fetching photo:', photo.url);
         const photoResponse = await fetch(photo.url);
         const photoBuffer = await photoResponse.arrayBuffer();
-        const photoBytes = new Uint8Array(photoBuffer);
+        const photoBase64 = btoa(String.fromCharCode(...new Uint8Array(photoBuffer)));
+        console.log('  - Photo base64 length:', photoBase64.length);
 
-        // Compare faces
+        // Compare faces - AWS expects base64 strings for Bytes
         const compareResult = await callRekognition('CompareFaces', {
-          SourceImage: { Bytes: selfieBytes },
-          TargetImage: { Bytes: photoBytes },
+          SourceImage: { Bytes: selfie_base64 },
+          TargetImage: { Bytes: photoBase64 },
           SimilarityThreshold: 80
         });
 
@@ -256,22 +299,37 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in photo-verification-start:', error);
+    // Return 200 with success=false so client can see full error details
     return new Response(
       JSON.stringify({
+        success: false,
+        verified: false,
         error: error.message || 'Failed to verify photos',
-        details: error.toString()
+        details: error.toString(),
+        debug: {
+          has_aws_key: !!AWS_ACCESS_KEY,
+          has_aws_secret: !!AWS_SECRET_KEY,
+          aws_region: AWS_REGION,
+          key_prefix: AWS_ACCESS_KEY ? AWS_ACCESS_KEY.substring(0, 4) : 'MISSING'
+        }
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   }
 });
 
 // Helper function to call AWS Rekognition API with AWS Signature V4
 async function callRekognition(action: string, params: any) {
+  console.log(`📡 callRekognition: ${action}`);
+  console.log(`  - Region: ${AWS_REGION}`);
+  console.log(`  - Has Image.Bytes: ${!!params?.Image?.Bytes}`);
+  console.log(`  - Image.Bytes length: ${params?.Image?.Bytes?.length || 0}`);
+
   const endpoint = `https://rekognition.${AWS_REGION}.amazonaws.com/`;
   const body = JSON.stringify(params);
+  console.log(`  - Body length: ${body.length}`);
 
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
@@ -315,15 +373,27 @@ async function callRekognition(action: string, params: any) {
   // Add authorization header
   headers['authorization'] = `${algorithm} Credential=${AWS_ACCESS_KEY}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: headers,
-    body: body,
-  });
+  console.log(`  - Sending request to AWS...`);
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: headers,
+      body: body,
+    });
+    console.log(`  - Response status: ${response.status}`);
+  } catch (fetchError: any) {
+    console.error('❌ Fetch failed:', fetchError.message);
+    throw new Error(`Network error calling AWS: ${fetchError.message}`);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('Rekognition API error:', errorText);
+    console.error('❌ Rekognition API error:');
+    console.error('  - Status:', response.status);
+    console.error('  - Response:', errorText);
+    console.error('  - Action:', action);
+    console.error('  - Region:', AWS_REGION);
     throw new Error(`Rekognition API error: ${response.status} ${errorText}`);
   }
 

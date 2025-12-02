@@ -233,11 +233,11 @@ export default function MarriagePreferences() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 7 of 8</Text>
-            <Text className="text-sm text-primary-500 font-bold">88%</Text>
+            <Text className="text-sm text-lavender-500 font-bold">88%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
-              className="h-3 bg-primary-500 rounded-full"
+              className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '88%' }}
             />
           </View>
@@ -267,7 +267,7 @@ export default function MarriagePreferences() {
                   key={reason.value}
                   className={`px-4 py-3 rounded-xl border ${
                     primaryReason.includes(reason.value)
-                      ? 'bg-primary-50 border-primary-500'
+                      ? 'bg-lavender-50 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => togglePrimaryReason(reason.value)}
@@ -275,7 +275,7 @@ export default function MarriagePreferences() {
                   <Text
                     className={`${
                       primaryReason.includes(reason.value)
-                        ? 'text-primary-500 font-semibold'
+                        ? 'text-lavender-500 font-semibold'
                         : 'text-gray-700'
                     }`}
                   >
@@ -285,7 +285,7 @@ export default function MarriagePreferences() {
               ))}
             </View>
             {primaryReason.length > 0 && (
-              <Text className="text-xs text-primary-500 mt-2">
+              <Text className="text-xs text-lavender-500 mt-2">
                 Selected: {primaryReason.map(val => PRIMARY_REASONS.find(r => r.value === val)?.label).join(', ')}
               </Text>
             )}
@@ -302,7 +302,7 @@ export default function MarriagePreferences() {
                   key={type.value}
                   className={`px-4 py-3 rounded-xl border ${
                     relationshipType === type.value
-                      ? 'bg-primary-50 border-primary-500'
+                      ? 'bg-lavender-50 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => setRelationshipType(type.value)}
@@ -310,7 +310,7 @@ export default function MarriagePreferences() {
                   <Text
                     className={`${
                       relationshipType === type.value
-                        ? 'text-primary-500 font-semibold'
+                        ? 'text-lavender-500 font-semibold'
                         : 'text-gray-700'
                     }`}
                   >
@@ -332,7 +332,7 @@ export default function MarriagePreferences() {
                   key={String(option.value)}
                   className={`flex-1 px-4 py-3 rounded-xl border ${
                     wantsChildren === option.value
-                      ? 'bg-primary-50 border-primary-500'
+                      ? 'bg-lavender-50 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => setWantsChildren(option.value)}
@@ -340,7 +340,7 @@ export default function MarriagePreferences() {
                   <Text
                     className={`text-center ${
                       wantsChildren === option.value
-                        ? 'text-primary-500 font-semibold'
+                        ? 'text-lavender-500 font-semibold'
                         : 'text-gray-700'
                     }`}
                   >
@@ -363,7 +363,7 @@ export default function MarriagePreferences() {
                   key={pref.value}
                   className={`px-4 py-3 rounded-xl border ${
                     housingPreference.includes(pref.value)
-                      ? 'bg-primary-50 border-primary-500'
+                      ? 'bg-lavender-50 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => toggleHousingPreference(pref.value)}
@@ -371,7 +371,7 @@ export default function MarriagePreferences() {
                   <Text
                     className={`${
                       housingPreference.includes(pref.value)
-                        ? 'text-primary-500 font-semibold'
+                        ? 'text-lavender-500 font-semibold'
                         : 'text-gray-700'
                     }`}
                   >
@@ -381,7 +381,7 @@ export default function MarriagePreferences() {
               ))}
             </View>
             {housingPreference.length > 0 && (
-              <Text className="text-xs text-primary-500 mt-2">
+              <Text className="text-xs text-lavender-500 mt-2">
                 Selected: {housingPreference.map(val => HOUSING_PREFERENCES.find(p => p.value === val)?.label).join(', ')}
               </Text>
             )}
@@ -399,7 +399,7 @@ export default function MarriagePreferences() {
                   key={arr.value}
                   className={`px-4 py-3 rounded-xl border ${
                     financialArrangement.includes(arr.value)
-                      ? 'bg-primary-50 border-primary-500'
+                      ? 'bg-lavender-50 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => toggleFinancialArrangement(arr.value)}
@@ -407,7 +407,7 @@ export default function MarriagePreferences() {
                   <Text
                     className={`${
                       financialArrangement.includes(arr.value)
-                        ? 'text-primary-500 font-semibold'
+                        ? 'text-lavender-500 font-semibold'
                         : 'text-gray-700'
                     }`}
                   >
@@ -417,7 +417,7 @@ export default function MarriagePreferences() {
               ))}
             </View>
             {financialArrangement.length > 0 && (
-              <Text className="text-xs text-primary-500 mt-2">
+              <Text className="text-xs text-lavender-500 mt-2">
                 Selected: {financialArrangement.map(val => FINANCIAL_ARRANGEMENTS.find(a => a.value === val)?.label).join(', ')}
               </Text>
             )}
@@ -436,7 +436,7 @@ export default function MarriagePreferences() {
                     key={arr.value}
                     className={`px-4 py-3 rounded-xl border ${
                       childrenArrangement.includes(arr.value)
-                        ? 'bg-primary-50 border-primary-500'
+                        ? 'bg-lavender-50 border-lavender-500'
                         : 'bg-white border-gray-300'
                     }`}
                     onPress={() => toggleChildrenArrangement(arr.value)}
@@ -444,7 +444,7 @@ export default function MarriagePreferences() {
                     <Text
                       className={`${
                         childrenArrangement.includes(arr.value)
-                          ? 'text-primary-500 font-semibold'
+                          ? 'text-lavender-500 font-semibold'
                           : 'text-gray-700'
                       }`}
                     >
@@ -454,7 +454,7 @@ export default function MarriagePreferences() {
                 ))}
               </View>
               {childrenArrangement.length > 0 && (
-                <Text className="text-xs text-primary-500 mt-2">
+                <Text className="text-xs text-lavender-500 mt-2">
                   Selected: {childrenArrangement.map(val => CHILDREN_ARRANGEMENTS.find(a => a.value === val)?.label).join(', ')}
                 </Text>
               )}
@@ -478,7 +478,7 @@ export default function MarriagePreferences() {
                     key={option.value}
                     className={`px-4 py-3 rounded-xl border ${
                       smoking === option.value
-                        ? 'bg-primary-50 border-primary-500'
+                        ? 'bg-lavender-50 border-lavender-500'
                         : 'bg-white border-gray-300'
                     }`}
                     onPress={() => setSmoking(option.value)}
@@ -486,7 +486,7 @@ export default function MarriagePreferences() {
                     <Text
                       className={`${
                         smoking === option.value
-                          ? 'text-primary-500 font-semibold'
+                          ? 'text-lavender-500 font-semibold'
                           : 'text-gray-700'
                       }`}
                     >
@@ -508,7 +508,7 @@ export default function MarriagePreferences() {
                     key={option.value}
                     className={`px-4 py-3 rounded-xl border ${
                       drinking === option.value
-                        ? 'bg-primary-50 border-primary-500'
+                        ? 'bg-lavender-50 border-lavender-500'
                         : 'bg-white border-gray-300'
                     }`}
                     onPress={() => setDrinking(option.value)}
@@ -516,7 +516,7 @@ export default function MarriagePreferences() {
                     <Text
                       className={`${
                         drinking === option.value
-                          ? 'text-primary-500 font-semibold'
+                          ? 'text-lavender-500 font-semibold'
                           : 'text-gray-700'
                       }`}
                     >
@@ -538,7 +538,7 @@ export default function MarriagePreferences() {
                     key={option.value}
                     className={`px-4 py-3 rounded-xl border ${
                       pets === option.value
-                        ? 'bg-primary-50 border-primary-500'
+                        ? 'bg-lavender-50 border-lavender-500'
                         : 'bg-white border-gray-300'
                     }`}
                     onPress={() => setPets(option.value)}
@@ -546,7 +546,7 @@ export default function MarriagePreferences() {
                     <Text
                       className={`${
                         pets === option.value
-                          ? 'text-primary-500 font-semibold'
+                          ? 'text-lavender-500 font-semibold'
                           : 'text-gray-700'
                       }`}
                     >
@@ -577,7 +577,7 @@ export default function MarriagePreferences() {
                 }}
               />
               <TouchableOpacity
-                className="bg-primary-500 p-3 rounded-lg"
+                className="bg-lavender-500 p-3 rounded-lg"
                 onPress={() => {
                   if (newMustHave.trim()) {
                     setMustHaves([...mustHaves, newMustHave.trim()]);
@@ -619,7 +619,7 @@ export default function MarriagePreferences() {
                 }}
               />
               <TouchableOpacity
-                className="bg-primary-500 p-3 rounded-lg"
+                className="bg-lavender-500 p-3 rounded-lg"
                 onPress={() => {
                   if (newDealbreaker.trim()) {
                     setDealbreakers([...dealbreakers, newDealbreaker.trim()]);
@@ -657,7 +657,7 @@ export default function MarriagePreferences() {
             className={`flex-1 py-4 rounded-full ${
               loading || primaryReason.length === 0 || !relationshipType || wantsChildren === undefined || housingPreference.length === 0 || financialArrangement.length === 0
                 ? 'bg-gray-400'
-                : 'bg-primary-500'
+                : 'bg-lavender-500'
             }`}
             style={{
               borderRadius: 9999,

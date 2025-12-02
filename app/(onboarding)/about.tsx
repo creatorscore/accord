@@ -148,11 +148,11 @@ export default function About() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 3 of 9</Text>
-            <Text className="text-sm text-primary-500 font-bold">33%</Text>
+            <Text className="text-sm text-lavender-500 font-bold">33%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
-              className="h-3 bg-primary-500 rounded-full"
+              className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '33%' }}
             />
           </View>
@@ -255,7 +255,7 @@ export default function About() {
             className={`flex-1 py-4 rounded-full ${
               loading || bio.length < 50
                 ? 'bg-gray-400'
-                : 'bg-primary-500'
+                : 'bg-lavender-500'
             }`}
             style={{
               borderRadius: 9999,

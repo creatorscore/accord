@@ -589,7 +589,6 @@ export default function AdminBans() {
             {/* Search Results */}
             <View style={{ flex: 1, minHeight: 200 }}>
               <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
-              {console.log('📱 Rendering search results UI, count:', searchResults.length)}
               {searchResults.length === 0 && searchQuery && !searching && (
                 <View style={{ padding: 20, alignItems: 'center' }}>
                   <MaterialCommunityIcons name="account-off" size={48} color="#D1D5DB" />

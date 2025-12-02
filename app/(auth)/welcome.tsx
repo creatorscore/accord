@@ -3,55 +3,72 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Welcome() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+
   return (
     <LinearGradient
-      colors={['#A78BFA', '#B8A9DD']}
+      colors={['#A08AB7', '#CDC2E5']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.container}
+      style={[styles.container, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 10 }]}
     >
       <StatusBar style="light" />
 
       {/* Hero Section */}
-      <View style={styles.hero}>
+      <View style={styles.heroSection}>
         <Text style={styles.emoji}>💜</Text>
-        <Text style={styles.title}>{t('auth.welcome.title')}</Text>
-        <Text style={styles.tagline}>{t('auth.welcome.tagline')}</Text>
-        <Text style={styles.subtitle}>{t('auth.welcome.subtitle')}</Text>
+        <Text style={styles.title}>
+          {t('auth.welcome.title')}
+        </Text>
+        <Text style={styles.tagline}>
+          {t('auth.welcome.tagline')}
+        </Text>
+        <Text style={styles.subtitle}>
+          {t('auth.welcome.subtitle')}
+        </Text>
       </View>
 
       {/* Value Props */}
-      <View style={styles.valueProps}>
-        <View style={styles.propRow}>
-          <View style={styles.prop}>
-            <View style={styles.iconBox}>
-              <Text style={styles.icon}>🛡️</Text>
+      <View style={styles.valuePropsContainer}>
+        <View style={styles.valuePropsRow}>
+          <View style={styles.valueProp}>
+            <View style={styles.iconContainer}>
+              <Text style={styles.propEmoji}>🛡️</Text>
             </View>
-            <Text style={styles.propText}>{t('auth.welcome.verifiedSafe')}</Text>
+            <Text style={styles.propText}>
+              {t('auth.welcome.verifiedSafe')}
+            </Text>
           </View>
 
-          <View style={styles.prop}>
-            <View style={styles.iconBox}>
-              <Text style={styles.icon}>💖</Text>
+          <View style={styles.valueProp}>
+            <View style={styles.iconContainer}>
+              <Text style={styles.propEmoji}>💖</Text>
             </View>
-            <Text style={styles.propText}>{t('auth.welcome.smartMatching')}</Text>
+            <Text style={styles.propText}>
+              {t('auth.welcome.smartMatching')}
+            </Text>
           </View>
 
-          <View style={styles.prop}>
-            <View style={styles.iconBox}>
-              <Text style={styles.icon}>🔒</Text>
+          <View style={styles.valueProp}>
+            <View style={styles.iconContainer}>
+              <Text style={styles.propEmoji}>🔒</Text>
             </View>
-            <Text style={styles.propText}>{t('auth.welcome.privacyFirst')}</Text>
+            <Text style={styles.propText}>
+              {t('auth.welcome.privacyFirst')}
+            </Text>
           </View>
         </View>
 
         {/* Trust Badge */}
         <View style={styles.trustBadge}>
-          <Text style={styles.rainbow}>✊</Text>
-          <Text style={styles.trustText}>{t('auth.welcome.trustBadge')}</Text>
+          <Text style={styles.badgeEmoji}>✊</Text>
+          <Text style={styles.badgeText}>
+            {t('auth.welcome.trustBadge')}
+          </Text>
         </View>
       </View>
 
@@ -62,7 +79,9 @@ export default function Welcome() {
           onPress={() => router.push('/(auth)/sign-up')}
           activeOpacity={0.9}
         >
-          <Text style={styles.primaryButtonText}>{t('auth.welcome.getStarted')}</Text>
+          <Text style={styles.primaryButtonText}>
+            {t('auth.welcome.getStarted')}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -70,10 +89,12 @@ export default function Welcome() {
           onPress={() => router.push('/(auth)/sign-in')}
           activeOpacity={0.9}
         >
-          <Text style={styles.secondaryButtonText}>{t('auth.welcome.signIn')}</Text>
+          <Text style={styles.secondaryButtonText}>
+            {t('auth.welcome.signIn')}
+          </Text>
         </TouchableOpacity>
 
-        <Text style={styles.footer}>
+        <Text style={styles.footerText}>
           {t('auth.welcome.footer')}
         </Text>
       </View>
@@ -85,10 +106,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 40,
   },
-  hero: {
+  heroSection: {
     flex: 1.2,
     justifyContent: 'center',
     alignItems: 'center',
@@ -99,55 +118,57 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: 'white',
+    fontSize: 40,
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#FFFFFF',
     marginBottom: 12,
     textAlign: 'center',
   },
   tagline: {
     fontSize: 24,
-    fontWeight: '600',
-    color: 'white',
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: 12,
     paddingHorizontal: 16,
   },
   subtitle: {
     fontSize: 16,
+    fontFamily: 'Inter',
     color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
     paddingHorizontal: 24,
+    lineHeight: 24,
   },
-  valueProps: {
+  valuePropsContainer: {
     marginBottom: 24,
     flex: 0.8,
     justifyContent: 'center',
   },
-  propRow: {
+  valuePropsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginBottom: 32,
   },
-  prop: {
+  valueProp: {
     alignItems: 'center',
     flex: 1,
   },
-  iconBox: {
+  iconContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     width: 50,
     height: 50,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
   },
-  icon: {
+  propEmoji: {
     fontSize: 24,
   },
   propText: {
-    color: 'white',
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter-SemiBold',
     fontSize: 12,
     textAlign: 'center',
   },
@@ -160,13 +181,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rainbow: {
+  badgeEmoji: {
     fontSize: 20,
     marginRight: 8,
   },
-  trustText: {
-    color: 'white',
-    fontWeight: 'bold',
+  badgeText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-Bold',
     fontSize: 16,
   },
   ctaContainer: {
@@ -175,38 +196,39 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   primaryButton: {
-    backgroundColor: 'white',
-    borderRadius: 100,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 50,
     paddingVertical: 16,
     alignItems: 'center',
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.15,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 4,
   },
   primaryButtonText: {
-    color: '#9B87CE',
-    fontWeight: 'bold',
+    color: '#A08AB7',
+    fontFamily: 'Inter-Bold',
     fontSize: 18,
   },
   secondaryButton: {
     borderWidth: 2,
-    borderColor: 'white',
-    borderRadius: 100,
+    borderColor: '#FFFFFF',
+    borderRadius: 50,
     paddingVertical: 16,
     alignItems: 'center',
     marginBottom: 16,
   },
   secondaryButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontFamily: 'Inter-Bold',
     fontSize: 18,
   },
-  footer: {
+  footerText: {
     color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
     fontSize: 14,
+    fontFamily: 'Inter',
   },
 });

@@ -27,7 +27,7 @@ export default function ReviewCategorySlider({
       {/* Category Header */}
       <View style={styles.header}>
         <View style={styles.iconContainer}>
-          <MaterialCommunityIcons name={icon as any} size={20} color="#9B87CE" />
+          <MaterialCommunityIcons name={icon as any} size={20} color="#A08AB7" />
         </View>
         <View style={styles.titleContainer}>
           <Text style={styles.categoryName}>{categoryName}</Text>
@@ -40,7 +40,7 @@ export default function ReviewCategorySlider({
         <StarRating
           rating={value}
           size={36}
-          color="#9B87CE"
+          color="#A08AB7"
           editable
           onRatingChange={onValueChange}
         />
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   ratingValue: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#9B87CE',
+    color: '#A08AB7',
     marginLeft: 16,
     minWidth: 30,
   },
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   },
   quickButtonActive: {
     backgroundColor: '#F3E8FF',
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
   },
   quickButtonText: {
     fontSize: 14,
@@ -146,6 +146,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   quickButtonTextActive: {
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
 });

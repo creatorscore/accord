@@ -176,7 +176,13 @@
         "short": "Надёжность",
         "description": "Насколько они надёжны и выполняют ли свои обязательства"
       }
-    }
+    },
+    "pendingReviews": "Ожидающие отзывы",
+    "bothSubmitted": "Оба отзыва отправлены! Отзывы скоро будут показаны.",
+    "waitingForOther": "Вы отправили свой отзыв. Ожидаем другую сторону.",
+    "youNeedToReview": "Пожалуйста, отправьте свой отзыв",
+    "reviewNow": "Оставить отзыв",
+    "revealed": "Показан"
   },
   "matches": {
     "title": "Совпадения",
@@ -371,7 +377,20 @@
       "error": "Не удалось выйти"
     },
     "verified": "Подтверждён",
-    "yourIntro": "Ваше"
+    "yourIntro": "Ваше",
+    "notifications": "Уведомления",
+    "photoVerification": "Проверка фото",
+    "screenshotAlerts": "Оповещения о скриншотах",
+    "blockContacts": "Заблокировать контакты",
+    "blockCountries": "Заблокировать страны",
+    "adminPanel": "Панель администратора",
+    "viewReports": "Просмотр жалоб",
+    "costMonitoring": "Мониторинг расходов",
+    "databaseSize": "Размер базы данных",
+    "screenshotMonitor": "Мониторинг скриншотов",
+    "banScreenshotUsers": "Заблокировать пользователей со скриншотами",
+    "pushNotifications": "Push-уведомления",
+    "sendMessagesToUsers": "Отправить сообщения пользователям"
   },
   "auth": {
     "welcome": {
@@ -489,7 +508,17 @@
       "minutesAgo": "{{count}}м",
       "hoursAgo": "{{count}}ч",
       "daysAgo": "{{count}}д"
-    }
+    },
+    "youMatchedWith": "Вы совпали с {{name}}",
+    "encryptionError": "Ошибка шифрования",
+    "encryptionErrorMessage": "Не удалось зашифровать это сообщение. Попробуйте снова.",
+    "decryptionError": "Ошибка дешифрования",
+    "decryptionErrorMessage": "Не удалось расшифровать это сообщение.",
+    "keyExchangeError": "Ошибка обмена ключами",
+    "keyExchangeErrorMessage": "Не удалось установить безопасное соединение. Попробуйте снова.",
+    "endToEndEncrypted": "Сквозное шифрование",
+    "encryptionInfo": "Сообщения в этом чате защищены сквозным шифрованием.",
+    "verifyEncryption": "Проверить шифрование"
   },
   "likes": {
     "title": "Лайки",
@@ -507,5 +536,80 @@
     "goToMatches": "Перейти к совпадениям",
     "errorLoadingLikes": "Не удалось загрузить лайки. Пожалуйста, попробуйте еще раз.",
     "errorCreatingMatch": "Не удалось создать совпадение. Пожалуйста, попробуйте еще раз."
+  },
+  "contactBlocking": {
+    "title": "Блокировка контактов",
+    "whyWeNeedAccess": "Зачем нам нужен доступ к контактам",
+    "iUnderstandContinue": "Понятно, продолжить",
+    "permissionDenied": "Доступ запрещён",
+    "permissionDeniedMessage": "Доступ к контактам запрещён. Пожалуйста, разрешите в настройках.",
+    "openSettings": "Открыть настройки",
+    "cancel": "Отмена",
+    "loadingContacts": "Загрузка контактов...",
+    "searchPlaceholder": "Поиск контактов...",
+    "noContactsFound": "Контакты не найдены",
+    "noContactsFoundMessage": "Контакты, соответствующие вашему запросу, не найдены.",
+    "noContacts": "Нет контактов",
+    "noContactsMessage": "На вашем устройстве нет контактов.",
+    "selectAll": "Выбрать все",
+    "deselectAll": "Снять выбор",
+    "selectedCount": "{{count}} выбрано",
+    "blockSelected": "Заблокировать выбранные",
+    "blocking": "Блокировка...",
+    "successTitle": "Успешно",
+    "successMessage": "{{count}} контактов заблокировано. Они не увидят вас в Accord.",
+    "errorTitle": "Ошибка",
+    "errorMessage": "Не удалось заблокировать контакты. Попробуйте снова.",
+    "blockedContacts": "Заблокированные контакты",
+    "blockedContactsCount": "{{count}} контактов заблокировано",
+    "noBlockedContacts": "Нет заблокированных контактов",
+    "noBlockedContactsMessage": "У вас нет заблокированных контактов.",
+    "unblock": "Разблокировать",
+    "unblocking": "Разблокировка...",
+    "unblockSuccess": "Контакт разблокирован",
+    "unblockError": "Не удалось разблокировать. Попробуйте снова.",
+    "privacyNote": "Ваши контакты защищены и конфиденциальны. Мы используем их только для предотвращения взаимной видимости.",
+    "privacyExplanation": "Блокировка контактов не позволит им видеть вас в Accord и вам видеть их. Эта функция полностью опциональна.",
+    "learnMore": "Узнать больше",
+    "done": "Готово",
+    "refreshContacts": "Обновить контакты",
+    "lastUpdated": "Последнее обновление: {{time}}",
+    "addMore": "Добавить ещё",
+    "removeFromBlocked": "Удалить из заблокированных"
+  },
+  "countryBlocking": {
+    "title": "Блокировка стран",
+    "subtitle": "Ваш профиль не будет показан пользователям из этих стран",
+    "searchPlaceholder": "Поиск страны...",
+    "noCountriesFound": "Страны не найдены",
+    "selectCountries": "Выберите страны для блокировки",
+    "selectedCount": "{{count}} стран выбрано",
+    "blockSelected": "Заблокировать выбранные страны",
+    "blockedCountries": "Заблокированные страны",
+    "blockedCountriesCount": "{{count}} стран заблокировано",
+    "noBlockedCountries": "Нет заблокированных стран",
+    "noBlockedCountriesMessage": "У вас нет заблокированных стран.",
+    "unblock": "Разблокировать",
+    "blocking": "Блокировка...",
+    "unblocking": "Разблокировка...",
+    "successTitle": "Успешно",
+    "successMessage": "{{count}} стран заблокировано",
+    "unblockSuccess": "Страна разблокирована",
+    "errorTitle": "Ошибка",
+    "errorMessage": "Не удалось заблокировать страны. Попробуйте снова.",
+    "unblockError": "Не удалось разблокировать. Попробуйте снова.",
+    "privacyNote": "Ваш профиль не будет показан пользователям из заблокированных стран.",
+    "done": "Готово"
+  },
+  "languageSettings": {
+    "title": "Настройки языка",
+    "subtitle": "Выберите предпочитаемый язык приложения",
+    "currentLanguage": "Текущий язык",
+    "selectLanguage": "Выбрать язык",
+    "searchLanguages": "Поиск языков...",
+    "languageChanged": "Язык изменён на {{language}}",
+    "restartRequired": "Некоторые изменения могут вступить в силу при следующем запуске",
+    "systemDefault": "По умолчанию системы",
+    "useSystemLanguage": "Использовать системный язык"
   }
 }

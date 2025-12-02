@@ -19,9 +19,9 @@ export function GradientButton({
   className = '',
 }: GradientButtonProps) {
   const gradientColors = {
-    primary: ['#A78BFA', '#B8A9DD'] as const, // Lavender to Soft Lavender
-    sunset: ['#FB923C', '#B8A9DD'] as const, // Orange to Soft Lavender
-    twilight: ['#9B87CE', '#3B82F6'] as const, // Deep Purple to Electric Blue
+    primary: ['#CDC2E5', '#CDC2E5'] as const, // Lavender to Soft Lavender
+    sunset: ['#FB923C', '#CDC2E5'] as const, // Orange to Soft Lavender
+    twilight: ['#A08AB7', '#3B82F6'] as const, // Deep Purple to Electric Blue
   };
 
   return (

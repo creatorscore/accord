@@ -152,7 +152,7 @@ export default function BetaFeedback() {
               <Ionicons
                 name={type.icon}
                 size={24}
-                color={feedbackType === type.value ? '#9B87CE' : '#6B7280'}
+                color={feedbackType === type.value ? '#A08AB7' : '#6B7280'}
               />
               <Text
                 style={[styles.typeLabel, feedbackType === type.value && styles.typeLabelActive]}
@@ -262,7 +262,7 @@ export default function BetaFeedback() {
           <Ionicons
             name={allowContact ? 'checkbox' : 'square-outline'}
             size={24}
-            color="#9B87CE"
+            color="#A08AB7"
           />
           <Text style={styles.checkboxLabel}>You can contact me about this feedback</Text>
         </TouchableOpacity>
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   typeCardActive: {
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
     backgroundColor: '#F3F0FF',
   },
   typeLabel: {
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   typeLabelActive: {
-    color: '#9B87CE',
+    color: '#A08AB7',
     fontWeight: '600',
   },
   input: {
@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   submitButton: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',

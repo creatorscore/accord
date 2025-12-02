@@ -61,19 +61,23 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .from('profiles')
         .select('is_premium, is_platinum')
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
 
       console.log('📊 Database query result:', { data, error });
 
       // If profile doesn't exist yet (user is in onboarding), silently return
       if (error) {
-        if (error.code === 'PGRST116') {
-          console.log('Profile not found yet - user likely in onboarding. Premium status will be loaded after profile creation.');
-          setDbPremiumStatus(false);
-          setDbPlatinumStatus(false);
-          return;
-        }
-        throw error;
+        console.log('Error loading premium status:', error.message);
+        setDbPremiumStatus(false);
+        setDbPlatinumStatus(false);
+        return;
+      }
+
+      if (!data) {
+        console.log('Profile not found yet - user likely in onboarding. Premium status will be loaded after profile creation.');
+        setDbPremiumStatus(false);
+        setDbPlatinumStatus(false);
+        return;
       }
 
       const premium = data?.is_premium || false;
@@ -166,15 +170,15 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (!user) return;
 
     try {
-      // Get current profile
+      // Get current profile (use maybeSingle since profile might not exist yet)
       const { data: profile } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!profile) {
-        console.error('Profile not found for sync');
+        console.log('Profile not found for sync - user might be in onboarding');
         return;
       }
 

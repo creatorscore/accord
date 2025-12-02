@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,8 +18,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 import { formatDistance } from '@/lib/geolocation';
 import { formatHeight, HeightUnit } from '@/lib/height-utils';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
@@ -58,12 +58,12 @@ interface Profile {
   personality_type?: string;
   love_language?: string | string[]; // Can be single or array for multi-select
   languages_spoken?: string[];
-  my_story?: string;
   religion?: string;
   political_views?: string;
   prompt_answers?: Array<{ prompt: string; answer: string }>;
   voice_intro_url?: string;
   voice_intro_duration?: number;
+  voice_intro_prompt?: string;
   hobbies?: string[];
   interests?: {
     movies?: string[];
@@ -73,6 +73,8 @@ interface Profile {
   };
   photo_blur_enabled?: boolean; // Privacy: blur photos until matched
   preferences?: any; // Add preferences for compatibility
+  last_active_at?: string;
+  hide_last_active?: boolean;
 }
 
 interface Preferences {
@@ -221,6 +223,25 @@ const formatArrayWithLabels = (value?: string | string[]): string => {
   return items.map(formatLabel).join(', ');
 };
 
+// Helper function to format last active time
+const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boolean | undefined): string | null => {
+  if (hideLastActive || !lastActiveAt) return null;
+
+  const lastActive = new Date(lastActiveAt);
+  const now = new Date();
+  const diffMs = now.getTime() - lastActive.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMins < 5) return 'Active now';
+  if (diffMins < 60) return `Active ${diffMins}m ago`;
+  if (diffHours < 24) return `Active ${diffHours}h ago`;
+  if (diffDays === 1) return 'Active yesterday';
+  if (diffDays < 7) return `Active ${diffDays}d ago`;
+  return null;
+};
+
 export default function ImmersiveProfileCard({
   profile,
   preferences,
@@ -238,15 +259,38 @@ export default function ImmersiveProfileCard({
   currentProfileId,
 }: ImmersiveProfileCardProps) {
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackProgress, setPlaybackProgress] = useState(0);
+  const [isVoicePlaying, setIsVoicePlaying] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
 
+  // Audio state
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [playbackProgress, setPlaybackProgress] = useState(0);
+  const [playbackDuration, setPlaybackDuration] = useState(profile.voice_intro_duration ? profile.voice_intro_duration * 1000 : 0);
+
   const photos = profile.photos || [];
   const heroPhoto = photos[0]?.url || 'https://via.placeholder.com/400x600';
+
+  // Fallback waveform bars
+  const waveformBars = useMemo(() => {
+    const seed = profile.display_name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const bars = [];
+    for (let i = 0; i < 35; i++) {
+      const noise = Math.sin(seed + i * 0.5) * 0.3 + Math.sin(seed + i * 0.2) * 0.2;
+      const base = 0.3 + Math.abs(Math.sin((seed + i) * 0.15)) * 0.5;
+      const height = Math.max(0.15, Math.min(1, base + noise));
+      bars.push(height);
+    }
+    return bars;
+  }, [profile.display_name]);
+
+  const formatTime = (milliseconds: number) => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   // Screenshot tracking - log when someone screenshots this profile
   useScreenCaptureProtection(visible, async () => {
@@ -263,39 +307,40 @@ export default function ImmersiveProfileCard({
     };
   }, [sound]);
 
-  const playVoiceIntro = async () => {
+  const handleVoicePlayPause = async () => {
+    if (!profile.voice_intro_url) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     try {
-      if (isPlaying && sound) {
+      if (sound && isVoicePlaying) {
         await sound.pauseAsync();
-        setIsPlaying(false);
-        return;
-      }
-
-      if (!profile.voice_intro_url) return;
-
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-      if (!sound) {
+        setIsVoicePlaying(false);
+      } else if (sound && !isVoicePlaying) {
+        await sound.playAsync();
+        setIsVoicePlaying(true);
+      } else {
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri: profile.voice_intro_url },
           { shouldPlay: true },
           (status) => {
-            if (status.isLoaded && status.durationMillis) {
-              setPlaybackProgress(status.positionMillis / status.durationMillis);
+            if (status.isLoaded) {
+              if (status.durationMillis) {
+                setPlaybackDuration(status.durationMillis);
+                setPlaybackProgress(status.positionMillis / status.durationMillis);
+              }
               if (status.didJustFinish) {
-                setIsPlaying(false);
+                setIsVoicePlaying(false);
                 setPlaybackProgress(0);
               }
             }
           }
         );
         setSound(newSound);
-        setIsPlaying(true);
-      } else {
-        await sound.playAsync();
-        setIsPlaying(true);
+        setIsVoicePlaying(true);
       }
     } catch (error) {
+      console.error('Error playing voice intro:', error);
       Alert.alert('Error', 'Could not play voice intro');
     }
   };
@@ -396,9 +441,15 @@ export default function ImmersiveProfileCard({
                 <MaterialCommunityIcons name="check-decagram" size={28} color="#3B82F6" />
               )}
               {profile.photo_verified && (
-                <MaterialCommunityIcons name="camera-check" size={28} color="#22c55e" />
+                <MaterialCommunityIcons name="check-decagram" size={28} color="#A08AB7" />
               )}
             </View>
+            {getLastActiveText(profile.last_active_at, profile.hide_last_active) && (
+              <View style={styles.lastActiveRow}>
+                <View style={[styles.activeIndicator, { backgroundColor: getLastActiveText(profile.last_active_at, profile.hide_last_active) === 'Active now' ? '#22c55e' : '#A08AB7' }]} />
+                <Text style={styles.lastActiveText}>{getLastActiveText(profile.last_active_at, profile.hide_last_active)}</Text>
+              </View>
+            )}
             {(profile.gender || profile.pronouns || profile.ethnicity) && (
               <View style={styles.heroIdentity}>
                 <Text style={styles.heroIdentityText}>
@@ -423,47 +474,66 @@ export default function ImmersiveProfileCard({
         </View>
 
         <View style={styles.content}>
-          {/* Voice Intro */}
+          {/* Voice Intro - Simple Hinge-style Design */}
           {profile.voice_intro_url && (
-            <TouchableOpacity onPress={playVoiceIntro} style={styles.voiceCard} activeOpacity={0.8}>
-              <LinearGradient
-                colors={['#9B87CE', '#9B87CE']}
-                style={styles.voiceGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <View style={styles.voiceLeft}>
-                  <View style={styles.voiceIconContainer}>
-                    <Ionicons name={isPlaying ? 'pause' : 'play'} size={24} color="white" />
-                  </View>
-                  <View style={styles.voiceTextContainer}>
-                    <Text style={styles.voiceTitle}>🎤 Voice Intro</Text>
-                    <Text style={styles.voiceDuration}>
-                      {profile.voice_intro_duration ? `${profile.voice_intro_duration}s` : 'Tap to hear my voice'}
-                    </Text>
+            <View style={styles.voiceContainer}>
+              {/* Prompt Text */}
+              <Text style={styles.voicePromptText}>
+                {profile.voice_intro_prompt || `${profile.display_name}'s voice intro`}
+              </Text>
+
+              {/* Audio Player with Real Waveform */}
+              <View style={styles.voicePlayerContainer}>
+                {/* Play/Pause Button */}
+                <TouchableOpacity
+                  style={styles.voicePlayButton}
+                  onPress={handleVoicePlayPause}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={isVoicePlaying ? "pause" : "play"}
+                    size={20}
+                    color="white"
+                  />
+                </TouchableOpacity>
+
+                {/* Waveform */}
+                <View style={styles.voiceWaveformContainer}>
+                  <View style={styles.voiceWaveform}>
+                    {waveformBars.map((barHeight, index) => {
+                      const progressBarCount = Math.floor(playbackProgress * waveformBars.length);
+                      const isPlayed = index < progressBarCount;
+                      return (
+                        <View
+                          key={index}
+                          style={[
+                            styles.voiceWaveBar,
+                            {
+                              height: 24 * barHeight,
+                              backgroundColor: isPlayed ? '#A08AB7' : '#EBE6F2',
+                            },
+                          ]}
+                        />
+                      );
+                    })}
                   </View>
                 </View>
-                {isPlaying && (
-                  <View style={styles.waveform}>
-                    {[...Array(4)].map((_, i) => (
-                      <Animated.View key={i} style={styles.waveBar} />
-                    ))}
-                  </View>
-                )}
-              </LinearGradient>
-              {playbackProgress > 0 && (
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: `${playbackProgress * 100}%` }]} />
-                </View>
-              )}
-            </TouchableOpacity>
+
+                {/* Duration */}
+                <Text style={styles.voiceDuration}>
+                  {isVoicePlaying || playbackProgress > 0
+                    ? formatTime(playbackProgress * playbackDuration)
+                    : formatTime(playbackDuration)}
+                </Text>
+              </View>
+            </View>
           )}
 
           {/* Compatibility Score */}
           {profile.compatibility_score && (
             <View style={styles.compatibilityCard}>
               <View style={styles.compatibilityHeader}>
-                <MaterialCommunityIcons name="heart-circle" size={36} color="#9B87CE" />
+                <MaterialCommunityIcons name="heart-circle" size={36} color="#A08AB7" />
                 <View style={styles.compatibilityTextBox}>
                   <Text style={styles.compatibilityScore}>{profile.compatibility_score}%</Text>
                   <Text style={styles.compatibilityLabel}>Compatibility Match</Text>
@@ -472,17 +542,17 @@ export default function ImmersiveProfileCard({
               <View style={styles.compatibilityBreakdown}>
                 {compatibilityBreakdown ? (
                   <>
-                    <CompFactorBar label="Marriage Goals" score={Math.round(compatibilityBreakdown.goals)} color="#9B87CE" />
-                    <CompFactorBar label="Location" score={Math.round(compatibilityBreakdown.location)} color="#3B82F6" />
-                    <CompFactorBar label="Lifestyle" score={Math.round(compatibilityBreakdown.lifestyle)} color="#10B981" />
-                    <CompFactorBar label="Personality" score={Math.round(compatibilityBreakdown.personality)} color="#F59E0B" />
+                    <CompFactorBar label="Marriage Goals" score={Math.round(compatibilityBreakdown.goals)} color="#A08AB7" />
+                    <CompFactorBar label="Location" score={Math.round(compatibilityBreakdown.location)} color="#A08AB7" />
+                    <CompFactorBar label="Lifestyle" score={Math.round(compatibilityBreakdown.lifestyle)} color="#A08AB7" />
+                    <CompFactorBar label="Personality" score={Math.round(compatibilityBreakdown.personality)} color="#A08AB7" />
                   </>
                 ) : (
                   <>
-                    <CompFactorBar label="Marriage Goals" score={92} color="#9B87CE" />
-                    <CompFactorBar label="Location" score={85} color="#3B82F6" />
-                    <CompFactorBar label="Lifestyle" score={88} color="#10B981" />
-                    <CompFactorBar label="Personality" score={90} color="#F59E0B" />
+                    <CompFactorBar label="Marriage Goals" score={92} color="#A08AB7" />
+                    <CompFactorBar label="Location" score={85} color="#A08AB7" />
+                    <CompFactorBar label="Lifestyle" score={88} color="#A08AB7" />
+                    <CompFactorBar label="Personality" score={90} color="#A08AB7" />
                   </>
                 )}
               </View>
@@ -494,14 +564,6 @@ export default function ImmersiveProfileCard({
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>About {profile.display_name}</Text>
               <Text style={styles.bioText}>{profile.bio}</Text>
-            </View>
-          )}
-
-          {/* My Story - Longer narrative */}
-          {profile.my_story && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>My Story</Text>
-              <Text style={styles.bioText}>{profile.my_story}</Text>
             </View>
           )}
 
@@ -525,7 +587,7 @@ export default function ImmersiveProfileCard({
           {/* MARRIAGE GOALS - MOST IMPORTANT */}
           <View style={styles.criticalSection}>
             <View style={styles.criticalHeader}>
-              <MaterialCommunityIcons name="ring" size={28} color="#9B87CE" />
+              <MaterialCommunityIcons name="ring" size={28} color="#A08AB7" />
               <Text style={styles.criticalTitle}>Marriage Goals & Expectations</Text>
             </View>
 
@@ -758,7 +820,7 @@ export default function ImmersiveProfileCard({
               {profile.interests.movies && profile.interests.movies.length > 0 && (
                 <View style={styles.favoriteCategory}>
                   <View style={styles.favoriteCategoryHeader}>
-                    <MaterialCommunityIcons name="movie-open" size={22} color="#B8A9DD" />
+                    <MaterialCommunityIcons name="movie-open" size={22} color="#CDC2E5" />
                     <Text style={styles.favoriteCategoryTitle}>Movies</Text>
                   </View>
                   <View style={styles.favoritesList}>
@@ -772,7 +834,7 @@ export default function ImmersiveProfileCard({
               {profile.interests.music && profile.interests.music.length > 0 && (
                 <View style={styles.favoriteCategory}>
                   <View style={styles.favoriteCategoryHeader}>
-                    <MaterialCommunityIcons name="music" size={22} color="#9B87CE" />
+                    <MaterialCommunityIcons name="music" size={22} color="#A08AB7" />
                     <Text style={styles.favoriteCategoryTitle}>Music Artists</Text>
                   </View>
                   <View style={styles.favoritesList}>
@@ -914,7 +976,7 @@ export default function ImmersiveProfileCard({
             <View style={styles.matchedActionContainer}>
               <TouchableOpacity onPress={onSendMessage} style={styles.messageButton}>
                 <LinearGradient
-                  colors={['#9B87CE', '#B8A9DD']}
+                  colors={['#A08AB7', '#CDC2E5']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.messageButtonGradient}
@@ -1000,7 +1062,7 @@ const CompFactorBar = ({ label, score, color }: { label: string; score: number; 
 
 const LifestyleItem = ({ icon, label, value }: { icon: string; label: string; value: string }) => (
   <View style={styles.lifestyleItem}>
-    <MaterialCommunityIcons name={icon as any} size={22} color="#9B87CE" />
+    <MaterialCommunityIcons name={icon as any} size={22} color="#A08AB7" />
     <View style={styles.lifestyleText}>
       <Text style={styles.lifestyleLabel}>{label}</Text>
       <Text style={styles.lifestyleValue}>{value}</Text>
@@ -1047,7 +1109,7 @@ const styles = StyleSheet.create({
   },
   headerMatch: {
     fontSize: 13,
-    color: '#9B87CE',
+    color: '#A08AB7',
     fontWeight: '600',
   },
   closeContainer: {
@@ -1166,6 +1228,22 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
   },
+  lastActiveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  activeIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  lastActiveText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '500',
+  },
   heroIdentity: {
     marginBottom: 6,
   },
@@ -1193,67 +1271,58 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
   },
-  voiceCard: {
+  voiceContainer: {
     marginBottom: 20,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#9B87CE',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  voiceGradient: {
+  voicePromptText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 10,
+  },
+  voicePlayerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 20,
+    gap: 12,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 28,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingRight: 16,
   },
-  voiceLeft: {
-    flexDirection: 'row',
+  voicePlayButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#A08AB7',
     alignItems: 'center',
-    gap: 14,
-    flex: 1,
-  },
-  voiceIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  voiceTextContainer: {
+  voiceWaveformContainer: {
     flex: 1,
+    height: 32,
+    justifyContent: 'center',
   },
-  voiceTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 4,
+  voiceWaveform: {
+    height: 32,
   },
-  voiceDuration: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  waveform: {
+  fallbackWaveform: {
     flexDirection: 'row',
-    gap: 3,
     alignItems: 'center',
-  },
-  waveBar: {
-    width: 3,
     height: 24,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    gap: 2,
+  },
+  voiceWaveBar: {
+    flex: 1,
+    minWidth: 2,
+    maxWidth: 3,
     borderRadius: 1.5,
   },
-  progressBar: {
-    height: 3,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: 'white',
+  voiceDuration: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#71717A',
+    minWidth: 36,
   },
   compatibilityCard: {
     backgroundColor: '#F9FAFB',
@@ -1275,7 +1344,7 @@ const styles = StyleSheet.create({
   compatibilityScore: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   compatibilityLabel: {
     fontSize: 15,
@@ -1335,12 +1404,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   criticalSection: {
-    backgroundColor: '#FEFCE8',
+    backgroundColor: '#CDC2E5',
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
-    borderWidth: 2,
-    borderColor: '#FDE047',
   },
   criticalHeader: {
     flexDirection: 'row',
@@ -1383,16 +1450,18 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   promptQuestion: {
-    fontSize: 15,
-    color: '#6B7280',
-    fontWeight: '600',
-    marginBottom: 10,
+    fontSize: 14,
+    color: '#000000',
+    fontWeight: '700',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   promptAnswer: {
-    fontSize: 18,
-    color: '#1F2937',
-    lineHeight: 26,
-    fontWeight: '500',
+    fontSize: 22,
+    color: '#000000',
+    lineHeight: 32,
+    fontWeight: '400',
   },
   promptPhoto: {
     width: '100%',
@@ -1466,7 +1535,7 @@ const styles = StyleSheet.create({
   messageButton: {
     borderRadius: 28,
     overflow: 'hidden',
-    shadowColor: '#9B87CE',
+    shadowColor: '#A08AB7',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -1500,7 +1569,7 @@ const styles = StyleSheet.create({
   },
   hobbyText: {
     fontSize: 15,
-    color: '#9B87CE',
+    color: '#A08AB7',
     fontWeight: '600',
   },
   favoriteCategory: {

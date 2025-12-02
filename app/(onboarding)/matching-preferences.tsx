@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 import { supabase } from '@/lib/supabase';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 import { formatDistanceSlider, DistanceUnit } from '@/lib/distance-utils';
-import { registerForPushNotifications, savePushToken } from '@/lib/notifications';
+import { registerForPushNotifications, savePushToken, ensurePushTokenSaved } from '@/lib/notifications';
 import Slider from '@react-native-community/slider';
 
 const GENDER_OPTIONS = [
@@ -30,6 +31,8 @@ const GENDER_OPTIONS = [
 export default function MatchingPreferences() {
   const router = useRouter();
   const { user } = useAuth();
+  // Get push token from NotificationContext (already registered on login)
+  const { pushToken: contextPushToken, notificationsEnabled: contextNotificationsEnabled } = useNotifications();
   const [profileId, setProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -39,8 +42,18 @@ export default function MatchingPreferences() {
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('miles');
   const [willingToRelocate, setWillingToRelocate] = useState(false);
   const [genderPreference, setGenderPreference] = useState<string[]>([]);
+  // Use context values as initial state, allow local override if user enables here
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationToken, setNotificationToken] = useState<string | null>(null);
+
+  // Sync with context on mount
+  useEffect(() => {
+    if (contextPushToken) {
+      setNotificationToken(contextPushToken);
+      setNotificationsEnabled(true);
+      console.log('📱 Push token already available from context');
+    }
+  }, [contextPushToken]);
 
   useEffect(() => {
     loadProfile();
@@ -108,6 +121,24 @@ export default function MatchingPreferences() {
     try {
       setLoading(true);
 
+      // Verify user has at least 2 photos before completing profile
+      const { data: photos, error: photosError } = await supabase
+        .from('photos')
+        .select('id')
+        .eq('profile_id', profileId);
+
+      if (photosError) throw photosError;
+
+      if (!photos || photos.length < 2) {
+        Alert.alert(
+          'Photos Required',
+          'Please add at least 2 photos to complete your profile.',
+          [{ text: 'OK', onPress: () => router.push('/(onboarding)/add-photos') }]
+        );
+        setLoading(false);
+        return;
+      }
+
       // Update preferences
       const { error: prefsError } = await supabase
         .from('preferences')
@@ -134,13 +165,33 @@ export default function MatchingPreferences() {
 
       if (profileError) throw profileError;
 
-      // Save notification token if user enabled notifications
-      if (notificationToken && user?.id) {
+      // ALWAYS try to save push token at end of onboarding
+      // This is critical for Android users who might have skipped the notification prompt
+      if (user?.id) {
         try {
-          await savePushToken(user.id, notificationToken);
-          console.log('✅ Push token saved after onboarding completion');
+          // First, try to use existing token (from context or local state)
+          let tokenToSave = notificationToken || contextPushToken;
+
+          // If no token exists, try to register one now
+          if (!tokenToSave) {
+            console.log('📱 No push token found, attempting to register...');
+            tokenToSave = await registerForPushNotifications();
+          }
+
+          if (tokenToSave) {
+            // Use ensurePushTokenSaved which handles both profiles and device_tokens tables
+            const saved = await ensurePushTokenSaved(user.id, tokenToSave);
+            if (saved) {
+              console.log('✅ Push token saved after onboarding completion');
+            } else {
+              console.warn('⚠️ Push token save returned false - will retry via NotificationContext');
+            }
+          } else {
+            console.log('📱 No push token available (user denied permissions or running in simulator)');
+          }
         } catch (pushError) {
           console.warn('Push notification save failed:', pushError);
+          // Don't block onboarding completion for push notification failures
         }
       }
 
@@ -160,11 +211,11 @@ export default function MatchingPreferences() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 8 of 8</Text>
-            <Text className="text-sm text-primary-500 font-bold">100%</Text>
+            <Text className="text-sm text-lavender-500 font-bold">100%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
-              className="h-3 bg-primary-500 rounded-full"
+              className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '100%' }}
             />
           </View>
@@ -196,7 +247,7 @@ export default function MatchingPreferences() {
                   step={1}
                   value={ageMin}
                   onValueChange={setAgeMin}
-                  minimumTrackTintColor="#9B87CE"
+                  minimumTrackTintColor="#A08AB7"
                   maximumTrackTintColor="#D1D5DB"
                 />
               </View>
@@ -208,7 +259,7 @@ export default function MatchingPreferences() {
                   step={1}
                   value={ageMax}
                   onValueChange={setAgeMax}
-                  minimumTrackTintColor="#9B87CE"
+                  minimumTrackTintColor="#A08AB7"
                   maximumTrackTintColor="#D1D5DB"
                 />
               </View>
@@ -224,7 +275,7 @@ export default function MatchingPreferences() {
               <TouchableOpacity
                 className={`flex-1 py-3 rounded-xl border ${
                   distanceUnit === 'miles'
-                    ? 'bg-primary-500 border-primary-500'
+                    ? 'bg-lavender-500 border-lavender-500'
                     : 'bg-white border-gray-300'
                 }`}
                 onPress={() => setDistanceUnit('miles')}
@@ -240,7 +291,7 @@ export default function MatchingPreferences() {
               <TouchableOpacity
                 className={`flex-1 py-3 rounded-xl border ${
                   distanceUnit === 'km'
-                    ? 'bg-primary-500 border-primary-500'
+                    ? 'bg-lavender-500 border-lavender-500'
                     : 'bg-white border-gray-300'
                 }`}
                 onPress={() => setDistanceUnit('km')}
@@ -267,7 +318,7 @@ export default function MatchingPreferences() {
               step={10}
               value={maxDistance}
               onValueChange={setMaxDistance}
-              minimumTrackTintColor="#9B87CE"
+              minimumTrackTintColor="#A08AB7"
               maximumTrackTintColor="#D1D5DB"
             />
           </View>
@@ -283,7 +334,7 @@ export default function MatchingPreferences() {
               </Text>
               <View
                 className={`w-12 h-7 rounded-full ${
-                  willingToRelocate ? 'bg-primary-500' : 'bg-gray-300'
+                  willingToRelocate ? 'bg-lavender-500' : 'bg-gray-300'
                 }`}
               >
                 <View
@@ -306,7 +357,7 @@ export default function MatchingPreferences() {
                   key={gender}
                   className={`px-4 py-2 rounded-full border ${
                     genderPreference.includes(gender)
-                      ? 'bg-primary-500 border-primary-500'
+                      ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => toggleGenderPreference(gender)}
@@ -328,15 +379,15 @@ export default function MatchingPreferences() {
           {/* Notification Permission */}
           <View className="mt-6">
             <View className={`border-2 rounded-2xl p-5 ${
-              notificationsEnabled ? 'bg-primary-50 border-primary-500' : 'bg-gray-50 border-gray-300'
+              (notificationsEnabled || contextNotificationsEnabled) ? 'bg-lavender-50 border-lavender-500' : 'bg-gray-50 border-gray-300'
             }`}>
               <View className="flex-row items-center mb-3">
                 <Text className="text-2xl mr-2">🔔</Text>
                 <Text className="text-xl font-bold text-gray-900 flex-1">
                   Stay in the Loop
                 </Text>
-                {notificationsEnabled && (
-                  <View className="bg-primary-500 px-3 py-1 rounded-full">
+                {(notificationsEnabled || contextNotificationsEnabled) && (
+                  <View className="bg-lavender-500 px-3 py-1 rounded-full">
                     <Text className="text-white text-xs font-bold">Enabled</Text>
                   </View>
                 )}
@@ -344,9 +395,9 @@ export default function MatchingPreferences() {
               <Text className="text-gray-700 mb-4 leading-6">
                 Get instant alerts when you match, receive messages, or someone likes your profile. Don't miss your perfect match!
               </Text>
-              {!notificationsEnabled ? (
+              {!(notificationsEnabled || contextNotificationsEnabled) ? (
                 <TouchableOpacity
-                  className="bg-primary-500 py-4 rounded-xl"
+                  className="bg-lavender-500 py-4 rounded-xl"
                   onPress={handleEnableNotifications}
                 >
                   <Text className="text-white text-center font-semibold text-base">
@@ -355,7 +406,7 @@ export default function MatchingPreferences() {
                 </TouchableOpacity>
               ) : (
                 <View className="flex-row items-center justify-center py-2">
-                  <Text className="text-primary-700 font-semibold">✓ You're all set!</Text>
+                  <Text className="text-lavender-700 font-semibold">✓ You're all set!</Text>
                 </View>
               )}
             </View>
@@ -383,7 +434,7 @@ export default function MatchingPreferences() {
 
           <TouchableOpacity
             className={`flex-1 py-4 rounded-full ${
-              loading || genderPreference.length === 0 ? 'bg-gray-400' : 'bg-primary-500'
+              loading || genderPreference.length === 0 ? 'bg-gray-400' : 'bg-lavender-500'
             }`}
             style={{
               borderRadius: 9999,

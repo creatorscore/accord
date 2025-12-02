@@ -46,7 +46,7 @@ export default function ProfileQuickFacts({ facts }: ProfileQuickFactsProps) {
               <MaterialCommunityIcons
                 name={fact.icon as any}
                 size={24}
-                color="#9B87CE"
+                color="#A08AB7"
               />
             )}
             {fact.emoji && <Text style={styles.emoji}>{fact.emoji}</Text>}

@@ -15,6 +15,14 @@ import bn from '@/locales/bn.json';
 import id from '@/locales/id.json';
 import ru from '@/locales/ru.json';
 import zh from '@/locales/zh.json';
+import fr from '@/locales/fr.json';
+import de from '@/locales/de.json';
+import pl from '@/locales/pl.json';
+import ka from '@/locales/ka.json';
+import es from '@/locales/es.json';
+import it from '@/locales/it.json';
+import pt from '@/locales/pt.json';
+import uk from '@/locales/uk.json';
 
 const LANGUAGE_STORAGE_KEY = '@accord_language';
 
@@ -30,6 +38,14 @@ const resources = {
   id: { translation: id },
   ru: { translation: ru },
   zh: { translation: zh },
+  fr: { translation: fr },
+  de: { translation: de },
+  pl: { translation: pl },
+  ka: { translation: ka },
+  es: { translation: es },
+  it: { translation: it },
+  pt: { translation: pt },
+  uk: { translation: uk },
 };
 
 // RTL languages

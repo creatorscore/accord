@@ -167,11 +167,11 @@ export default function Prompts() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 5 of 7</Text>
-            <Text className="text-sm text-primary-500 font-bold">71%</Text>
+            <Text className="text-sm text-lavender-500 font-bold">71%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
-              className="h-3 bg-primary-500 rounded-full"
+              className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '71%' }}
             />
           </View>
@@ -195,7 +195,7 @@ export default function Prompts() {
                 className="bg-purple-100 border-2 border-dashed border-purple-300 rounded-3xl p-6 items-center"
                 onPress={() => setShowPromptPicker(index)}
               >
-                <MaterialCommunityIcons name="plus-circle" size={40} color="#9B87CE" />
+                <MaterialCommunityIcons name="plus-circle" size={40} color="#A08AB7" />
                 <Text className="text-purple-700 font-bold text-lg mt-2">
                   Choose a prompt
                 </Text>
@@ -203,7 +203,7 @@ export default function Prompts() {
             ) : (
               <View className="bg-white border-2 border-purple-200 rounded-3xl overflow-hidden shadow-sm">
                 <TouchableOpacity
-                  className="bg-primary-500 px-6 py-4 flex-row justify-between items-center"
+                  className="bg-lavender-500 px-6 py-4 flex-row justify-between items-center"
                   onPress={() => setShowPromptPicker(index)}
                 >
                   <Text className="text-white font-bold text-base flex-1">
@@ -250,7 +250,7 @@ export default function Prompts() {
                   className="py-4 border-b-2 border-purple-300 bg-purple-50 rounded-xl mb-2 px-4 flex-row items-center"
                   onPress={handleCustomPrompt}
                 >
-                  <MaterialCommunityIcons name="pencil-plus" size={24} color="#9B87CE" />
+                  <MaterialCommunityIcons name="pencil-plus" size={24} color="#A08AB7" />
                   <Text className="text-purple-700 font-bold text-base ml-3">
                     ✨ Write your own prompt
                   </Text>
@@ -328,7 +328,7 @@ export default function Prompts() {
         {/* Tips */}
         <View className="bg-purple-50 border-2 border-purple-200 rounded-3xl p-5 mb-8">
           <View className="flex-row items-center mb-3">
-            <MaterialCommunityIcons name="lightbulb-on" size={24} color="#9B87CE" />
+            <MaterialCommunityIcons name="lightbulb-on" size={24} color="#A08AB7" />
             <Text className="text-purple-900 font-bold text-lg ml-2">Pro Tips</Text>
           </View>
           <Text className="text-purple-800 text-sm mb-2">
@@ -356,7 +356,7 @@ export default function Prompts() {
             className={`flex-1 py-4 rounded-full ${
               loading || !selectedPrompts.some((p) => p.prompt && p.answer.trim())
                 ? 'bg-gray-400'
-                : 'bg-primary-500'
+                : 'bg-lavender-500'
             }`}
             style={{
               borderRadius: 9999,

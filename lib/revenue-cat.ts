@@ -313,6 +313,32 @@ export const isRevenueCatInitialized = (): boolean => {
 };
 
 /**
+ * Present the Apple promo code redemption sheet (iOS only)
+ * This allows users to redeem offer codes, custom codes, or one-time use codes
+ * created in App Store Connect
+ */
+export const presentCodeRedemptionSheet = async (): Promise<void> => {
+  if (!isInitialized) {
+    console.warn('⚠️ RevenueCat not initialized - cannot present code redemption');
+    throw new Error('RevenueCat not initialized. Please restart the app.');
+  }
+
+  if (Platform.OS !== 'ios') {
+    console.warn('⚠️ Promo code redemption is only available on iOS');
+    throw new Error('Promo code redemption is only available on iOS devices.');
+  }
+
+  try {
+    console.log('🎁 Presenting code redemption sheet...');
+    await Purchases.presentCodeRedemptionSheet();
+    console.log('✅ Code redemption sheet presented');
+  } catch (error: any) {
+    console.error('❌ Error presenting code redemption sheet:', error);
+    throw error;
+  }
+};
+
+/**
  * Sync subscription status with Supabase database
  * Call this after purchase/restore to update DB
  */

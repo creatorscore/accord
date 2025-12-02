@@ -625,7 +625,7 @@ export default function Messages() {
           onPress={() => setShowPaywall(true)}
         >
           <LinearGradient
-            colors={['#9B87CE', '#B8A9DD']}
+            colors={['#A08AB7', '#CDC2E5']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.upgradeCard}
@@ -699,7 +699,7 @@ export default function Messages() {
             <View style={styles.conversationHeader}>
               <View style={styles.nameRow}>
                 {item.is_pinned && (
-                  <MaterialCommunityIcons name="pin" size={16} color="#9B87CE" style={{ marginRight: 4 }} />
+                  <MaterialCommunityIcons name="pin" size={16} color="#A08AB7" style={{ marginRight: 4 }} />
                 )}
                 <Text style={styles.conversationName} numberOfLines={1}>
                   {item.profile.display_name}
@@ -763,7 +763,7 @@ export default function Messages() {
         </View>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
           <Text style={styles.loadingText}>{t('messages.loadingMessages')}</Text>
         </View>
       </View>
@@ -787,7 +787,7 @@ export default function Messages() {
             transition={{ type: 'spring', delay: 200 }}
           >
             <View style={styles.emptyIconContainer}>
-              <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.emptyIcon}>
+              <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.emptyIcon}>
                 <MaterialCommunityIcons name="chat-outline" size={48} color="white" />
               </LinearGradient>
             </View>
@@ -799,7 +799,7 @@ export default function Messages() {
               style={styles.emptyButton}
               onPress={() => router.push('/(tabs)/discover')}
             >
-              <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.emptyButtonGradient}>
+              <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.emptyButtonGradient}>
                 <MaterialCommunityIcons name="cards-heart" size={20} color="white" />
                 <Text style={styles.emptyButtonText}>{t('messages.findMatches')}</Text>
               </LinearGradient>
@@ -856,8 +856,8 @@ export default function Messages() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#9B87CE"
-            colors={['#9B87CE']}
+            tintColor="#A08AB7"
+            colors={['#A08AB7']}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -911,7 +911,7 @@ export default function Messages() {
                 <MaterialCommunityIcons
                   name="pin"
                   size={24}
-                  color={selectedConversation?.is_pinned ? '#9B87CE' : '#6B7280'}
+                  color={selectedConversation?.is_pinned ? '#A08AB7' : '#6B7280'}
                 />
                 <Text style={styles.actionText}>
                   {selectedConversation?.is_pinned ? t('messages.actions.unpinConversation') : t('messages.actions.pinConversation')}
@@ -997,40 +997,43 @@ export default function Messages() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAF7F0',
+    backgroundColor: '#FFFFFF',
   },
   header: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#FFFFFF',
     paddingTop: 60,
     paddingBottom: 24,
     paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E4E4E7',
   },
   archiveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#F5F2F7',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 12,
   },
   archiveButtonText: {
-    color: 'white',
+    color: '#A08AB7',
     fontSize: 14,
     fontWeight: '600',
   },
   headerTitle: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#1F2937',
     marginBottom: 4,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'Inter',
+    color: '#71717A',
   },
   loadingContainer: {
     flex: 1,
@@ -1040,7 +1043,8 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#6B7280',
+    fontFamily: 'Inter',
+    color: '#71717A',
   },
   emptyContainer: {
     flex: 1,
@@ -1200,8 +1204,8 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     fontSize: 14,
-    color: '#9B87CE',
-    fontWeight: '500',
+    fontFamily: 'Inter-Medium',
+    color: '#A08AB7',
   },
   upgradeCardContainer: {
     marginBottom: 16,
@@ -1256,8 +1260,8 @@ const styles = StyleSheet.create({
   },
   upgradeCTAText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#9B87CE',
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#A08AB7',
   },
   modalOverlay: {
     flex: 1,

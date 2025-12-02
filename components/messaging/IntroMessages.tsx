@@ -71,7 +71,7 @@ export default function IntroMessages({
       >
         <View style={styles.header}>
           <View style={styles.headerContent}>
-            <MaterialCommunityIcons name="auto-fix" size={20} color="#9B87CE" />
+            <MaterialCommunityIcons name="auto-fix" size={20} color="#A08AB7" />
             <Text style={styles.headerTitle}>Intro Message Suggestions</Text>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -102,7 +102,7 @@ export default function IntroMessages({
                 {message}
               </Text>
               <View style={styles.useButton}>
-                <MaterialCommunityIcons name="arrow-right-circle" size={20} color="#9B87CE" />
+                <MaterialCommunityIcons name="arrow-right-circle" size={20} color="#A08AB7" />
                 <Text style={styles.useButtonText}>Use</Text>
               </View>
             </LinearGradient>
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   closeButton: {
     width: 32,
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   useButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   footer: {
     flexDirection: 'row',

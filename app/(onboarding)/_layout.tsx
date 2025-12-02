@@ -54,7 +54,7 @@ export default function OnboardingLayout() {
               zIndex: 1000,
             }}
           >
-            <MaterialCommunityIcons name="logout" size={20} color="#9B87CE" />
+            <MaterialCommunityIcons name="logout" size={20} color="#A08AB7" />
           </TouchableOpacity>
         ),
         gestureEnabled: false, // Prevent back swipe

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
@@ -7,9 +7,12 @@ import { supabase } from '@/lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { trackUserAction, identifyUser } from '@/lib/analytics';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SignIn() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -285,109 +288,276 @@ export default function SignIn() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-cream"
+      style={[styles.container, { paddingTop: insets.top }]}
     >
       <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 64, paddingBottom: 40 }}
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity onPress={() => router.back()} className="mb-8">
-          <Text className="text-primary-500 text-lg font-semibold">{t('auth.signIn.backButton')}</Text>
-        </TouchableOpacity>
-
-        <Text className="text-4xl font-bold text-charcoal mb-2">
-          {t('auth.signIn.title')}
-        </Text>
-        <Text className="text-gray-600 text-lg mb-8">
-          {t('auth.signIn.subtitle')}
-        </Text>
-
-        <View className="space-y-4">
-        <View>
-          <Text className="text-gray-700 mb-2 font-medium">{t('auth.signIn.email')}</Text>
-          <TextInput
-            className="border border-gray-300 rounded-lg px-4 py-3 bg-white text-gray-900"
-            placeholder={t('auth.signIn.emailPlaceholder')}
-            placeholderTextColor="#9CA3AF"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View>
-          <Text className="text-gray-700 mb-2 font-medium">{t('auth.signIn.password')}</Text>
-          <TextInput
-            className="border border-gray-300 rounded-lg px-4 py-3 bg-white text-gray-900"
-            placeholder={t('auth.signIn.passwordPlaceholder')}
-            placeholderTextColor="#9CA3AF"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-        </View>
-
+        {/* Back Button */}
         <TouchableOpacity
-          className={`bg-primary-500 rounded-full py-4 items-center mt-4 shadow-lg ${
-            loading ? 'opacity-50' : ''
-          }`}
-          onPress={handleSignIn}
-          disabled={loading}
+          onPress={() => router.back()}
+          style={styles.backButton}
         >
-          <Text className="text-white font-bold text-lg">
-            {loading ? t('auth.signIn.signingIn') : t('auth.signIn.signInButton')}
-          </Text>
+          <Ionicons name="chevron-back" size={24} color="#A08AB7" />
+          <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          className="items-center mt-4"
-          onPress={() => router.push('/(auth)/forgot-password')}
-        >
-          <Text className="text-primary-500">{t('auth.signIn.forgotPassword')}</Text>
-        </TouchableOpacity>
+        {/* Header */}
+        <Text style={styles.title}>{t('auth.signIn.title')}</Text>
+        <Text style={styles.subtitle}>{t('auth.signIn.subtitle')}</Text>
 
-        {/* Divider */}
-        <View className="flex-row items-center my-6">
-          <View className="flex-1 h-px bg-gray-300" />
-          <Text className="mx-4 text-gray-500">{t('auth.signIn.orContinueWith')}</Text>
-          <View className="flex-1 h-px bg-gray-300" />
-        </View>
+        {/* Form */}
+        <View style={styles.form}>
+          {/* Email Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>{t('auth.signIn.email')}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={t('auth.signIn.emailPlaceholder')}
+              placeholderTextColor="#A1A1AA"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
 
-        {/* Social Sign-In Buttons */}
-        <View className="space-y-3">
+          {/* Password Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>{t('auth.signIn.password')}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={t('auth.signIn.passwordPlaceholder')}
+              placeholderTextColor="#A1A1AA"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          </View>
+
+          {/* Sign In Button */}
           <TouchableOpacity
-            className="border border-gray-300 rounded-full py-3 px-4 flex-row items-center justify-center"
-            onPress={handleGoogleSignIn}
+            style={[styles.primaryButton, loading && styles.buttonDisabled]}
+            onPress={handleSignIn}
             disabled={loading}
           >
-            <Text className="text-gray-700 font-semibold ml-2">
-              {t('auth.signIn.continueWithGoogle')}
+            <Text style={styles.primaryButtonText}>
+              {loading ? t('auth.signIn.signingIn') : t('auth.signIn.signInButton')}
             </Text>
           </TouchableOpacity>
 
-          {appleAuthAvailable && (
+          {/* Forgot Password Link */}
+          <TouchableOpacity
+            style={styles.forgotPassword}
+            onPress={() => router.push('/(auth)/forgot-password')}
+          >
+            <Text style={styles.linkText}>{t('auth.signIn.forgotPassword')}</Text>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>{t('auth.signIn.orContinueWith')}</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Social Sign-In Buttons */}
+          <View style={styles.socialButtons}>
+            {/* Google Button */}
             <TouchableOpacity
-              className="bg-black rounded-full py-3 px-4 flex-row items-center justify-center"
-              onPress={handleAppleSignIn}
+              style={styles.socialButton}
+              onPress={handleGoogleSignIn}
               disabled={loading}
             >
-              <Text className="text-white font-semibold ml-2">
-                {t('auth.signIn.continueWithApple')}
-              </Text>
+              <Ionicons name="logo-google" size={20} color="#4285F4" />
+              <Text style={styles.socialButtonText}>{t('auth.signIn.continueWithGoogle')}</Text>
             </TouchableOpacity>
-          )}
-        </View>
 
-        <View className="flex-row justify-center items-center mt-6">
-          <Text className="text-gray-600">{t('auth.signIn.noAccount')}</Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)/sign-up')}>
-            <Text className="text-primary-500 font-semibold">{t('auth.signIn.signUpLink')}</Text>
-          </TouchableOpacity>
+            {/* Apple Button */}
+            {appleAuthAvailable && (
+              <TouchableOpacity
+                style={styles.appleButton}
+                onPress={handleAppleSignIn}
+                disabled={loading}
+              >
+                <Ionicons name="logo-apple" size={20} color="#FFFFFF" />
+                <Text style={styles.appleButtonText}>{t('auth.signIn.continueWithApple')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Sign Up Link */}
+          <View style={styles.signUpContainer}>
+            <Text style={styles.signUpText}>{t('auth.signIn.noAccount')}</Text>
+            <TouchableOpacity onPress={() => router.push('/(auth)/sign-up')}>
+              <Text style={styles.signUpLink}>{t('auth.signIn.signUpLink')}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    flexGrow: 1,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  backButtonText: {
+    color: '#A08AB7',
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    marginLeft: 4,
+  },
+  title: {
+    fontSize: 32,
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 17,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  form: {
+    gap: 16,
+  },
+  inputContainer: {
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    color: '#1F2937',
+    fontSize: 16,
+    fontFamily: 'Inter',
+  },
+  primaryButton: {
+    backgroundColor: '#A08AB7',
+    borderRadius: 50,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+    shadowColor: '#A08AB7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-Bold',
+    fontSize: 17,
+  },
+  forgotPassword: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  linkText: {
+    color: '#A08AB7',
+    fontFamily: 'Inter-Medium',
+    fontSize: 16,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E4E4E7',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#71717A',
+    fontFamily: 'Inter',
+    fontSize: 14,
+  },
+  socialButtons: {
+    gap: 12,
+  },
+  socialButton: {
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
+    borderRadius: 50,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  socialButtonText: {
+    color: '#1F2937',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  appleButton: {
+    backgroundColor: '#1F2937',
+    borderRadius: 50,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appleButtonText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  signUpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+    paddingBottom: 16,
+  },
+  signUpText: {
+    color: '#71717A',
+    fontFamily: 'Inter',
+    fontSize: 16,
+  },
+  signUpLink: {
+    color: '#A08AB7',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+  },
+});

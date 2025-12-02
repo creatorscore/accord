@@ -36,6 +36,14 @@ const LANGUAGES: Language[] = [
   { code: 'id', name: 'Indonesian', nativeName: 'Bahasa Indonesia', flag: '🇮🇩', isRTL: false },
   { code: 'ru', name: 'Russian', nativeName: 'Русский', flag: '🇷🇺', isRTL: false },
   { code: 'zh', name: 'Mandarin Chinese', nativeName: '简体中文', flag: '🇨🇳', isRTL: false },
+  { code: 'fr', name: 'French', nativeName: 'Français', flag: '🇫🇷', isRTL: false },
+  { code: 'de', name: 'German', nativeName: 'Deutsch', flag: '🇩🇪', isRTL: false },
+  { code: 'pl', name: 'Polish', nativeName: 'Polski', flag: '🇵🇱', isRTL: false },
+  { code: 'ka', name: 'Georgian', nativeName: 'ქართული', flag: '🇬🇪', isRTL: false },
+  { code: 'es', name: 'Spanish', nativeName: 'Español', flag: '🇪🇸', isRTL: false },
+  { code: 'it', name: 'Italian', nativeName: 'Italiano', flag: '🇮🇹', isRTL: false },
+  { code: 'pt', name: 'Portuguese', nativeName: 'Português', flag: '🇵🇹', isRTL: false },
+  { code: 'uk', name: 'Ukrainian', nativeName: 'Українська', flag: '🇺🇦', isRTL: false },
 ];
 
 export default function LanguageSettings() {
@@ -57,8 +65,8 @@ export default function LanguageSettings() {
       // If RTL direction changed, need to reload the app
       if (currentIsRTL !== newIsRTL) {
         Alert.alert(
-          t('common.success'),
-          'Language changed! The app will reload to apply text direction changes.',
+          t('languageSettings.languageChanged'),
+          t('languageSettings.languageChangedRTL'),
           [
             {
               text: t('common.continue'),
@@ -80,10 +88,10 @@ export default function LanguageSettings() {
       } else {
         Alert.alert(
           t('common.success'),
-          'Language changed successfully!',
+          t('languageSettings.languageChangedSuccess'),
           [
             {
-              text: 'OK',
+              text: t('common.continue'),
               onPress: () => router.back(),
             },
           ]
@@ -91,7 +99,7 @@ export default function LanguageSettings() {
       }
     } catch (error) {
       console.error('Error changing language:', error);
-      Alert.alert(t('common.error'), 'Failed to change language. Please try again.');
+      Alert.alert(t('common.error'), t('languageSettings.languageChangeError'));
     }
   };
 
@@ -117,10 +125,9 @@ export default function LanguageSettings() {
           <LinearGradient colors={['#EFF6FF', '#DBEAFE']} style={styles.infoBannerGradient}>
             <MaterialCommunityIcons name="translate" size={24} color="#3B82F6" />
             <View style={styles.infoBannerContent}>
-              <Text style={styles.infoBannerTitle}>Global Language Support</Text>
+              <Text style={styles.infoBannerTitle}>{t('languageSettings.globalLanguageSupport')}</Text>
               <Text style={styles.infoBannerText}>
-                Accord is available in multiple languages. RTL (right-to-left) support included for
-                Arabic, Hebrew, Persian, and Urdu.
+                {t('languageSettings.globalLanguageSupportMessage')}
               </Text>
             </View>
           </LinearGradient>
@@ -128,7 +135,7 @@ export default function LanguageSettings() {
 
         {/* Language List */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SELECT LANGUAGE</Text>
+          <Text style={styles.sectionTitle}>{t('languageSettings.selectLanguage')}</Text>
 
           {LANGUAGES.map((language, index) => (
             <MotiView
@@ -153,7 +160,7 @@ export default function LanguageSettings() {
                 </View>
 
                 {currentLang === language.code ? (
-                  <MaterialCommunityIcons name="check-circle" size={24} color="#9B87CE" />
+                  <MaterialCommunityIcons name="check-circle" size={24} color="#A08AB7" />
                 ) : (
                   <MaterialCommunityIcons name="circle-outline" size={24} color="#D1D5DB" />
                 )}
@@ -172,17 +179,15 @@ export default function LanguageSettings() {
         <View style={styles.helpSection}>
           <MaterialCommunityIcons name="information-outline" size={20} color="#6B7280" />
           <Text style={styles.helpText}>
-            Changing to a language with different text direction (RTL/LTR) will require reloading
-            the app.
+            {t('languageSettings.rtlNote')}
           </Text>
         </View>
 
         {/* Contribution Notice */}
         <View style={styles.contributeSection}>
-          <Text style={styles.contributeTitle}>Help Translate</Text>
+          <Text style={styles.contributeTitle}>{t('languageSettings.helpTranslate')}</Text>
           <Text style={styles.contributeText}>
-            Want to help translate Accord into your language? We support 11 languages and are
-            always looking to expand. Contact us to contribute!
+            {t('languageSettings.helpTranslateMessage')}
           </Text>
         </View>
 
@@ -284,7 +289,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   languageCardSelected: {
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
     backgroundColor: '#F3E8FF',
   },
   languageContent: {

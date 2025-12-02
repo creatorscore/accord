@@ -34,7 +34,7 @@
  * - Physical: height_inches
  * - Personality: zodiac_sign, personality_type (MBTI), love_language
  * - Interests: hobbies[], interests{movies, music, books, tv_shows}
- * - Bio: bio, my_story (keyword extraction)
+ * - Bio: bio (keyword extraction)
  * - Values: religion, political_views, languages_spoken[]
  *
  * Preferences Fields:
@@ -65,7 +65,6 @@ interface Profile {
   longitude: number | null;
   height_inches?: number | null;
   bio?: string | null;
-  my_story?: string | null;
   hobbies: string[] | null;
   interests: {
     movies?: string[];

@@ -172,7 +172,7 @@ export default function DeleteAccount() {
           </Text>
 
           <TouchableOpacity style={styles.alternativeCard}>
-            <MaterialCommunityIcons name="pause-circle" size={24} color="#9B87CE" />
+            <MaterialCommunityIcons name="pause-circle" size={24} color="#A08AB7" />
             <View style={styles.alternativeContent}>
               <Text style={styles.alternativeTitle}>Take a Break</Text>
               <Text style={styles.alternativeText}>
@@ -182,7 +182,7 @@ export default function DeleteAccount() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.alternativeCard}>
-            <MaterialCommunityIcons name="eye-off" size={24} color="#9B87CE" />
+            <MaterialCommunityIcons name="eye-off" size={24} color="#A08AB7" />
             <View style={styles.alternativeContent}>
               <Text style={styles.alternativeTitle}>Privacy Settings</Text>
               <Text style={styles.alternativeText}>
@@ -192,7 +192,7 @@ export default function DeleteAccount() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.alternativeCard}>
-            <MaterialCommunityIcons name="email" size={24} color="#9B87CE" />
+            <MaterialCommunityIcons name="email" size={24} color="#A08AB7" />
             <View style={styles.alternativeContent}>
               <Text style={styles.alternativeTitle}>Contact Support</Text>
               <Text style={styles.alternativeText}>
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   reasonOptionSelected: {
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
     backgroundColor: '#F3E8FF',
   },
   radioOuter: {
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
   },
   reasonLabel: {
     fontSize: 15,

@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ForgotPassword() {
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -52,34 +55,36 @@ export default function ForgotPassword() {
     }
   };
 
+  // Email Sent Success Screen
   if (emailSent) {
     return (
-      <View className="flex-1 bg-white px-6 pt-16">
-        <TouchableOpacity onPress={() => router.back()} className="mb-8">
-          <Text className="text-primary-500 text-lg">← Back</Text>
+      <View style={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+        {/* Back Button */}
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <Ionicons name="chevron-back" size={24} color="#A08AB7" />
+          <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
 
-        <View className="items-center justify-center flex-1 -mt-20">
-          <Text className="text-6xl mb-6">📧</Text>
-          <Text className="text-2xl font-bold text-gray-900 mb-4 text-center">
-            Check Your Email
-          </Text>
-          <Text className="text-gray-600 text-center mb-8 px-4">
-            We've sent a password reset link to{'\n'}
-            <Text className="font-semibold">{email}</Text>
-          </Text>
-          <Text className="text-gray-500 text-sm text-center px-8 mb-8">
+        <View style={styles.successContainer}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="mail-outline" size={40} color="#A08AB7" />
+          </View>
+          <Text style={styles.successTitle}>Check Your Email</Text>
+          <Text style={styles.successMessage}>We've sent a password reset link to</Text>
+          <Text style={styles.emailText}>{email}</Text>
+          <Text style={styles.successInstructions}>
             Click the link in the email to reset your password. The link will expire in 1 hour.
           </Text>
 
           <TouchableOpacity
-            className={`border-2 border-primary-500 rounded-full py-3 px-8 mb-4 ${
-              resendCooldown > 0 || loading ? 'opacity-50' : ''
-            }`}
+            style={[styles.outlineButton, (resendCooldown > 0 || loading) && styles.buttonDisabled]}
             onPress={handleResend}
             disabled={resendCooldown > 0 || loading}
           >
-            <Text className="text-primary-500 font-semibold">
+            <Text style={styles.outlineButtonText}>
               {resendCooldown > 0
                 ? `Resend in ${resendCooldown}s`
                 : loading
@@ -89,10 +94,10 @@ export default function ForgotPassword() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            className="bg-primary-500 rounded-full py-3 px-8"
+            style={styles.primaryButton}
             onPress={() => router.push('/(auth)/sign-in')}
           >
-            <Text className="text-white font-semibold">Back to Sign In</Text>
+            <Text style={styles.primaryButtonText}>Back to Sign In</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -100,51 +105,226 @@ export default function ForgotPassword() {
   }
 
   return (
-    <View className="flex-1 bg-white px-6 pt-16">
-      <TouchableOpacity onPress={() => router.back()} className="mb-8">
-        <Text className="text-primary-500 text-lg">← Back</Text>
-      </TouchableOpacity>
-
-      <Text className="text-3xl font-bold text-gray-900 mb-2">
-        Forgot Password?
-      </Text>
-      <Text className="text-gray-600 mb-8">
-        Enter your email and we'll send you a link to reset your password
-      </Text>
-
-      <View className="space-y-4">
-        <View>
-          <Text className="text-gray-700 mb-2 font-medium">Email</Text>
-          <TextInput
-            className="border border-gray-300 rounded-lg px-4 py-3"
-            placeholder="your@email.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoFocus
-          />
-        </View>
-
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={[styles.container, { paddingTop: insets.top }]}
+    >
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Back Button */}
         <TouchableOpacity
-          className={`bg-primary-500 rounded-full py-4 items-center mt-4 ${
-            loading ? 'opacity-50' : ''
-          }`}
-          onPress={handleResetPassword}
-          disabled={loading}
+          onPress={() => router.back()}
+          style={styles.backButton}
         >
-          <Text className="text-white font-semibold text-lg">
-            {loading ? 'Sending...' : 'Send Reset Link'}
-          </Text>
+          <Ionicons name="chevron-back" size={24} color="#A08AB7" />
+          <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
 
-        <View className="flex-row justify-center items-center mt-6">
-          <Text className="text-gray-600">Remember your password? </Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)/sign-in')}>
-            <Text className="text-primary-500 font-semibold">Sign In</Text>
+        {/* Header */}
+        <Text style={styles.title}>Forgot Password?</Text>
+        <Text style={styles.subtitle}>
+          Enter your email and we'll send you a link to reset your password
+        </Text>
+
+        {/* Form */}
+        <View style={styles.form}>
+          {/* Email Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="your@email.com"
+              placeholderTextColor="#A1A1AA"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+            />
+          </View>
+
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={[styles.primaryButton, loading && styles.buttonDisabled]}
+            onPress={handleResetPassword}
+            disabled={loading}
+          >
+            <Text style={styles.primaryButtonText}>
+              {loading ? 'Sending...' : 'Send Reset Link'}
+            </Text>
           </TouchableOpacity>
+
+          {/* Sign In Link */}
+          <View style={styles.signInContainer}>
+            <Text style={styles.signInText}>Remember your password? </Text>
+            <TouchableOpacity onPress={() => router.push('/(auth)/sign-in')}>
+              <Text style={styles.signInLink}>Sign In</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 24,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: 16,
+    flexGrow: 1,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  backButtonText: {
+    color: '#A08AB7',
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    marginLeft: 4,
+  },
+  title: {
+    fontSize: 32,
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 17,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  form: {
+    gap: 16,
+  },
+  inputContainer: {
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    color: '#1F2937',
+    fontSize: 16,
+    fontFamily: 'Inter',
+  },
+  primaryButton: {
+    backgroundColor: '#A08AB7',
+    borderRadius: 50,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+    shadowColor: '#A08AB7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-Bold',
+    fontSize: 17,
+  },
+  outlineButton: {
+    borderWidth: 2,
+    borderColor: '#A08AB7',
+    borderRadius: 50,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  outlineButtonText: {
+    color: '#A08AB7',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+  },
+  signInContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  signInText: {
+    color: '#71717A',
+    fontFamily: 'Inter',
+    fontSize: 16,
+  },
+  signInLink: {
+    color: '#A08AB7',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+  },
+  // Success screen styles
+  successContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -80,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F5F2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  successTitle: {
+    fontSize: 28,
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#1F2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: 17,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emailText: {
+    fontSize: 17,
+    fontFamily: 'Inter-SemiBold',
+    color: '#A08AB7',
+    marginBottom: 24,
+  },
+  successInstructions: {
+    fontSize: 16,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    textAlign: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 32,
+    lineHeight: 24,
+  },
+});
