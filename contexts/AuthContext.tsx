@@ -66,6 +66,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => subscription.unsubscribe();
   }, []);
 
+  // CRITICAL SAFETY: Check if user is banned
+  useEffect(() => {
+    const checkBanStatus = async () => {
+      if (!user) return;
+
+      try {
+        // Get user's profile ID (use maybeSingle - user might not have a profile yet)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!profile) return;
+
+        // Check if banned by user_id or profile_id
+        const { data: banData } = await supabase
+          .from('bans')
+          .select('id, ban_reason')
+          .or(`banned_user_id.eq.${user.id},banned_profile_id.eq.${profile.id}`)
+          .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
+          .maybeSingle();
+
+        if (banData) {
+          console.log('🚨 USER IS BANNED - signing out');
+          // Sign out the banned user
+          await supabase.auth.signOut();
+          // Alert will be shown by the sign-in screen
+        }
+      } catch (error) {
+        console.error('Error checking ban status:', error);
+      }
+    };
+
+    checkBanStatus();
+  }, [user]);
+
   // Initialize encryption keys for authenticated users
   useEffect(() => {
     const setupEncryption = async () => {
@@ -82,12 +119,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         console.log('🔐 Initializing encryption keys...');
         const publicKey = await initializeEncryption(user.id);
 
-        // Store public key in user's profile
+        // Store public key in user's profile (use maybeSingle - profile might not exist yet)
         const { data: profile } = await supabase
           .from('profiles')
           .select('id')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
         if (profile) {
           await supabase

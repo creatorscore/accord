@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 export default function PhotoVerificationCard() {
   const { user } = useAuth();
@@ -86,24 +87,52 @@ export default function PhotoVerificationCard() {
 
     } catch (error: any) {
       console.error('Error taking selfie:', error);
-      Alert.alert('Error', 'Failed to take selfie. Please try again.');
+      // TEMPORARY: Show actual error for debugging
+      Alert.alert('Selfie Error', `Stage: Camera/Image\n\nError: ${error?.message || error?.toString() || 'Unknown error'}`);
     }
   };
 
   const verifySelfie = async (imageUri: string) => {
     setVerifying(true);
     try {
-      // Read image as base64
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
+      // Resize and compress image to reduce payload size
+      // AWS Rekognition works well with 800x800 images
+      console.log('📷 Resizing image for verification...');
+      const manipulated = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 800, height: 800 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      // Read resized image as base64
+      const base64 = await FileSystem.readAsStringAsync(manipulated.uri, {
+        encoding: 'base64',
       });
 
       // Call Edge Function
+      console.log('📤 Calling photo-verification-start edge function...');
+      console.log('📷 Base64 length:', base64.length, '(~' + Math.round(base64.length / 1024) + ' KB)');
+
       const { data, error } = await supabase.functions.invoke('photo-verification-start', {
         body: { selfie_base64: base64 },
       });
 
-      if (error) throw error;
+      console.log('📥 Edge function response:', { data, error });
+
+      if (error) {
+        // Attach any additional data from the response to the error
+        const enhancedError = new Error(error.message || 'Edge function error');
+        (enhancedError as any).details = data?.details || data?.error || '';
+        (enhancedError as any).originalError = error;
+        throw enhancedError;
+      }
+
+      // Check if data contains an error (edge function returned error in response body)
+      if (data?.error && !data?.success) {
+        const dataError = new Error(data.error);
+        (dataError as any).details = data.details || data.message || '';
+        throw dataError;
+      }
 
       // Refresh profile to get updated status
       await loadProfile();
@@ -129,23 +158,35 @@ export default function PhotoVerificationCard() {
     } catch (error: any) {
       console.error('Error verifying selfie:', error);
 
+      // Extract the actual error message from different error formats
+      const errorMessage = error?.message || error?.error || error?.toString() || 'Unknown error';
+      const errorDetails = error?.details || '';
+
+      console.error('Error details:', { errorMessage, errorDetails, fullError: JSON.stringify(error) });
+
       // Handle specific errors
-      if (error.message?.includes('No photos to compare')) {
+      if (errorMessage?.includes('No photos to compare')) {
         Alert.alert(
           'No Profile Photos',
           'Please upload profile photos before verifying.',
           [{ text: 'OK' }]
         );
-      } else if (error.message?.includes('Already verified')) {
+      } else if (errorMessage?.includes('Already verified')) {
         Alert.alert('Already Verified', 'Your photos are already verified!');
         await loadProfile();
-      } else if (error.message?.includes('Too many attempts')) {
+      } else if (errorMessage?.includes('Too many attempts')) {
         Alert.alert(
           'Too Many Attempts',
           'You have exceeded the maximum number of verification attempts. Please contact support.'
         );
+      } else if (errorMessage?.includes('Profile not found')) {
+        Alert.alert('Error', 'Profile not found. Please try again.');
       } else {
-        Alert.alert('Error', 'Failed to verify photos. Please try again later.');
+        // TEMPORARY: Show actual error in production for debugging
+        // TODO: Revert this after fixing photo verification
+        const debugInfo = error?.debug ? `\n\nDebug: ${JSON.stringify(error.debug)}` : '';
+        const displayMessage = `Error: ${errorMessage}${errorDetails ? `\n\nDetails: ${errorDetails}` : ''}${debugInfo}`;
+        Alert.alert('Verification Error', displayMessage);
       }
     } finally {
       setVerifying(false);
@@ -191,7 +232,7 @@ export default function PhotoVerificationCard() {
   if (!profile) {
     return (
       <View className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <ActivityIndicator size="small" color="#9B87CE" />
+        <ActivityIndicator size="small" color="#A08AB7" />
       </View>
     );
   }
@@ -202,7 +243,7 @@ export default function PhotoVerificationCard() {
       <View className="flex-row items-start justify-between mb-4">
         <View className="flex-1">
           <View className="flex-row items-center mb-2">
-            <MaterialCommunityIcons name="camera-account" size={24} color="#9B87CE" />
+            <MaterialCommunityIcons name="camera-account" size={24} color="#A08AB7" />
             <Text className="text-xl font-bold text-charcoal ml-2">Photo Verification</Text>
           </View>
           {renderStatusBadge()}
@@ -241,7 +282,7 @@ export default function PhotoVerificationCard() {
           onPress={takeSelfie}
           disabled={verifying}
           className={`rounded-full py-4 items-center ${
-            verifying ? 'bg-gray-300' : 'bg-primary-500'
+            verifying ? 'bg-gray-300' : 'bg-lavender-500'
           }`}
         >
           {verifying ? (
@@ -274,7 +315,7 @@ export default function PhotoVerificationCard() {
               <MaterialCommunityIcons
                 name="check"
                 size={16}
-                color="#9B87CE"
+                color="#A08AB7"
                 style={{ marginTop: 2, marginRight: 8 }}
               />
               <Text className="text-gray-600 text-sm flex-1">{tip}</Text>

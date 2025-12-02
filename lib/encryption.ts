@@ -1,11 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import { Buffer } from 'buffer';
-// Import expo-standard-web-crypto for React Native crypto.subtle polyfill
-import { polyfillWebCrypto } from 'expo-standard-web-crypto';
-
-// Polyfill Web Crypto API for React Native
-polyfillWebCrypto();
+import QuickCrypto from 'react-native-quick-crypto';
 
 /**
  * E2E Encryption for Messages
@@ -21,7 +17,7 @@ polyfillWebCrypto();
  * - Perfect forward secrecy (unique keys per conversation pair)
  * - Authenticated encryption (prevents tampering)
  *
- * Note: Uses expo-standard-web-crypto for React Native compatibility
+ * Note: Uses react-native-quick-crypto for reliable native crypto on iOS/Android
  */
 
 // Constants
@@ -143,7 +139,7 @@ async function deriveSharedKey(
 }
 
 /**
- * Encrypt a message using AES-256-GCM with Web Crypto API
+ * Encrypt a message using AES-256-GCM with react-native-quick-crypto
  *
  * @param message - Plain text message to encrypt
  * @param senderPrivateKey - Sender's private key
@@ -159,42 +155,30 @@ export async function encryptMessage(
     // Derive shared encryption key
     const sharedKeyBytes = await deriveSharedKey(senderPrivateKey, recipientPublicKey);
 
-    // Import key for Web Crypto API (polyfilled by expo-standard-web-crypto)
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      sharedKeyBytes as any,
-      { name: 'AES-GCM' },
-      false,
-      ['encrypt']
+    // Generate random IV (Initialization Vector) using QuickCrypto
+    const iv = QuickCrypto.randomBytes(IV_SIZE);
+
+    // Create cipher using AES-256-GCM
+    const cipher = QuickCrypto.createCipheriv(
+      'aes-256-gcm',
+      Buffer.from(sharedKeyBytes),
+      iv
     );
 
-    // Generate random IV (Initialization Vector)
-    const iv = await Crypto.getRandomBytesAsync(IV_SIZE);
+    // Encrypt the message
+    const messageBuffer = Buffer.from(message, 'utf8');
+    const encrypted = Buffer.concat([
+      cipher.update(messageBuffer),
+      cipher.final()
+    ]);
 
-    // Encrypt the message using Web Crypto API
-    const messageBuffer = new TextEncoder().encode(message);
-    const encrypted = await crypto.subtle.encrypt(
-      {
-        name: 'AES-GCM',
-        iv: iv as any,
-        tagLength: 128, // 128-bit authentication tag
-      },
-      cryptoKey,
-      messageBuffer
-    );
-
-    // GCM mode appends the auth tag (16 bytes) to the ciphertext
-    const encryptedArray = new Uint8Array(encrypted);
-    const authTagLength = 16; // 128 bits = 16 bytes
-
-    // Extract auth tag (last 16 bytes) and ciphertext (everything else)
-    const ciphertext = encryptedArray.slice(0, encryptedArray.length - authTagLength);
-    const authTag = encryptedArray.slice(encryptedArray.length - authTagLength);
+    // Get the authentication tag (16 bytes for GCM)
+    const authTag = cipher.getAuthTag();
 
     // Convert to base64
     const ivBase64 = bufferToBase64(iv);
     const authTagBase64 = bufferToBase64(authTag);
-    const ciphertextBase64 = bufferToBase64(ciphertext);
+    const ciphertextBase64 = bufferToBase64(encrypted);
 
     // Format: iv:authTag:ciphertext (3-part format for compatibility)
     return `${ivBase64}:${authTagBase64}:${ciphertextBase64}`;
@@ -205,7 +189,7 @@ export async function encryptMessage(
 }
 
 /**
- * Decrypt a message using AES-256-GCM with Web Crypto API
+ * Decrypt a message using AES-256-GCM with react-native-quick-crypto
  *
  * @param encryptedMessage - Encrypted message in format: iv:authTag:ciphertext (all base64)
  * @param recipientPrivateKey - Recipient's private key
@@ -223,72 +207,84 @@ export async function decryptMessage(
 
     // If not in correct format, assume it's plain text (development/legacy)
     if (parts.length < 2) {
-      console.log('Message is plain text (no encryption format detected)');
+      console.log('🔓 Message is plain text (no encryption format detected)');
       return encryptedMessage;
     }
 
+    console.log(`🔐 Attempting to decrypt message (${parts.length} parts)`);
+
     let ivBase64: string;
-    let ciphertextWithTag: Uint8Array;
+    let ciphertext: Buffer;
+    let authTag: Buffer;
 
     if (parts.length === 3) {
       // Standard format: iv:authTag:ciphertext
-      const [iv, authTag, cipher] = parts;
+      const [iv, authTagStr, cipher] = parts;
       ivBase64 = iv;
-
-      // Reconstruct ciphertext with auth tag appended (GCM format)
-      const cipherBuffer = base64ToBuffer(cipher);
-      const authTagBuffer = base64ToBuffer(authTag);
-      ciphertextWithTag = new Uint8Array(cipherBuffer.length + authTagBuffer.length);
-      ciphertextWithTag.set(new Uint8Array(cipherBuffer), 0);
-      ciphertextWithTag.set(new Uint8Array(authTagBuffer), cipherBuffer.length);
+      authTag = base64ToBuffer(authTagStr);
+      ciphertext = base64ToBuffer(cipher);
+      console.log('📦 Parsed 3-part format (iv:authTag:ciphertext)');
     } else if (parts.length === 2) {
-      // Alternative format: iv:ciphertext (auth tag already included)
-      const [iv, ciphertext] = parts;
+      // Alternative format: iv:ciphertext (auth tag at end of ciphertext)
+      const [iv, ciphertextWithTag] = parts;
       ivBase64 = iv;
-      ciphertextWithTag = new Uint8Array(base64ToBuffer(ciphertext));
+      const combined = base64ToBuffer(ciphertextWithTag);
+      // Auth tag is last 16 bytes
+      ciphertext = combined.slice(0, combined.length - 16);
+      authTag = combined.slice(combined.length - 16);
+      console.log('📦 Parsed 2-part format (iv:ciphertext+tag)');
     } else {
       // Unknown format, return as plain text
-      console.log('Unknown encryption format, treating as plain text');
+      console.log('⚠️ Unknown encryption format, treating as plain text');
       return encryptedMessage;
     }
 
     // Derive shared encryption key (same as sender)
+    console.log('🔑 Deriving shared key...');
     const sharedKeyBytes = await deriveSharedKey(recipientPrivateKey, senderPublicKey);
-
-    // Import key for Web Crypto API (polyfilled by expo-standard-web-crypto)
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      sharedKeyBytes as any,
-      { name: 'AES-GCM' },
-      false,
-      ['decrypt']
-    );
+    console.log('✅ Shared key derived');
 
     // Convert IV from base64
     const iv = base64ToBuffer(ivBase64);
 
-    // Decrypt using Web Crypto API
-    const decrypted = await crypto.subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv: iv as any,
-        tagLength: 128,
-      },
-      cryptoKey,
-      ciphertextWithTag as any
+    // Create decipher using AES-256-GCM
+    console.log('🔓 Creating decipher...');
+    const decipher = QuickCrypto.createDecipheriv(
+      'aes-256-gcm',
+      Buffer.from(sharedKeyBytes),
+      iv
     );
 
-    return new TextDecoder().decode(decrypted);
-  } catch (error) {
-    console.error('Error decrypting message:', error);
+    // Set the auth tag for verification
+    decipher.setAuthTag(authTag);
+
+    // Decrypt the message
+    const decrypted = Buffer.concat([
+      decipher.update(ciphertext),
+      decipher.final()
+    ]);
+
+    const result = decrypted.toString('utf8');
+    console.log('✅ Message decrypted successfully');
+    return result;
+  } catch (error: any) {
+    console.error('❌ Error decrypting message:', error?.message || error);
+    console.error('Stack:', error?.stack);
+
     // If decryption fails, it might be plain text from development
     // Check if it looks like encrypted data or plain text
     if (encryptedMessage.includes(':')) {
-      return '[Unable to decrypt message]';
-    } else {
-      // Probably plain text from development
-      return encryptedMessage;
+      // Check if it's base64 encoded (encrypted)
+      const firstPart = encryptedMessage.split(':')[0];
+      const isBase64 = /^[A-Za-z0-9+/=]+$/.test(firstPart);
+      if (isBase64) {
+        console.log('⚠️ Encrypted message but decryption failed');
+        return '[Unable to decrypt message]';
+      }
     }
+    // Probably plain text from development
+    console.log('📝 Returning as plain text');
+    return encryptedMessage;
   }
 }
 

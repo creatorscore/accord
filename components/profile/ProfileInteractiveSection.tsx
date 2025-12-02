@@ -45,7 +45,7 @@ export default function ProfileInteractiveSection({
               <MaterialCommunityIcons
                 name="chevron-down"
                 size={24}
-                color="#9B87CE"
+                color="#A08AB7"
               />
             </MotiView>
           )}
@@ -71,7 +71,7 @@ export default function ProfileInteractiveSection({
                     <MaterialCommunityIcons
                       name={item.icon as any}
                       size={20}
-                      color="#9B87CE"
+                      color="#A08AB7"
                     />
                   </View>
                 )}
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   },
   moreText: {
     fontSize: 14,
-    color: '#9B87CE',
+    color: '#A08AB7',
     fontWeight: '600',
     textAlign: 'center',
     marginTop: 8,

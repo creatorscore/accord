@@ -243,6 +243,25 @@ export default function Chat() {
 
       console.log('Other profile ID:', otherProfileId);
 
+      // CRITICAL SAFETY: Check if other user is banned
+      const { data: banData } = await supabase
+        .from('bans')
+        .select('id')
+        .eq('banned_profile_id', otherProfileId)
+        .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
+        .maybeSingle();
+
+      if (banData) {
+        // Other user is banned - show message and go back
+        Alert.alert(
+          'Chat Unavailable',
+          'This user is no longer available.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+        setLoading(false);
+        return;
+      }
+
       // Get profile details with additional data for intro messages
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -443,6 +462,10 @@ export default function Chat() {
   /**
    * Decrypt a single message
    * Returns the message with decrypted content, or error message if decryption fails
+   *
+   * IMPORTANT: ECDH key derivation requires:
+   * - If I'm the RECIPIENT: use my private key + sender's public key
+   * - If I'm the SENDER: use my private key + recipient's public key
    */
   const decryptSingleMessage = async (message: Message): Promise<Message> => {
     // Don't decrypt image or voice messages
@@ -460,32 +483,38 @@ export default function Chat() {
 
     try {
       // Get current user's private key
-      const recipientPrivateKey = await getPrivateKey(user?.id || '');
-      if (!recipientPrivateKey) {
+      const myPrivateKey = await getPrivateKey(user?.id || '');
+      if (!myPrivateKey) {
         console.error('❌ Private key not found for decryption');
-        // Return the encrypted content as-is (might be plain text from development)
         return { ...message, decrypted_content: message.encrypted_content };
       }
 
-      // Get sender's public key
-      const senderId = message.sender_profile_id;
-      const { data: senderProfile, error: senderError } = await supabase
+      // Determine if I'm the sender or recipient
+      const iAmSender = message.sender_profile_id === currentProfileId;
+
+      // Get the OTHER person's public key (the one we need for ECDH)
+      // If I'm the sender, I need the recipient's public key
+      // If I'm the recipient, I need the sender's public key
+      const otherProfileId = iAmSender
+        ? message.receiver_profile_id
+        : message.sender_profile_id;
+
+      const { data: otherProfile, error: otherError } = await supabase
         .from('profiles')
         .select('encryption_public_key')
-        .eq('id', senderId)
+        .eq('id', otherProfileId)
         .single();
 
-      if (senderError || !senderProfile?.encryption_public_key) {
-        console.error('❌ Sender public key not found');
-        // Return the encrypted content as-is (might be plain text from development)
+      if (otherError || !otherProfile?.encryption_public_key) {
+        console.error('❌ Other party public key not found');
         return { ...message, decrypted_content: message.encrypted_content };
       }
 
-      // Decrypt the message (decryptMessage handles both encrypted and plain text)
+      // Decrypt the message
       const decryptedContent = await decryptMessage(
         message.encrypted_content,
-        recipientPrivateKey,
-        senderProfile.encryption_public_key
+        myPrivateKey,
+        otherProfile.encryption_public_key
       );
 
       // Store decrypted content in separate field, preserve encrypted content
@@ -538,18 +567,13 @@ export default function Chat() {
       console.log('Match ID:', matchId);
       console.log('Sender ID:', currentProfileId);
       console.log('Receiver ID:', matchProfile.id);
-      console.log('Content:', messageContent);
 
       let encryptedContent = messageContent; // Default to plain text
-      let shouldEncrypt = false;
 
-      // Get sender's private key for encryption
+      // Try to encrypt the message
       const senderPrivateKey = await getPrivateKey(user.id);
 
-      if (!senderPrivateKey) {
-        console.warn('⚠️ Sender encryption keys not found. Sending unencrypted message.');
-        // Continue with plain text
-      } else {
+      if (senderPrivateKey) {
         // Get recipient's public key for encryption
         const { data: recipientProfile } = await supabase
           .from('profiles')
@@ -557,10 +581,7 @@ export default function Chat() {
           .eq('id', matchProfile.id)
           .single();
 
-        if (!recipientProfile?.encryption_public_key) {
-          console.warn('⚠️ Recipient encryption keys not found. Sending unencrypted message.');
-          // Continue with plain text
-        } else {
+        if (recipientProfile?.encryption_public_key) {
           // Both parties have keys - encrypt the message
           console.log('🔐 Encrypting message...');
           try {
@@ -569,16 +590,17 @@ export default function Chat() {
               senderPrivateKey,
               recipientProfile.encryption_public_key
             );
-            shouldEncrypt = true;
             console.log('✅ Message encrypted successfully');
           } catch (encryptError: any) {
-            console.error('❌ Encryption failed:', encryptError);
-            console.warn('⚠️ Falling back to unencrypted message');
+            console.warn('⚠️ Encryption failed, sending as plain text:', encryptError.message);
             // Fall back to plain text
             encryptedContent = messageContent;
-            shouldEncrypt = false;
           }
+        } else {
+          console.warn('⚠️ Recipient encryption keys not found, sending as plain text');
         }
+      } else {
+        console.warn('⚠️ Sender encryption keys not found, sending as plain text');
       }
 
       // Send message (encrypted if possible, plain text otherwise)
@@ -1238,7 +1260,7 @@ export default function Chat() {
             >
               {isMine ? (
                 <LinearGradient
-                  colors={['#9B87CE', '#B8A9DD']}
+                  colors={['#A08AB7', '#CDC2E5']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.imageMessageGradient}
@@ -1275,7 +1297,7 @@ export default function Chat() {
             <TouchableOpacity onPress={() => handleVoicePlay(item)} activeOpacity={0.7}>
               {isMine ? (
                 <LinearGradient
-                  colors={['#9B87CE', '#B8A9DD']}
+                  colors={['#A08AB7', '#CDC2E5']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.voiceMessageBubble}
@@ -1326,7 +1348,7 @@ export default function Chat() {
                     <MaterialCommunityIcons
                       name={playingVoiceId === item.id ? "pause-circle" : "play-circle"}
                       size={32}
-                      color="#9B87CE"
+                      color="#A08AB7"
                     />
                     <View style={styles.voiceMessageInfo}>
                       <View style={styles.voiceWaveform}>
@@ -1359,7 +1381,7 @@ export default function Chat() {
             <>
               {isMine ? (
                 <LinearGradient
-                  colors={['#9B87CE', '#B8A9DD']}
+                  colors={['#A08AB7', '#CDC2E5']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.messageBubbleGradient}
@@ -1398,7 +1420,7 @@ export default function Chat() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
         <Text style={{ marginTop: 16, color: '#6B7280' }}>{t('chat.loadingChat')}</Text>
       </View>
     );
@@ -1415,7 +1437,7 @@ export default function Chat() {
         {/* Header with back button */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <MaterialCommunityIcons name="chevron-left" size={28} color="#fff" />
+            <MaterialCommunityIcons name="chevron-left" size={28} color="#A08AB7" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
             {isBlocked ? t('chat.blocked') : t('chat.conversationEnded')}
@@ -1473,7 +1495,7 @@ export default function Chat() {
   if (!matchProfile) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
         <Text style={{ marginTop: 16, color: '#6B7280' }}>{t('chat.loading')}</Text>
       </View>
     );
@@ -1497,7 +1519,7 @@ export default function Chat() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <MaterialCommunityIcons name="chevron-left" size={28} color="#fff" />
+          <MaterialCommunityIcons name="chevron-left" size={28} color="#A08AB7" />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -1536,12 +1558,12 @@ export default function Chat() {
               style={styles.revealButton}
             >
               {revealLoading ? (
-                <ActivityIndicator size="small" color="#9B87CE" />
+                <ActivityIndicator size="small" color="#A08AB7" />
               ) : (
                 <MaterialCommunityIcons
                   name={hasRevealedPhotos ? "eye-off" : "eye"}
                   size={24}
-                  color={hasRevealedPhotos ? "#9B87CE" : "#D1D5DB"}
+                  color={hasRevealedPhotos ? "#A08AB7" : "#D1D5DB"}
                 />
               )}
             </TouchableOpacity>
@@ -1565,7 +1587,7 @@ export default function Chat() {
           style={styles.premiumBanner}
         >
           <LinearGradient
-            colors={['#9B87CE', '#B8A9DD']}
+            colors={['#A08AB7', '#CDC2E5']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.premiumBannerGradient}
@@ -1605,8 +1627,8 @@ export default function Chat() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#9B87CE"
-            colors={['#9B87CE']}
+            tintColor="#A08AB7"
+            colors={['#A08AB7']}
           />
         }
         ListEmptyComponent={
@@ -1617,7 +1639,7 @@ export default function Chat() {
               transition={{ type: 'spring' }}
             >
               <View style={styles.emptyIconContainer}>
-                <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.emptyIcon}>
+                <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.emptyIcon}>
                   <MaterialCommunityIcons name="message-text-outline" size={40} color="white" />
                 </LinearGradient>
               </View>
@@ -1672,7 +1694,7 @@ export default function Chat() {
           </View>
 
           <TouchableOpacity style={styles.stopButton} onPress={handleVoiceRecordStop}>
-            <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.stopButtonGradient}>
+            <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.stopButtonGradient}>
               <MaterialCommunityIcons name="send" size={20} color="white" />
             </LinearGradient>
           </TouchableOpacity>
@@ -1683,7 +1705,7 @@ export default function Chat() {
           paddingBottom: (insets.bottom || 4) + 8
         }]}>
           <TouchableOpacity style={styles.imageButton} onPress={handleImagePick} disabled={sending}>
-            <MaterialCommunityIcons name="image-outline" size={24} color={sending ? "#D1D5DB" : "#9B87CE"} />
+            <MaterialCommunityIcons name="image-outline" size={24} color={sending ? "#D1D5DB" : "#A08AB7"} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1692,7 +1714,7 @@ export default function Chat() {
             onLongPress={handleVoiceRecordStart}
             disabled={sending}
           >
-            <MaterialCommunityIcons name="microphone" size={24} color={sending ? "#D1D5DB" : "#9B87CE"} />
+            <MaterialCommunityIcons name="microphone" size={24} color={sending ? "#D1D5DB" : "#A08AB7"} />
           </TouchableOpacity>
 
           <View style={styles.inputWrapper}>
@@ -1720,7 +1742,7 @@ export default function Chat() {
             {sending ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
-              <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.sendButtonGradient}>
+              <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.sendButtonGradient}>
                 <MaterialCommunityIcons name="send" size={20} color="white" />
               </LinearGradient>
             )}
@@ -1792,11 +1814,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#FFFFFF',
     paddingTop: 48,
     paddingBottom: 12,
     paddingHorizontal: 16,
     gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E4E4E7',
   },
   backButton: {
     width: 40,
@@ -1827,7 +1851,7 @@ const styles = StyleSheet.create({
   headerName: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#fff',
+    color: '#1F2937',
   },
   encryptionRow: {
     flexDirection: 'row',
@@ -1837,7 +1861,7 @@ const styles = StyleSheet.create({
   },
   encryptionText: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#71717A',
   },
   headerRight: {
     flexDirection: 'row',
@@ -1850,7 +1874,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#F5F2F7',
   },
   premiumBanner: {
     marginHorizontal: 12,
@@ -2169,7 +2193,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   unmatchedButton: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 12,
@@ -2183,7 +2207,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: '#1F2937',
     flex: 1,
     textAlign: 'center',
   },

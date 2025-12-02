@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -10,7 +9,7 @@ interface StoryCardProps {
   title: string;
   icon: string;
   content: string;
-  gradient: [string, string];
+  gradient?: [string, string]; // No longer used, kept for backward compatibility
   delay?: number;
 }
 
@@ -28,61 +27,62 @@ export default function ProfileStoryCard({
       transition={{ type: 'timing', duration: 600, delay }}
       style={styles.container}
     >
-      <LinearGradient
-        colors={gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.gradient}
-      >
+      <View style={styles.cardContent}>
         <View style={styles.header}>
           <View style={styles.iconContainer}>
-            <MaterialCommunityIcons name={icon as any} size={24} color="white" />
+            <MaterialCommunityIcons name={icon as any} size={20} color="#111827" />
           </View>
           <Text style={styles.title}>{title}</Text>
         </View>
         <Text style={styles.content}>{content}</Text>
-      </LinearGradient>
+      </View>
     </MotiView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
-    borderRadius: 20,
+    marginBottom: 12,
+    borderRadius: 16,
     overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  gradient: {
-    padding: 20,
+  cardContent: {
+    padding: 16,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 8,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
     flex: 1,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   content: {
     fontSize: 15,
     lineHeight: 22,
-    color: 'rgba(255, 255, 255, 0.95)',
+    color: '#111827',
+    fontWeight: '400',
   },
 });

@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { useScreenProtection } from '@/hooks/useScreenProtection';
 import { isOnline, getLastActiveText } from '@/lib/online-status';
 import { realtimeManager } from '@/lib/realtime-manager';
+import { decryptMessage, getPrivateKey } from '@/lib/encryption';
 
 interface Match {
   id: string;
@@ -26,6 +27,7 @@ interface Match {
     hide_last_active?: boolean;
     photo_blur_enabled?: boolean;
     is_revealed?: boolean;
+    encryption_public_key?: string;
   };
   compatibility_score?: number;
   matched_at: string;
@@ -36,6 +38,7 @@ interface Match {
     read_at: string | null;
   };
   unread_count?: number;
+  decrypted_preview?: string;
 }
 
 export default function Matches() {
@@ -81,6 +84,75 @@ export default function Matches() {
     }
   };
 
+  // Decrypt message previews for all matches
+  const decryptMessagePreviews = async (matchesList: Match[]): Promise<Match[]> => {
+    if (!user?.id) return matchesList;
+
+    try {
+      // Get current user's private key
+      const myPrivateKey = await getPrivateKey(user.id);
+      if (!myPrivateKey) {
+        console.log('No private key found, returning matches without decryption');
+        return matchesList;
+      }
+
+      // Get current user's public key for messages they sent
+      const { data: myProfile } = await supabase
+        .from('profiles')
+        .select('encryption_public_key')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!myProfile) {
+        console.log('No profile found for decryption, returning matches without decryption');
+        return matchesList;
+      }
+
+      const myPublicKey = myProfile?.encryption_public_key;
+
+      // Decrypt each message preview
+      const decryptedMatches = await Promise.all(
+        matchesList.map(async (match) => {
+          if (!match.last_message?.encrypted_content) {
+            return match;
+          }
+
+          try {
+            // Determine if I sent this message or received it
+            const iAmSender = match.last_message.sender_profile_id === currentProfileId;
+
+            // For ECDH: we need the OTHER person's public key
+            // If I sent it, I need their public key (match.profile.encryption_public_key)
+            // If they sent it, I also need their public key
+            const otherPublicKey = match.profile.encryption_public_key;
+
+            if (!otherPublicKey) {
+              console.log('No public key for match, showing encrypted content');
+              return { ...match, decrypted_preview: match.last_message.encrypted_content };
+            }
+
+            const decrypted = await decryptMessage(
+              match.last_message.encrypted_content,
+              myPrivateKey,
+              otherPublicKey
+            );
+
+            return { ...match, decrypted_preview: decrypted };
+          } catch (error) {
+            console.error('Error decrypting preview for match:', match.id, error);
+            // Return encrypted content as fallback
+            return { ...match, decrypted_preview: match.last_message.encrypted_content };
+          }
+        })
+      );
+
+      return decryptedMatches;
+    } catch (error) {
+      console.error('Error in decryptMessagePreviews:', error);
+      return matchesList;
+    }
+  };
+
   const loadMatches = async () => {
     try {
       if (!currentProfileId) return;
@@ -118,12 +190,23 @@ export default function Matches() {
         ...(blockedMe?.map(b => b.blocker_profile_id) || [])
       ]);
 
-      // Filter out matches with blocked users
+      // CRITICAL SAFETY: Filter out banned users
+      const { data: bannedUsers } = await supabase
+        .from('bans')
+        .select('banned_profile_id')
+        .not('banned_profile_id', 'is', null)
+        .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
+
+      const bannedProfileIds = new Set(
+        bannedUsers?.map(b => b.banned_profile_id).filter(Boolean) || []
+      );
+
+      // Filter out matches with blocked OR banned users
       const filteredMatches = (matchesData || []).filter(match => {
         const otherProfileId = match.profile1_id === currentProfileId
           ? match.profile2_id
           : match.profile1_id;
-        return !blockedProfileIds.has(otherProfileId);
+        return !blockedProfileIds.has(otherProfileId) && !bannedProfileIds.has(otherProfileId);
       });
 
       // For each match, get the other person's profile and last message
@@ -144,6 +227,7 @@ export default function Matches() {
               last_active_at,
               hide_last_active,
               photo_blur_enabled,
+              encryption_public_key,
               photos (
                 url,
                 is_primary,
@@ -153,14 +237,14 @@ export default function Matches() {
             .eq('id', otherProfileId)
             .single();
 
-          // Get last message
+          // Get last message (use maybeSingle since there might be no messages yet)
           const { data: lastMessage } = await supabase
             .from('messages')
             .select('encrypted_content, created_at, sender_profile_id, read_at')
             .eq('match_id', match.id)
             .order('created_at', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
 
           // Get unread count
           const { count: unreadCount } = await supabase
@@ -194,6 +278,7 @@ export default function Matches() {
               last_active_at: profile.last_active_at,
               hide_last_active: profile.hide_last_active,
               photo_blur_enabled: profile.photo_blur_enabled,
+              encryption_public_key: profile.encryption_public_key,
               photos: profile?.photos?.sort((a: any, b: any) => a.display_order - b.display_order),
               is_revealed: isRevealed,
             },
@@ -207,7 +292,10 @@ export default function Matches() {
 
       // Filter out any null values (profiles that failed to load)
       const validMatches = matchesWithProfiles.filter(m => m !== null) as Match[];
-      setMatches(validMatches);
+
+      // Decrypt message previews
+      const matchesWithDecryptedPreviews = await decryptMessagePreviews(validMatches);
+      setMatches(matchesWithDecryptedPreviews);
     } catch (error: any) {
       console.error('Error loading matches:', error);
     } finally {
@@ -589,7 +677,7 @@ export default function Matches() {
           onPress={handleLikesPress}
         >
           <LinearGradient
-            colors={['#9B87CE', '#B8A9DD']}
+            colors={['#A08AB7', '#CDC2E5']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.likesCard}
@@ -678,18 +766,15 @@ export default function Matches() {
               )}
             </View>
 
-            {/* Compatibility Score */}
-            {item.compatibility_score && (
+            {/* Compatibility Score - only show if we have a real score (not 0 or null) */}
+            {typeof item.compatibility_score === 'number' && item.compatibility_score > 0 && (
               <View style={styles.compatibilityRow}>
                 <LinearGradient
-                  colors={['#9B87CE', '#B8A9DD']}
+                  colors={['#A08AB7', '#CDC2E5']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.compatibilityBadge}
-                >
-                  <MaterialCommunityIcons name="heart" size={12} color="white" />
-                  <Text style={styles.compatibilityText}>{t('matches.matchPercentage', { score: item.compatibility_score })}</Text>
-                </LinearGradient>
+                ><MaterialCommunityIcons name="heart" size={12} color="white" /><Text style={styles.compatibilityText}>{t('matches.matchPercentage', { score: item.compatibility_score })}</Text></LinearGradient>
               </View>
             )}
 
@@ -705,7 +790,7 @@ export default function Matches() {
                 numberOfLines={1}
               >
                 {item.last_message.sender_profile_id === currentProfileId ? t('matches.youLabel') : ''}
-                {item.last_message.encrypted_content}
+                {item.decrypted_preview || item.last_message.encrypted_content}
               </Text>
             ) : (
               <View style={styles.ctaRow}>
@@ -733,7 +818,7 @@ export default function Matches() {
         </View>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
           <Text style={styles.loadingText}>{t('matches.loadingMatches')}</Text>
         </View>
       </View>
@@ -758,7 +843,7 @@ export default function Matches() {
           >
             <View style={styles.emptyIconContainer}>
               <LinearGradient
-                colors={['#9B87CE', '#B8A9DD']}
+                colors={['#A08AB7', '#CDC2E5']}
                 style={styles.emptyIcon}
               >
                 <MaterialCommunityIcons name="heart-outline" size={48} color="white" />
@@ -773,7 +858,7 @@ export default function Matches() {
               onPress={() => router.push('/(tabs)/discover')}
             >
               <LinearGradient
-                colors={['#9B87CE', '#B8A9DD']}
+                colors={['#A08AB7', '#CDC2E5']}
                 style={styles.emptyButtonGradient}
               >
                 <MaterialCommunityIcons name="cards-heart" size={20} color="white" />
@@ -812,8 +897,8 @@ export default function Matches() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#9B87CE"
-            colors={['#9B87CE']}
+            tintColor="#A08AB7"
+            colors={['#A08AB7']}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -898,23 +983,26 @@ export default function Matches() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAF7F0',
+    backgroundColor: '#FFFFFF',
   },
   header: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#FFFFFF',
     paddingTop: 60,
     paddingBottom: 24,
     paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E4E4E7',
   },
   headerTitle: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#1F2937',
     marginBottom: 4,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'Inter',
+    color: '#71717A',
   },
   loadingContainer: {
     flex: 1,
@@ -924,7 +1012,8 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#6B7280',
+    fontFamily: 'Inter',
+    color: '#71717A',
   },
   emptyContainer: {
     flex: 1,
@@ -1091,7 +1180,7 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     fontSize: 14,
-    color: '#9B87CE',
+    color: '#A08AB7',
     fontWeight: '500',
   },
   likesCardContainer: {

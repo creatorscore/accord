@@ -7,8 +7,10 @@ import * as Contacts from 'expo-contacts';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import * as Crypto from 'expo-crypto';
+import { useTranslation } from 'react-i18next';
 
 export default function ContactBlocking() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [blocking, setBlocking] = useState(false);
@@ -57,20 +59,11 @@ export default function ContactBlocking() {
     // Show detailed explanation before requesting permission
     return new Promise<boolean>((resolve) => {
       Alert.alert(
-        '🔒 Why We Need Contacts Access',
-        'Accord needs to read your contacts to help you avoid awkward situations.\n\n' +
-        '✅ What we do:\n' +
-        '• Read phone numbers from your contacts\n' +
-        '• Convert them to encrypted codes on YOUR device\n' +
-        '• Hide matching profiles from your discovery feed\n\n' +
-        '❌ What we DON\'t do:\n' +
-        '• Upload your contacts to our servers\n' +
-        '• Store names, emails, or any personal info\n' +
-        '• Share your contacts with anyone\n\n' +
-        '🔐 Your contacts are processed locally and never leave your device in readable form. Only encrypted codes are stored for matching.',
+        `🔒 ${t('contactBlocking.whyWeNeedAccess')}`,
+        t('contactBlocking.whyWeNeedAccessExplanation'),
         [
           {
-            text: 'Cancel',
+            text: t('common.cancel'),
             style: 'cancel',
             onPress: () => {
               setHasPermission(false);
@@ -78,7 +71,7 @@ export default function ContactBlocking() {
             }
           },
           {
-            text: 'I Understand, Continue',
+            text: t('contactBlocking.iUnderstandContinue'),
             onPress: async () => {
               try {
                 const { status } = await Contacts.requestPermissionsAsync();
@@ -87,9 +80,9 @@ export default function ContactBlocking() {
 
                 if (!granted) {
                   Alert.alert(
-                    'Permission Denied',
-                    'You can enable contacts access later in your device settings if you change your mind.',
-                    [{ text: 'OK' }]
+                    t('contactBlocking.permissionDenied'),
+                    t('contactBlocking.permissionDeniedMessage'),
+                    [{ text: t('common.success') }]
                   );
                 }
 
@@ -124,8 +117,8 @@ export default function ContactBlocking() {
       const granted = await requestContactsPermission();
       if (!granted) {
         Alert.alert(
-          'Permission Required',
-          'Please allow access to your contacts to use this feature.'
+          t('contactBlocking.permissionRequired'),
+          t('contactBlocking.permissionRequiredMessage')
         );
         return;
       }
@@ -148,11 +141,8 @@ export default function ContactBlocking() {
 
       if (!contactsData || contactsData.length === 0) {
         Alert.alert(
-          'No Contacts Found',
-          'No contacts were found on your device. This could happen if:\n\n' +
-          '• Your contacts are stored in a cloud account that\'s not synced\n' +
-          '• Contacts permission was partially granted\n\n' +
-          'Try syncing your contacts and try again.'
+          t('contactBlocking.noContactsFound'),
+          t('contactBlocking.noContactsFoundMessage')
         );
         setBlocking(false);
         return;
@@ -174,8 +164,8 @@ export default function ContactBlocking() {
 
       if (phoneNumbers.length === 0) {
         Alert.alert(
-          'No Phone Numbers',
-          'Your contacts don\'t have any phone numbers saved. Contact blocking only works with contacts that have phone numbers.'
+          t('contactBlocking.noPhoneNumbers'),
+          t('contactBlocking.noPhoneNumbersMessage')
         );
         setBlocking(false);
         return;
@@ -214,11 +204,9 @@ export default function ContactBlocking() {
       setIsEnabled(true);
 
       Alert.alert(
-        '✅ Protected',
-        `${hashedNumbers.length} contact${hashedNumbers.length === 1 ? ' is' : 's are'} now blocked from your discovery feed.\n\n` +
-        `🔐 All phone numbers were encrypted on your device using SHA-256. Your contacts' privacy is fully protected.\n\n` +
-        `These profiles will never appear in your feed, and they'll never know.`,
-        [{ text: 'Got It' }]
+        `✅ ${t('contactBlocking.protected')}`,
+        t('contactBlocking.protectedMessage', { count: hashedNumbers.length }),
+        [{ text: t('contactBlocking.gotIt') }]
       );
     } catch (error: any) {
       console.error('Error blocking contacts:', error);
@@ -238,7 +226,7 @@ export default function ContactBlocking() {
         errorMessage = `Error: ${error.message}`;
       }
 
-      Alert.alert('Error', errorMessage);
+      Alert.alert(t('common.error'), errorMessage);
     } finally {
       setBlocking(false);
     }
@@ -248,12 +236,12 @@ export default function ContactBlocking() {
     if (!currentProfileId) return;
 
     Alert.alert(
-      'Clear Contact Blocks',
-      'Are you sure you want to remove all contact blocks? Profiles from your contacts will appear in discovery again.',
+      t('contactBlocking.clearContactBlocks'),
+      t('contactBlocking.clearContactBlocksMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Clear',
+          text: t('contactBlocking.clear'),
           style: 'destructive',
           onPress: async () => {
             setBlocking(true);
@@ -268,10 +256,10 @@ export default function ContactBlocking() {
               setContactsBlocked(0);
               setIsEnabled(false);
 
-              Alert.alert('Cleared', 'All contact blocks have been removed.');
+              Alert.alert(t('contactBlocking.cleared'), t('contactBlocking.clearedMessage'));
             } catch (error: any) {
               console.error('Error clearing blocks:', error);
-              Alert.alert('Error', 'Failed to clear blocks. Please try again.');
+              Alert.alert(t('common.error'), t('contactBlocking.clearError'));
             } finally {
               setBlocking(false);
             }
@@ -284,16 +272,16 @@ export default function ContactBlocking() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+        <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Contact Blocking</Text>
+          <Text style={styles.headerTitle}>{t('contactBlocking.title')}</Text>
           <View style={{ width: 24 }} />
         </LinearGradient>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
         </View>
       </View>
     );
@@ -301,11 +289,11 @@ export default function ContactBlocking() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+      <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Contact Blocking</Text>
+        <Text style={styles.headerTitle}>{t('contactBlocking.title')}</Text>
         <View style={{ width: 24 }} />
       </LinearGradient>
 
@@ -313,20 +301,17 @@ export default function ContactBlocking() {
         {/* Info Card */}
         <View style={styles.infoCard}>
           <View style={styles.infoIconContainer}>
-            <MaterialCommunityIcons name="shield-lock" size={32} color="#9B87CE" />
+            <MaterialCommunityIcons name="shield-lock" size={32} color="#A08AB7" />
           </View>
-          <Text style={styles.infoTitle}>Stay Private & Safe</Text>
+          <Text style={styles.infoTitle}>{t('contactBlocking.stayPrivateSafe')}</Text>
           <Text style={styles.infoText}>
-            Avoid awkward encounters by preventing people in your contacts from appearing in your discovery feed.
+            {t('contactBlocking.stayPrivateSafeMessage')}
           </Text>
           <Text style={[styles.infoText, { marginTop: 12, fontWeight: '600' }]}>
-            🔐 Your Privacy is Protected:
+            🔐 {t('contactBlocking.privacyProtected')}
           </Text>
           <Text style={[styles.infoText, { marginTop: 4 }]}>
-            • Phone numbers are encrypted on YOUR device{'\n'}
-            • We never see your contacts' names or info{'\n'}
-            • Nothing is uploaded to our servers{'\n'}
-            • You can remove blocks anytime
+            {t('contactBlocking.privacyProtectedDetails')}
           </Text>
         </View>
 
@@ -335,11 +320,11 @@ export default function ContactBlocking() {
           <View style={styles.statusRow}>
             <MaterialCommunityIcons name="phone-off" size={24} color="#6B7280" />
             <View style={styles.statusTextContainer}>
-              <Text style={styles.statusTitle}>Contacts Blocked</Text>
+              <Text style={styles.statusTitle}>{t('contactBlocking.contactsBlocked')}</Text>
               <Text style={styles.statusSubtitle}>
                 {contactsBlocked === 0
-                  ? 'No contacts blocked yet'
-                  : `${contactsBlocked} contact${contactsBlocked === 1 ? '' : 's'} blocked`}
+                  ? t('contactBlocking.noContactsBlockedYet')
+                  : t('contactBlocking.contactsBlockedCount', { count: contactsBlocked })}
               </Text>
             </View>
             <View style={[
@@ -350,7 +335,7 @@ export default function ContactBlocking() {
                 styles.statusBadgeText,
                 isEnabled && styles.statusBadgeTextActive
               ]}>
-                {isEnabled ? 'Active' : 'Inactive'}
+                {isEnabled ? t('contactBlocking.active') : t('contactBlocking.inactive')}
               </Text>
             </View>
           </View>
@@ -358,16 +343,16 @@ export default function ContactBlocking() {
 
         {/* How It Works */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>How It Works</Text>
+          <Text style={styles.sectionTitle}>{t('contactBlocking.howItWorks')}</Text>
 
           <View style={styles.stepCard}>
             <View style={styles.stepNumber}>
               <Text style={styles.stepNumberText}>1</Text>
             </View>
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>Grant Permission (One Time)</Text>
+              <Text style={styles.stepTitle}>{t('contactBlocking.step1Title')}</Text>
               <Text style={styles.stepText}>
-                You'll see a clear explanation of how we protect your privacy, then grant access to your contacts. We only read phone numbers—no names, emails, or other info.
+                {t('contactBlocking.step1Text')}
               </Text>
             </View>
           </View>
@@ -377,9 +362,9 @@ export default function ContactBlocking() {
               <Text style={styles.stepNumberText}>2</Text>
             </View>
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>Local Encryption (On Your Device)</Text>
+              <Text style={styles.stepTitle}>{t('contactBlocking.step2Title')}</Text>
               <Text style={styles.stepText}>
-                Phone numbers are immediately converted to encrypted codes using SHA-256 (military-grade encryption) on YOUR device. We never see the actual numbers.
+                {t('contactBlocking.step2Text')}
               </Text>
             </View>
           </View>
@@ -389,9 +374,9 @@ export default function ContactBlocking() {
               <Text style={styles.stepNumberText}>3</Text>
             </View>
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>Automatic Protection</Text>
+              <Text style={styles.stepTitle}>{t('contactBlocking.step3Title')}</Text>
               <Text style={styles.stepText}>
-                Profiles with matching phone numbers are automatically hidden from your discovery feed. They'll never know, and you'll never see each other.
+                {t('contactBlocking.step3Text')}
               </Text>
             </View>
           </View>
@@ -410,7 +395,7 @@ export default function ContactBlocking() {
               ) : (
                 <>
                   <MaterialCommunityIcons name="shield-check" size={20} color="white" />
-                  <Text style={styles.buttonText}>Block My Contacts</Text>
+                  <Text style={styles.buttonText}>{t('contactBlocking.blockMyContacts')}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -426,7 +411,7 @@ export default function ContactBlocking() {
                 ) : (
                   <>
                     <MaterialCommunityIcons name="refresh" size={20} color="white" />
-                    <Text style={styles.buttonText}>Update Blocked Contacts</Text>
+                    <Text style={styles.buttonText}>{t('contactBlocking.updateBlockedContacts')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -437,7 +422,7 @@ export default function ContactBlocking() {
                 disabled={blocking}
               >
                 <MaterialCommunityIcons name="delete" size={20} color="#EF4444" />
-                <Text style={styles.secondaryButtonText}>Clear All Blocks</Text>
+                <Text style={styles.secondaryButtonText}>{t('contactBlocking.clearAllBlocks')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -447,8 +432,8 @@ export default function ContactBlocking() {
         <View style={styles.privacyNotice}>
           <MaterialCommunityIcons name="shield-check" size={20} color="#10B981" />
           <Text style={styles.privacyText}>
-            <Text style={{ fontWeight: '700', color: '#10B981' }}>100% Privacy Guaranteed: </Text>
-            Your contacts never leave your device in readable form. We use the same encryption technology that banks use to protect your data. Phone numbers are converted to encrypted codes instantly on your device, and only these codes are stored. We can't read your contacts, and neither can anyone else.
+            <Text style={{ fontWeight: '700', color: '#10B981' }}>{t('contactBlocking.privacyGuaranteed')} </Text>
+            {t('contactBlocking.privacyGuaranteedText')}
           </Text>
         </View>
 
@@ -457,13 +442,10 @@ export default function ContactBlocking() {
           <MaterialCommunityIcons name="help-circle" size={20} color="#6366F1" />
           <View style={{ flex: 1 }}>
             <Text style={[styles.privacyText, { color: '#4338CA', fontWeight: '600', marginBottom: 4 }]}>
-              Common Questions:
+              {t('contactBlocking.commonQuestions')}
             </Text>
             <Text style={[styles.privacyText, { color: '#4338CA' }]}>
-              • "Can Accord see my contacts?" No. We only see encrypted codes.{'\n'}
-              • "Will my contacts know?" No. This is completely invisible to them.{'\n'}
-              • "Can I undo this?" Yes. Tap "Clear All Blocks" anytime.{'\n'}
-              • "What if I add new contacts?" Tap "Update Blocked Contacts" to refresh.
+              {t('contactBlocking.commonQuestionsText')}
             </Text>
           </View>
         </View>
@@ -599,7 +581,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -636,7 +618,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   primaryButton: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
   },
   secondaryButton: {
     backgroundColor: 'white',

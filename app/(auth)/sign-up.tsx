@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
@@ -7,9 +7,12 @@ import { supabase } from '@/lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { trackUserAction, identifyUser } from '@/lib/analytics';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SignUp() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -191,43 +194,35 @@ export default function SignUp() {
     }
   };
 
+  // Email Verification Success Screen
   if (showVerificationMessage) {
     return (
-      <View className="flex-1 bg-cream px-6 pt-16 justify-center">
-        <View className="items-center">
-          <Text className="text-6xl mb-6">📧</Text>
-          <Text className="text-3xl font-bold text-charcoal mb-4 text-center">
-            {t('auth.signUp.verificationTitle')}
-          </Text>
-          <Text className="text-gray-600 text-lg text-center mb-2">
-            {t('auth.signUp.verificationMessage')}
-          </Text>
-          <Text className="text-primary-500 font-semibold text-lg mb-6">
-            {userEmail}
-          </Text>
-          <Text className="text-gray-600 text-center mb-8 px-4">
-            {t('auth.signUp.verificationInstructions')}
-          </Text>
+      <View style={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+        <View style={styles.verificationContainer}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="mail-outline" size={40} color="#A08AB7" />
+          </View>
+          <Text style={styles.verificationTitle}>{t('auth.signUp.verificationTitle')}</Text>
+          <Text style={styles.verificationMessage}>{t('auth.signUp.verificationMessage')}</Text>
+          <Text style={styles.verificationEmail}>{userEmail}</Text>
+          <Text style={styles.verificationInstructions}>{t('auth.signUp.verificationInstructions')}</Text>
 
           <TouchableOpacity
-            className="bg-primary-500 rounded-full py-4 px-8 mb-4"
+            style={styles.primaryButton}
             onPress={() => router.replace('/(auth)/sign-in')}
           >
-            <Text className="text-white font-bold text-lg">
-              {t('auth.signUp.goToSignIn')}
-            </Text>
+            <Text style={styles.primaryButtonText}>{t('auth.signUp.goToSignIn')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => setShowVerificationMessage(false)}
+            style={styles.secondaryLink}
           >
-            <Text className="text-primary-500 font-semibold">
-              {t('auth.signUp.useDifferentEmail')}
-            </Text>
+            <Text style={styles.linkText}>{t('auth.signUp.useDifferentEmail')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            className="mt-4"
+            style={styles.tertiaryLink}
             onPress={async () => {
               try {
                 await supabase.auth.resend({
@@ -240,9 +235,7 @@ export default function SignUp() {
               }
             }}
           >
-            <Text className="text-gray-500 underline">
-              {t('auth.signUp.resendVerificationEmail')}
-            </Text>
+            <Text style={styles.tertiaryLinkText}>{t('auth.signUp.resendVerificationEmail')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -252,126 +245,362 @@ export default function SignUp() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-cream"
+      style={[styles.container, { paddingTop: insets.top }]}
     >
       <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 64, paddingBottom: 40 }}
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity onPress={() => router.back()} className="mb-8">
-          <Text className="text-primary-500 text-lg font-semibold">{t('auth.signUp.backButton')}</Text>
-        </TouchableOpacity>
-
-        <Text className="text-4xl font-bold text-charcoal mb-2">
-          {t('auth.signUp.title')}
-        </Text>
-        <Text className="text-gray-600 text-lg mb-8">
-          {t('auth.signUp.subtitle')}
-        </Text>
-
-        <View className="space-y-4">
-        <View>
-          <Text className="text-gray-700 mb-2 font-medium">{t('auth.signUp.email')}</Text>
-          <TextInput
-            className="border border-gray-300 rounded-lg px-4 py-3 bg-white text-gray-900"
-            placeholder={t('auth.signUp.emailPlaceholder')}
-            placeholderTextColor="#9CA3AF"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View>
-          <Text className="text-gray-700 mb-2 font-medium">{t('auth.signUp.password')}</Text>
-          <TextInput
-            className="border border-gray-300 rounded-lg px-4 py-3 bg-white text-gray-900"
-            placeholder={t('auth.signUp.passwordPlaceholder')}
-            placeholderTextColor="#9CA3AF"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-          <Text className="text-gray-500 text-sm mt-1">
-            {t('auth.signUp.passwordHint')}
-          </Text>
-        </View>
-
-        <View>
-          <Text className="text-gray-700 mb-2 font-medium">
-            {t('auth.signUp.confirmPassword')}
-          </Text>
-          <TextInput
-            className="border border-gray-300 rounded-lg px-4 py-3 bg-white text-gray-900"
-            placeholder={t('auth.signUp.passwordPlaceholder')}
-            placeholderTextColor="#9CA3AF"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-          />
-        </View>
-
+        {/* Back Button */}
         <TouchableOpacity
-          className={`bg-primary-500 rounded-full py-4 items-center mt-4 shadow-lg ${
-            loading ? 'opacity-50' : ''
-          }`}
-          onPress={handleSignUp}
-          disabled={loading}
+          onPress={() => router.back()}
+          style={styles.backButton}
         >
-          <Text className="text-white font-bold text-lg">
-            {loading ? t('auth.signUp.creatingAccount') : t('auth.signUp.createAccountButton')}
-          </Text>
+          <Ionicons name="chevron-back" size={24} color="#A08AB7" />
+          <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
 
-        <Text className="text-gray-500 text-xs text-center mt-4">
-          {t('auth.signUp.termsAgree')}
-          <Text className="text-primary-500">{t('auth.signUp.termsOfService')}</Text>
-          {t('auth.signUp.and')}
-          <Text className="text-primary-500">{t('auth.signUp.privacyPolicy')}</Text>
-        </Text>
+        {/* Header */}
+        <Text style={styles.title}>{t('auth.signUp.title')}</Text>
+        <Text style={styles.subtitle}>{t('auth.signUp.subtitle')}</Text>
 
-        {/* Divider */}
-        <View className="flex-row items-center my-6">
-          <View className="flex-1 h-px bg-gray-300" />
-          <Text className="mx-4 text-gray-500">{t('auth.signUp.orSignUpWith')}</Text>
-          <View className="flex-1 h-px bg-gray-300" />
-        </View>
+        {/* Form */}
+        <View style={styles.form}>
+          {/* Email Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>{t('auth.signUp.email')}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={t('auth.signUp.emailPlaceholder')}
+              placeholderTextColor="#A1A1AA"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
 
-        {/* Social Sign-Up Buttons */}
-        <View className="space-y-3">
+          {/* Password Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>{t('auth.signUp.password')}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={t('auth.signUp.passwordPlaceholder')}
+              placeholderTextColor="#A1A1AA"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+            <Text style={styles.hint}>{t('auth.signUp.passwordHint')}</Text>
+          </View>
+
+          {/* Confirm Password Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>{t('auth.signUp.confirmPassword')}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={t('auth.signUp.passwordPlaceholder')}
+              placeholderTextColor="#A1A1AA"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+            />
+          </View>
+
+          {/* Sign Up Button */}
           <TouchableOpacity
-            className="border border-gray-300 rounded-full py-3 px-4 flex-row items-center justify-center"
-            onPress={handleGoogleSignUp}
+            style={[styles.primaryButton, loading && styles.buttonDisabled]}
+            onPress={handleSignUp}
             disabled={loading}
           >
-            <Text className="text-gray-700 font-semibold ml-2">
-              {t('auth.signUp.continueWithGoogle')}
+            <Text style={styles.primaryButtonText}>
+              {loading ? t('auth.signUp.creatingAccount') : t('auth.signUp.createAccountButton')}
             </Text>
           </TouchableOpacity>
 
-          {appleAuthAvailable && (
+          {/* Terms */}
+          <Text style={styles.terms}>
+            {t('auth.signUp.termsAgree')}
+            <Text style={styles.termsLink}>{t('auth.signUp.termsOfService')}</Text>
+            {t('auth.signUp.and')}
+            <Text style={styles.termsLink}>{t('auth.signUp.privacyPolicy')}</Text>
+          </Text>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>{t('auth.signUp.orSignUpWith')}</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Social Sign-Up Buttons */}
+          <View style={styles.socialButtons}>
+            {/* Google Button */}
             <TouchableOpacity
-              className="bg-black rounded-full py-3 px-4 flex-row items-center justify-center"
-              onPress={handleAppleSignUp}
+              style={styles.socialButton}
+              onPress={handleGoogleSignUp}
               disabled={loading}
             >
-              <Text className="text-white font-semibold ml-2">
-                {t('auth.signUp.continueWithApple')}
-              </Text>
+              <Ionicons name="logo-google" size={20} color="#4285F4" />
+              <Text style={styles.socialButtonText}>{t('auth.signUp.continueWithGoogle')}</Text>
             </TouchableOpacity>
-          )}
-        </View>
 
-        <View className="flex-row justify-center items-center mt-6">
-          <Text className="text-gray-600">{t('auth.signUp.haveAccount')}</Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)/sign-in')}>
-            <Text className="text-primary-500 font-semibold">{t('auth.signUp.signInLink')}</Text>
-          </TouchableOpacity>
+            {/* Apple Button */}
+            {appleAuthAvailable && (
+              <TouchableOpacity
+                style={styles.appleButton}
+                onPress={handleAppleSignUp}
+                disabled={loading}
+              >
+                <Ionicons name="logo-apple" size={20} color="#FFFFFF" />
+                <Text style={styles.appleButtonText}>{t('auth.signUp.continueWithApple')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Sign In Link */}
+          <View style={styles.signInContainer}>
+            <Text style={styles.signInText}>{t('auth.signUp.haveAccount')}</Text>
+            <TouchableOpacity onPress={() => router.push('/(auth)/sign-in')}>
+              <Text style={styles.signInLink}>{t('auth.signUp.signInLink')}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    flexGrow: 1,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  backButtonText: {
+    color: '#A08AB7',
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    marginLeft: 4,
+  },
+  title: {
+    fontSize: 32,
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 17,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  form: {
+    gap: 16,
+  },
+  inputContainer: {
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    color: '#1F2937',
+    fontSize: 16,
+    fontFamily: 'Inter',
+  },
+  hint: {
+    fontSize: 14,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    marginTop: 6,
+  },
+  primaryButton: {
+    backgroundColor: '#A08AB7',
+    borderRadius: 50,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+    shadowColor: '#A08AB7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-Bold',
+    fontSize: 17,
+  },
+  terms: {
+    fontSize: 14,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: '#A08AB7',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E4E4E7',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#71717A',
+    fontFamily: 'Inter',
+    fontSize: 14,
+  },
+  socialButtons: {
+    gap: 12,
+  },
+  socialButton: {
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
+    borderRadius: 50,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  socialButtonText: {
+    color: '#1F2937',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  appleButton: {
+    backgroundColor: '#1F2937',
+    borderRadius: 50,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appleButtonText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  signInContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+    paddingBottom: 16,
+  },
+  signInText: {
+    color: '#71717A',
+    fontFamily: 'Inter',
+    fontSize: 16,
+  },
+  signInLink: {
+    color: '#A08AB7',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+  },
+  // Verification screen styles
+  verificationContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F5F2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  verificationTitle: {
+    fontSize: 28,
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#1F2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  verificationMessage: {
+    fontSize: 17,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  verificationEmail: {
+    fontSize: 17,
+    fontFamily: 'Inter-SemiBold',
+    color: '#A08AB7',
+    marginBottom: 24,
+  },
+  verificationInstructions: {
+    fontSize: 16,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    textAlign: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 16,
+    lineHeight: 24,
+  },
+  secondaryLink: {
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+  linkText: {
+    color: '#A08AB7',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+  },
+  tertiaryLink: {
+    paddingVertical: 8,
+    marginTop: 16,
+  },
+  tertiaryLinkText: {
+    color: '#71717A',
+    fontFamily: 'Inter',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+});

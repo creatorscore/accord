@@ -128,7 +128,7 @@ export default function ReviewSettingsScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
       </View>
     );
   }
@@ -171,7 +171,7 @@ export default function ReviewSettingsScreen() {
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
                 <View style={styles.iconContainer}>
-                  <MaterialCommunityIcons name="eye" size={20} color="#9B87CE" />
+                  <MaterialCommunityIcons name="eye" size={20} color="#A08AB7" />
                 </View>
                 <View style={styles.settingInfo}>
                   <Text style={styles.settingLabel}>{t('reviews.enableReviews')}</Text>
@@ -183,8 +183,8 @@ export default function ReviewSettingsScreen() {
               <Switch
                 value={settings.reviews_enabled}
                 onValueChange={() => handleToggle('reviews_enabled')}
-                trackColor={{ false: '#D1D5DB', true: '#C4B5FD' }}
-                thumbColor={settings.reviews_enabled ? '#9B87CE' : '#F3F4F6'}
+                trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
+                thumbColor={settings.reviews_enabled ? '#A08AB7' : '#F3F4F6'}
                 disabled={settings.auto_disabled_by_location}
               />
             </View>
@@ -288,7 +288,7 @@ export default function ReviewSettingsScreen() {
           onPress={handleSave}
           disabled={saving}
         >
-          <LinearGradient colors={['#9B87CE', '#9B87CE']} style={styles.saveGradient}>
+          <LinearGradient colors={['#A08AB7', '#A08AB7']} style={styles.saveGradient}>
             {saving ? (
               <ActivityIndicator color="#FFF" />
             ) : (
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#9B87CE',
+    shadowColor: '#A08AB7',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

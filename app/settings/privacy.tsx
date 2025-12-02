@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
@@ -31,6 +31,9 @@ interface PrivacySettings {
 export default function PrivacySettings() {
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
+  const { scrollTo } = useLocalSearchParams<{ scrollTo?: string }>();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [verificationSectionY, setVerificationSectionY] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [updatingLocation, setUpdatingLocation] = useState(false);
@@ -46,6 +49,15 @@ export default function PrivacySettings() {
   useEffect(() => {
     loadSettings();
   }, []);
+
+  // Scroll to verification section if requested via URL param
+  useEffect(() => {
+    if (scrollTo === 'verification' && verificationSectionY > 0 && !loading) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: verificationSectionY - 20, animated: true });
+      }, 300);
+    }
+  }, [scrollTo, verificationSectionY, loading]);
 
   const loadSettings = async () => {
     try {
@@ -195,7 +207,7 @@ export default function PrivacySettings() {
         style={styles.settingRow}
       >
         <View style={styles.settingIcon}>
-          <MaterialCommunityIcons name={icon as any} size={24} color="#9B87CE" />
+          <MaterialCommunityIcons name={icon as any} size={24} color="#A08AB7" />
         </View>
         <View style={styles.settingContent}>
           <View style={styles.settingHeader}>
@@ -214,8 +226,8 @@ export default function PrivacySettings() {
         <Switch
           value={value}
           onValueChange={onValueChange}
-          trackColor={{ false: '#D1D5DB', true: '#A78BFA' }}
-          thumbColor={value ? '#9B87CE' : '#F3F4F6'}
+          trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
+          thumbColor={value ? '#A08AB7' : '#F3F4F6'}
           disabled={saving || isLocked}
         />
       </MotiView>
@@ -233,7 +245,7 @@ export default function PrivacySettings() {
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
           <Text style={styles.loadingText}>Loading settings...</Text>
         </View>
       </View>
@@ -241,7 +253,7 @@ export default function PrivacySettings() {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollViewRef} style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -296,7 +308,10 @@ export default function PrivacySettings() {
       </View>
 
       {/* Photo Verification */}
-      <View style={styles.section}>
+      <View
+        style={styles.section}
+        onLayout={(event) => setVerificationSectionY(event.nativeEvent.layout.y)}
+      >
         <Text style={styles.sectionTitle}>Verification</Text>
         <View style={{ paddingHorizontal: 20 }}>
           <PhotoVerificationCard />
@@ -336,7 +351,7 @@ export default function PrivacySettings() {
         >
           <View style={styles.locationHeader}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="map-marker" size={24} color="#9B87CE" />
+              <MaterialCommunityIcons name="map-marker" size={24} color="#A08AB7" />
             </View>
             <View style={styles.locationContent}>
               <Text style={styles.settingTitle}>Update Location</Text>
@@ -410,7 +425,7 @@ export default function PrivacySettings() {
           style={styles.learnMoreButton}
           onPress={() => Linking.openURL('https://joinaccord.app/privacy')}
         >
-          <MaterialCommunityIcons name="shield-lock-outline" size={20} color="#9B87CE" />
+          <MaterialCommunityIcons name="shield-lock-outline" size={20} color="#A08AB7" />
           <Text style={styles.learnMoreText}>Privacy Policy</Text>
           <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
         </TouchableOpacity>
@@ -419,7 +434,7 @@ export default function PrivacySettings() {
           style={styles.learnMoreButton}
           onPress={() => Linking.openURL('https://joinaccord.app/terms')}
         >
-          <MaterialCommunityIcons name="file-document-outline" size={20} color="#9B87CE" />
+          <MaterialCommunityIcons name="file-document-outline" size={20} color="#A08AB7" />
           <Text style={styles.learnMoreText}>Terms of Service</Text>
           <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
         </TouchableOpacity>
@@ -624,7 +639,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '500',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   locationCard: {
     backgroundColor: '#fff',
@@ -657,14 +672,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 12,
     gap: 8,
   },
   updateLocationButtonDisabled: {
-    backgroundColor: '#A78BFA',
+    backgroundColor: '#CDC2E5',
     opacity: 0.6,
   },
   updateLocationButtonText: {

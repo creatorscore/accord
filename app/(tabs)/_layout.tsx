@@ -1,10 +1,12 @@
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Platform } from 'react-native';
+import { useColorScheme } from '@/lib/useColorScheme';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   // Add extra padding for safe area (home indicator on iPhone X+, navigation bar on Android)
   const tabBarHeight = 60 + insets.bottom;
@@ -14,15 +16,20 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#9B87CE',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: '#A08AB7', // lavender-500
+        tabBarInactiveTintColor: isDark ? '#71717A' : '#A1A1AA', // muted-foreground
         tabBarStyle: {
-          backgroundColor: 'white',
+          backgroundColor: isDark ? '#18181B' : '#FFFFFF', // card
           borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
+          borderTopColor: isDark ? '#27272A' : '#E4E4E7', // border
           paddingBottom: paddingBottom,
           paddingTop: 5,
           height: tabBarHeight,
+        },
+        tabBarLabelStyle: {
+          fontFamily: 'Inter',
+          fontSize: 11,
+          fontWeight: '500',
         },
       }}
     >

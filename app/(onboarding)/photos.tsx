@@ -6,12 +6,13 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
-import { optimizeImage, uriToArrayBuffer, validateImage } from '@/lib/image-optimization';
+import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash } from '@/lib/image-optimization';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 
 interface Photo {
   uri: string;
   id?: string;
+  contentHash?: string;
 }
 
 export default function Photos() {
@@ -114,9 +115,35 @@ export default function Photos() {
 
         console.log(`Optimized image: ${(optimized.size! / 1024).toFixed(0)}KB (${optimized.width}x${optimized.height})`);
 
+        // Generate hash for duplicate detection
+        const contentHash = await generateImageHash(optimized.uri);
+        console.log(`Generated content hash: ${contentHash.substring(0, 16)}...`);
+
+        // Check for duplicate in current selection (local check)
+        const isDuplicateLocal = photos.some(p => p.contentHash === contentHash);
+        if (isDuplicateLocal) {
+          Alert.alert('Duplicate Photo', 'You have already selected this photo. Please choose a different one.');
+          return;
+        }
+
+        // Check for duplicate in database (already uploaded photos)
+        if (profileId) {
+          const { data: existingPhoto } = await supabase
+            .from('photos')
+            .select('id')
+            .eq('profile_id', profileId)
+            .eq('content_hash', contentHash)
+            .maybeSingle();
+
+          if (existingPhoto) {
+            Alert.alert('Duplicate Photo', 'You have already uploaded this photo. Please choose a different one.');
+            return;
+          }
+        }
+
         // Update state if component is still mounted
         if (isMounted.current) {
-          setPhotos(prev => [...prev, { uri: optimized.uri }]);
+          setPhotos(prev => [...prev, { uri: optimized.uri, contentHash }]);
         }
       }
     } catch (error: any) {
@@ -182,7 +209,7 @@ export default function Photos() {
               .from('profile-photos')
               .getPublicUrl(fileName);
 
-            // Save to photos table
+            // Save to photos table with content hash for duplicate detection
             const { error: dbError } = await supabase
               .from('photos')
               .insert({
@@ -191,6 +218,7 @@ export default function Photos() {
                 url: publicUrl,
                 display_order: photos.length - newPhotos.length + i, // Maintain correct order
                 is_primary: photos.length - newPhotos.length + i === 0,
+                content_hash: photo.contentHash,
               });
 
             if (dbError) {
@@ -246,11 +274,11 @@ export default function Photos() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 2 of 8</Text>
-            <Text className="text-sm text-primary-500 font-bold">25%</Text>
+            <Text className="text-sm text-lavender-500 font-bold">25%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
-              className="h-3 bg-primary-500 rounded-full"
+              className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '25%' }}
             />
           </View>
@@ -281,7 +309,7 @@ export default function Photos() {
                 <MaterialCommunityIcons name="close" size={16} color="white" />
               </TouchableOpacity>
               {index === 0 && (
-                <View className="absolute bottom-2 left-2 bg-primary-500 px-2 py-1 rounded">
+                <View className="absolute bottom-2 left-2 bg-lavender-500 px-2 py-1 rounded">
                   <Text className="text-white text-xs font-semibold">Primary</Text>
                 </View>
               )}
@@ -330,7 +358,7 @@ export default function Photos() {
                 console.log('🔒 Photo blur toggled:', value ? 'ON' : 'OFF');
                 setPhotoBlurEnabled(value);
               }}
-              trackColor={{ false: '#D1D5DB', true: '#9B87CE' }}
+              trackColor={{ false: '#D1D5DB', true: '#A08AB7' }}
               thumbColor={photoBlurEnabled ? '#ffffff' : '#f4f3f4'}
             />
           </View>
@@ -350,7 +378,7 @@ export default function Photos() {
             className={`flex-1 py-4 rounded-full ${
               uploading || photos.length < 2
                 ? 'bg-gray-400'
-                : 'bg-primary-500'
+                : 'bg-lavender-500'
             }`}
             style={{
               borderRadius: 9999,

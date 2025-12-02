@@ -87,17 +87,17 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.privyreviews.accord'
+    namespace "com.privyreviews.accord"
     defaultConfig {
-        applicationId 'com.privyreviews.accord'
+        applicationId "com.privyreviews.accord"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 29
-        versionName "1.0.1"
+        versionCode 31
+        versionName "1.0.2"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
 
-        // Specify which capture protection flavor to use
+        // Fix for react-native-capture-protection product flavor ambiguity
         missingDimensionStrategy 'react-native-capture-protection', 'fullMediaCapture'
     }
     signingConfigs {
@@ -158,9 +158,6 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
-
-    // Play Integrity API
-    implementation("com.google.android.play:integrity:1.4.0")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

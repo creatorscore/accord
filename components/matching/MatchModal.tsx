@@ -1,18 +1,20 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, Dimensions } from 'react-native';
 import { Image } from '@/components/shared/ConditionalImage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
-  withSequence,
   withTiming,
   withDelay,
+  Easing,
+  interpolate,
 } from 'react-native-reanimated';
-import ConfettiCannon from 'react-native-confetti-cannon';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const PHOTO_SIZE = SCREEN_WIDTH * 0.38;
 
 interface MatchModalProps {
   visible: boolean;
@@ -33,47 +35,52 @@ export default function MatchModal({
   matchedProfile,
   currentUserPhoto,
 }: MatchModalProps) {
-  const scale = useSharedValue(0);
-  const opacity = useSharedValue(0);
-  const heartScale = useSharedValue(0);
-  const confettiRef = useRef<any>(null);
+  const progress = useSharedValue(0);
+  const photoLeft = useSharedValue(-50);
+  const photoRight = useSharedValue(50);
 
   useEffect(() => {
     if (visible) {
-      // Animate modal entrance
-      opacity.value = withTiming(1, { duration: 300 });
-      scale.value = withSequence(
-        withSpring(1.1, { damping: 10 }),
-        withSpring(1, { damping: 8 })
-      );
-
-      // Animate heart icon
-      heartScale.value = withDelay(
-        200,
-        withSequence(
-          withSpring(1.3, { damping: 8 }),
-          withSpring(1, { damping: 6 })
-        )
-      );
-
-      // Trigger confetti after a slight delay
-      setTimeout(() => {
-        confettiRef.current?.start();
-      }, 400);
+      // Smooth entrance
+      progress.value = withTiming(1, {
+        duration: 400,
+        easing: Easing.out(Easing.cubic)
+      });
+      // Photos slide gently toward each other
+      photoLeft.value = withDelay(100, withTiming(0, {
+        duration: 500,
+        easing: Easing.out(Easing.cubic)
+      }));
+      photoRight.value = withDelay(100, withTiming(0, {
+        duration: 500,
+        easing: Easing.out(Easing.cubic)
+      }));
     } else {
-      opacity.value = withTiming(0, { duration: 200 });
-      scale.value = withTiming(0, { duration: 200 });
-      heartScale.value = 0;
+      progress.value = withTiming(0, { duration: 200 });
+      photoLeft.value = -50;
+      photoRight.value = 50;
     }
   }, [visible]);
 
-  const modalStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
   }));
 
-  const heartStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: heartScale.value }],
+  const contentStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [
+      { translateY: interpolate(progress.value, [0, 1], [30, 0]) }
+    ],
+  }));
+
+  const leftPhotoStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: photoLeft.value }],
+    opacity: interpolate(photoLeft.value, [-50, 0], [0, 1]),
+  }));
+
+  const rightPhotoStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: photoRight.value }],
+    opacity: interpolate(photoRight.value, [50, 0], [0, 1]),
   }));
 
   return (
@@ -82,184 +89,225 @@ export default function MatchModal({
       transparent
       animationType="none"
       onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <View className="flex-1 bg-black/70 items-center justify-center px-6">
-        <Animated.View
-          style={[modalStyle]}
-          className="bg-white rounded-3xl p-8 w-full max-w-sm"
+      {/* Backdrop with gradient */}
+      <Animated.View style={[{ flex: 1 }, backdropStyle]}>
+        <LinearGradient
+          colors={['#745f8d', '#8B6BA3', '#A08AB7']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1 }}
         >
-          {/* Close Button */}
+          {/* Close button - top right */}
           <TouchableOpacity
-            className="absolute top-4 right-4 z-10"
             onPress={onClose}
+            style={{
+              position: 'absolute',
+              top: 60,
+              right: 24,
+              zIndex: 10,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
-            <MaterialCommunityIcons name="close" size={24} color="#9CA3AF" />
+            <MaterialCommunityIcons name="close" size={22} color="white" />
           </TouchableOpacity>
 
-          {/* Header */}
-          <View className="items-center mb-6">
-            <Text className="text-4xl font-black text-primary-500 mb-2 text-center">
-              IT'S A MATCH! 🎉
+          {/* Main content */}
+          <Animated.View
+            style={[contentStyle, { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }]}
+          >
+            {/* The headline - fun & queer */}
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '500',
+              color: 'rgba(255,255,255,0.7)',
+              letterSpacing: 3,
+              textTransform: 'uppercase',
+              marginBottom: 8,
+            }}>
+              oh hey there
             </Text>
-            <Text className="text-gray-600 text-center text-base">
-              You and {matchedProfile.display_name} liked each other!
-            </Text>
-          </View>
 
-          {/* Profile Photos */}
-          <View className="flex-row justify-center items-center mb-6 relative">
-            {/* Current User Photo */}
-            <View className="bg-white rounded-full border-4 border-primary-500 overflow-hidden shadow-lg">
-              {currentUserPhoto ? (
-                <Image
-                  source={{ uri: currentUserPhoto }}
-                  style={{ width: 112, height: 112 }}
-                  contentFit="cover"
-                />
-              ) : (
-                <View className="w-28 h-28 bg-gray-200 items-center justify-center">
-                  <MaterialCommunityIcons name="account" size={50} color="#9CA3AF" />
+            <Text style={{
+              fontSize: 42,
+              fontWeight: '300',
+              color: 'white',
+              marginBottom: 12,
+              letterSpacing: -1,
+            }}>
+              You clicked!
+            </Text>
+
+            <Text style={{
+              fontSize: 16,
+              color: 'rgba(255,255,255,0.8)',
+              marginBottom: 40,
+              textAlign: 'center',
+            }}>
+              The feeling is mutual ✨
+            </Text>
+
+            {/* Photos - the hero moment */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 48,
+            }}>
+              {/* Your photo */}
+              <Animated.View style={[leftPhotoStyle]}>
+                <View style={{
+                  width: PHOTO_SIZE,
+                  height: PHOTO_SIZE,
+                  borderRadius: PHOTO_SIZE / 2,
+                  borderWidth: 3,
+                  borderColor: 'rgba(255,255,255,0.4)',
+                  overflow: 'hidden',
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                }}>
+                  {currentUserPhoto ? (
+                    <Image
+                      source={{ uri: currentUserPhoto }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialCommunityIcons name="account" size={50} color="rgba(255,255,255,0.5)" />
+                    </View>
+                  )}
                 </View>
-              )}
+              </Animated.View>
+
+              {/* Subtle heart connector */}
+              <View style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: 'white',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginHorizontal: -22,
+                zIndex: 10,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 12,
+                elevation: 8,
+              }}>
+                <MaterialCommunityIcons name="heart" size={22} color="#A08AB7" />
+              </View>
+
+              {/* Their photo */}
+              <Animated.View style={[rightPhotoStyle]}>
+                <View style={{
+                  width: PHOTO_SIZE,
+                  height: PHOTO_SIZE,
+                  borderRadius: PHOTO_SIZE / 2,
+                  borderWidth: 3,
+                  borderColor: 'rgba(255,255,255,0.4)',
+                  overflow: 'hidden',
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                }}>
+                  {matchedProfile.photo_url ? (
+                    <Image
+                      source={{ uri: matchedProfile.photo_url }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialCommunityIcons name="account" size={50} color="rgba(255,255,255,0.5)" />
+                    </View>
+                  )}
+                </View>
+              </Animated.View>
             </View>
 
-            {/* Heart Icon in Center */}
-            <Animated.View
-              style={[heartStyle]}
-              className="absolute bg-primary-500 rounded-full w-16 h-16 items-center justify-center shadow-xl"
-              pointerEvents="none"
-            >
-              <MaterialCommunityIcons name="heart" size={32} color="white" />
-            </Animated.View>
+            {/* Their name */}
+            <Text style={{
+              fontSize: 28,
+              fontWeight: '700',
+              color: 'white',
+              marginBottom: 8,
+              letterSpacing: 0.5,
+            }}>
+              {matchedProfile.display_name}
+            </Text>
 
-            {/* Matched Profile Photo */}
-            <View className="bg-white rounded-full border-4 border-pink-500 overflow-hidden shadow-lg">
-              {matchedProfile.photo_url ? (
-                <Image
-                  source={{ uri: matchedProfile.photo_url }}
-                  style={{ width: 112, height: 112 }}
-                  contentFit="cover"
-                />
-              ) : (
-                <View className="w-28 h-28 bg-gray-200 items-center justify-center">
-                  <MaterialCommunityIcons name="account" size={50} color="#9CA3AF" />
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Compatibility Score */}
-          {(matchedProfile.compatibility_score !== undefined && matchedProfile.compatibility_score !== null) && (
-            <View className="bg-purple-100 rounded-2xl p-4 mb-6">
-              <View className="flex-row items-center justify-center">
-                <MaterialCommunityIcons name="star-circle" size={24} color="#9B87CE" />
-                <Text className="text-primary-500 font-bold text-lg ml-2">
-                  {matchedProfile.compatibility_score}% Compatible
+            {/* Compatibility - eye-catching pill */}
+            {matchedProfile.compatibility_score !== undefined && matchedProfile.compatibility_score !== null && (
+              <View style={{
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 20,
+                marginBottom: 48,
+              }}>
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '600',
+                  color: 'white',
+                }}>
+                  {matchedProfile.compatibility_score}% your type
                 </Text>
               </View>
-              <Text className="text-purple-700 text-center text-sm mt-1">
-                You have great potential together!
-              </Text>
-            </View>
-          )}
+            )}
 
-          {/* Action Buttons */}
-          <View className="gap-3">
+            {/* Primary action - one clear choice */}
             <TouchableOpacity
-              className="bg-primary-500 rounded-full py-4 px-6 shadow-lg"
               onPress={onSendMessage}
+              style={{
+                backgroundColor: 'white',
+                paddingVertical: 18,
+                paddingHorizontal: 48,
+                borderRadius: 30,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 12,
+                elevation: 8,
+                marginBottom: 16,
+              }}
             >
-              <Text className="text-white font-bold text-lg text-center">
-                Send Message 💬
+              <Text style={{
+                fontSize: 17,
+                fontWeight: '600',
+                color: '#745f8d',
+                letterSpacing: 0.3,
+              }}>
+                Slide into their DMs
               </Text>
             </TouchableOpacity>
 
+            {/* Secondary action - outlined button */}
             <TouchableOpacity
-              className="bg-gray-100 rounded-full py-4 px-6"
               onPress={onClose}
+              style={{
+                borderWidth: 2,
+                borderColor: 'rgba(255,255,255,0.5)',
+                paddingVertical: 14,
+                paddingHorizontal: 32,
+                borderRadius: 30,
+              }}
             >
-              <Text className="text-gray-700 font-semibold text-lg text-center">
-                Keep Swiping
+              <Text style={{
+                fontSize: 16,
+                color: 'white',
+                fontWeight: '600',
+              }}>
+                Play it cool for now
               </Text>
             </TouchableOpacity>
-          </View>
-
-          {/* Fun Message */}
-          <Text className="text-gray-500 text-xs text-center mt-4">
-            ✨ Don't keep them waiting - say hi! ✨
-          </Text>
-        </Animated.View>
-
-        {/* Floating Hearts Background Animation */}
-        <FloatingHearts visible={visible} />
-
-        {/* Confetti Cannon */}
-        <ConfettiCannon
-          ref={confettiRef}
-          count={200}
-          origin={{ x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT / 2 }}
-          autoStart={false}
-          fadeOut
-          colors={['#9B87CE', '#B8A9DD', '#F59E0B', '#10B981', '#3B82F6', '#EF4444']}
-          explosionSpeed={350}
-          fallSpeed={2500}
-        />
-      </View>
+          </Animated.View>
+        </LinearGradient>
+      </Animated.View>
     </Modal>
-  );
-}
-
-// Floating hearts background effect
-function FloatingHearts({ visible }: { visible: boolean }) {
-  if (!visible) return null;
-
-  return (
-    <View className="absolute inset-0" pointerEvents="none">
-      {[...Array(12)].map((_, i) => (
-        <FloatingHeart key={i} delay={i * 100} />
-      ))}
-    </View>
-  );
-}
-
-function FloatingHeart({ delay }: { delay: number }) {
-  const translateY = useSharedValue(0);
-  const opacity = useSharedValue(0);
-  const randomX = Math.random() * SCREEN_WIDTH;
-  const randomRotation = Math.random() * 360;
-
-  useEffect(() => {
-    opacity.value = withDelay(delay, withTiming(0.6, { duration: 500 }));
-    translateY.value = withDelay(
-      delay,
-      withTiming(-800, { duration: 3000 })
-    );
-
-    setTimeout(() => {
-      opacity.value = withTiming(0, { duration: 500 });
-    }, delay + 2500);
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [
-      { translateY: translateY.value },
-      { rotate: `${randomRotation}deg` },
-    ],
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        animatedStyle,
-        {
-          position: 'absolute',
-          bottom: 0,
-          left: randomX,
-        },
-      ]}
-    >
-      <Text style={{ fontSize: 30 }}>💜</Text>
-    </Animated.View>
   );
 }

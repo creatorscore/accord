@@ -186,11 +186,11 @@ export default function Interests() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 5 of 9</Text>
-            <Text className="text-sm text-primary-500 font-bold">56%</Text>
+            <Text className="text-sm text-lavender-500 font-bold">56%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
-              className="h-3 bg-primary-500 rounded-full"
+              className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '56%' }}
             />
           </View>
@@ -221,7 +221,7 @@ export default function Interests() {
                 key={hobby}
                 className={`px-4 py-3 rounded-full border-2 ${
                   hobbies.includes(hobby)
-                    ? 'bg-primary-500 border-primary-500'
+                    ? 'bg-lavender-500 border-lavender-500'
                     : 'bg-white border-gray-300'
                 }`}
                 onPress={() => toggleHobby(hobby)}
@@ -242,7 +242,7 @@ export default function Interests() {
               .map((hobby) => (
                 <TouchableOpacity
                   key={hobby}
-                  className="px-4 py-3 rounded-full border-2 bg-primary-500 border-primary-500"
+                  className="px-4 py-3 rounded-full border-2 bg-lavender-500 border-lavender-500"
                   onPress={() => toggleHobby(hobby)}
                 >
                   <Text className="text-sm font-semibold text-white">
@@ -267,7 +267,7 @@ export default function Interests() {
               />
               <TouchableOpacity
                 className={`px-6 py-3 rounded-full ${
-                  customHobby.trim() ? 'bg-primary-500' : 'bg-gray-300'
+                  customHobby.trim() ? 'bg-lavender-500' : 'bg-gray-300'
                 }`}
                 onPress={addCustomHobby}
                 disabled={!customHobby.trim()}
@@ -288,7 +288,7 @@ export default function Interests() {
         {/* Favorites Section */}
         <View className="bg-white rounded-3xl p-6 shadow-sm border border-purple-100 mb-8">
           <View className="flex-row items-center mb-6">
-            <MaterialCommunityIcons name="heart-multiple" size={28} color="#9B87CE" />
+            <MaterialCommunityIcons name="heart-multiple" size={28} color="#A08AB7" />
             <Text className="text-2xl font-bold text-gray-900 ml-2">
               Your Favorites
             </Text>
@@ -373,7 +373,7 @@ export default function Interests() {
             className={`flex-1 py-4 rounded-full ${
               loading || hobbies.length === 0
                 ? 'bg-gray-400'
-                : 'bg-primary-500'
+                : 'bg-lavender-500'
             }`}
             style={{
               borderRadius: 9999,

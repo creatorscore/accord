@@ -208,7 +208,7 @@ export default function BlockedUsers() {
         disabled={unblocking === item.id}
       >
         {unblocking === item.id ? (
-          <ActivityIndicator size="small" color="#9B87CE" />
+          <ActivityIndicator size="small" color="#A08AB7" />
         ) : (
           <Text style={styles.unblockButtonText}>Unblock</Text>
         )}
@@ -219,7 +219,7 @@ export default function BlockedUsers() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
         <Text style={styles.loadingText}>Loading blocked users...</Text>
       </View>
     );
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
     backgroundColor: '#fff',
   },
   unblockButtonDisabled: {
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
   unblockButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   separator: {
     height: 12,

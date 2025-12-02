@@ -86,7 +86,6 @@ interface ProfileData {
   hobbies?: string[];
   love_language?: string;
   languages_spoken?: string[];
-  my_story?: string;
   religion?: string;
   political_views?: string;
   voice_intro_url?: string;
@@ -154,13 +153,13 @@ export default function Profile() {
           zodiac_sign,
           personality_type,
           is_verified,
+          photo_verified,
           is_admin,
           prompt_answers,
           interests,
           hobbies,
           love_language,
           languages_spoken,
-          my_story,
           religion,
           political_views,
           voice_intro_url,
@@ -268,7 +267,7 @@ export default function Profile() {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
           <Text style={styles.loadingText}>{t('profile.loadingProfile')}</Text>
         </View>
       </View>
@@ -323,7 +322,7 @@ export default function Profile() {
         ) : (
           <View style={styles.placeholderHeader}>
             <LinearGradient
-              colors={['#9B87CE', '#B8A9DD']}
+              colors={['#A08AB7', '#CDC2E5']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.placeholderGradient}
@@ -362,10 +361,10 @@ export default function Profile() {
           {/* Bio Story Card */}
           {profile?.bio && (
             <ProfileStoryCard
-              title={t('profile.myStory')}
+              title={t('profile.aboutMe')}
               icon="book-open-variant"
               content={profile.bio}
-              gradient={['#9B87CE', '#B8A9DD']}
+              gradient={['#A08AB7', '#CDC2E5']}
               delay={100}
             />
           )}
@@ -413,7 +412,7 @@ export default function Profile() {
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ type: 'spring', delay: index * 50 }}
                     style={{
-                      backgroundColor: index % 3 === 0 ? '#EDE9FE' :
+                      backgroundColor: index % 3 === 0 ? '#F5F2F7' :
                                        index % 3 === 1 ? '#FEF3C7' : '#DBEAFE',
                       paddingHorizontal: 16,
                       paddingVertical: 8,
@@ -421,7 +420,7 @@ export default function Profile() {
                     }}
                   >
                     <Text style={{
-                      color: index % 3 === 0 ? '#9B87CE' :
+                      color: index % 3 === 0 ? '#A08AB7' :
                              index % 3 === 1 ? '#F59E0B' : '#3B82F6',
                       fontWeight: '600',
                       fontSize: 14,
@@ -473,7 +472,7 @@ export default function Profile() {
             onPress={() => router.push('/settings/edit-profile')}
           >
             <LinearGradient
-              colors={['#9B87CE', '#B8A9DD']}
+              colors={['#A08AB7', '#CDC2E5']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.editProfileGradient}
@@ -488,7 +487,7 @@ export default function Profile() {
             style={styles.previewProfileButton}
             onPress={handlePreviewProfile}
           >
-            <MaterialCommunityIcons name="eye-outline" size={20} color="#9B87CE" />
+            <MaterialCommunityIcons name="eye-outline" size={20} color="#A08AB7" />
             <Text style={styles.previewProfileText}>{t('profile.previewProfile')}</Text>
           </TouchableOpacity>
 
@@ -501,7 +500,7 @@ export default function Profile() {
           style={styles.premiumCard}
         >
           <LinearGradient
-            colors={isPlatinum ? ['#FFD700', '#FFA500'] : ['#9B87CE', '#B8A9DD']}
+            colors={isPlatinum ? ['#FFD700', '#FFA500'] : ['#A08AB7', '#CDC2E5']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.premiumGradient}
@@ -569,7 +568,7 @@ export default function Profile() {
             onPress={() => setShowPaywall(true)}
           >
             <LinearGradient
-              colors={['#9B87CE', '#B8A9DD']}
+              colors={['#A08AB7', '#CDC2E5']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.upgradeGradient}
@@ -638,7 +637,7 @@ export default function Profile() {
         >
           <View style={styles.menuItemLeft}>
             <MaterialCommunityIcons name="shield-alert" size={24} color="#EF4444" />
-            <Text style={[styles.menuItemText, { color: '#EF4444', fontWeight: '600' }]}>Screenshot Alerts</Text>
+            <Text style={[styles.menuItemText, { color: '#EF4444', fontWeight: '600' }]}>{t('profile.screenshotAlerts')}</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
         </TouchableOpacity>
@@ -648,10 +647,10 @@ export default function Profile() {
           onPress={() => router.push('/settings/matching-preferences')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="heart-cog" size={24} color="#9B87CE" />
-            <Text style={[styles.menuItemText, { color: '#9B87CE', fontWeight: '600' }]}>{t('profile.matchingPreferences')}</Text>
+            <MaterialCommunityIcons name="heart-cog" size={24} color="#A08AB7" />
+            <Text style={[styles.menuItemText, { color: '#A08AB7', fontWeight: '600' }]}>{t('profile.matchingPreferences')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -706,13 +705,13 @@ export default function Profile() {
             <MaterialCommunityIcons
               name={isPremium ? "credit-card-outline" : "crown-outline"}
               size={24}
-              color={isPremium ? "#6B7280" : "#9B87CE"}
+              color={isPremium ? "#6B7280" : "#A08AB7"}
             />
-            <Text style={[styles.menuItemText, !isPremium && { color: '#9B87CE', fontWeight: '600' }]}>
+            <Text style={[styles.menuItemText, !isPremium && { color: '#A08AB7', fontWeight: '600' }]}>
               {isPremium ? t('profile.manageSubscription') : t('profile.upgradeToPremium')}
             </Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={isPremium ? "#D1D5DB" : "#9B87CE"} />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={isPremium ? "#D1D5DB" : "#A08AB7"} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -743,7 +742,7 @@ export default function Profile() {
         >
           <View style={styles.menuItemLeft}>
             <MaterialCommunityIcons name="phone-off" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Block Contacts</Text>
+            <Text style={styles.menuItemText}>{t('profile.blockContacts')}</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
         </TouchableOpacity>
@@ -754,7 +753,7 @@ export default function Profile() {
         >
           <View style={styles.menuItemLeft}>
             <MaterialCommunityIcons name="earth-off" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Block Countries</Text>
+            <Text style={styles.menuItemText}>{t('profile.blockCountries')}</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
         </TouchableOpacity>
@@ -769,8 +768,8 @@ export default function Profile() {
               <View style={styles.menuItemLeft}>
                 <MaterialCommunityIcons name="shield-alert" size={24} color="#F59E0B" />
                 <View>
-                  <Text style={[styles.menuItemText, { color: '#92400E', fontWeight: '700' }]}>Admin Panel</Text>
-                  <Text style={{ fontSize: 12, color: '#92400E', marginTop: 2 }}>View reports & moderate</Text>
+                  <Text style={[styles.menuItemText, { color: '#92400E', fontWeight: '700' }]}>{t('profile.adminPanel')}</Text>
+                  <Text style={{ fontSize: 12, color: '#92400E', marginTop: 2 }}>{t('profile.viewReports')}</Text>
                 </View>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
@@ -783,8 +782,8 @@ export default function Profile() {
               <View style={styles.menuItemLeft}>
                 <MaterialCommunityIcons name="chart-line" size={24} color="#3B82F6" />
                 <View>
-                  <Text style={[styles.menuItemText, { color: '#1E40AF', fontWeight: '700' }]}>Cost Monitoring</Text>
-                  <Text style={{ fontSize: 12, color: '#1E40AF', marginTop: 2 }}>Database size & cleanup</Text>
+                  <Text style={[styles.menuItemText, { color: '#1E40AF', fontWeight: '700' }]}>{t('profile.costMonitoring')}</Text>
+                  <Text style={{ fontSize: 12, color: '#1E40AF', marginTop: 2 }}>{t('profile.databaseSize')}</Text>
                 </View>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={24} color="#3B82F6" />
@@ -797,25 +796,25 @@ export default function Profile() {
               <View style={styles.menuItemLeft}>
                 <MaterialCommunityIcons name="camera-off" size={24} color="#EF4444" />
                 <View>
-                  <Text style={[styles.menuItemText, { color: '#991B1B', fontWeight: '700' }]}>Screenshot Monitor</Text>
-                  <Text style={{ fontSize: 12, color: '#991B1B', marginTop: 2 }}>Ban users taking screenshots</Text>
+                  <Text style={[styles.menuItemText, { color: '#991B1B', fontWeight: '700' }]}>{t('profile.screenshotMonitor')}</Text>
+                  <Text style={{ fontSize: 12, color: '#991B1B', marginTop: 2 }}>{t('profile.banScreenshotUsers')}</Text>
                 </View>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: '#F3E8FF', borderLeftWidth: 4, borderLeftColor: '#9B87CE' }]}
+              style={[styles.menuItem, { backgroundColor: '#F5F2F7', borderLeftWidth: 4, borderLeftColor: '#A08AB7' }]}
               onPress={() => router.push('/admin/push-notifications')}
             >
               <View style={styles.menuItemLeft}>
-                <MaterialCommunityIcons name="bell-ring" size={24} color="#9B87CE" />
+                <MaterialCommunityIcons name="bell-ring" size={24} color="#A08AB7" />
                 <View>
-                  <Text style={[styles.menuItemText, { color: '#6B21A8', fontWeight: '700' }]}>Push Notifications</Text>
-                  <Text style={{ fontSize: 12, color: '#6B21A8', marginTop: 2 }}>Send messages to users</Text>
+                  <Text style={[styles.menuItemText, { color: '#6B21A8', fontWeight: '700' }]}>{t('profile.pushNotifications')}</Text>
+                  <Text style={{ fontSize: 12, color: '#6B21A8', marginTop: 2 }}>{t('profile.sendMessagesToUsers')}</Text>
                 </View>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
             </TouchableOpacity>
           </>
         )}
@@ -914,7 +913,7 @@ export default function Profile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAF7F0',
+    backgroundColor: '#FFFFFF',
   },
   content: {
     paddingHorizontal: 20,
@@ -990,14 +989,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
     backgroundColor: 'white',
     marginBottom: 20,
   },
   previewProfileText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#9B87CE',
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#A08AB7',
   },
   loadingContainer: {
     flex: 1,
@@ -1007,7 +1006,8 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#6B7280',
+    fontFamily: 'Inter',
+    color: '#71717A',
   },
   premiumCard: {
     marginHorizontal: 20,
@@ -1070,8 +1070,8 @@ const styles = StyleSheet.create({
   },
   upgradeToPlatinumText: {
     fontSize: 15,
-    fontWeight: 'bold',
-    color: '#9B87CE',
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#A08AB7',
   },
   upgradeCard: {
     marginHorizontal: 20,
@@ -1137,8 +1137,8 @@ const styles = StyleSheet.create({
   },
   upgradeCTAText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#9B87CE',
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#A08AB7',
   },
   menuSection: {
     marginHorizontal: 20,

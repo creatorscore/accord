@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
-import { sendReportActionNotification, sendBanNotification } from '@/lib/notifications';
+import { sendReportActionNotification, sendBanNotification, sendPhotoReviewNotification } from '@/lib/notifications';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -155,17 +155,20 @@ export default function AdminReports() {
       if (action !== 'ban') {
         const newStatus = action === 'resolve' ? 'resolved' : 'dismissed';
 
-        const { error: reportError } = await supabase
+        // Update ALL pending reports for this profile, not just the one clicked
+        const { error: reportError, count } = await supabase
           .from('reports')
           .update({
             status: newStatus,
             reviewed_at: new Date().toISOString(),
           })
-          .eq('id', reportId);
+          .eq('reported_profile_id', report.reported_profile_id)
+          .eq('status', 'pending');
 
         if (reportError) throw reportError;
 
-        Alert.alert('Report Updated', `Report has been marked as ${newStatus}.`);
+        const reportsResolved = count && count > 1 ? ` (${count} reports resolved)` : '';
+        Alert.alert('Report Updated', `Report has been marked as ${newStatus}.${reportsResolved}`);
         loadReports();
         return;
       }
@@ -237,18 +240,21 @@ export default function AdminReports() {
 
         console.log('✅ User banned successfully:', banResponse);
 
-        // Mark report as resolved AFTER ban succeeds
-        const { error: reportError } = await supabase
+        // Mark ALL pending reports for this profile as resolved AFTER ban succeeds
+        const { error: reportError, count: resolvedCount } = await supabase
           .from('reports')
           .update({
             status: 'resolved',
             reviewed_at: new Date().toISOString(),
           })
-          .eq('id', reportId);
+          .eq('reported_profile_id', report.reported_profile_id)
+          .eq('status', 'pending');
 
         if (reportError) {
           console.warn('⚠️ User was banned but failed to update report status:', reportError);
           // Don't throw - ban already succeeded, just warn
+        } else if (resolvedCount && resolvedCount > 1) {
+          console.log(`✅ Resolved ${resolvedCount} reports for banned user`);
         }
 
         // Send ban notifications to the banned user (push + email)
@@ -301,6 +307,93 @@ export default function AdminReports() {
     } catch (error: any) {
       console.error('Error executing action:', error);
       Alert.alert('Error', 'Failed to complete action. Please try again.');
+    }
+  };
+
+  const handlePhotoReview = (reportId: string) => {
+    Alert.alert(
+      'Require New Photos',
+      'This will hide the profile from discovery until they upload new photos. The user will be notified.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Require Photos',
+          style: 'default',
+          onPress: () => executePhotoReview(reportId),
+        },
+      ]
+    );
+  };
+
+  const executePhotoReview = async (reportId: string) => {
+    try {
+      const report = reports.find(r => r.id === reportId);
+      if (!report) return;
+
+      // Get current admin profile ID
+      const { data: adminProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (!adminProfile) throw new Error('Admin profile not found');
+
+      // Flag the profile for photo review
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          photo_review_required: true,
+          photo_review_reason: `${report.reason}: ${report.details || 'Photo review required'}`,
+          photo_review_requested_at: new Date().toISOString(),
+        })
+        .eq('id', report.reported_profile_id);
+
+      if (profileError) throw profileError;
+
+      // Mark ALL pending reports for this profile as resolved
+      const { error: reportError, count: resolvedCount } = await supabase
+        .from('reports')
+        .update({
+          status: 'resolved',
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('reported_profile_id', report.reported_profile_id)
+        .eq('status', 'pending');
+
+      if (reportError) throw reportError;
+
+      if (resolvedCount && resolvedCount > 1) {
+        console.log(`✅ Resolved ${resolvedCount} reports for profile requiring photo review`);
+      }
+
+      // Send push notification to the user
+      try {
+        await sendPhotoReviewNotification(
+          report.reported_profile_id,
+          `${report.reason}: ${report.details || 'Photo review required'}`
+        );
+      } catch (notifyError) {
+        console.warn('Could not send photo review notification:', notifyError);
+        // Don't fail if notification fails
+      }
+
+      // Notify reporter that action was taken
+      try {
+        await sendReportActionNotification(report.reporter_profile_id, 'resolved');
+      } catch (notifyError) {
+        console.warn('Could not notify reporter:', notifyError);
+      }
+
+      Alert.alert(
+        'Profile Flagged',
+        `${report.reported_name}'s profile has been hidden from discovery.\n\nThey have been notified to upload new photos.`
+      );
+
+      loadReports();
+    } catch (error: any) {
+      console.error('Error flagging profile for photo review:', error);
+      Alert.alert('Error', 'Failed to flag profile. Please try again.');
     }
   };
 
@@ -537,18 +630,18 @@ export default function AdminReports() {
                     <Text style={styles.dismissButtonText}>Dismiss</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.actionButton, styles.resolveButton]}
-                    onPress={() => handleReportAction(report.id, 'resolve')}
+                    style={[styles.actionButton, styles.photoReviewButton]}
+                    onPress={() => handlePhotoReview(report.id)}
                   >
-                    <MaterialCommunityIcons name="check" size={18} color="#10B981" />
-                    <Text style={styles.resolveButtonText}>Resolve</Text>
+                    <MaterialCommunityIcons name="camera-off" size={18} color="#F59E0B" />
+                    <Text style={styles.photoReviewButtonText}>Photos</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionButton, styles.banButton]}
                     onPress={() => handleReportAction(report.id, 'ban')}
                   >
                     <MaterialCommunityIcons name="account-cancel" size={18} color="white" />
-                    <Text style={styles.banButtonText}>Ban User</Text>
+                    <Text style={styles.banButtonText}>Ban</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -766,6 +859,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#10B981',
+  },
+  photoReviewButton: {
+    backgroundColor: '#FEF3C7',
+  },
+  photoReviewButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#F59E0B',
   },
   banButton: {
     backgroundColor: '#EF4444',

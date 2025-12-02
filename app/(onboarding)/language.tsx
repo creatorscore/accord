@@ -65,7 +65,7 @@ export default function LanguageSelection() {
               key={language.code}
               className={`px-6 py-4 rounded-xl border-2 flex-row items-center justify-between ${
                 selectedLanguage === language.code
-                  ? 'bg-primary-50 border-primary-500'
+                  ? 'bg-lavender-50 border-lavender-500'
                   : 'bg-white border-gray-200'
               }`}
               onPress={() => setSelectedLanguage(language.code)}
@@ -76,7 +76,7 @@ export default function LanguageSelection() {
                   <Text
                     className={`text-lg font-semibold ${
                       selectedLanguage === language.code
-                        ? 'text-primary-500'
+                        ? 'text-lavender-500'
                         : 'text-gray-900'
                     }`}
                   >
@@ -86,7 +86,7 @@ export default function LanguageSelection() {
                 </View>
               </View>
               {selectedLanguage === language.code && (
-                <MaterialCommunityIcons name="check-circle" size={24} color="#9B87CE" />
+                <MaterialCommunityIcons name="check-circle" size={24} color="#A08AB7" />
               )}
             </TouchableOpacity>
           ))}
@@ -94,7 +94,7 @@ export default function LanguageSelection() {
 
         {/* Info Banner */}
         <View className="bg-purple-50 rounded-xl p-4 mb-6 flex-row">
-          <MaterialCommunityIcons name="information" size={24} color="#9B87CE" />
+          <MaterialCommunityIcons name="information" size={24} color="#A08AB7" />
           <View className="flex-1 ml-3">
             <Text className="text-sm text-gray-700">
               <Text className="font-semibold">Global Community: </Text>
@@ -106,7 +106,7 @@ export default function LanguageSelection() {
         {/* Continue Button */}
         <TouchableOpacity
           className={`rounded-full py-4 px-8 items-center shadow-lg ${
-            loading ? 'bg-gray-300' : 'bg-primary-500'
+            loading ? 'bg-gray-300' : 'bg-lavender-500'
           }`}
           style={{
             borderRadius: 9999,

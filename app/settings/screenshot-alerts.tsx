@@ -130,7 +130,7 @@ export default function ScreenshotAlerts() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#F9FAFB', alignItems: 'center', justifyContent: 'center' }}>
-        <MaterialCommunityIcons name="loading" size={32} color="#9B87CE" />
+        <MaterialCommunityIcons name="loading" size={32} color="#A08AB7" />
         <Text style={{ color: '#6B7280', marginTop: 16 }}>Loading alerts...</Text>
       </View>
     );
@@ -169,7 +169,7 @@ export default function ScreenshotAlerts() {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 20 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#9B87CE" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#A08AB7" />
         }
       >
         {/* Info Card */}

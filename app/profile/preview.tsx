@@ -34,12 +34,12 @@ export default function ProfilePreview() {
     }
   }, [profileDataParam, isRealtimeParam]);
 
+  // Always refresh profile from database when screen comes into focus
+  // This ensures verification status and other data is always up to date
   useFocusEffect(
     useCallback(() => {
-      if (!profileDataParam || isRealtimeParam !== 'true') {
-        loadCurrentUserProfile();
-      }
-    }, [profileDataParam, isRealtimeParam])
+      loadCurrentUserProfile();
+    }, [user?.id])
   );
 
   const loadCurrentUserProfile = async () => {
@@ -84,7 +84,7 @@ export default function ProfilePreview() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
         <Text style={{ color: '#6B7280', marginTop: 16 }}>Loading preview...</Text>
       </View>
     );

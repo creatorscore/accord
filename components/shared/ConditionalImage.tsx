@@ -11,21 +11,19 @@ import Constants from 'expo-constants';
 // Determine if we're in a production standalone build
 // appOwnership === 'standalone' means App Store/Play Store build
 // This is more reliable than __DEV__ which can be true in production with expo-dev-client
-const isProduction = Constants.appOwnership === 'standalone';
+const appOwnership = Constants.appOwnership as string | null;
+const isProduction = appOwnership === 'standalone';
 
 // Conditionally require expo-image only in production to avoid simulator errors
-let ExpoImage: any;
-let ExpoImageProps: any;
+let ExpoImage: any = RNImage;
 
 if (isProduction) {
   try {
     const expoImageModule = require('expo-image');
     ExpoImage = expoImageModule.Image;
-    ExpoImageProps = expoImageModule.ImageProps;
   } catch (error) {
     console.warn('Failed to load expo-image, falling back to React Native Image:', error);
     ExpoImage = RNImage;
-    ExpoImageProps = RNImageProps;
   }
 }
 
@@ -33,16 +31,17 @@ if (isProduction) {
 export const Image = isProduction ? ExpoImage : RNImage;
 
 // Type helper for consistent API - accepts both React Native and Expo Image props
-export type ConditionalImageProps = RNImageProps | ExpoImageProps;
+export type ConditionalImageProps = RNImageProps;
 
 /**
  * Helper to convert props between React Native Image and expo-image
  * Handles the resizeMode vs contentFit difference
  */
 export const normalizeImageProps = (props: any) => {
-  const isProduction = Constants.appOwnership === 'standalone';
+  const ownership = Constants.appOwnership as string | null;
+  const isProd = ownership === 'standalone';
 
-  if (!isProduction) {
+  if (!isProd) {
     // Development/Simulator: Use React Native Image API
     return {
       ...props,
@@ -56,5 +55,30 @@ export const normalizeImageProps = (props: any) => {
       contentFit: props.contentFit || props.resizeMode || 'cover',
       style: props.style,
     };
+  }
+};
+
+/**
+ * Prefetch images to cache them before they're displayed
+ * Works with both React Native Image and expo-image
+ */
+export const prefetchImages = async (urls: string[]): Promise<void> => {
+  if (!urls || urls.length === 0) return;
+
+  const ownership = Constants.appOwnership as string | null;
+  const isProd = ownership === 'standalone';
+
+  try {
+    if (isProd) {
+      // Production: Use expo-image's prefetch
+      const expoImageModule = require('expo-image');
+      await expoImageModule.Image.prefetch(urls);
+    } else {
+      // Development: Use React Native Image's prefetch
+      await Promise.all(urls.map(url => RNImage.prefetch(url)));
+    }
+  } catch (error) {
+    // Silently fail - prefetching is a performance optimization, not critical
+    console.warn('Image prefetch failed:', error);
   }
 };

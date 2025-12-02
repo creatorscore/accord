@@ -33,6 +33,7 @@ interface ProfilePhotoCarouselProps {
   name?: string;
   age?: number;
   isVerified?: boolean;
+  photoVerified?: boolean; // Photo verification via selfie
   distance?: number;
   compatibilityScore?: number;
   photoBlurEnabled?: boolean;
@@ -46,6 +47,7 @@ export default function ProfilePhotoCarousel({
   name,
   age,
   isVerified,
+  photoVerified,
   distance,
   compatibilityScore,
   photoBlurEnabled = false,
@@ -138,6 +140,19 @@ export default function ProfilePhotoCarousel({
                         />
                       </MotiView>
                     )}
+                    {photoVerified && (
+                      <MotiView
+                        from={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: 'spring', delay: 400 }}
+                      >
+                        <MaterialCommunityIcons
+                          name="check-decagram"
+                          size={28}
+                          color="#A08AB7"
+                        />
+                      </MotiView>
+                    )}
                   </View>
                   {(distance !== undefined && distance !== null) && (
                     <Text style={styles.distance}>
@@ -185,7 +200,7 @@ export default function ProfilePhotoCarousel({
           style={[styles.compatibilityBadge, { top: insets.top + 60 }]}
         >
           <LinearGradient
-            colors={['#9B87CE', '#B8A9DD']}
+            colors={['#A08AB7', '#CDC2E5']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.compatibilityGradient}

@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#9B87CE"
+      "backgroundColor": "#000000"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.privyreviews.accord",
-      "buildNumber": "36",
+      "buildNumber": "45",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Accord needs access to your photos to upload profile pictures.",
@@ -55,7 +55,9 @@
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePreciseLocation",
             "NSPrivacyCollectedDataTypeLinked": false,
             "NSPrivacyCollectedDataTypeTracking": false,
-            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
           }
         ]
       }
@@ -66,7 +68,7 @@
         "backgroundColor": "#9B87CE"
       },
       "package": "com.privyreviews.accord",
-      "versionCode": 29,
+      "versionCode": 31,
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.CAMERA",
@@ -76,21 +78,12 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_CONTACTS"
       ],
-      "googleServicesFile": "./google-services.json",
-      "useNextNotificationsApi": true,
-      "compileSdkVersion": 35,
-      "targetSdkVersion": 35,
-      "buildToolsVersion": "35.0.0"
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro"
     },
     "scheme": "accord",
-    "privacy": "public",
-    "description": "Find your perfect lavender marriage arrangement. Connect with like-minded LGBTQ+ individuals seeking mutually beneficial partnerships in a safe, verified space.",
-    "primaryCategory": "SOCIAL_NETWORKING",
-    "privacyPolicyUrl": "https://joinaccord.app/privacy",
-    "termsOfServiceUrl": "https://joinaccord.app/terms",
     "plugins": [
       "expo-router",
       "expo-dev-client",
@@ -111,7 +104,9 @@
         {
           "icon": "./assets/icon.png",
           "color": "#9B87CE",
-          "sounds": ["./assets/notification-sound.wav"],
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ],
           "mode": "production"
         }
       ],
@@ -134,7 +129,9 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.609854216709-81grqvlc66iahvd56749ot511p9agh09"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser"
     ],
     "extra": {
       "router": {

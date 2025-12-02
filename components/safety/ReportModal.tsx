@@ -205,7 +205,7 @@ export default function ReportModal({
                     <MaterialCommunityIcons
                       name={reason.icon as any}
                       size={20}
-                      color={selectedReason === reason.id ? '#9B87CE' : '#6B7280'}
+                      color={selectedReason === reason.id ? '#A08AB7' : '#6B7280'}
                     />
                   </View>
                   <Text
@@ -217,7 +217,7 @@ export default function ReportModal({
                     {reason.label}
                   </Text>
                   {selectedReason === reason.id && (
-                    <MaterialCommunityIcons name="check-circle" size={20} color="#9B87CE" />
+                    <MaterialCommunityIcons name="check-circle" size={20} color="#A08AB7" />
                   )}
                 </TouchableOpacity>
               ))}
@@ -256,10 +256,10 @@ export default function ReportModal({
                   disabled={submitting || uploadingPhoto}
                 >
                   {uploadingPhoto ? (
-                    <ActivityIndicator size="small" color="#9B87CE" />
+                    <ActivityIndicator size="small" color="#A08AB7" />
                   ) : (
                     <>
-                      <MaterialCommunityIcons name="camera-plus" size={20} color="#9B87CE" />
+                      <MaterialCommunityIcons name="camera-plus" size={20} color="#A08AB7" />
                       <Text style={styles.uploadButtonText}>Upload</Text>
                     </>
                   )}
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   },
   reasonItemSelected: {
     backgroundColor: '#F3E8FF',
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
   },
   reasonIcon: {
     width: 32,
@@ -507,12 +507,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3E8FF',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
   },
   uploadButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   evidenceInfo: {
     flexDirection: 'row',

@@ -290,14 +290,17 @@ export async function ensurePushTokenSaved(userId: string, token: string): Promi
 
 /**
  * Send a push notification using Expo Push Notification service
+ * Includes timeout and detailed error logging
  */
 export async function sendPushNotification(
   pushToken: string,
   title: string,
   body: string,
   data?: any
-): Promise<void> {
+): Promise<{ success: boolean; error?: string; ticketId?: string }> {
   try {
+    console.log(`📤 Sending push notification to token: ${pushToken.substring(0, 30)}...`);
+
     const message = {
       to: pushToken,
       sound: 'default',
@@ -308,6 +311,10 @@ export async function sendPushNotification(
       badge: 1,
     };
 
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: {
@@ -316,18 +323,40 @@ export async function sendPushNotification(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(message),
+      signal: controller.signal,
     });
 
-    const result = await response.json();
+    clearTimeout(timeoutId);
 
+    const result = await response.json();
+    console.log('📬 Expo Push API response:', JSON.stringify(result));
+
+    // Check for errors in the response
     if (result.data?.status === 'error') {
-      console.error('Error sending push notification:', result.data.message);
-    } else {
-      console.log('Push notification sent successfully');
+      const errorMessage = result.data.message || 'Unknown error';
+      const errorDetails = result.data.details?.error || '';
+      console.error(`❌ Push notification error: ${errorMessage} ${errorDetails}`);
+
+      // Check for specific error types
+      if (errorDetails === 'DeviceNotRegistered') {
+        console.error('⚠️ Device token is invalid/expired - needs re-registration');
+      }
+
+      return { success: false, error: `${errorMessage} ${errorDetails}`.trim() };
     }
-  } catch (error) {
-    console.error('Error sending push notification:', error);
-    throw error;
+
+    // Success - get ticket ID for receipt checking
+    const ticketId = result.data?.id;
+    console.log(`✅ Push notification sent successfully (ticket: ${ticketId})`);
+    return { success: true, ticketId };
+
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.error('❌ Push notification timed out after 10 seconds');
+      return { success: false, error: 'Request timed out' };
+    }
+    console.error('❌ Error sending push notification:', error.message || error);
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
@@ -413,14 +442,22 @@ export async function sendMessageNotification(
   matchId: string
 ): Promise<void> {
   try {
+    console.log(`📨 Attempting to send message notification to profile: ${recipientProfileId}`);
+
     // Get recipient's push settings
     const { data: profile, error } = await supabase
       .from('profiles')
-      .select('push_token, push_enabled')
+      .select('push_token, push_enabled, display_name')
       .eq('id', recipientProfileId)
       .single();
 
-    if (error || !profile?.push_enabled) {
+    if (error) {
+      console.error('❌ Error fetching recipient profile:', error);
+      return;
+    }
+
+    if (!profile?.push_enabled) {
+      console.log(`⏭️ Push disabled for ${profile?.display_name || recipientProfileId}`);
       return;
     }
 
@@ -440,8 +477,11 @@ export async function sendMessageNotification(
     }
 
     if (tokens.size === 0) {
+      console.log(`⚠️ No push tokens found for ${profile?.display_name || recipientProfileId}`);
       return;
     }
+
+    console.log(`📱 Found ${tokens.size} device(s) for ${profile?.display_name}`);
 
     // Truncate message preview
     const preview = messagePreview.length > 50
@@ -462,7 +502,12 @@ export async function sendMessageNotification(
       )
     );
 
-    await Promise.allSettled(notificationPromises);
+    const results = await Promise.allSettled(notificationPromises);
+
+    // Log results
+    const successCount = results.filter(r => r.status === 'fulfilled' && (r.value as any)?.success).length;
+    const failCount = results.length - successCount;
+    console.log(`📊 Message notification results: ${successCount} success, ${failCount} failed`);
 
     // Log notification (once per user, not per device)
     await supabase.from('push_notifications').insert({
@@ -473,7 +518,7 @@ export async function sendMessageNotification(
       data: { matchId, type: 'new_message' },
     });
   } catch (error) {
-    console.error('Error sending message notification:', error);
+    console.error('❌ Error sending message notification:', error);
   }
 }
 
@@ -742,6 +787,136 @@ export async function sendBanNotification(
     console.log(`Ban notification sent to ${profile.display_name}`);
   } catch (error) {
     console.error('Error sending ban notification:', error);
+  }
+}
+
+/**
+ * Send a test push notification to verify the setup works
+ * Call this from settings or debug screen
+ */
+export async function sendTestNotification(userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('🧪 Sending test notification...');
+
+    // Get user's profile with push settings
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, push_token, push_enabled, display_name')
+      .eq('user_id', userId)
+      .single();
+
+    if (profileError || !profile) {
+      console.error('❌ Profile not found:', profileError);
+      return { success: false, error: 'Profile not found' };
+    }
+
+    if (!profile.push_enabled) {
+      return { success: false, error: 'Push notifications are disabled in your profile' };
+    }
+
+    if (!profile.push_token) {
+      return { success: false, error: 'No push token found. Try logging out and back in.' };
+    }
+
+    console.log(`📱 Found token for ${profile.display_name}: ${profile.push_token.substring(0, 30)}...`);
+
+    // Send test notification
+    const result = await sendPushNotification(
+      profile.push_token,
+      '🧪 Test Notification',
+      'If you see this, push notifications are working!',
+      {
+        type: 'test',
+        timestamp: new Date().toISOString(),
+      }
+    );
+
+    if (result.success) {
+      console.log('✅ Test notification sent successfully');
+      return { success: true };
+    } else {
+      console.error('❌ Test notification failed:', result.error);
+      return { success: false, error: result.error };
+    }
+  } catch (error: any) {
+    console.error('❌ Error sending test notification:', error);
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+/**
+ * Send notification when a profile is flagged for photo review
+ * Tells the user they need to upload new photos to restore visibility
+ * Sends to ALL devices for the user (multi-device support)
+ */
+export async function sendPhotoReviewNotification(
+  profileId: string,
+  reason: string
+): Promise<void> {
+  try {
+    // Get user's push settings
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('push_token, push_enabled, display_name')
+      .eq('id', profileId)
+      .single();
+
+    if (error || !profile?.push_enabled) {
+      console.log('User does not have push notifications enabled');
+      return;
+    }
+
+    // Get all device tokens for this user (new multi-device system)
+    const { data: deviceTokens } = await supabase
+      .from('device_tokens')
+      .select('push_token')
+      .eq('profile_id', profileId);
+
+    // Collect all tokens (from both device_tokens and profiles.push_token)
+    const tokens = new Set<string>();
+    if (deviceTokens) {
+      deviceTokens.forEach(dt => tokens.add(dt.push_token));
+    }
+    if (profile.push_token) {
+      tokens.add(profile.push_token);
+    }
+
+    if (tokens.size === 0) {
+      console.log('No push tokens found for user');
+      return;
+    }
+
+    const title = 'Action Required: Update Your Photos';
+    const body = 'Your profile has been temporarily hidden. Please upload clear photos of yourself to restore visibility.';
+
+    // Send notification to all devices
+    const notificationPromises = Array.from(tokens).map(token =>
+      sendPushNotification(
+        token,
+        title,
+        body,
+        {
+          type: 'photo_review_required',
+          reason,
+          screen: 'photos',
+        }
+      )
+    );
+
+    await Promise.allSettled(notificationPromises);
+
+    // Log notification (once per user, not per device)
+    await supabase.from('push_notifications').insert({
+      profile_id: profileId,
+      notification_type: 'photo_review_required',
+      title,
+      body,
+      data: { type: 'photo_review_required', reason },
+    });
+
+    console.log(`Photo review notification sent to ${profile.display_name}`);
+  } catch (error) {
+    console.error('Error sending photo review notification:', error);
   }
 }
 

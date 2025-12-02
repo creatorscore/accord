@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 // Complete list of all countries with ISO codes
 const COUNTRIES = [
@@ -215,6 +216,7 @@ interface BlockedCountry {
 }
 
 export default function CountryBlocking() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -259,7 +261,7 @@ export default function CountryBlocking() {
 
     // Check if already blocked
     if (blockedCountries.some(b => b.country_code === country.code)) {
-      Alert.alert('Already Blocked', `${country.name} is already in your blocked list.`);
+      Alert.alert(t('countryBlocking.alreadyBlocked'), t('countryBlocking.alreadyBlockedMessage', { country: country.name }));
       return;
     }
 
@@ -282,12 +284,12 @@ export default function CountryBlocking() {
       setSearchQuery('');
 
       Alert.alert(
-        'Country Blocked',
-        `Your profile will no longer be shown to users in ${country.name}.`
+        t('countryBlocking.countryBlocked'),
+        t('countryBlocking.countryBlockedMessage', { country: country.name })
       );
     } catch (error: any) {
       console.error('Error blocking country:', error);
-      Alert.alert('Error', 'Failed to block country. Please try again.');
+      Alert.alert(t('common.error'), t('countryBlocking.blockError'));
     } finally {
       setSaving(false);
     }
@@ -295,12 +297,12 @@ export default function CountryBlocking() {
 
   const removeCountryBlock = async (block: BlockedCountry) => {
     Alert.alert(
-      'Remove Block',
-      `Are you sure you want to allow users in ${block.country_name} to see your profile again?`,
+      t('countryBlocking.removeBlock'),
+      t('countryBlocking.removeBlockMessage', { country: block.country_name }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Remove',
+          text: t('countryBlocking.remove'),
           style: 'destructive',
           onPress: async () => {
             setSaving(true);
@@ -315,7 +317,7 @@ export default function CountryBlocking() {
               setBlockedCountries(blockedCountries.filter(b => b.id !== block.id));
             } catch (error: any) {
               console.error('Error removing block:', error);
-              Alert.alert('Error', 'Failed to remove block. Please try again.');
+              Alert.alert(t('common.error'), t('countryBlocking.removeError'));
             } finally {
               setSaving(false);
             }
@@ -333,16 +335,16 @@ export default function CountryBlocking() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+        <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Country Blocking</Text>
+          <Text style={styles.headerTitle}>{t('countryBlocking.title')}</Text>
           <View style={{ width: 24 }} />
         </LinearGradient>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
         </View>
       </View>
     );
@@ -350,11 +352,11 @@ export default function CountryBlocking() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+      <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Country Blocking</Text>
+        <Text style={styles.headerTitle}>{t('countryBlocking.title')}</Text>
         <View style={{ width: 24 }} />
       </LinearGradient>
 
@@ -362,25 +364,25 @@ export default function CountryBlocking() {
         {/* Safety Info Card */}
         <View style={styles.infoCard}>
           <View style={styles.infoIconContainer}>
-            <MaterialCommunityIcons name="earth-off" size={32} color="#9B87CE" />
+            <MaterialCommunityIcons name="earth-off" size={32} color="#A08AB7" />
           </View>
-          <Text style={styles.infoTitle}>Stay Safe Globally</Text>
+          <Text style={styles.infoTitle}>{t('countryBlocking.staySafeGlobally')}</Text>
           <Text style={styles.infoText}>
-            Hide your profile from users in specific countries. This is especially important if you need to stay hidden from people in your home country for safety reasons.
+            {t('countryBlocking.staySafeGloballyMessage')}
           </Text>
         </View>
 
         {/* Blocked Countries List */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            Blocked Countries ({blockedCountries.length})
+            {t('countryBlocking.blockedCountries')} {t('countryBlocking.blockedCountriesCount', { count: blockedCountries.length })}
           </Text>
 
           {blockedCountries.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialCommunityIcons name="shield-check-outline" size={48} color="#D1D5DB" />
               <Text style={styles.emptyStateText}>
-                No countries blocked yet.{'\n'}Your profile is visible worldwide.
+                {t('countryBlocking.noCountriesBlocked')}
               </Text>
             </View>
           ) : (
@@ -410,19 +412,16 @@ export default function CountryBlocking() {
             disabled={saving}
           >
             <MaterialCommunityIcons name="plus" size={20} color="white" />
-            <Text style={styles.addButtonText}>Block a Country</Text>
+            <Text style={styles.addButtonText}>{t('countryBlocking.blockACountry')}</Text>
           </TouchableOpacity>
         </View>
 
         {/* How It Works */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>How It Works</Text>
+          <Text style={styles.sectionTitle}>{t('countryBlocking.howItWorks')}</Text>
           <View style={styles.infoBox}>
             <Text style={styles.infoBoxText}>
-              <Text style={{ fontWeight: '700' }}>1. Choose countries</Text> you want to hide from{'\n\n'}
-              <Text style={{ fontWeight: '700' }}>2. Users in those countries</Text> won't see your profile in discovery{'\n\n'}
-              <Text style={{ fontWeight: '700' }}>3. You can still see</Text> profiles from those countries{'\n\n'}
-              <Text style={{ fontWeight: '700' }}>4. Remove blocks</Text> anytime to become visible again
+              {t('countryBlocking.howItWorksText')}
             </Text>
           </View>
         </View>
@@ -431,7 +430,7 @@ export default function CountryBlocking() {
         <View style={styles.privacyNotice}>
           <MaterialCommunityIcons name="shield-lock" size={20} color="#10B981" />
           <Text style={styles.privacyText}>
-            Your blocked countries list is private. No one can see which countries you've blocked.
+            {t('countryBlocking.privacyNote')}
           </Text>
         </View>
       </ScrollView>
@@ -441,7 +440,7 @@ export default function CountryBlocking() {
         <View style={styles.modalOverlay}>
           <View style={styles.modal}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select a Country</Text>
+              <Text style={styles.modalTitle}>{t('countryBlocking.selectCountry')}</Text>
               <TouchableOpacity onPress={() => {
                 setShowCountryPicker(false);
                 setSearchQuery('');
@@ -454,7 +453,7 @@ export default function CountryBlocking() {
               <MaterialCommunityIcons name="magnify" size={20} color="#9CA3AF" />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search countries..."
+                placeholder={t('countryBlocking.searchCountries')}
                 placeholderTextColor="#9CA3AF"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -475,7 +474,7 @@ export default function CountryBlocking() {
                 </TouchableOpacity>
               ))}
               {filteredCountries.length === 0 && (
-                <Text style={styles.noResults}>No countries found</Text>
+                <Text style={styles.noResults}>{t('countryBlocking.noCountriesFound')}</Text>
               )}
             </ScrollView>
           </View>
@@ -607,7 +606,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     borderRadius: 12,
     padding: 16,
     marginTop: 8,

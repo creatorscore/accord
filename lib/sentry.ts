@@ -21,21 +21,6 @@ export const initializeSentry = () => {
   }
 
   try {
-    // Build integrations array safely
-    const integrations = [];
-
-    // Only add React Native Tracing if available (may not work in Expo Go)
-    try {
-      if (Sentry.ReactNativeTracing) {
-        integrations.push(new Sentry.ReactNativeTracing({
-          // Simplified tracing without navigation instrumentation
-          tracingOrigins: ['localhost', /^\//],
-        }));
-      }
-    } catch (tracingError) {
-      console.log('React Native Tracing not available, skipping');
-    }
-
     Sentry.init({
       dsn: SENTRY_DSN,
 
@@ -60,9 +45,6 @@ export const initializeSentry = () => {
 
       // Sample rate for performance monitoring (adjust based on traffic)
       tracesSampleRate: 0.2, // 20% of transactions
-
-      // Integrations (may be empty array if tracing unavailable)
-      integrations,
 
       // Filter out sensitive data
       beforeSend(event: any) {

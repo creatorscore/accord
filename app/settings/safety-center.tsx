@@ -142,7 +142,7 @@ export default function SafetyCenter() {
       >
         {/* Header - now scrolls with content */}
         <LinearGradient
-          colors={['#9B87CE', '#B8A9DD']}
+          colors={['#A08AB7', '#CDC2E5']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.header}
@@ -174,7 +174,7 @@ export default function SafetyCenter() {
                   <MaterialCommunityIcons
                     name={tip.icon as any}
                     size={24}
-                    color="#9B87CE"
+                    color="#A08AB7"
                   />
                 </View>
                 <View style={styles.tipContent}>
@@ -244,7 +244,7 @@ export default function SafetyCenter() {
                   <MaterialCommunityIcons
                     name="open-in-new"
                     size={16}
-                    color="#9B87CE"
+                    color="#A08AB7"
                   />
                   <Text style={styles.websiteButtonText}>Visit Website</Text>
                 </TouchableOpacity>
@@ -262,7 +262,7 @@ export default function SafetyCenter() {
             onPress={() => router.push('/settings/blocked-users')}
           >
             <View style={styles.actionIcon}>
-              <MaterialCommunityIcons name="cancel" size={24} color="#9B87CE" />
+              <MaterialCommunityIcons name="cancel" size={24} color="#A08AB7" />
             </View>
             <View style={styles.actionContent}>
               <Text style={styles.actionTitle}>Blocked Users</Text>
@@ -282,7 +282,7 @@ export default function SafetyCenter() {
             onPress={() => router.push('/settings/privacy')}
           >
             <View style={styles.actionIcon}>
-              <MaterialCommunityIcons name="lock" size={24} color="#9B87CE" />
+              <MaterialCommunityIcons name="lock" size={24} color="#A08AB7" />
             </View>
             <View style={styles.actionContent}>
               <Text style={styles.actionTitle}>Privacy Settings</Text>
@@ -307,7 +307,7 @@ export default function SafetyCenter() {
               <MaterialCommunityIcons
                 name="email"
                 size={24}
-                color="#9B87CE"
+                color="#A08AB7"
               />
             </View>
             <View style={styles.actionContent}>
@@ -325,7 +325,7 @@ export default function SafetyCenter() {
         </View>
 
         <View style={styles.footer}>
-          <MaterialCommunityIcons name="heart" size={20} color="#B8A9DD" />
+          <MaterialCommunityIcons name="heart" size={20} color="#CDC2E5" />
           <Text style={styles.footerText}>
             Your safety and wellbeing matter to us.{'\n'}
             Stay safe out there!
@@ -339,7 +339,7 @@ export default function SafetyCenter() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#9B87CE', // Match header for smooth bounce effect
+    backgroundColor: '#A08AB7', // Match header for smooth bounce effect
   },
   header: {
     paddingTop: 60,
@@ -494,14 +494,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
     backgroundColor: '#fff',
     gap: 6,
   },
   websiteButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   actionCard: {
     flexDirection: 'row',

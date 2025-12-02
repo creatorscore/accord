@@ -573,11 +573,11 @@ export default function BasicInfo() {
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
             <Text className="text-sm text-gray-600 font-medium">Step 1 of 8</Text>
-            <Text className="text-sm text-primary-400 font-bold">12%</Text>
+            <Text className="text-sm text-lavender-400 font-bold">12%</Text>
           </View>
           <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
             <View
-              className="h-3 bg-primary-400 rounded-full"
+              className="h-3 bg-lavender-400 rounded-full"
               style={{ width: '12%' }}
             />
           </View>
@@ -639,7 +639,7 @@ export default function BasicInfo() {
               activeOpacity={0.7}
             >
               <View className={`w-6 h-6 rounded-md border-2 mr-3 items-center justify-center ${
-                ageCertified ? 'bg-primary-500 border-primary-500' : 'bg-white border-gray-300'
+                ageCertified ? 'bg-lavender-500 border-lavender-500' : 'bg-white border-gray-300'
               }`}>
                 {ageCertified && (
                   <MaterialCommunityIcons name="check" size={16} color="white" />
@@ -696,7 +696,7 @@ export default function BasicInfo() {
                 {/* Confirm Button */}
                 <TouchableOpacity
                   className={`rounded-full py-4 items-center mt-4 ${
-                    birthDate ? 'bg-primary-500' : 'bg-gray-300'
+                    birthDate ? 'bg-lavender-500' : 'bg-gray-300'
                   }`}
                   onPress={() => setShowDatePicker(false)}
                   disabled={!birthDate}
@@ -719,7 +719,7 @@ export default function BasicInfo() {
                   key={g}
                   className={`px-4 py-2 rounded-full border ${
                     gender.includes(g)
-                      ? 'bg-primary-500 border-primary-500'
+                      ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => toggleGender(g)}
@@ -735,7 +735,7 @@ export default function BasicInfo() {
               ))}
             </View>
             {gender.length > 0 && (
-              <Text className="text-xs text-primary-500 mt-2">
+              <Text className="text-xs text-lavender-500 mt-2">
                 Selected: {gender.join(', ')}
               </Text>
             )}
@@ -750,7 +750,7 @@ export default function BasicInfo() {
                   key={p}
                   className={`px-4 py-2 rounded-full border ${
                     pronouns === p
-                      ? 'bg-primary-500 border-primary-500'
+                      ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => setPronouns(p)}
@@ -777,7 +777,7 @@ export default function BasicInfo() {
                   key={e}
                   className={`px-4 py-2 rounded-full border ${
                     ethnicity.includes(e)
-                      ? 'bg-primary-500 border-primary-500'
+                      ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => toggleEthnicity(e)}
@@ -793,7 +793,7 @@ export default function BasicInfo() {
               ))}
             </View>
             {ethnicity.length > 0 && (
-              <Text className="text-xs text-primary-500 mt-2">
+              <Text className="text-xs text-lavender-500 mt-2">
                 Selected: {ethnicity.join(', ')}
               </Text>
             )}
@@ -809,7 +809,7 @@ export default function BasicInfo() {
                   key={o}
                   className={`px-4 py-2 rounded-full border ${
                     orientation.includes(o)
-                      ? 'bg-primary-500 border-primary-500'
+                      ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
                   onPress={() => toggleOrientation(o)}
@@ -825,7 +825,7 @@ export default function BasicInfo() {
               ))}
             </View>
             {orientation.length > 0 && (
-              <Text className="text-xs text-primary-500 mt-2">
+              <Text className="text-xs text-lavender-500 mt-2">
                 Selected: {orientation.join(', ')}
               </Text>
             )}
@@ -836,7 +836,7 @@ export default function BasicInfo() {
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-sm font-medium text-gray-700">{t('onboarding.location')}</Text>
               <TouchableOpacity onPress={handleGetLocation} disabled={gettingLocation}>
-                <Text className="text-primary-500 font-medium">
+                <Text className="text-lavender-500 font-medium">
                   {gettingLocation ? t('onboarding.gettingLocation') : t('onboarding.useMyLocation')}
                 </Text>
               </TouchableOpacity>
@@ -874,7 +874,7 @@ export default function BasicInfo() {
                         onPress={() => selectLocation(suggestion)}
                         activeOpacity={0.7}
                       >
-                        <MaterialCommunityIcons name="map-marker" size={20} color="#9B87CE" />
+                        <MaterialCommunityIcons name="map-marker" size={20} color="#A08AB7" />
                         <View className="ml-3 flex-1">
                           <Text className="text-gray-900 font-medium">
                             {suggestion.city}
@@ -896,9 +896,9 @@ export default function BasicInfo() {
 
             {/* Selected Location Display */}
             {(locationCity || locationState || locationCountry) && (
-              <View className="bg-primary-50 border border-primary-200 rounded-xl px-4 py-3 mt-3">
+              <View className="bg-lavender-50 border border-lavender-200 rounded-xl px-4 py-3 mt-3">
                 <View className="flex-row items-center">
-                  <MaterialCommunityIcons name="map-marker-check" size={20} color="#9B87CE" />
+                  <MaterialCommunityIcons name="map-marker-check" size={20} color="#A08AB7" />
                   <View className="ml-3 flex-1">
                     <Text className="text-gray-900 font-semibold">
                       {locationCity}
@@ -918,7 +918,7 @@ export default function BasicInfo() {
                     }}
                     className="ml-2"
                   >
-                    <MaterialCommunityIcons name="close-circle" size={24} color="#9B87CE" />
+                    <MaterialCommunityIcons name="close-circle" size={24} color="#A08AB7" />
                   </TouchableOpacity>
                 </View>
               </View>

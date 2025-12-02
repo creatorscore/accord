@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { restorePurchases, getCustomerInfo, getOfferings, purchasePackage } from '@/lib/revenue-cat';
+import { restorePurchases, getCustomerInfo, getOfferings, purchasePackage, presentCodeRedemptionSheet } from '@/lib/revenue-cat';
 import { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 
 export default function SubscriptionManagement() {
@@ -13,6 +13,7 @@ export default function SubscriptionManagement() {
 
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [redeeming, setRedeeming] = useState(false);
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [loadingOfferings, setLoadingOfferings] = useState(true);
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annual'>('annual'); // Default to annual (best value)
@@ -106,6 +107,37 @@ export default function SubscriptionManagement() {
     }
   };
 
+  const handleRedeemCode = async () => {
+    // Only available on iOS
+    if (Platform.OS !== 'ios') {
+      Alert.alert(
+        'Not Available',
+        'Promo code redemption is only available on iOS devices. On Android, you can redeem codes directly in the Google Play Store.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      setRedeeming(true);
+      await presentCodeRedemptionSheet();
+
+      // After redemption sheet closes, refresh subscription status
+      // Small delay to allow Apple's systems to process
+      setTimeout(async () => {
+        await refreshSubscription();
+      }, 2000);
+    } catch (error: any) {
+      console.error('Error presenting code redemption:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to open code redemption. Please try again.'
+      );
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
   const handlePurchasePackage = async (pkg: PurchasesPackage) => {
     try {
       setLoading(true);
@@ -182,7 +214,7 @@ export default function SubscriptionManagement() {
         title: 'Premium Member',
         description: 'Enhanced features unlocked',
         icon: 'star',
-        color: '#9B87CE',
+        color: '#A08AB7',
       };
     }
 
@@ -268,7 +300,7 @@ export default function SubscriptionManagement() {
                 onPress={() => setBillingPeriod('monthly')}
                 className="flex-1"
               >
-                <View className={`py-3 rounded-full ${billingPeriod === 'monthly' ? 'bg-purple-500' : 'bg-transparent'}`}>
+                <View className={`py-3 rounded-full ${billingPeriod === 'monthly' ? 'bg-lavender-500' : 'bg-transparent'}`}>
                   <Text className={`text-center font-bold ${billingPeriod === 'monthly' ? 'text-white' : 'text-gray-600'}`}>
                     Monthly
                   </Text>
@@ -278,7 +310,7 @@ export default function SubscriptionManagement() {
                 onPress={() => setBillingPeriod('annual')}
                 className="flex-1"
               >
-                <View className={`py-3 rounded-full ${billingPeriod === 'annual' ? 'bg-purple-500' : 'bg-transparent'}`}>
+                <View className={`py-3 rounded-full ${billingPeriod === 'annual' ? 'bg-lavender-500' : 'bg-transparent'}`}>
                   <Text className={`text-center font-bold ${billingPeriod === 'annual' ? 'text-white' : 'text-gray-600'}`}>
                     Annual
                     <Text className="text-xs"> (Save 33%)</Text>
@@ -290,7 +322,7 @@ export default function SubscriptionManagement() {
             {/* Premium Plan */}
             <View className="mb-6">
               <View className="flex-row items-center mb-3">
-                <MaterialCommunityIcons name="star" size={24} color="#9B87CE" />
+                <MaterialCommunityIcons name="star" size={24} color="#A08AB7" />
                 <Text className="text-lg font-bold text-gray-900 ml-2">Premium</Text>
               </View>
 
@@ -343,26 +375,26 @@ export default function SubscriptionManagement() {
                     onPress={() => handlePurchasePackage(displayPackage)}
                     disabled={loading}
                   >
-                    <View className="bg-white border-2 border-purple-300 rounded-2xl p-6">
+                    <View className="bg-white border-2 border-lavender-300 rounded-2xl p-6">
                       {billingPeriod === 'annual' && (
                         <View className="absolute -top-2 right-4 bg-green-500 px-3 py-1 rounded-full">
                           <Text className="text-white text-xs font-bold">SAVE 33%</Text>
                         </View>
                       )}
                       <View className="flex-row items-baseline mb-3">
-                        <Text className="text-4xl font-bold text-purple-600">
+                        <Text className="text-4xl font-bold text-lavender-600">
                           {displayPackage.product.priceString}
                         </Text>
                         <Text className="text-gray-600 ml-2">
                           /{billingPeriod === 'monthly' ? 'month' : 'year'}
                         </Text>
                       </View>
-                      <View className="bg-purple-500 rounded-xl py-4 mb-4">
+                      <View className="bg-lavender-500 rounded-xl py-4 mb-4">
                         <Text className="text-white text-center text-lg font-bold">
                           {loading ? 'Processing...' : 'Subscribe to Premium'}
                         </Text>
                       </View>
-                      <View className="bg-purple-50 rounded-xl p-4">
+                      <View className="bg-lavender-50 rounded-xl p-4">
                         <Text className="text-xs text-gray-700 font-semibold mb-2">Premium includes:</Text>
                         <Text className="text-xs text-gray-600 leading-5">
                           • Unlimited swipes{'\n'}
@@ -492,7 +524,7 @@ export default function SubscriptionManagement() {
 
         {loadingOfferings && (
           <View className="py-8 items-center">
-            <ActivityIndicator size="large" color="#9B87CE" />
+            <ActivityIndicator size="large" color="#A08AB7" />
             <Text className="text-gray-600 mt-2">Loading plans...</Text>
           </View>
         )}
@@ -530,7 +562,7 @@ export default function SubscriptionManagement() {
         <View className="mb-6">
           <Text className="text-xl font-bold text-gray-900 mb-4">Premium Features</Text>
 
-          <View className="bg-purple-50 rounded-3xl p-6">
+          <View className="bg-lavender-50 rounded-3xl p-6">
             {[
               { icon: 'infinity', text: 'Unlimited swipes', tier: 'premium' },
               { icon: 'eye', text: 'See who liked you', tier: 'premium' },
@@ -548,7 +580,7 @@ export default function SubscriptionManagement() {
                 <MaterialCommunityIcons
                   name={feature.icon as any}
                   size={24}
-                  color={feature.tier === 'platinum' ? '#FFD700' : '#9B87CE'}
+                  color={feature.tier === 'platinum' ? '#FFD700' : '#A08AB7'}
                 />
                 <Text className="text-gray-800 text-base ml-3 flex-1">{feature.text}</Text>
                 {feature.tier === 'platinum' && (
@@ -567,20 +599,41 @@ export default function SubscriptionManagement() {
           <TouchableOpacity
             onPress={handleRestorePurchases}
             disabled={restoring}
-            className="bg-white border-2 border-purple-500 rounded-full py-4 px-6"
+            className="bg-white border-2 border-lavender-500 rounded-full py-4 px-6"
           >
             {restoring ? (
               <View className="flex-row items-center justify-center">
-                <ActivityIndicator size="small" color="#9B87CE" />
-                <Text className="text-purple-600 font-bold text-lg ml-2">Restoring...</Text>
+                <ActivityIndicator size="small" color="#A08AB7" />
+                <Text className="text-lavender-600 font-bold text-lg ml-2">Restoring...</Text>
               </View>
             ) : (
               <View className="flex-row items-center justify-center">
-                <MaterialCommunityIcons name="restore" size={20} color="#9B87CE" />
-                <Text className="text-purple-600 font-bold text-lg ml-2">Restore Purchases</Text>
+                <MaterialCommunityIcons name="restore" size={20} color="#A08AB7" />
+                <Text className="text-lavender-600 font-bold text-lg ml-2">Restore Purchases</Text>
               </View>
             )}
           </TouchableOpacity>
+
+          {/* Redeem Code (iOS only) */}
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity
+              onPress={handleRedeemCode}
+              disabled={redeeming}
+              className="bg-white border-2 border-green-500 rounded-full py-4 px-6"
+            >
+              {redeeming ? (
+                <View className="flex-row items-center justify-center">
+                  <ActivityIndicator size="small" color="#22C55E" />
+                  <Text className="text-green-600 font-bold text-lg ml-2">Opening...</Text>
+                </View>
+              ) : (
+                <View className="flex-row items-center justify-center">
+                  <MaterialCommunityIcons name="gift" size={20} color="#22C55E" />
+                  <Text className="text-green-600 font-bold text-lg ml-2">Redeem Promo Code</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
 
           {/* Manage Subscription (if subscribed) */}
           {isSubscribed && (
@@ -617,14 +670,14 @@ export default function SubscriptionManagement() {
             onPress={() => Linking.openURL('https://joinaccord.app/terms')}
             className="py-2"
           >
-            <Text className="text-purple-600 text-sm font-medium underline">Terms of Use</Text>
+            <Text className="text-lavender-600 text-sm font-medium underline">Terms of Use</Text>
           </TouchableOpacity>
           <Text className="text-gray-400">•</Text>
           <TouchableOpacity
             onPress={() => Linking.openURL('https://joinaccord.app/privacy')}
             className="py-2"
           >
-            <Text className="text-purple-600 text-sm font-medium underline">Privacy Policy</Text>
+            <Text className="text-lavender-600 text-sm font-medium underline">Privacy Policy</Text>
           </TouchableOpacity>
         </View>
 
