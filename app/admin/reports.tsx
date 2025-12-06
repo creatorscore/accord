@@ -1,14 +1,23 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, RefreshControl, Image, Modal, Dimensions } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, RefreshControl, Image, Modal, Dimensions, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
-import { sendReportActionNotification, sendBanNotification, sendPhotoReviewNotification } from '@/lib/notifications';
+import { sendReportActionNotification, sendBanNotification, sendPhotoReviewNotification, sendIdentityVerificationNotification } from '@/lib/notifications';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Ban duration options
+const BAN_DURATIONS = [
+  { label: '1 Day', hours: 24, description: 'Short suspension' },
+  { label: '3 Days', hours: 72, description: 'Minor violation' },
+  { label: '7 Days', hours: 168, description: 'Moderate violation' },
+  { label: '30 Days', hours: 720, description: 'Serious violation' },
+  { label: 'Permanent', hours: null, description: 'Severe/repeat offender' },
+];
 
 interface Report {
   id: string;
@@ -23,6 +32,15 @@ interface Report {
   evidence_urls?: string[];
 }
 
+interface PastReport {
+  id: string;
+  reason: string;
+  details: string;
+  status: string;
+  created_at: string;
+  reporter_name: string;
+}
+
 export default function AdminReports() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -31,6 +49,20 @@ export default function AdminReports() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'reviewed'>('pending');
   const [isAdmin, setIsAdmin] = useState(false);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+
+  // Ban modal state
+  const [showBanModal, setShowBanModal] = useState(false);
+  const [banningReport, setBanningReport] = useState<Report | null>(null);
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null); // null = permanent
+  const [userMessage, setUserMessage] = useState('');
+  const [isBanning, setIsBanning] = useState(false);
+
+  // Report history modal state
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyProfileId, setHistoryProfileId] = useState<string | null>(null);
+  const [historyProfileName, setHistoryProfileName] = useState<string>('');
+  const [pastReports, setPastReports] = useState<PastReport[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     checkAdminStatus();
@@ -123,25 +155,45 @@ export default function AdminReports() {
   };
 
   const handleReportAction = (reportId: string, action: 'resolve' | 'dismiss' | 'ban') => {
+    if (action === 'ban') {
+      // Show ban modal instead of immediate ban
+      const report = reports.find(r => r.id === reportId);
+      if (report) {
+        setBanningReport(report);
+        setSelectedDuration(null); // Default to permanent
+        setUserMessage('');
+        setShowBanModal(true);
+      }
+      return;
+    }
+
     Alert.alert(
       'Confirm Action',
       `Are you sure you want to ${action} this report?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: action === 'ban' ? 'Ban User' : 'Confirm',
-          style: action === 'ban' ? 'destructive' : 'default',
+          text: 'Confirm',
+          style: 'default',
           onPress: () => executeReportAction(reportId, action),
         },
       ]
     );
   };
 
-  const executeReportAction = async (reportId: string, action: 'resolve' | 'dismiss' | 'ban') => {
-    try {
-      const report = reports.find(r => r.id === reportId);
-      if (!report) return;
+  const closeBanModal = () => {
+    setShowBanModal(false);
+    setBanningReport(null);
+    setSelectedDuration(null);
+    setUserMessage('');
+  };
 
+  const executeBan = async () => {
+    if (!banningReport) return;
+
+    setIsBanning(true);
+
+    try {
       // Get current admin profile ID
       const { data: adminProfile } = await supabase
         .from('profiles')
@@ -151,159 +203,108 @@ export default function AdminReports() {
 
       if (!adminProfile) throw new Error('Admin profile not found');
 
-      // For non-ban actions, update report status immediately
-      if (action !== 'ban') {
-        const newStatus = action === 'resolve' ? 'resolved' : 'dismissed';
+      // Get admin's device ID for logging
+      const adminDeviceId = await getDeviceFingerprint();
 
-        // Update ALL pending reports for this profile, not just the one clicked
-        const { error: reportError, count } = await supabase
-          .from('reports')
-          .update({
-            status: newStatus,
-            reviewed_at: new Date().toISOString(),
-          })
-          .eq('reported_profile_id', report.reported_profile_id)
-          .eq('status', 'pending');
+      // Call Edge Function to perform the ban
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No active session');
 
-        if (reportError) throw reportError;
+      const durationLabel = selectedDuration
+        ? BAN_DURATIONS.find(d => d.hours === selectedDuration)?.label || `${selectedDuration}h`
+        : 'Permanent';
 
-        const reportsResolved = count && count > 1 ? ` (${count} reports resolved)` : '';
-        Alert.alert('Report Updated', `Report has been marked as ${newStatus}.${reportsResolved}`);
-        loadReports();
-        return;
+      console.log('🔍 Calling admin-ban-user Edge Function...');
+      console.log('🔍 Ban duration:', durationLabel);
+
+      const { data: banResponse, error: banError } = await supabase.functions.invoke('admin-ban-user', {
+        body: {
+          banned_profile_id: banningReport.reported_profile_id,
+          ban_reason: `${banningReport.reason}: ${banningReport.details || 'No additional details'}`,
+          banned_by_profile_id: adminProfile.id,
+          report_id: banningReport.id,
+          admin_notes: `Banned from device: ${adminDeviceId}`,
+          ban_duration_hours: selectedDuration,
+          user_message: userMessage || undefined,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (banError) {
+        throw new Error(banError.message || 'Failed to ban user');
       }
 
-      // For ban action, perform the ban FIRST, then update report status
-      if (action === 'ban') {
-        // Get admin's device ID for logging
-        const adminDeviceId = await getDeviceFingerprint();
+      if (!banResponse?.success) {
+        throw new Error(`Ban operation failed: ${JSON.stringify(banResponse)}`);
+      }
 
-        // Call Edge Function to perform the ban (fetches profile details with service role)
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('No active session');
+      console.log('✅ User banned successfully:', banResponse);
 
-        console.log('🔍 Calling admin-ban-user Edge Function...');
-        console.log('🔍 Profile ID to ban:', report.reported_profile_id);
+      // Mark ALL pending reports for this profile as resolved
+      await supabase
+        .from('reports')
+        .update({
+          status: 'resolved',
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('reported_profile_id', banningReport.reported_profile_id)
+        .eq('status', 'pending');
 
-        const { data: banResponse, error: banError } = await supabase.functions.invoke('admin-ban-user', {
-          body: {
-            banned_profile_id: report.reported_profile_id,
-            ban_reason: `${report.reason}: ${report.details || 'No additional details'}`,
-            banned_by_profile_id: adminProfile.id,
-            report_id: reportId,
-            admin_notes: `Banned from device: ${adminDeviceId}`,
-          },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-
-        console.log('🔍 Edge Function response:', { banResponse, banError });
-
-        if (banError) {
-          console.error('❌ Ban failed:', banError);
-
-          // Try to read the response body from the error context
-          let errorBody = null;
-          try {
-            if (banError.context && banError.context._bodyInit) {
-              const blob = banError.context._bodyBlob || banError.context._bodyInit;
-              // For React Native, try to read the blob data
-              const response = banError.context;
-              if (response && !response.bodyUsed) {
-                errorBody = await response.json();
-                console.log('🔍 Parsed error body:', errorBody);
-              }
-            }
-          } catch (parseError) {
-            console.warn('⚠️ Could not parse error body:', parseError);
-          }
-
-          // Show detailed error from Edge Function
-          const errorDetails = errorBody?.error || banError.message;
-          const errorContext = errorBody?.details || '';
-          const searchedId = errorBody?.searched_for_id || '';
-          const rawError = errorBody?.raw_error || '';
-
-          throw new Error(
-            `Failed to ban user: ${errorDetails}\n` +
-            `Details: ${errorContext}\n` +
-            `Searched for ID: ${searchedId}\n` +
-            `Raw error: ${JSON.stringify(rawError)}`
-          );
-        }
-
-        if (!banResponse?.success) {
-          console.error('❌ Ban response unsuccessful:', banResponse);
-          throw new Error(`Ban operation failed: ${JSON.stringify(banResponse)}`);
-        }
-
-        console.log('✅ User banned successfully:', banResponse);
-
-        // Mark ALL pending reports for this profile as resolved AFTER ban succeeds
-        const { error: reportError, count: resolvedCount } = await supabase
-          .from('reports')
-          .update({
-            status: 'resolved',
-            reviewed_at: new Date().toISOString(),
-          })
-          .eq('reported_profile_id', report.reported_profile_id)
-          .eq('status', 'pending');
-
-        if (reportError) {
-          console.warn('⚠️ User was banned but failed to update report status:', reportError);
-          // Don't throw - ban already succeeded, just warn
-        } else if (resolvedCount && resolvedCount > 1) {
-          console.log(`✅ Resolved ${resolvedCount} reports for banned user`);
-        }
-
-        // Send ban notifications to the banned user (push + email)
-        try {
-          // Send push notification
-          await sendBanNotification(
-            report.reported_profile_id,
-            `${report.reason}: ${report.details || 'No additional details'}`
-          );
-
-          // Send email notification (email returned from Edge Function)
-          if (banResponse.banned_email) {
-            await supabase.functions.invoke('send-ban-email', {
-              body: {
-                email: banResponse.banned_email,
-                displayName: report.reported_name,
-                banReason: `${report.reason}: ${report.details || 'No additional details'}`,
-              },
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-              },
-            });
-          }
-
-          console.log('✅ Ban notifications sent to banned user (push + email)');
-        } catch (banNotifyError) {
-          console.warn('Could not send ban notifications to user:', banNotifyError);
-          // Don't fail the ban if notification fails
-        }
-
-        // Notify the reporter that action was taken
-        try {
-          await sendReportActionNotification(report.reporter_profile_id, 'banned');
-        } catch (notifyError) {
-          console.warn('Could not notify reporter:', notifyError);
-          // Don't fail the ban if notification fails
-        }
-
-        Alert.alert(
-          '✅ User Banned',
-          `${report.reported_name} has been permanently banned.\n\n` +
-          `🔒 All authentication methods and devices blocked.\n\n` +
-          `They cannot log in or re-register.\n\n` +
-          `📱 The user and reporter have been notified.`
+      // Send notifications
+      try {
+        await sendBanNotification(
+          banningReport.reported_profile_id,
+          `${banningReport.reason}: ${banningReport.details || 'No additional details'}`
         );
-
-        // Reload reports to remove the now-resolved report from the list
-        loadReports();
+        await sendReportActionNotification(banningReport.reporter_profile_id, 'banned');
+      } catch (notifyError) {
+        console.warn('Notification error:', notifyError);
       }
+
+      closeBanModal();
+
+      const expiryText = selectedDuration
+        ? `Ban expires in ${durationLabel.toLowerCase()}.`
+        : 'This is a permanent ban.';
+
+      Alert.alert(
+        '✅ User Banned',
+        `${banningReport.reported_name} has been banned.\n\n${expiryText}\n\n${userMessage ? 'Custom message sent to user.' : ''}`
+      );
+
+      loadReports();
+    } catch (error: any) {
+      console.error('Error banning user:', error);
+      Alert.alert('Error', error.message || 'Failed to ban user. Please try again.');
+    } finally {
+      setIsBanning(false);
+    }
+  };
+
+  const executeReportAction = async (reportId: string, action: 'resolve' | 'dismiss') => {
+    try {
+      const report = reports.find(r => r.id === reportId);
+      if (!report) return;
+
+      const newStatus = action === 'resolve' ? 'resolved' : 'dismissed';
+
+      // Update ALL pending reports for this profile, not just the one clicked
+      const { error: reportError, count } = await supabase
+        .from('reports')
+        .update({
+          status: newStatus,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('reported_profile_id', report.reported_profile_id)
+        .eq('status', 'pending');
+
+      if (reportError) throw reportError;
+
+      const reportsResolved = count && count > 1 ? ` (${count} reports resolved)` : '';
+      Alert.alert('Report Updated', `Report has been marked as ${newStatus}.${reportsResolved}`);
+      loadReports();
     } catch (error: any) {
       console.error('Error executing action:', error);
       Alert.alert('Error', 'Failed to complete action. Please try again.');
@@ -397,6 +398,143 @@ export default function AdminReports() {
     }
   };
 
+  const handleVerifyIdentity = (reportId: string) => {
+    Alert.alert(
+      'Require Identity Verification',
+      'This will hide the profile from discovery until they complete photo verification. The user will be notified.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Require Verification',
+          style: 'default',
+          onPress: () => executeVerifyIdentity(reportId),
+        },
+      ]
+    );
+  };
+
+  const executeVerifyIdentity = async (reportId: string) => {
+    try {
+      const report = reports.find(r => r.id === reportId);
+      if (!report) return;
+
+      // Get current admin profile ID
+      const { data: adminProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (!adminProfile) throw new Error('Admin profile not found');
+
+      // Flag the profile for identity verification
+      // Also set photo_review_required to hide from discovery
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          photo_verified: false,
+          photo_verification_status: 'admin_required',
+          is_verified: false,
+          photo_review_required: true,
+          photo_review_reason: `Identity verification required: ${report.reason}`,
+          photo_review_requested_at: new Date().toISOString(),
+        })
+        .eq('id', report.reported_profile_id);
+
+      if (profileError) throw profileError;
+
+      // Mark ALL pending reports for this profile as resolved
+      const { error: reportError, count: resolvedCount } = await supabase
+        .from('reports')
+        .update({
+          status: 'resolved',
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('reported_profile_id', report.reported_profile_id)
+        .eq('status', 'pending');
+
+      if (reportError) throw reportError;
+
+      if (resolvedCount && resolvedCount > 1) {
+        console.log(`Resolved ${resolvedCount} reports for profile requiring identity verification`);
+      }
+
+      // Send push notification to the user
+      try {
+        await sendIdentityVerificationNotification(
+          report.reported_profile_id,
+          `${report.reason}: ${report.details || 'Identity verification required'}`
+        );
+      } catch (notifyError) {
+        console.warn('Could not send identity verification notification:', notifyError);
+      }
+
+      // Notify reporter that action was taken
+      try {
+        await sendReportActionNotification(report.reporter_profile_id, 'resolved');
+      } catch (notifyError) {
+        console.warn('Could not notify reporter:', notifyError);
+      }
+
+      Alert.alert(
+        'Verification Required',
+        `${report.reported_name}'s profile has been hidden from discovery.\n\nThey must complete identity verification to restore visibility.`
+      );
+
+      loadReports();
+    } catch (error: any) {
+      console.error('Error flagging profile for identity verification:', error);
+      Alert.alert('Error', 'Failed to require verification. Please try again.');
+    }
+  };
+
+  const handleViewHistory = async (profileId: string, profileName: string) => {
+    setHistoryProfileId(profileId);
+    setHistoryProfileName(profileName);
+    setShowHistoryModal(true);
+    setLoadingHistory(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select(`
+          id,
+          reason,
+          details,
+          status,
+          created_at,
+          reporter:reporter_profile_id(display_name)
+        `)
+        .eq('reported_profile_id', profileId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const transformedReports: PastReport[] = (data || []).map((report: any) => ({
+        id: report.id,
+        reason: report.reason,
+        details: report.details,
+        status: report.status,
+        created_at: report.created_at,
+        reporter_name: report.reporter?.display_name || 'Unknown',
+      }));
+
+      setPastReports(transformedReports);
+    } catch (error: any) {
+      console.error('Error loading report history:', error);
+      Alert.alert('Error', 'Failed to load report history.');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const closeHistoryModal = () => {
+    setShowHistoryModal(false);
+    setHistoryProfileId(null);
+    setHistoryProfileName('');
+    setPastReports([]);
+  };
+
   const viewProfile = (profileId: string) => {
     router.push(`/profile/${profileId}`);
   };
@@ -484,9 +622,14 @@ export default function AdminReports() {
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Admin: Reports</Text>
-        <TouchableOpacity onPress={() => router.push('/admin/bans')}>
-          <MaterialCommunityIcons name="shield-off" size={24} color="white" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => router.push('/admin/appeals')} style={styles.headerBtn}>
+            <MaterialCommunityIcons name="message-reply-text" size={22} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/admin/bans')} style={styles.headerBtn}>
+            <MaterialCommunityIcons name="shield-off" size={22} color="white" />
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       {/* Filter Tabs */}
@@ -621,28 +764,48 @@ export default function AdminReports() {
 
               {/* Actions (only for pending reports) */}
               {report.status === 'pending' && (
-                <View style={styles.actionsContainer}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.dismissButton]}
-                    onPress={() => handleReportAction(report.id, 'dismiss')}
-                  >
-                    <MaterialCommunityIcons name="close" size={18} color="#6B7280" />
-                    <Text style={styles.dismissButtonText}>Dismiss</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.photoReviewButton]}
-                    onPress={() => handlePhotoReview(report.id)}
-                  >
-                    <MaterialCommunityIcons name="camera-off" size={18} color="#F59E0B" />
-                    <Text style={styles.photoReviewButtonText}>Photos</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.banButton]}
-                    onPress={() => handleReportAction(report.id, 'ban')}
-                  >
-                    <MaterialCommunityIcons name="account-cancel" size={18} color="white" />
-                    <Text style={styles.banButtonText}>Ban</Text>
-                  </TouchableOpacity>
+                <View style={styles.actionsWrapper}>
+                  {/* Primary Actions Row */}
+                  <View style={styles.actionsContainer}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.dismissButton]}
+                      onPress={() => handleReportAction(report.id, 'dismiss')}
+                    >
+                      <MaterialCommunityIcons name="close" size={18} color="#6B7280" />
+                      <Text style={styles.dismissButtonText}>Dismiss</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.photoReviewButton]}
+                      onPress={() => handlePhotoReview(report.id)}
+                    >
+                      <MaterialCommunityIcons name="camera-off" size={18} color="#F59E0B" />
+                      <Text style={styles.photoReviewButtonText}>Photos</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.banButton]}
+                      onPress={() => handleReportAction(report.id, 'ban')}
+                    >
+                      <MaterialCommunityIcons name="account-cancel" size={18} color="white" />
+                      <Text style={styles.banButtonText}>Ban</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {/* Secondary Actions Row */}
+                  <View style={styles.secondaryActionsContainer}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.verifyButton]}
+                      onPress={() => handleVerifyIdentity(report.id)}
+                    >
+                      <MaterialCommunityIcons name="account-check" size={18} color="#8B5CF6" />
+                      <Text style={styles.verifyButtonText}>Verify ID</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.historyButton]}
+                      onPress={() => handleViewHistory(report.reported_profile_id, report.reported_name)}
+                    >
+                      <MaterialCommunityIcons name="history" size={18} color="#3B82F6" />
+                      <Text style={styles.historyButtonText}>History</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
             </View>
@@ -677,6 +840,222 @@ export default function AdminReports() {
           </Text>
         </View>
       </Modal>
+
+      {/* Ban Options Modal */}
+      <Modal
+        visible={showBanModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={closeBanModal}
+      >
+        <View style={styles.banModalOverlay}>
+          <View style={styles.banModalContainer}>
+            {/* Header */}
+            <View style={styles.banModalHeader}>
+              <Text style={styles.banModalTitle}>Ban User</Text>
+              <TouchableOpacity onPress={closeBanModal} style={styles.banModalCloseBtn}>
+                <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {banningReport && (
+              <Text style={styles.banModalSubtitle}>
+                Banning: <Text style={{ fontWeight: '700', color: '#EF4444' }}>{banningReport.reported_name}</Text>
+              </Text>
+            )}
+
+            <ScrollView style={styles.banModalContent} showsVerticalScrollIndicator={false}>
+              {/* Duration Selection */}
+              <Text style={styles.banModalSectionTitle}>Ban Duration</Text>
+              <View style={styles.durationOptions}>
+                {BAN_DURATIONS.map((duration) => (
+                  <TouchableOpacity
+                    key={duration.label}
+                    style={[
+                      styles.durationOption,
+                      (selectedDuration === duration.hours) && styles.durationOptionSelected,
+                      duration.hours === null && styles.durationOptionPermanent,
+                    ]}
+                    onPress={() => setSelectedDuration(duration.hours)}
+                  >
+                    <Text style={[
+                      styles.durationLabel,
+                      (selectedDuration === duration.hours) && styles.durationLabelSelected,
+                    ]}>
+                      {duration.label}
+                    </Text>
+                    <Text style={[
+                      styles.durationDesc,
+                      (selectedDuration === duration.hours) && styles.durationDescSelected,
+                    ]}>
+                      {duration.description}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Custom Message */}
+              <Text style={styles.banModalSectionTitle}>Message to User (Optional)</Text>
+              <Text style={styles.banModalHint}>
+                This message will be shown to the user when they try to access the app.
+              </Text>
+              <TextInput
+                style={styles.messageInput}
+                placeholder="Explain why they're being banned and what they can do..."
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={4}
+                value={userMessage}
+                onChangeText={setUserMessage}
+                textAlignVertical="top"
+              />
+
+              {/* Quick Message Templates */}
+              <View style={styles.templateButtons}>
+                <TouchableOpacity
+                  style={styles.templateBtn}
+                  onPress={() => setUserMessage('Your account has been temporarily suspended due to violating our community guidelines. Please review our terms of service before your suspension ends.')}
+                >
+                  <Text style={styles.templateBtnText}>Guidelines Violation</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.templateBtn}
+                  onPress={() => setUserMessage('Your profile photos do not meet our requirements. Please upload clear, recent photos of yourself when your suspension ends.')}
+                >
+                  <Text style={styles.templateBtnText}>Photo Issue</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.templateBtn}
+                  onPress={() => setUserMessage('Your account has been suspended due to reports from other users. If you believe this is an error, you may submit an appeal.')}
+                >
+                  <Text style={styles.templateBtnText}>User Reports</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            {/* Actions */}
+            <View style={styles.banModalActions}>
+              <TouchableOpacity
+                style={styles.banModalCancelBtn}
+                onPress={closeBanModal}
+                disabled={isBanning}
+              >
+                <Text style={styles.banModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.banModalConfirmBtn, isBanning && { opacity: 0.6 }]}
+                onPress={executeBan}
+                disabled={isBanning}
+              >
+                {isBanning ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="account-cancel" size={18} color="white" />
+                    <Text style={styles.banModalConfirmText}>
+                      {selectedDuration ? `Ban for ${BAN_DURATIONS.find(d => d.hours === selectedDuration)?.label}` : 'Ban Permanently'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Report History Modal */}
+      <Modal
+        visible={showHistoryModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={closeHistoryModal}
+      >
+        <View style={styles.historyModalOverlay}>
+          <View style={styles.historyModalContainer}>
+            {/* Header */}
+            <View style={styles.historyModalHeader}>
+              <Text style={styles.historyModalTitle}>Report History</Text>
+              <TouchableOpacity onPress={closeHistoryModal} style={styles.historyModalCloseBtn}>
+                <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.historyModalSubtitle}>
+              All reports against: <Text style={{ fontWeight: '700', color: '#EF4444' }}>{historyProfileName}</Text>
+            </Text>
+
+            <ScrollView style={styles.historyModalContent} showsVerticalScrollIndicator={false}>
+              {loadingHistory ? (
+                <View style={styles.historyLoadingContainer}>
+                  <ActivityIndicator size="large" color="#9B87CE" />
+                </View>
+              ) : pastReports.length === 0 ? (
+                <View style={styles.historyEmptyState}>
+                  <MaterialCommunityIcons name="check-circle-outline" size={48} color="#D1D5DB" />
+                  <Text style={styles.historyEmptyText}>No previous reports</Text>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.historySummary}>
+                    <Text style={styles.historySummaryText}>
+                      {pastReports.length} total report{pastReports.length !== 1 ? 's' : ''}
+                    </Text>
+                    <Text style={styles.historySummarySubtext}>
+                      {pastReports.filter(r => r.status === 'pending').length} pending
+                      {' '}{pastReports.filter(r => r.status === 'resolved').length} resolved
+                      {' '}{pastReports.filter(r => r.status === 'dismissed').length} dismissed
+                    </Text>
+                  </View>
+
+                  {pastReports.map((pastReport) => (
+                    <View key={pastReport.id} style={styles.historyReportCard}>
+                      <View style={styles.historyReportHeader}>
+                        <View style={styles.historyReportLeft}>
+                          <MaterialCommunityIcons
+                            name={getReasonIcon(pastReport.reason) as any}
+                            size={20}
+                            color="#EF4444"
+                          />
+                          <Text style={styles.historyReportReason}>{getReasonLabel(pastReport.reason)}</Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.historyStatusBadge,
+                            { backgroundColor: `${getStatusColor(pastReport.status)}20` },
+                          ]}
+                        >
+                          <Text style={[styles.historyStatusText, { color: getStatusColor(pastReport.status) }]}>
+                            {pastReport.status}
+                          </Text>
+                        </View>
+                      </View>
+                      {pastReport.details && (
+                        <Text style={styles.historyReportDetails} numberOfLines={2}>
+                          {pastReport.details}
+                        </Text>
+                      )}
+                      <View style={styles.historyReportFooter}>
+                        <Text style={styles.historyReportDate}>{formatDate(pastReport.created_at)}</Text>
+                        <Text style={styles.historyReportReporter}>by {pastReport.reporter_name}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </>
+              )}
+            </ScrollView>
+
+            {/* Close Button */}
+            <View style={styles.historyModalActions}>
+              <TouchableOpacity
+                style={styles.historyModalCloseButton}
+                onPress={closeHistoryModal}
+              >
+                <Text style={styles.historyModalCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -698,6 +1077,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: 'white',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  headerBtn: {
+    padding: 4,
   },
   loadingContainer: {
     flex: 1,
@@ -831,9 +1217,6 @@ const styles = StyleSheet.create({
   actionsContainer: {
     flexDirection: 'row',
     gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingTop: 12,
   },
   actionButton: {
     flex: 1,
@@ -947,6 +1330,326 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 20,
     fontSize: 14,
+    color: 'white',
+  },
+  // Ban Modal Styles
+  banModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  banModalContainer: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    paddingBottom: 34,
+  },
+  banModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 8,
+  },
+  banModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  banModalCloseBtn: {
+    padding: 4,
+  },
+  banModalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  banModalContent: {
+    paddingHorizontal: 20,
+  },
+  banModalSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  banModalHint: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 12,
+  },
+  durationOptions: {
+    gap: 8,
+    marginBottom: 20,
+  },
+  durationOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  durationOptionSelected: {
+    borderColor: '#9B87CE',
+    backgroundColor: '#F3F0F7',
+  },
+  durationOptionPermanent: {
+    borderColor: '#FEE2E2',
+    backgroundColor: '#FEF2F2',
+  },
+  durationLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  durationLabelSelected: {
+    color: '#9B87CE',
+  },
+  durationDesc: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  durationDescSelected: {
+    color: '#9B87CE',
+  },
+  messageInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 14,
+    color: '#111827',
+    backgroundColor: '#F9FAFB',
+    minHeight: 100,
+    marginBottom: 12,
+  },
+  templateButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+  },
+  templateBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+  },
+  templateBtnText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  banModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  banModalCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  banModalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  banModalConfirmBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  banModalConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: 'white',
+  },
+  // Actions Wrapper for two rows
+  actionsWrapper: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingTop: 12,
+    gap: 8,
+  },
+  secondaryActionsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  // Verify ID Button
+  verifyButton: {
+    backgroundColor: '#F3E8FF',
+  },
+  verifyButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8B5CF6',
+  },
+  // History Button
+  historyButton: {
+    backgroundColor: '#DBEAFE',
+  },
+  historyButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3B82F6',
+  },
+  // History Modal Styles
+  historyModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  historyModalContainer: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+    paddingBottom: 34,
+  },
+  historyModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 8,
+  },
+  historyModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  historyModalCloseBtn: {
+    padding: 4,
+  },
+  historyModalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  historyModalContent: {
+    paddingHorizontal: 20,
+    maxHeight: 400,
+  },
+  historyLoadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  historyEmptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  historyEmptyText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    marginTop: 12,
+  },
+  historySummary: {
+    backgroundColor: '#F3F4F6',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  historySummaryText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  historySummarySubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  historyReportCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  historyReportHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  historyReportLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  historyReportReason: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    flex: 1,
+  },
+  historyStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  historyStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  historyReportDetails: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  historyReportFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  historyReportDate: {
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+  historyReportReporter: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  historyModalActions: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  historyModalCloseButton: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#9B87CE',
+    alignItems: 'center',
+  },
+  historyModalCloseButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
     color: 'white',
   },
 });
