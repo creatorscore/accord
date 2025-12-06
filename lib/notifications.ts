@@ -29,7 +29,6 @@ try {
   }
 } catch (error) {
   // Silently fail - notifications will work in dev/production builds
-  console.log('Notifications not available in Expo Go - will work in production build');
 }
 
 /**
@@ -40,13 +39,11 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   try {
     // Check if notifications are available
     if (!Notifications || !Device) {
-      console.log('Notifications not available (Expo Go)');
       return false;
     }
 
     // Only request permissions on physical devices
     if (!Device.isDevice) {
-      console.log('Notifications are not supported on simulator/emulator');
       return false;
     }
 
@@ -59,14 +56,9 @@ export async function requestNotificationPermissions(): Promise<boolean> {
       finalStatus = status;
     }
 
-    if (finalStatus !== 'granted') {
-      console.log('Notification permission denied');
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Error requesting notification permissions:', error);
+    return finalStatus === 'granted';
+  } catch (error: any) {
+    console.error('Error requesting notification permissions:', error?.message);
     return false;
   }
 }
@@ -79,20 +71,17 @@ export async function registerForPushNotifications(): Promise<string | null> {
   try {
     // Check if notifications are available
     if (!Notifications || !Device) {
-      console.log('Notifications not available (Expo Go)');
       return null;
     }
 
     // Only works on physical devices
     if (!Device.isDevice) {
-      console.log('Push notifications require a physical device');
       return null;
     }
 
     // Request permissions first
     const hasPermission = await requestNotificationPermissions();
     if (!hasPermission) {
-      console.log('Push notification permissions not granted');
       return null;
     }
 
@@ -111,14 +100,9 @@ export async function registerForPushNotifications(): Promise<string | null> {
       projectId: '71ca414e-ff65-488b-97f6-9150455475a0',
     });
 
-    const token = tokenData.data;
-    console.log('Push token registered successfully');
-
-    return token;
+    return tokenData.data;
   } catch (error: any) {
-    // Log the error but don't crash the app
-    console.warn('Push notifications setup failed (this is OK for development):', error?.message || error);
-    // Return null so the app can continue without push notifications
+    console.error('Push notifications setup failed:', error?.message);
     return null;
   }
 }
@@ -140,7 +124,6 @@ export async function savePushToken(userId: string, token: string): Promise<void
     // The token will be saved when the profile is created during onboarding
     if (profileError) {
       if (profileError.code === 'PGRST116') {
-        console.log('Profile not found yet - user likely in onboarding. Push token will be saved after profile creation.');
         return;
       }
       throw profileError;
@@ -176,11 +159,8 @@ export async function savePushToken(userId: string, token: string): Promise<void
       );
 
     if (deviceError) {
-      console.warn('⚠️ Device token save failed (non-critical):', deviceError);
-      // Don't throw - profile token was saved successfully
+      // Non-critical - profile token was saved successfully
     }
-
-    console.log(`✅ Push token saved successfully (${deviceType})`);
   } catch (error) {
     console.error('Error saving push token:', error);
     throw error;
@@ -204,7 +184,6 @@ export async function ensurePushTokenSaved(userId: string, token: string): Promi
     // Profile doesn't exist yet - needs retry
     if (profileError) {
       if (profileError.code === 'PGRST116') {
-        console.log('⏰ Profile not found yet - will retry');
         return false;
       }
       throw profileError;
@@ -222,13 +201,11 @@ export async function ensurePushTokenSaved(userId: string, token: string): Promi
 
     // Token is already saved in new system
     if (deviceToken) {
-      console.log('✅ Push token already saved in device_tokens');
       return true;
     }
 
     // Legacy check: token saved in old system
     if (profile.push_token === token) {
-      console.log('✅ Push token already saved in profiles (legacy)');
       // Migrate to new system while we're here
       await supabase
         .from('device_tokens')
@@ -276,14 +253,12 @@ export async function ensurePushTokenSaved(userId: string, token: string): Promi
       );
 
     if (deviceError) {
-      console.warn('⚠️ Device token save failed (non-critical):', deviceError);
-      // Don't fail - profile token was saved successfully
+      // Non-critical - profile token was saved successfully
     }
 
-    console.log('✅ Push token saved successfully to both systems');
     return true;
   } catch (error) {
-    console.error('❌ Error ensuring push token saved:', error);
+    console.error('Error ensuring push token saved:', error);
     return false; // Will trigger retry
   }
 }
@@ -299,8 +274,6 @@ export async function sendPushNotification(
   data?: any
 ): Promise<{ success: boolean; error?: string; ticketId?: string }> {
   try {
-    console.log(`📤 Sending push notification to token: ${pushToken.substring(0, 30)}...`);
-
     const message = {
       to: pushToken,
       sound: 'default',
@@ -313,7 +286,7 @@ export async function sendPushNotification(
 
     // Add timeout to prevent hanging
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
@@ -329,33 +302,20 @@ export async function sendPushNotification(
     clearTimeout(timeoutId);
 
     const result = await response.json();
-    console.log('📬 Expo Push API response:', JSON.stringify(result));
 
     // Check for errors in the response
     if (result.data?.status === 'error') {
       const errorMessage = result.data.message || 'Unknown error';
       const errorDetails = result.data.details?.error || '';
-      console.error(`❌ Push notification error: ${errorMessage} ${errorDetails}`);
-
-      // Check for specific error types
-      if (errorDetails === 'DeviceNotRegistered') {
-        console.error('⚠️ Device token is invalid/expired - needs re-registration');
-      }
-
       return { success: false, error: `${errorMessage} ${errorDetails}`.trim() };
     }
 
-    // Success - get ticket ID for receipt checking
-    const ticketId = result.data?.id;
-    console.log(`✅ Push notification sent successfully (ticket: ${ticketId})`);
-    return { success: true, ticketId };
-
+    return { success: true, ticketId: result.data?.id };
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      console.error('❌ Push notification timed out after 10 seconds');
       return { success: false, error: 'Request timed out' };
     }
-    console.error('❌ Error sending push notification:', error.message || error);
+    console.error('Error sending push notification:', error.message);
     return { success: false, error: error.message || 'Unknown error' };
   }
 }
@@ -378,7 +338,6 @@ export async function sendMatchNotification(
       .single();
 
     if (error || !profile?.push_enabled) {
-      console.log('Recipient does not have push notifications enabled');
       return;
     }
 
@@ -398,7 +357,6 @@ export async function sendMatchNotification(
     }
 
     if (tokens.size === 0) {
-      console.log('No push tokens found for recipient');
       return;
     }
 
@@ -442,8 +400,6 @@ export async function sendMessageNotification(
   matchId: string
 ): Promise<void> {
   try {
-    console.log(`📨 Attempting to send message notification to profile: ${recipientProfileId}`);
-
     // Get recipient's push settings
     const { data: profile, error } = await supabase
       .from('profiles')
@@ -451,13 +407,7 @@ export async function sendMessageNotification(
       .eq('id', recipientProfileId)
       .single();
 
-    if (error) {
-      console.error('❌ Error fetching recipient profile:', error);
-      return;
-    }
-
-    if (!profile?.push_enabled) {
-      console.log(`⏭️ Push disabled for ${profile?.display_name || recipientProfileId}`);
+    if (error || !profile?.push_enabled) {
       return;
     }
 
@@ -477,11 +427,8 @@ export async function sendMessageNotification(
     }
 
     if (tokens.size === 0) {
-      console.log(`⚠️ No push tokens found for ${profile?.display_name || recipientProfileId}`);
       return;
     }
-
-    console.log(`📱 Found ${tokens.size} device(s) for ${profile?.display_name}`);
 
     // Truncate message preview
     const preview = messagePreview.length > 50
@@ -502,12 +449,7 @@ export async function sendMessageNotification(
       )
     );
 
-    const results = await Promise.allSettled(notificationPromises);
-
-    // Log results
-    const successCount = results.filter(r => r.status === 'fulfilled' && (r.value as any)?.success).length;
-    const failCount = results.length - successCount;
-    console.log(`📊 Message notification results: ${successCount} success, ${failCount} failed`);
+    await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
     await supabase.from('push_notifications').insert({
@@ -518,7 +460,7 @@ export async function sendMessageNotification(
       data: { matchId, type: 'new_message' },
     });
   } catch (error) {
-    console.error('❌ Error sending message notification:', error);
+    console.error('Error sending message notification:', error);
   }
 }
 
@@ -625,7 +567,6 @@ export function setupNotificationListener(
   onNotificationTap: (data: any) => void
 ): any {
   if (!Notifications) {
-    console.log('Notifications not available (Expo Go)');
     return { remove: () => {} }; // Return mock subscription
   }
 
@@ -652,7 +593,6 @@ export async function sendReportActionNotification(
       .single();
 
     if (error || !profile?.push_enabled) {
-      console.log('Reporter does not have push notifications enabled');
       return;
     }
 
@@ -672,7 +612,6 @@ export async function sendReportActionNotification(
     }
 
     if (tokens.size === 0) {
-      console.log('No push tokens found for reporter');
       return;
     }
 
@@ -711,8 +650,6 @@ export async function sendReportActionNotification(
       body,
       data: { type: 'report_action', action },
     });
-
-    console.log(`Report action notification sent to reporter (${action})`);
   } catch (error) {
     console.error('Error sending report action notification:', error);
   }
@@ -735,7 +672,6 @@ export async function sendBanNotification(
       .single();
 
     if (error || !profile?.push_enabled) {
-      console.log('Banned user does not have push notifications enabled');
       return;
     }
 
@@ -755,7 +691,6 @@ export async function sendBanNotification(
     }
 
     if (tokens.size === 0) {
-      console.log('No push tokens found for banned user');
       return;
     }
 
@@ -783,8 +718,6 @@ export async function sendBanNotification(
       body: 'Your Accord account has been restricted. If you believe this is an error, please contact support at hello@joinaccord.app.',
       data: { type: 'account_banned', banReason },
     });
-
-    console.log(`Ban notification sent to ${profile.display_name}`);
   } catch (error) {
     console.error('Error sending ban notification:', error);
   }
@@ -796,8 +729,6 @@ export async function sendBanNotification(
  */
 export async function sendTestNotification(userId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('🧪 Sending test notification...');
-
     // Get user's profile with push settings
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -806,7 +737,6 @@ export async function sendTestNotification(userId: string): Promise<{ success: b
       .single();
 
     if (profileError || !profile) {
-      console.error('❌ Profile not found:', profileError);
       return { success: false, error: 'Profile not found' };
     }
 
@@ -818,12 +748,10 @@ export async function sendTestNotification(userId: string): Promise<{ success: b
       return { success: false, error: 'No push token found. Try logging out and back in.' };
     }
 
-    console.log(`📱 Found token for ${profile.display_name}: ${profile.push_token.substring(0, 30)}...`);
-
     // Send test notification
     const result = await sendPushNotification(
       profile.push_token,
-      '🧪 Test Notification',
+      'Test Notification',
       'If you see this, push notifications are working!',
       {
         type: 'test',
@@ -832,14 +760,12 @@ export async function sendTestNotification(userId: string): Promise<{ success: b
     );
 
     if (result.success) {
-      console.log('✅ Test notification sent successfully');
       return { success: true };
     } else {
-      console.error('❌ Test notification failed:', result.error);
       return { success: false, error: result.error };
     }
   } catch (error: any) {
-    console.error('❌ Error sending test notification:', error);
+    console.error('Error sending test notification:', error);
     return { success: false, error: error.message || 'Unknown error' };
   }
 }
@@ -862,7 +788,6 @@ export async function sendPhotoReviewNotification(
       .single();
 
     if (error || !profile?.push_enabled) {
-      console.log('User does not have push notifications enabled');
       return;
     }
 
@@ -882,7 +807,6 @@ export async function sendPhotoReviewNotification(
     }
 
     if (tokens.size === 0) {
-      console.log('No push tokens found for user');
       return;
     }
 
@@ -913,10 +837,80 @@ export async function sendPhotoReviewNotification(
       body,
       data: { type: 'photo_review_required', reason },
     });
-
-    console.log(`Photo review notification sent to ${profile.display_name}`);
   } catch (error) {
     console.error('Error sending photo review notification:', error);
+  }
+}
+
+/**
+ * Send notification when a profile is flagged for identity verification
+ * Tells the user they need to verify their identity to restore visibility
+ * Sends to ALL devices for the user (multi-device support)
+ */
+export async function sendIdentityVerificationNotification(
+  profileId: string,
+  reason: string
+): Promise<void> {
+  try {
+    // Get user's push settings
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('push_token, push_enabled, display_name')
+      .eq('id', profileId)
+      .single();
+
+    if (error || !profile?.push_enabled) {
+      return;
+    }
+
+    // Get all device tokens for this user (new multi-device system)
+    const { data: deviceTokens } = await supabase
+      .from('device_tokens')
+      .select('push_token')
+      .eq('profile_id', profileId);
+
+    // Collect all tokens (from both device_tokens and profiles.push_token)
+    const tokens = new Set<string>();
+    if (deviceTokens) {
+      deviceTokens.forEach(dt => tokens.add(dt.push_token));
+    }
+    if (profile.push_token) {
+      tokens.add(profile.push_token);
+    }
+
+    if (tokens.size === 0) {
+      return;
+    }
+
+    const title = 'Action Required: Verify Your Identity';
+    const body = 'Your profile has been temporarily hidden. Please complete identity verification to restore visibility.';
+
+    // Send notification to all devices
+    const notificationPromises = Array.from(tokens).map(token =>
+      sendPushNotification(
+        token,
+        title,
+        body,
+        {
+          type: 'identity_verification_required',
+          reason,
+          screen: 'verification',
+        }
+      )
+    );
+
+    await Promise.allSettled(notificationPromises);
+
+    // Log notification (once per user, not per device)
+    await supabase.from('push_notifications').insert({
+      profile_id: profileId,
+      notification_type: 'identity_verification_required',
+      title,
+      body,
+      data: { type: 'identity_verification_required', reason },
+    });
+  } catch (error) {
+    console.error('Error sending identity verification notification:', error);
   }
 }
 
@@ -944,16 +938,10 @@ export async function removePushToken(userId: string): Promise<void> {
       .eq('id', profile.id);
 
     // STEP 2: Delete all device tokens for this user (new multi-device system)
-    const { error: deviceError } = await supabase
+    await supabase
       .from('device_tokens')
       .delete()
       .eq('profile_id', profile.id);
-
-    if (deviceError) {
-      console.warn('⚠️ Error removing device tokens (non-critical):', deviceError);
-    }
-
-    console.log('Push token removed from all devices');
   } catch (error) {
     console.error('Error removing push token:', error);
   }
