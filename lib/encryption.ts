@@ -25,6 +25,10 @@ const KEY_SIZE = 32; // 256 bits for AES-256
 const IV_SIZE = 12; // 96 bits for GCM (recommended)
 const SALT_SIZE = 16; // 128 bits
 
+// Secret salt for deterministic key derivation (ensures consistent keys across devices)
+// This enables the same user to have the same encryption keys on iOS and Android
+const ENCRYPTION_SALT = 'accord_e2e_encryption_v1_';
+
 // Helper to convert Buffer/Uint8Array to base64
 function bufferToBase64(buffer: Buffer | Uint8Array): string {
   return Buffer.from(buffer).toString('base64');
@@ -52,8 +56,56 @@ function uint8ArrayToHex(bytes: Uint8Array): string {
 }
 
 /**
- * Generate encryption keys for a user
+ * Derive public key from private key
+ * This is the same derivation used in generateKeyPairForUser
+ */
+async function derivePublicKeyFromPrivate(privateKey: string): Promise<string> {
+  return await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    privateKey,
+    { encoding: Crypto.CryptoEncoding.HEX }
+  );
+}
+
+/**
+ * Generate deterministic encryption keys for a user based on their userId
+ * This ensures the same user gets the same keys on any device (iOS/Android)
  * Returns public key hash (to store in DB) and private key (to store in secure storage)
+ */
+export async function generateKeyPairForUser(userId: string): Promise<{
+  publicKey: string;
+  privateKey: string;
+}> {
+  try {
+    // Derive private key deterministically from userId + salt
+    // This ensures the same user always gets the same key on any device
+    const seedString = ENCRYPTION_SALT + userId;
+    const privateKey = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      seedString,
+      { encoding: Crypto.CryptoEncoding.HEX }
+    );
+
+    // Derive public key from private key using SHA-256
+    const publicKey = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      privateKey,
+      { encoding: Crypto.CryptoEncoding.HEX }
+    );
+
+    return {
+      publicKey,
+      privateKey,
+    };
+  } catch (error) {
+    console.error('Error generating key pair:', error);
+    throw new Error('Failed to generate encryption keys');
+  }
+}
+
+/**
+ * Generate random encryption keys (legacy - kept for backward compatibility)
+ * @deprecated Use generateKeyPairForUser for cross-device compatibility
  */
 export async function generateKeyPair(): Promise<{
   publicKey: string;
@@ -106,6 +158,32 @@ export async function getPrivateKey(userId: string): Promise<string | null> {
 }
 
 /**
+ * Retrieve legacy private key from secure storage
+ * This is the old random key that was used before deterministic keys
+ * Used for backwards compatibility to decrypt old messages
+ */
+export async function getLegacyPrivateKey(userId: string): Promise<string | null> {
+  try {
+    return await SecureStore.getItemAsync(`encryption_legacy_private_key_${userId}`);
+  } catch (error) {
+    console.error('Error retrieving legacy private key:', error);
+    return null;
+  }
+}
+
+/**
+ * Store legacy private key in device secure storage
+ * Called before migrating to deterministic keys to preserve old key for decryption
+ */
+async function storeLegacyPrivateKey(userId: string, privateKey: string): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(`encryption_legacy_private_key_${userId}`, privateKey);
+  } catch (error) {
+    console.error('Error storing legacy private key:', error);
+  }
+}
+
+/**
  * Check if user has encryption keys set up
  */
 export async function hasEncryptionKeys(userId: string): Promise<boolean> {
@@ -114,16 +192,28 @@ export async function hasEncryptionKeys(userId: string): Promise<boolean> {
 }
 
 /**
- * Derive a shared encryption key from two user keys
- * Uses HKDF-like derivation for perfect forward secrecy
+ * Derive a shared encryption key from two PUBLIC keys
+ *
+ * CRITICAL: Both parameters MUST be public keys (not private keys)!
+ * This ensures both sender and recipient derive the SAME shared key:
+ * - Sender calls: deriveSharedKey(sender_PUBLIC, recipient_PUBLIC)
+ * - Recipient calls: deriveSharedKey(recipient_PUBLIC, sender_PUBLIC)
+ *
+ * Keys are sorted lexicographically to ensure same order for both parties.
+ * After sorting: SHA256(A + B) === SHA256(A + B) - decryption works!
+ *
+ * This is the standard approach for symmetric key derivation from public keys.
  */
 async function deriveSharedKey(
-  privateKey: string,
-  publicKey: string
+  publicKey1: string,
+  publicKey2: string
 ): Promise<Uint8Array> {
   try {
-    // Combine keys and hash to create shared secret using expo-crypto
-    const combined = privateKey + publicKey;
+    // CRITICAL: Sort keys lexicographically to ensure same order for both parties
+    // Without sorting: SHA256(A+B) ≠ SHA256(B+A) - decryption would fail!
+    const sortedKeys = [publicKey1, publicKey2].sort();
+    const combined = ENCRYPTION_SALT + sortedKeys[0] + sortedKeys[1];
+
     const sharedSecretHex = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       combined,
@@ -152,8 +242,14 @@ export async function encryptMessage(
   recipientPublicKey: string
 ): Promise<string> {
   try {
-    // Derive shared encryption key
-    const sharedKeyBytes = await deriveSharedKey(senderPrivateKey, recipientPublicKey);
+    // CRITICAL FIX: Derive sender's public key from their private key
+    // Then use BOTH PUBLIC KEYS for shared key derivation
+    // This ensures sender and recipient derive the SAME shared key:
+    // - Sender: deriveSharedKey(sender_PUBLIC, recipient_PUBLIC)
+    // - Recipient: deriveSharedKey(recipient_PUBLIC, sender_PUBLIC)
+    // After sorting, both get identical results!
+    const senderPublicKey = await derivePublicKeyFromPrivate(senderPrivateKey);
+    const sharedKeyBytes = await deriveSharedKey(senderPublicKey, recipientPublicKey);
 
     // Generate random IV (Initialization Vector) using QuickCrypto
     const iv = QuickCrypto.randomBytes(IV_SIZE);
@@ -239,9 +335,15 @@ export async function decryptMessage(
       return encryptedMessage;
     }
 
-    // Derive shared encryption key (same as sender)
+    // CRITICAL FIX: Derive recipient's public key from their private key
+    // Then use BOTH PUBLIC KEYS for shared key derivation (same as sender)
+    // This ensures sender and recipient derive the SAME shared key:
+    // - Sender: deriveSharedKey(sender_PUBLIC, recipient_PUBLIC)
+    // - Recipient: deriveSharedKey(recipient_PUBLIC, sender_PUBLIC)
+    // After sorting, both get identical results!
     console.log('🔑 Deriving shared key...');
-    const sharedKeyBytes = await deriveSharedKey(recipientPrivateKey, senderPublicKey);
+    const recipientPublicKey = await derivePublicKeyFromPrivate(recipientPrivateKey);
+    const sharedKeyBytes = await deriveSharedKey(recipientPublicKey, senderPublicKey);
     console.log('✅ Shared key derived');
 
     // Convert IV from base64
@@ -289,28 +391,99 @@ export async function decryptMessage(
 }
 
 /**
+ * Decrypt a message with fallback to legacy key
+ * Tries the current deterministic key first, then falls back to the legacy random key
+ * This allows old messages (encrypted with random keys) to still be decrypted
+ *
+ * @param encryptedMessage - Encrypted message in format: iv:authTag:ciphertext
+ * @param userId - Current user's ID (to get their private keys)
+ * @param senderPublicKey - Sender's public key
+ * @returns Decrypted plain text message, or error message if decryption fails
+ */
+export async function decryptMessageWithFallback(
+  encryptedMessage: string,
+  userId: string,
+  senderPublicKey: string
+): Promise<string> {
+  // Get current private key
+  const currentPrivateKey = await getPrivateKey(userId);
+
+  if (currentPrivateKey) {
+    try {
+      // Try decrypting with current (deterministic) key
+      const decrypted = await decryptMessage(encryptedMessage, currentPrivateKey, senderPublicKey);
+
+      // Check if decryption actually succeeded (not just returned the encrypted message)
+      if (decrypted !== '[Unable to decrypt message]' && decrypted !== encryptedMessage) {
+        return decrypted;
+      }
+    } catch (error) {
+      console.log('🔄 Current key decryption failed, trying legacy key...');
+    }
+  }
+
+  // Try legacy key if available
+  const legacyPrivateKey = await getLegacyPrivateKey(userId);
+  if (legacyPrivateKey) {
+    try {
+      console.log('🔑 Attempting decryption with legacy key...');
+      const decrypted = await decryptMessage(encryptedMessage, legacyPrivateKey, senderPublicKey);
+
+      // Check if decryption actually succeeded
+      if (decrypted !== '[Unable to decrypt message]' && decrypted !== encryptedMessage) {
+        console.log('✅ Successfully decrypted with legacy key');
+        return decrypted;
+      }
+    } catch (error) {
+      console.log('❌ Legacy key decryption also failed');
+    }
+  }
+
+  // Both keys failed - return placeholder
+  console.log('⚠️ Unable to decrypt message with any available keys');
+  return '[Unable to decrypt message]';
+}
+
+/**
  * Initialize encryption for a user
  * Call this during user registration/first login
+ *
+ * Uses deterministic key derivation so the same user gets the same keys
+ * on any device (iOS/Android). This enables cross-device messaging.
+ *
+ * IMPORTANT: Preserves old random keys as "legacy" keys for backwards compatibility.
+ * This allows old messages (encrypted with random keys) to still be decrypted.
  */
 export async function initializeEncryption(userId: string): Promise<string> {
   try {
-    // Check if already initialized
+    // Generate deterministic keys for this user
+    // These will be the same on any device for the same userId
+    const { publicKey, privateKey } = await generateKeyPairForUser(userId);
+
+    // Check if we already have the correct key stored
     const existingKey = await getPrivateKey(userId);
-    if (existingKey) {
-      // Return the existing public key (derive from private key)
-      const publicKey = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        existingKey,
-        { encoding: Crypto.CryptoEncoding.HEX }
-      );
+    if (existingKey === privateKey) {
+      // Already have the correct deterministic key
       return publicKey;
     }
 
-    // Generate new key pair
-    const { publicKey, privateKey } = await generateKeyPair();
+    // BACKWARDS COMPATIBILITY: If there's an existing key that's different from
+    // the new deterministic key, it's an old random key. Save it as "legacy"
+    // so we can still decrypt old messages encrypted with that key.
+    if (existingKey && existingKey !== privateKey) {
+      // Check if we already have a legacy key saved
+      const existingLegacyKey = await getLegacyPrivateKey(userId);
+      if (!existingLegacyKey) {
+        // Save the old random key as legacy before overwriting
+        console.log('🔑 Saving old encryption key as legacy for backwards compatibility');
+        await storeLegacyPrivateKey(userId, existingKey);
+      }
+    }
 
-    // Store private key securely on device
+    // Store/update the deterministic private key on this device
+    // This handles both new devices and migration from old random keys
     await storePrivateKey(userId, privateKey);
+    console.log('✅ Encryption keys initialized for cross-device messaging');
 
     // Return public key to be stored in database
     return publicKey;

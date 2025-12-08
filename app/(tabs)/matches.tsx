@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useColorScheme } from '@/lib/useColorScheme';
 import { supabase } from '@/lib/supabase';
 import { useScreenProtection } from '@/hooks/useScreenProtection';
 import { isOnline, getLastActiveText } from '@/lib/online-status';
@@ -48,6 +49,7 @@ export default function Matches() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { isPremium } = useSubscription();
+  const { colors, isDarkColorScheme } = useColorScheme();
   const insets = useSafeAreaInsets();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -734,7 +736,7 @@ export default function Matches() {
         transition={{ type: 'timing', duration: 400, delay: index * 50 }}
       >
         <TouchableOpacity
-          style={styles.matchCard}
+          style={[styles.matchCard, { backgroundColor: colors.card }]}
           onPress={() => handleMatchPress(item)}
           onLongPress={() => handleMatchLongPress(item)}
           activeOpacity={0.7}
@@ -747,7 +749,7 @@ export default function Matches() {
               blurRadius={item.profile.photo_blur_enabled && !item.profile.is_revealed ? 30 : 0}
             />
             {item.profile.is_verified && (
-              <View style={styles.verifiedBadge}>
+              <View style={[styles.verifiedBadge, { backgroundColor: colors.card }]}>
                 <MaterialCommunityIcons name="check-decagram" size={18} color="#3B82F6" />
               </View>
             )}
@@ -758,11 +760,11 @@ export default function Matches() {
           {/* Match Info */}
           <View style={styles.matchInfo}>
             <View style={styles.matchHeader}>
-              <Text style={styles.matchName} numberOfLines={1}>
+              <Text style={[styles.matchName, { color: colors.foreground }]} numberOfLines={1}>
                 {item.profile.display_name}, {item.profile.age}
               </Text>
               {item.last_message && (
-                <Text style={styles.timestamp}>{getTimeAgo(item.last_message.created_at)}</Text>
+                <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>{getTimeAgo(item.last_message.created_at)}</Text>
               )}
             </View>
 
@@ -786,7 +788,7 @@ export default function Matches() {
             {/* Last Message or CTA */}
             {item.last_message ? (
               <Text
-                style={[styles.lastMessage, hasUnread && styles.lastMessageUnread]}
+                style={[styles.lastMessage, { color: colors.mutedForeground }, hasUnread && { color: colors.foreground, fontWeight: '600' }]}
                 numberOfLines={1}
               >
                 {item.last_message.sender_profile_id === currentProfileId ? t('matches.youLabel') : ''}
@@ -801,7 +803,7 @@ export default function Matches() {
           </View>
 
           {/* Chevron */}
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
       </MotiView>
     );
@@ -810,16 +812,16 @@ export default function Matches() {
   // Loading state
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>{t('matches.title')}</Text>
-          <Text style={styles.headerSubtitle}>{t('matches.subtitle')}</Text>
+        <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('matches.title')}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('matches.subtitle')}</Text>
         </View>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#A08AB7" />
-          <Text style={styles.loadingText}>{t('matches.loadingMatches')}</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>{t('matches.loadingMatches')}</Text>
         </View>
       </View>
     );
@@ -828,11 +830,11 @@ export default function Matches() {
   // Empty state
   if (matches.length === 0) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>{t('matches.title')}</Text>
-          <Text style={styles.headerSubtitle}>{t('matches.subtitle')}</Text>
+        <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('matches.title')}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('matches.subtitle')}</Text>
         </View>
 
         <View style={styles.emptyContainer}>
@@ -849,8 +851,8 @@ export default function Matches() {
                 <MaterialCommunityIcons name="heart-outline" size={48} color="white" />
               </LinearGradient>
             </View>
-            <Text style={styles.emptyTitle}>{t('matches.noMatchesYet')}</Text>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t('matches.noMatchesYet')}</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
               {t('matches.noMatchesText')}
             </Text>
             <TouchableOpacity
@@ -873,12 +875,12 @@ export default function Matches() {
 
   // Matches list
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View>
-          <Text style={styles.headerTitle}>{t('matches.title')}</Text>
-          <Text style={styles.headerSubtitle}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('matches.title')}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
             {matches.length === 1
               ? t('matches.connection', { count: matches.length })
               : t('matches.connections', { count: matches.length })}
@@ -915,14 +917,14 @@ export default function Matches() {
           style={styles.modalOverlay}
           onPress={() => setShowActionSheet(false)}
         >
-          <Pressable style={[styles.actionSheet, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[styles.actionSheet, { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 20) + 20 }]} onPress={(e) => e.stopPropagation()}>
             {/* Header */}
-            <View style={styles.actionSheetHeader}>
-              <Text style={styles.actionSheetTitle}>
+            <View style={[styles.actionSheetHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.actionSheetTitle, { color: colors.foreground }]}>
                 {actionSheetMatch?.profile.display_name}
               </Text>
               <Pressable onPress={() => setShowActionSheet(false)}>
-                <MaterialCommunityIcons name="close" size={24} color="#9CA3AF" />
+                <MaterialCommunityIcons name="close" size={24} color={colors.mutedForeground} />
               </Pressable>
             </View>
 
@@ -932,27 +934,27 @@ export default function Matches() {
                 style={styles.actionItem}
                 onPress={() => handleActionSelect('view_profile')}
               >
-                <MaterialCommunityIcons name="account" size={24} color="#6B7280" />
-                <Text style={styles.actionText}>{t('matches.actions.viewProfile')}</Text>
-                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                <MaterialCommunityIcons name="account" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.actionText, { color: colors.foreground }]}>{t('matches.actions.viewProfile')}</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.border} />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.actionItem}
                 onPress={() => handleActionSelect('send_message')}
               >
-                <MaterialCommunityIcons name="message-text" size={24} color="#6B7280" />
-                <Text style={styles.actionText}>{t('matches.actions.sendMessage')}</Text>
-                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                <MaterialCommunityIcons name="message-text" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.actionText, { color: colors.foreground }]}>{t('matches.actions.sendMessage')}</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.border} />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.actionItem}
                 onPress={() => handleActionSelect('report')}
               >
-                <MaterialCommunityIcons name="flag" size={24} color="#6B7280" />
-                <Text style={styles.actionText}>{t('matches.actions.report')}</Text>
-                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                <MaterialCommunityIcons name="flag" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.actionText, { color: colors.foreground }]}>{t('matches.actions.report')}</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.border} />
               </TouchableOpacity>
 
               <TouchableOpacity

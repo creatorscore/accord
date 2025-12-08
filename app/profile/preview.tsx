@@ -3,10 +3,12 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useColorScheme } from '@/lib/useColorScheme';
 import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
 
 export default function ProfilePreview() {
   const { user } = useAuth();
+  const { colors } = useColorScheme();
   const params = useLocalSearchParams();
   const [profile, setProfile] = useState<any | null>(null);
   const [preferences, setPreferences] = useState<any | null>(null);
@@ -83,17 +85,17 @@ export default function ProfilePreview() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color="#A08AB7" />
-        <Text style={{ color: '#6B7280', marginTop: 16 }}>Loading preview...</Text>
+        <Text style={{ color: colors.mutedForeground, marginTop: 16 }}>Loading preview...</Text>
       </View>
     );
   }
 
   if (!profile) {
     return (
-      <View style={{ flex: 1, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: '#6B7280' }}>Profile not found</Text>
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: colors.mutedForeground }}>Profile not found</Text>
       </View>
     );
   }

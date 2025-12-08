@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { initializeEncryption, hasEncryptionKeys } from '@/lib/encryption';
+import { initializeEncryption } from '@/lib/encryption';
 // import { setUser as setSentryUser } from '@/lib/sentry'; // Temporarily disabled
 import { identifyUser, resetUser, trackUserAction } from '@/lib/analytics';
 
@@ -90,10 +91,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           .maybeSingle();
 
         if (banData) {
-          console.log('🚨 USER IS BANNED - signing out');
+          console.log('🚨 USER IS BANNED - redirecting to banned screen');
           // Sign out the banned user
           await supabase.auth.signOut();
-          // Alert will be shown by the sign-in screen
+          // Redirect to banned screen with user info
+          router.replace({
+            pathname: '/(auth)/banned',
+            params: { userId: user.id }
+          });
         }
       } catch (error) {
         console.error('Error checking ban status:', error);
@@ -104,35 +109,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [user]);
 
   // Initialize encryption keys for authenticated users
+  // Uses deterministic key derivation so the same user gets identical keys on iOS/Android
   useEffect(() => {
     const setupEncryption = async () => {
       if (!user) return;
 
       try {
-        // Check if user already has encryption keys
-        const hasKeys = await hasEncryptionKeys(user.id);
-        if (hasKeys) {
-          console.log('✅ Encryption keys already exist');
-          return;
-        }
-
-        console.log('🔐 Initializing encryption keys...');
+        // Always initialize encryption - this uses deterministic keys based on userId
+        // So the same user gets the same keys on any device (iOS/Android)
+        // If keys already match, initializeEncryption() will skip storing
+        console.log('🔐 Initializing deterministic encryption keys...');
         const publicKey = await initializeEncryption(user.id);
 
         // Store public key in user's profile (use maybeSingle - profile might not exist yet)
         const { data: profile } = await supabase
           .from('profiles')
-          .select('id')
+          .select('id, encryption_public_key')
           .eq('user_id', user.id)
           .maybeSingle();
 
         if (profile) {
-          await supabase
-            .from('profiles')
-            .update({ encryption_public_key: publicKey })
-            .eq('id', profile.id);
-
-          console.log('✅ Encryption keys initialized and saved');
+          // Always update DB to ensure it has the deterministic public key
+          // This handles migration from old random keys to new deterministic keys
+          if (profile.encryption_public_key !== publicKey) {
+            await supabase
+              .from('profiles')
+              .update({ encryption_public_key: publicKey })
+              .eq('id', profile.id);
+            console.log('✅ Encryption public key updated in database');
+          } else {
+            console.log('✅ Encryption keys already synced');
+          }
         }
       } catch (error) {
         console.error('Error setting up encryption:', error);

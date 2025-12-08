@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Alert,
   RefreshControl,
   Modal,
+  InteractionManager,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -37,10 +38,14 @@ import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import IntroMessages from '@/components/messaging/IntroMessages';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
 import ReviewPromptBanner from '@/components/reviews/ReviewPromptBanner';
+import ReviewSubmissionModal from '@/components/reviews/ReviewSubmissionModal';
 import { validateMessage, containsContactInfo, validateContent } from '@/lib/content-moderation';
-import { encryptMessage, decryptMessage, getPrivateKey } from '@/lib/encryption';
+import { encryptMessage, decryptMessage, getPrivateKey, getLegacyPrivateKey } from '@/lib/encryption';
 import { getLastActiveText, isOnline, getOnlineStatusColor } from '@/lib/online-status';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
+import { useColorScheme } from '@/lib/useColorScheme';
+import { checkMessagingVersionRequirement, getCurrentVersion } from '@/lib/version-check';
+import * as Linking from 'expo-linking';
 
 interface Message {
   id: string;
@@ -86,6 +91,7 @@ export default function Chat() {
   const { isPremium } = useSubscription();
   const flatListRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
+  const { colors, isDarkColorScheme } = useColorScheme();
 
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [currentProfileName, setCurrentProfileName] = useState<string>('');
@@ -98,6 +104,12 @@ export default function Chat() {
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [pendingReviewData, setPendingReviewData] = useState<{
+    matchId: string;
+    revieweeId: string;
+    revieweeName: string;
+  } | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -119,6 +131,37 @@ export default function Chat() {
   const [matchProfilePhotoBlur, setMatchProfilePhotoBlur] = useState(false);
   const [revealLoading, setRevealLoading] = useState(false);
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
+
+  // Android layout fix - force re-layout after initial mount
+  const [androidLayoutReady, setAndroidLayoutReady] = useState(Platform.OS !== 'android');
+
+  // Version check state - ensures encryption compatibility
+  const [versionCheckPassed, setVersionCheckPassed] = useState(true);
+  const [versionUpdateMessage, setVersionUpdateMessage] = useState<string | null>(null);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+
+  // Check messaging version requirement on mount
+  useEffect(() => {
+    const checkVersion = async () => {
+      const result = await checkMessagingVersionRequirement();
+      if (!result.allowed) {
+        setVersionCheckPassed(false);
+        setVersionUpdateMessage(result.message || 'Please update your app to continue messaging.');
+        setShowUpdateModal(true);
+      }
+    };
+    checkVersion();
+  }, []);
+
+  // Android layout fix - trigger re-layout after interactions complete
+  useLayoutEffect(() => {
+    if (Platform.OS === 'android') {
+      const handle = InteractionManager.runAfterInteractions(() => {
+        setAndroidLayoutReady(true);
+      });
+      return () => handle.cancel();
+    }
+  }, []);
 
   useEffect(() => {
     loadCurrentProfile();
@@ -466,6 +509,9 @@ export default function Chat() {
    * IMPORTANT: ECDH key derivation requires:
    * - If I'm the RECIPIENT: use my private key + sender's public key
    * - If I'm the SENDER: use my private key + recipient's public key
+   *
+   * BACKWARDS COMPATIBILITY: Tries current deterministic key first, then falls back
+   * to legacy random key for old messages encrypted before the migration.
    */
   const decryptSingleMessage = async (message: Message): Promise<Message> => {
     // Don't decrypt image or voice messages
@@ -484,9 +530,12 @@ export default function Chat() {
     try {
       // Get current user's private key
       const myPrivateKey = await getPrivateKey(user?.id || '');
-      if (!myPrivateKey) {
-        console.error('❌ Private key not found for decryption');
-        return { ...message, decrypted_content: message.encrypted_content };
+      // Also get legacy key for backwards compatibility with old messages
+      const myLegacyPrivateKey = await getLegacyPrivateKey(user?.id || '');
+
+      if (!myPrivateKey && !myLegacyPrivateKey) {
+        console.error('❌ No private keys found for decryption');
+        return { ...message, decrypted_content: t('chat.unableToDecrypt') };
       }
 
       // Determine if I'm the sender or recipient
@@ -507,22 +556,54 @@ export default function Chat() {
 
       if (otherError || !otherProfile?.encryption_public_key) {
         console.error('❌ Other party public key not found');
-        return { ...message, decrypted_content: message.encrypted_content };
+        return { ...message, decrypted_content: t('chat.unableToDecrypt') };
       }
 
-      // Decrypt the message
-      const decryptedContent = await decryptMessage(
-        message.encrypted_content,
-        myPrivateKey,
-        otherProfile.encryption_public_key
-      );
+      // Try decrypting with current key first
+      if (myPrivateKey) {
+        try {
+          const decryptedContent = await decryptMessage(
+            message.encrypted_content,
+            myPrivateKey,
+            otherProfile.encryption_public_key
+          );
 
-      // Store decrypted content in separate field, preserve encrypted content
-      return { ...message, decrypted_content: decryptedContent };
+          // Check if decryption succeeded (not error message)
+          if (decryptedContent !== '[Unable to decrypt message]') {
+            return { ...message, decrypted_content: decryptedContent };
+          }
+        } catch (error) {
+          console.log('🔄 Current key decryption failed, trying legacy key...');
+        }
+      }
+
+      // Fallback: Try legacy key for old messages
+      if (myLegacyPrivateKey) {
+        try {
+          console.log('🔑 Attempting decryption with legacy key...');
+          const decryptedContent = await decryptMessage(
+            message.encrypted_content,
+            myLegacyPrivateKey,
+            otherProfile.encryption_public_key
+          );
+
+          // Check if decryption succeeded
+          if (decryptedContent !== '[Unable to decrypt message]') {
+            console.log('✅ Successfully decrypted with legacy key');
+            return { ...message, decrypted_content: decryptedContent };
+          }
+        } catch (error) {
+          console.log('❌ Legacy key decryption also failed');
+        }
+      }
+
+      // Both keys failed
+      console.log('⚠️ Unable to decrypt message with any available keys');
+      return { ...message, decrypted_content: t('chat.unableToDecrypt') };
     } catch (error) {
       console.error('Error decrypting message:', error);
-      // Try to display the content anyway - might be plain text
-      return { ...message, decrypted_content: message.encrypted_content };
+      // Show placeholder instead of encrypted gibberish
+      return { ...message, decrypted_content: t('chat.unableToDecrypt') };
     }
   };
 
@@ -535,6 +616,12 @@ export default function Chat() {
     // Check if match is still active
     if (matchStatus?.status !== 'active') {
       Alert.alert(t('chat.cannotSendMessage'), t('chat.conversationEnded'));
+      return;
+    }
+
+    // Block sending if version check failed - ensures encryption compatibility
+    if (!versionCheckPassed) {
+      setShowUpdateModal(true);
       return;
     }
 
@@ -1251,7 +1338,7 @@ export default function Chat() {
           style={[styles.messageRow, isMine && styles.messageRowMine]}
         >
         {/* Message Bubble */}
-        <View style={[styles.messageBubble, isMine ? styles.messageBubbleMine : styles.messageBubbleTheirs]}>
+        <View style={[styles.messageBubble, isMine ? styles.messageBubbleMine : [styles.messageBubbleTheirs, { backgroundColor: colors.card }]]}>
           {item.content_type === 'image' && item.media_url ? (
             // Image message
             <TouchableOpacity
@@ -1403,8 +1490,8 @@ export default function Chat() {
                 </LinearGradient>
               ) : (
                 <>
-                  <Text style={styles.messageTextTheirs}>{item.decrypted_content || item.encrypted_content}</Text>
-                  <Text style={styles.messageTime}>
+                  <Text style={[styles.messageTextTheirs, { color: colors.foreground }]}>{item.decrypted_content || item.encrypted_content}</Text>
+                  <Text style={[styles.messageTime, { color: colors.mutedForeground }]}>
                     {getTimeDisplay(item.created_at)}
                   </Text>
                 </>
@@ -1419,9 +1506,9 @@ export default function Chat() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color="#A08AB7" />
-        <Text style={{ marginTop: 16, color: '#6B7280' }}>{t('chat.loadingChat')}</Text>
+        <Text style={{ marginTop: 16, color: colors.mutedForeground }}>{t('chat.loadingChat')}</Text>
       </View>
     );
   }
@@ -1433,13 +1520,13 @@ export default function Chat() {
     const wasUnmatchedByMe = matchStatus.unmatched_by === currentProfileId;
 
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header with back button */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <MaterialCommunityIcons name="chevron-left" size={28} color="#A08AB7" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
             {isBlocked ? t('chat.blocked') : t('chat.conversationEnded')}
           </Text>
           <View style={{ width: 40 }} />
@@ -1460,11 +1547,11 @@ export default function Chat() {
               />
             </View>
 
-            <Text style={styles.unmatchedTitle}>
+            <Text style={[styles.unmatchedTitle, { color: colors.foreground }]}>
               {isBlocked ? t('chat.thisUserIsBlocked') : t('chat.thisConversationHasEnded')}
             </Text>
 
-            <Text style={styles.unmatchedMessage}>
+            <Text style={[styles.unmatchedMessage, { color: colors.mutedForeground }]}>
               {isBlocked
                 ? t('chat.blockedUserMessage')
                 : isUnmatched && wasUnmatchedByMe
@@ -1474,7 +1561,7 @@ export default function Chat() {
             </Text>
 
             {isUnmatched && (
-              <Text style={styles.unmatchedSubtext}>
+              <Text style={[styles.unmatchedSubtext, { color: colors.mutedForeground }]}>
                 {t('chat.messagesPreservedMessage')}
               </Text>
             )}
@@ -1494,17 +1581,17 @@ export default function Chat() {
 
   if (!matchProfile) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color="#A08AB7" />
-        <Text style={{ marginTop: 16, color: '#6B7280' }}>{t('chat.loading')}</Text>
+        <Text style={{ marginTop: 16, color: colors.mutedForeground }}>{t('chat.loading')}</Text>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
       {/* Dynamic Watermark Overlay for chat */}
@@ -1517,7 +1604,7 @@ export default function Chat() {
       )}
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <MaterialCommunityIcons name="chevron-left" size={28} color="#A08AB7" />
         </TouchableOpacity>
@@ -1532,7 +1619,7 @@ export default function Chat() {
           />
           <View style={styles.headerInfo}>
             <View style={styles.headerNameRow}>
-              <Text style={styles.headerName}>{matchProfile?.display_name}</Text>
+              <Text style={[styles.headerName, { color: colors.foreground }]}>{matchProfile?.display_name}</Text>
               {matchProfile?.is_verified && (
                 <MaterialCommunityIcons name="check-decagram" size={16} color="#3B82F6" />
               )}
@@ -1542,7 +1629,7 @@ export default function Chat() {
               {isOnline(matchProfile?.last_active_at || null) && !matchProfile?.hide_last_active && (
                 <View style={styles.onlineDot} />
               )}
-              <Text style={styles.encryptionText}>
+              <Text style={[styles.encryptionText, { color: colors.mutedForeground }]}>
                 {getLastActiveText(matchProfile?.last_active_at || null, matchProfile?.hide_last_active) || t('chat.secureMessaging')}
               </Text>
             </View>
@@ -1555,7 +1642,7 @@ export default function Chat() {
             <TouchableOpacity
               onPress={togglePhotoReveal}
               disabled={revealLoading}
-              style={styles.revealButton}
+              style={[styles.revealButton, { backgroundColor: isDarkColorScheme ? '#2D2D30' : '#F5F2F7' }]}
             >
               {revealLoading ? (
                 <ActivityIndicator size="small" color="#A08AB7" />
@@ -1607,8 +1694,14 @@ export default function Chat() {
       {matchProfile && (
         <ReviewPromptBanner
           onReviewPress={(prompt) => {
-            // Navigate to review screen when user taps review prompt
-            router.push(`/reviews/create?matchId=${prompt.match_id}&revieweeId=${prompt.profile1_id === currentProfileId ? prompt.profile2_id : prompt.profile1_id}`);
+            // Open review modal when user taps review prompt
+            const revieweeId = prompt.profile1_id === currentProfileId ? prompt.profile2_id : prompt.profile1_id;
+            setPendingReviewData({
+              matchId: prompt.match_id,
+              revieweeId,
+              revieweeName: prompt.reviewee_name || matchProfile.display_name,
+            });
+            setShowReviewModal(true);
           }}
         />
       )}
@@ -1643,8 +1736,8 @@ export default function Chat() {
                   <MaterialCommunityIcons name="message-text-outline" size={40} color="white" />
                 </LinearGradient>
               </View>
-              <Text style={styles.emptyTitle}>{t('chat.sayHello')}</Text>
-              <Text style={styles.emptyText}>
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t('chat.sayHello')}</Text>
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
                 {t('chat.youMatchedWith', { name: matchProfile?.display_name })} {'\n'}
                 {t('chat.startConversation')}
               </Text>
@@ -1670,7 +1763,9 @@ export default function Chat() {
       {/* Input Bar */}
       {isRecording ? (
         // Recording UI
-        <View style={[styles.recordingContainer, { paddingBottom: (insets.bottom || 4) + 8 }]}>
+        <View
+          key={`recording-${androidLayoutReady}`}
+          style={[styles.recordingContainer, { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: isDarkColorScheme ? '#3D1F1F' : '#FEF2F2', borderTopColor: isDarkColorScheme ? '#5C2C2C' : '#FEE2E2' }]}>
           <TouchableOpacity style={styles.cancelButton} onPress={handleVoiceRecordCancel}>
             <MaterialCommunityIcons name="close" size={24} color="#EF4444" />
           </TouchableOpacity>
@@ -1690,7 +1785,7 @@ export default function Chat() {
             <Text style={styles.recordingTime}>
               {Math.floor(recordingDuration / 60)}:{String(recordingDuration % 60).padStart(2, '0')}
             </Text>
-            <Text style={styles.recordingHint}>{t('chat.slideToCancel')}</Text>
+            <Text style={[styles.recordingHint, { color: colors.mutedForeground }]}>{t('chat.slideToCancel')}</Text>
           </View>
 
           <TouchableOpacity style={styles.stopButton} onPress={handleVoiceRecordStop}>
@@ -1701,27 +1796,32 @@ export default function Chat() {
         </View>
       ) : (
         // Normal input UI
-        <View style={[styles.inputContainer, {
-          paddingBottom: (insets.bottom || 4) + 8
-        }]}>
-          <TouchableOpacity style={styles.imageButton} onPress={handleImagePick} disabled={sending}>
-            <MaterialCommunityIcons name="image-outline" size={24} color={sending ? "#D1D5DB" : "#A08AB7"} />
+        <View
+          key={`input-${androidLayoutReady}`}
+          style={[styles.inputContainer, {
+            // Both iOS and Android need safe area insets for navigation bar/home indicator
+            paddingBottom: Math.max(insets.bottom, 12),
+            backgroundColor: colors.card,
+            borderTopColor: colors.border
+          }]}>
+          <TouchableOpacity style={[styles.imageButton, { backgroundColor: isDarkColorScheme ? '#2D2D30' : '#F3F4F6' }]} onPress={handleImagePick} disabled={sending}>
+            <MaterialCommunityIcons name="image-outline" size={24} color={sending ? colors.mutedForeground : "#A08AB7"} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.voiceButton}
+            style={[styles.voiceButton, { backgroundColor: isDarkColorScheme ? '#2D2D30' : '#F3F4F6' }]}
             onPress={handleVoiceRecordStart}
             onLongPress={handleVoiceRecordStart}
             disabled={sending}
           >
-            <MaterialCommunityIcons name="microphone" size={24} color={sending ? "#D1D5DB" : "#A08AB7"} />
+            <MaterialCommunityIcons name="microphone" size={24} color={sending ? colors.mutedForeground : "#A08AB7"} />
           </TouchableOpacity>
 
-          <View style={styles.inputWrapper}>
+          <View style={[styles.inputWrapper, { backgroundColor: isDarkColorScheme ? '#2D2D30' : '#F3F4F6' }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colors.foreground }]}
               placeholder={t('chat.typeMessage')}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.mutedForeground}
               value={newMessage}
               onChangeText={setNewMessage}
               multiline
@@ -1772,6 +1872,24 @@ export default function Chat() {
         feature="messaging"
       />
 
+      {/* Review Submission Modal */}
+      {pendingReviewData && (
+        <ReviewSubmissionModal
+          visible={showReviewModal}
+          onClose={() => {
+            setShowReviewModal(false);
+            setPendingReviewData(null);
+          }}
+          matchId={pendingReviewData.matchId}
+          reviewerId={currentProfileId || ''}
+          revieweeId={pendingReviewData.revieweeId}
+          revieweeName={pendingReviewData.revieweeName}
+          onReviewSubmitted={() => {
+            // Modal handles success alert internally
+          }}
+        />
+      )}
+
       {/* Image Viewer Modal */}
       <Modal
         visible={!!viewingImageUrl}
@@ -1794,6 +1912,52 @@ export default function Chat() {
               resizeMode="contain"
             />
           )}
+        </View>
+      </Modal>
+
+      {/* Update Required Modal */}
+      <Modal
+        visible={showUpdateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.updateModalOverlay}>
+          <View style={[styles.updateModalContent, { backgroundColor: colors.card }]}>
+            <MaterialCommunityIcons name="update" size={48} color="#A08AB7" />
+            <Text style={[styles.updateModalTitle, { color: colors.foreground }]}>
+              {t('chat.updateRequired')}
+            </Text>
+            <Text style={[styles.updateModalMessage, { color: colors.mutedForeground }]}>
+              {versionUpdateMessage}
+            </Text>
+            <Text style={[styles.updateModalVersion, { color: colors.mutedForeground }]}>
+              {t('chat.currentVersion')}: {getCurrentVersion()}
+            </Text>
+            <TouchableOpacity
+              style={styles.updateButton}
+              onPress={() => {
+                // Open app store - verified store URLs
+                const storeUrl = Platform.OS === 'ios'
+                  ? 'https://apps.apple.com/ca/app/accord-lavender-marriage/id6753855469'
+                  : 'https://play.google.com/store/apps/details?id=com.privyreviews.accord';
+                Linking.openURL(storeUrl);
+              }}
+            >
+              <LinearGradient colors={['#A08AB7', '#8B7AA5']} style={styles.updateButtonGradient}>
+                <MaterialCommunityIcons name="download" size={20} color="#fff" />
+                <Text style={styles.updateButtonText}>{t('chat.updateNow')}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.goBackButton}
+              onPress={() => router.back()}
+            >
+              <Text style={[styles.goBackButtonText, { color: colors.mutedForeground }]}>
+                {t('common.goBack')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </KeyboardAvoidingView>
@@ -2239,5 +2403,60 @@ const styles = StyleSheet.create({
   imageViewerImage: {
     width: '100%',
     height: '100%',
+  },
+  // Update Required Modal styles
+  updateModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  updateModalContent: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    gap: 16,
+  },
+  updateModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  updateModalMessage: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  updateModalVersion: {
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  updateButton: {
+    width: '100%',
+    marginTop: 8,
+  },
+  updateButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 8,
+  },
+  updateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  goBackButton: {
+    paddingVertical: 12,
+  },
+  goBackButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

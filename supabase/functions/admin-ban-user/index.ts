@@ -12,6 +12,9 @@ interface BanUserPayload {
   banned_by_profile_id: string;
   report_id?: string;
   admin_notes?: string;
+  // New fields for temporary bans and custom messages
+  ban_duration_hours?: number; // null/undefined = permanent, otherwise hours (24, 72, 168, 720)
+  user_message?: string; // Custom message shown to the banned user
 }
 
 serve(async (req) => {
@@ -105,17 +108,37 @@ serve(async (req) => {
       banned_until: targetUser?.banned_until
     });
 
+    // Calculate ban duration and expiry
+    const isPermanent = !payload.ban_duration_hours;
+    const banDurationHours = payload.ban_duration_hours || 876000; // ~100 years if permanent
+    const expiresAt = isPermanent ? null : new Date(Date.now() + banDurationHours * 60 * 60 * 1000);
+
+    console.log('[Ban User] Ban type:', isPermanent ? 'PERMANENT' : `TEMPORARY (${banDurationHours}h)`);
+    if (expiresAt) {
+      console.log('[Ban User] Expires at:', expiresAt.toISOString());
+    }
+
     // 1. BAN USER IN SUPABASE AUTH (CRITICAL - prevents all future logins)
     let authBanError = null;
 
     if (isAlreadyBanned) {
-      console.log('[Ban User] ⚠️ User already banned in Auth - skipping auth ban step');
+      console.log('[Ban User] ⚠️ User already banned in Auth - updating ban duration');
+      // Update ban duration even if already banned
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(
+        profile.user_id,
+        {
+          ban_duration: `${banDurationHours}h`,
+        }
+      );
+      if (error) {
+        console.warn('[Ban User] Could not update existing ban:', error);
+      }
     } else {
       console.log('[Ban User] Banning user in Auth...');
       const { error } = await supabaseAdmin.auth.admin.updateUserById(
         profile.user_id,
         {
-          ban_duration: '876000h', // ~100 years (permanent ban)
+          ban_duration: `${banDurationHours}h`,
         }
       );
       authBanError = error;
@@ -141,6 +164,8 @@ serve(async (req) => {
       .update({
         is_active: false,
         ban_reason: payload.ban_reason,
+        ban_expires_at: expiresAt?.toISOString() || null,
+        ban_user_message: payload.user_message || null,
       })
       .eq('id', payload.banned_profile_id);
 
@@ -164,8 +189,12 @@ serve(async (req) => {
         ban_reason: payload.ban_reason,
         banned_by: payload.banned_by_profile_id,
         report_id: payload.report_id,
-        is_permanent: true,
+        is_permanent: isPermanent,
+        expires_at: expiresAt?.toISOString() || null,
+        ban_duration_hours: payload.ban_duration_hours || null,
+        user_message: payload.user_message || null,
         admin_notes: payload.admin_notes,
+        appeal_status: 'none',
       });
 
     if (banRecordError) {
@@ -205,6 +234,9 @@ serve(async (req) => {
       was_already_banned: isAlreadyBanned,
       profile_deactivated: !profileError,
       ban_record_created: !banRecordError,
+      is_permanent: isPermanent,
+      expires_at: expiresAt?.toISOString() || null,
+      ban_duration_hours: payload.ban_duration_hours || null,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,

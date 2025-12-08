@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import { getPrivateKey, decryptMessage } from '@/lib/encryption';
 import { useScreenProtection } from '@/hooks/useScreenProtection';
+import { useColorScheme } from '@/lib/useColorScheme';
 
 interface Conversation {
   match_id: string;
@@ -44,6 +45,7 @@ export default function Messages() {
   const { user } = useAuth();
   const { isPremium } = useSubscription();
   const insets = useSafeAreaInsets();
+  const { colors, isDarkColorScheme } = useColorScheme();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,7 +187,7 @@ export default function Messages() {
           const isRevealed = !!revealData;
 
           // Decrypt last message if available
-          let decryptedContent = lastMessage?.encrypted_content;
+          let decryptedContent: string | undefined;
           if (lastMessage && profile?.encryption_public_key) {
             try {
               const privateKey = await getPrivateKey(user?.id || '');
@@ -199,11 +201,24 @@ export default function Messages() {
                   privateKey,
                   senderKey
                 );
+              } else {
+                // No private key available - show placeholder
+                decryptedContent = t('messages.encryptedMessage');
               }
             } catch (error) {
               console.log('Could not decrypt preview:', error);
-              // Fall back to showing encrypted content or placeholder
+              // Fall back to placeholder on any decryption error
               decryptedContent = t('messages.encryptedMessage');
+            }
+          } else if (lastMessage) {
+            // No encryption key for other user - check if message looks encrypted
+            const content = lastMessage.encrypted_content;
+            if (content && content.includes(':') && /^[A-Za-z0-9+/=]+:/.test(content)) {
+              // Looks like encrypted content
+              decryptedContent = t('messages.encryptedMessage');
+            } else {
+              // Plain text (legacy message)
+              decryptedContent = content;
             }
           }
 
@@ -674,7 +689,7 @@ export default function Messages() {
         transition={{ type: 'timing', duration: 300, delay: index * 50 }}
       >
         <TouchableOpacity
-          style={styles.conversationCard}
+          style={[styles.conversationCard, { backgroundColor: colors.card }]}
           onPress={() => handleConversationPress(item)}
           onLongPress={() => handleConversationLongPress(item)}
           activeOpacity={0.7}
@@ -683,12 +698,12 @@ export default function Messages() {
           <View style={styles.photoContainer}>
             <Image
               source={{ uri: item.profile.photo_url || 'https://via.placeholder.com/64' }}
-              style={styles.photo}
+              style={[styles.photo, { backgroundColor: colors.muted }]}
               blurRadius={item.profile.photo_blur_enabled && !item.profile.is_revealed ? 30 : 0}
             />
             {item.profile.is_verified && (
-              <View style={styles.verifiedBadge}>
-                <MaterialCommunityIcons name="check-decagram" size={16} color="#3B82F6" />
+              <View style={[styles.verifiedBadge, { backgroundColor: colors.background }]}>
+                <MaterialCommunityIcons name="check-decagram" size={16} color={colors.info} />
               </View>
             )}
             {hasUnread && <View style={styles.unreadDot} />}
@@ -699,17 +714,17 @@ export default function Messages() {
             <View style={styles.conversationHeader}>
               <View style={styles.nameRow}>
                 {item.is_pinned && (
-                  <MaterialCommunityIcons name="pin" size={16} color="#A08AB7" style={{ marginRight: 4 }} />
+                  <MaterialCommunityIcons name="pin" size={16} color={colors.primary} style={{ marginRight: 4 }} />
                 )}
-                <Text style={styles.conversationName} numberOfLines={1}>
+                <Text style={[styles.conversationName, { color: colors.foreground }]} numberOfLines={1}>
                   {item.profile.display_name}
                 </Text>
                 {item.is_muted && (
-                  <MaterialCommunityIcons name="bell-off" size={14} color="#9CA3AF" style={{ marginLeft: 6 }} />
+                  <MaterialCommunityIcons name="bell-off" size={14} color={colors.mutedForeground} style={{ marginLeft: 6 }} />
                 )}
               </View>
               {item.last_message && (
-                <Text style={styles.timestamp}>{getTimeAgo(item.last_message.created_at)}</Text>
+                <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>{getTimeAgo(item.last_message.created_at)}</Text>
               )}
             </View>
 
@@ -717,7 +732,7 @@ export default function Messages() {
             {item.last_message ? (
               <View style={styles.messageRow}>
                 <Text
-                  style={[styles.lastMessage, hasUnread && styles.lastMessageUnread]}
+                  style={[styles.lastMessage, { color: colors.mutedForeground }, hasUnread && { color: colors.foreground, fontWeight: '600' }]}
                   numberOfLines={2}
                 >
                   {item.last_message.sender_profile_id === currentProfileId ? t('matches.youLabel') : ''}
@@ -727,7 +742,7 @@ export default function Messages() {
                   <MaterialCommunityIcons
                     name={item.last_message.read_at ? "check-all" : "check"}
                     size={16}
-                    color={item.last_message.read_at ? "#3B82F6" : "#9CA3AF"}
+                    color={item.last_message.read_at ? colors.info : colors.mutedForeground}
                     style={{ marginLeft: 4 }}
                   />
                 )}
@@ -739,14 +754,14 @@ export default function Messages() {
               </View>
             ) : (
               <View style={styles.ctaRow}>
-                <MaterialCommunityIcons name="chat-outline" size={14} color="#9B87CE" />
-                <Text style={styles.ctaText}>{t('messages.startConversation')}</Text>
+                <MaterialCommunityIcons name="chat-outline" size={14} color={colors.primary} />
+                <Text style={[styles.ctaText, { color: colors.primary }]}>{t('messages.startConversation')}</Text>
               </View>
             )}
           </View>
 
           {/* Chevron */}
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.grey3} />
         </TouchableOpacity>
       </MotiView>
     );
@@ -755,16 +770,16 @@ export default function Messages() {
   // Loading state
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>{t('messages.title')}</Text>
-          <Text style={styles.headerSubtitle}>{t('messages.subtitle')}</Text>
+        <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('messages.title')}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('messages.subtitle')}</Text>
         </View>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#A08AB7" />
-          <Text style={styles.loadingText}>{t('messages.loadingMessages')}</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>{t('messages.loadingMessages')}</Text>
         </View>
       </View>
     );
@@ -773,11 +788,11 @@ export default function Messages() {
   // Empty state
   if (conversations.length === 0) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>{t('messages.title')}</Text>
-          <Text style={styles.headerSubtitle}>{t('messages.subtitle')}</Text>
+        <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('messages.title')}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('messages.subtitle')}</Text>
         </View>
 
         <View style={styles.emptyContainer}>
@@ -791,8 +806,8 @@ export default function Messages() {
                 <MaterialCommunityIcons name="chat-outline" size={48} color="white" />
               </LinearGradient>
             </View>
-            <Text style={styles.emptyTitle}>{t('messages.noMessagesYet')}</Text>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t('messages.noMessagesYet')}</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
               {t('messages.noMessagesText')}
             </Text>
             <TouchableOpacity
@@ -812,12 +827,12 @@ export default function Messages() {
 
   // Conversations list
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View>
-          <Text style={styles.headerTitle}>{t('messages.title')}</Text>
-          <Text style={styles.headerSubtitle}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('messages.title')}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
             {showArchived
               ? t('messages.archivedConversations')
               : conversations.length === 1
@@ -832,14 +847,14 @@ export default function Messages() {
             setConversations([]); // Clear to trigger reload
             setLoading(true);
           }}
-          style={styles.archiveButton}
+          style={[styles.archiveButton, { backgroundColor: colors.muted }]}
         >
           <MaterialCommunityIcons
             name={showArchived ? "inbox" : "archive"}
             size={24}
-            color="white"
+            color={colors.primary}
           />
-          <Text style={styles.archiveButtonText}>
+          <Text style={[styles.archiveButtonText, { color: colors.primary }]}>
             {showArchived ? t('messages.activeButton') : t('messages.archiveButton')}
           </Text>
         </TouchableOpacity>
@@ -882,14 +897,14 @@ export default function Messages() {
           style={styles.modalOverlay}
           onPress={() => setShowActionSheet(false)}
         >
-          <Pressable style={[styles.actionSheet, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[styles.actionSheet, { paddingBottom: Math.max(insets.bottom, 20) + 20, backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
             {/* Header */}
-            <View style={styles.actionSheetHeader}>
-              <Text style={styles.actionSheetTitle}>
+            <View style={[styles.actionSheetHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.actionSheetTitle, { color: colors.foreground }]}>
                 {selectedConversation?.profile.display_name}
               </Text>
               <Pressable onPress={() => setShowActionSheet(false)}>
-                <MaterialCommunityIcons name="close" size={24} color="#9CA3AF" />
+                <MaterialCommunityIcons name="close" size={24} color={colors.mutedForeground} />
               </Pressable>
             </View>
 
@@ -899,9 +914,9 @@ export default function Messages() {
                 style={styles.actionItem}
                 onPress={() => handleActionSelect('view_profile')}
               >
-                <MaterialCommunityIcons name="account" size={24} color="#6B7280" />
-                <Text style={styles.actionText}>{t('messages.actions.viewProfile')}</Text>
-                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                <MaterialCommunityIcons name="account" size={24} color={colors.grey} />
+                <Text style={[styles.actionText, { color: colors.foreground }]}>{t('messages.actions.viewProfile')}</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.grey3} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -911,12 +926,12 @@ export default function Messages() {
                 <MaterialCommunityIcons
                   name="pin"
                   size={24}
-                  color={selectedConversation?.is_pinned ? '#A08AB7' : '#6B7280'}
+                  color={selectedConversation?.is_pinned ? colors.primary : colors.grey}
                 />
-                <Text style={styles.actionText}>
+                <Text style={[styles.actionText, { color: colors.foreground }]}>
                   {selectedConversation?.is_pinned ? t('messages.actions.unpinConversation') : t('messages.actions.pinConversation')}
                 </Text>
-                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.grey3} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -926,12 +941,12 @@ export default function Messages() {
                 <MaterialCommunityIcons
                   name={selectedConversation?.is_muted ? 'bell-ring' : 'bell-off'}
                   size={24}
-                  color="#6B7280"
+                  color={colors.grey}
                 />
-                <Text style={styles.actionText}>
+                <Text style={[styles.actionText, { color: colors.foreground }]}>
                   {selectedConversation?.is_muted ? t('messages.actions.unmuteNotifications') : t('messages.actions.muteNotifications')}
                 </Text>
-                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.grey3} />
               </TouchableOpacity>
 
               {selectedConversation?.last_message && selectedConversation.unread_count === 0 && (
@@ -939,9 +954,9 @@ export default function Messages() {
                   style={styles.actionItem}
                   onPress={() => handleActionSelect('mark_unread')}
                 >
-                  <MaterialCommunityIcons name="email-mark-as-unread" size={24} color="#6B7280" />
-                  <Text style={styles.actionText}>{t('messages.actions.markAsUnread')}</Text>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                  <MaterialCommunityIcons name="email-mark-as-unread" size={24} color={colors.grey} />
+                  <Text style={[styles.actionText, { color: colors.foreground }]}>{t('messages.actions.markAsUnread')}</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.grey3} />
                 </TouchableOpacity>
               )}
 
@@ -952,39 +967,39 @@ export default function Messages() {
                 <MaterialCommunityIcons
                   name={showArchived ? 'inbox' : 'archive'}
                   size={24}
-                  color="#6B7280"
+                  color={colors.grey}
                 />
-                <Text style={styles.actionText}>
+                <Text style={[styles.actionText, { color: colors.foreground }]}>
                   {showArchived ? t('messages.actions.unarchive') : t('messages.actions.archive')}
                 </Text>
-                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.grey3} />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.actionItem}
                 onPress={() => handleActionSelect('report')}
               >
-                <MaterialCommunityIcons name="flag" size={24} color="#6B7280" />
-                <Text style={styles.actionText}>{t('messages.actions.report')}</Text>
-                <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                <MaterialCommunityIcons name="flag" size={24} color={colors.grey} />
+                <Text style={[styles.actionText, { color: colors.foreground }]}>{t('messages.actions.report')}</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.grey3} />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.actionItem, styles.actionItemDanger]}
                 onPress={() => handleActionSelect('block')}
               >
-                <MaterialCommunityIcons name="block-helper" size={24} color="#EF4444" />
-                <Text style={[styles.actionText, styles.actionTextDanger]}>{t('messages.actions.block')}</Text>
-                <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
+                <MaterialCommunityIcons name="block-helper" size={24} color={colors.destructive} />
+                <Text style={[styles.actionText, { color: colors.destructive }]}>{t('messages.actions.block')}</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.destructive} />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.actionItem, styles.actionItemDanger]}
                 onPress={() => handleActionSelect('delete')}
               >
-                <MaterialCommunityIcons name="delete" size={24} color="#EF4444" />
-                <Text style={[styles.actionText, styles.actionTextDanger]}>{t('messages.actions.deleteConversation')}</Text>
-                <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
+                <MaterialCommunityIcons name="delete" size={24} color={colors.destructive} />
+                <Text style={[styles.actionText, { color: colors.destructive }]}>{t('messages.actions.deleteConversation')}</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.destructive} />
               </TouchableOpacity>
             </View>
           </Pressable>

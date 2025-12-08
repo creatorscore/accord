@@ -1,13 +1,6 @@
 import Expo
 import React
 import ReactAppDependencyProvider
-import ObjectiveC
-import UIKit
-
-// MARK: - Screenshot Protection
-// NOTE: Native iOS screenshot protection via layer manipulation causes crashes
-// due to CALayer cycle issues. Using react-native-capture-protection instead
-// which handles this at the React Native level.
 
 @UIApplicationMain
 public class AppDelegate: ExpoAppDelegate {
@@ -30,7 +23,6 @@ public class AppDelegate: ExpoAppDelegate {
 
 #if os(iOS) || os(tvOS)
     window = UIWindow(frame: UIScreen.main.bounds)
-
     factory.startReactNative(
       withModuleName: "main",
       in: window,
@@ -58,7 +50,6 @@ public class AppDelegate: ExpoAppDelegate {
     let result = RCTLinkingManager.application(application, continue: userActivity, restorationHandler: restorationHandler)
     return super.application(application, continue: userActivity, restorationHandler: restorationHandler) || result
   }
-
 }
 
 class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {

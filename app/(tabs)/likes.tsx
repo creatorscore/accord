@@ -333,7 +333,7 @@ export default function Likes() {
     return (
       <View className="flex-1 bg-background">
         {/* Header */}
-        <View className="bg-white px-6 pb-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
+        <View className="bg-background dark:bg-background px-6 pb-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
           <Text className="text-heading-2xl font-display-bold text-foreground mb-2">{t('likes.title')}</Text>
           <Text className="text-body-lg font-sans text-muted-foreground">{t('likes.subtitle')}</Text>
         </View>
@@ -400,7 +400,7 @@ export default function Likes() {
   return (
     <View className="flex-1 bg-background">
       {/* Header */}
-      <View className="bg-white px-6 pb-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
+      <View className="bg-background dark:bg-background px-6 pb-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
         <Text className="text-heading-2xl font-display-bold text-foreground mb-2">
           {t('likes.title')} ({likes.length})
         </Text>

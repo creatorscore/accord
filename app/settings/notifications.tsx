@@ -115,14 +115,22 @@ export default function NotificationSettings() {
       }
 
       // Request permissions and get token
-      const token = await registerForPushNotifications();
+      let token: string | null = null;
+      let tokenError: string | null = null;
+
+      try {
+        token = await registerForPushNotifications();
+      } catch (err: any) {
+        tokenError = err?.message || String(err);
+        console.error('Token registration error:', err);
+      }
 
       if (!token) {
         Alert.alert(
           'Unable to Enable',
           Platform.OS === 'ios'
             ? 'Push notifications require a physical device and proper permissions.'
-            : 'Failed to get notification token. Please try again.'
+            : `Failed to get notification token.${tokenError ? `\n\nError: ${tokenError}` : ''}\n\nPlease ensure Google Play Services is up to date.`
         );
         return;
       }

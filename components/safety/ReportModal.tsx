@@ -11,6 +11,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -42,6 +43,7 @@ export default function ReportModal({
   onSubmit,
   profileName,
 }: ReportModalProps) {
+  const insets = useSafeAreaInsets();
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -303,7 +305,7 @@ export default function ReportModal({
           </ScrollView>
 
           {/* Actions */}
-          <View style={styles.actions}>
+          <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, 20) }]}>
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={handleClose}

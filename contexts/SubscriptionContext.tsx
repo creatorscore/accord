@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { InteractionManager } from 'react-native';
 import { CustomerInfo } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import {
@@ -41,21 +42,31 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const isDatabaseOnlyMode = false;
 
   // Load premium status from database (for both dev and production as fallback)
+  // Use InteractionManager to defer database query until after navigation animations complete
   useEffect(() => {
-    console.log('🔄 SubscriptionContext: useEffect triggered', {
-      hasUser: !!user,
-      userId: user?.id,
-      appEnv: process.env.EXPO_PUBLIC_APP_ENV,
-      isDatabaseOnlyMode
-    });
+    if (__DEV__) {
+      console.log('🔄 SubscriptionContext: useEffect triggered', {
+        hasUser: !!user,
+        userId: user?.id,
+        appEnv: process.env.EXPO_PUBLIC_APP_ENV,
+        isDatabaseOnlyMode
+      });
+    }
     if (user) {
-      console.log('📞 Calling loadDatabasePremiumStatus...');
-      loadDatabasePremiumStatus();
+      if (__DEV__) {
+        console.log('📞 Calling loadDatabasePremiumStatus...');
+      }
+      // Defer database query to avoid blocking main thread during navigation
+      InteractionManager.runAfterInteractions(() => {
+        loadDatabasePremiumStatus();
+      });
     }
   }, [user]);
 
   const loadDatabasePremiumStatus = async () => {
-    console.log('🔍 Loading premium status from database for user:', user?.id);
+    if (__DEV__) {
+      console.log('🔍 Loading premium status from database for user:', user?.id);
+    }
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -63,18 +74,24 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .eq('user_id', user?.id)
         .maybeSingle();
 
-      console.log('📊 Database query result:', { data, error });
+      if (__DEV__) {
+        console.log('📊 Database query result:', { data, error });
+      }
 
       // If profile doesn't exist yet (user is in onboarding), silently return
       if (error) {
-        console.log('Error loading premium status:', error.message);
+        if (__DEV__) {
+          console.log('Error loading premium status:', error.message);
+        }
         setDbPremiumStatus(false);
         setDbPlatinumStatus(false);
         return;
       }
 
       if (!data) {
-        console.log('Profile not found yet - user likely in onboarding. Premium status will be loaded after profile creation.');
+        if (__DEV__) {
+          console.log('Profile not found yet - user likely in onboarding. Premium status will be loaded after profile creation.');
+        }
         setDbPremiumStatus(false);
         setDbPlatinumStatus(false);
         return;
@@ -83,7 +100,9 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const premium = data?.is_premium || false;
       const platinum = data?.is_platinum || false;
 
-      console.log('✅ Setting premium status:', { premium, platinum });
+      if (__DEV__) {
+        console.log('✅ Setting premium status:', { premium, platinum });
+      }
       setDbPremiumStatus(premium);
       setDbPlatinumStatus(platinum);
     } catch (error) {
@@ -188,13 +207,15 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const platinum = freshCustomerInfo ? hasPlatinum(freshCustomerInfo) : isPlatinum;
       const tier = freshCustomerInfo ? getSubscriptionTier(freshCustomerInfo) : subscriptionTier;
 
-      console.log('🔄 Syncing subscription to database:', {
-        profileId: profile.id,
-        isPremium: premium,
-        isPlatinum: platinum,
-        tier,
-        usingFreshData: !!freshCustomerInfo,
-      });
+      if (__DEV__) {
+        console.log('🔄 Syncing subscription to database:', {
+          profileId: profile.id,
+          isPremium: premium,
+          isPlatinum: platinum,
+          tier,
+          usingFreshData: !!freshCustomerInfo,
+        });
+      }
 
       // Update profiles table
       await supabase
@@ -222,7 +243,9 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         );
       }
 
-      console.log('✅ Subscription synced to database');
+      if (__DEV__) {
+        console.log('✅ Subscription synced to database');
+      }
     } catch (error) {
       console.error('❌ Error syncing subscription to database:', error);
     }
@@ -246,17 +269,19 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     ? (dbPlatinumStatus ? 'platinum' : dbPremiumStatus ? 'premium' : null)
     : (getSubscriptionTier(customerInfo) || (dbPlatinumStatus ? 'platinum' : dbPremiumStatus ? 'premium' : null));
 
-  // Debug log computed values
-  console.log('💎 Subscription Status:', {
-    appEnv: process.env.EXPO_PUBLIC_APP_ENV,
-    isDatabaseOnlyMode,
-    dbPremiumStatus,
-    dbPlatinumStatus,
-    isSubscribed,
-    isPremium,
-    isPlatinum,
-    subscriptionTier
-  });
+  // Debug log computed values (only in development to avoid main thread work in production)
+  if (__DEV__) {
+    console.log('💎 Subscription Status:', {
+      appEnv: process.env.EXPO_PUBLIC_APP_ENV,
+      isDatabaseOnlyMode,
+      dbPremiumStatus,
+      dbPlatinumStatus,
+      isSubscribed,
+      isPremium,
+      isPlatinum,
+      subscriptionTier
+    });
+  }
 
   const checkFeature = useCallback(
     (feature: string) => {
