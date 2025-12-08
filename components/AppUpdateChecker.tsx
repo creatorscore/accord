@@ -16,9 +16,9 @@ import { supabase } from '@/lib/supabase';
 // Get current app version from app.json
 const CURRENT_VERSION = Constants.expoConfig?.version || '1.0.0';
 
-// Store links
-const APP_STORE_URL = 'https://apps.apple.com/app/accord-lavender-marriage/id6738970337';
-const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.joinaccord.app';
+// Store links - verified URLs
+const APP_STORE_URL = 'https://apps.apple.com/ca/app/accord-lavender-marriage/id6753855469';
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.privyreviews.accord';
 
 interface UpdateInfo {
   latest_version: string;

@@ -19,6 +19,7 @@ import ModerationMenu from '@/components/moderation/ModerationMenu';
 import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import { logScreenshotEvent } from '@/lib/screenshot-tracking';
+import { useColorScheme } from '@/lib/useColorScheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -191,6 +192,7 @@ export default function ProfileView() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
+  const { colors, isDarkColorScheme } = useColorScheme();
   const insets = useSafeAreaInsets();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [currentProfile, setCurrentProfile] = useState<any>(null);
@@ -795,7 +797,7 @@ export default function ProfileView() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-white items-center justify-center">
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color="#A08AB7" />
       </View>
     );
@@ -803,8 +805,8 @@ export default function ProfileView() {
 
   if (!profile) {
     return (
-      <View className="flex-1 bg-white items-center justify-center">
-        <Text className="text-gray-600">Profile not found</Text>
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: colors.mutedForeground }}>Profile not found</Text>
       </View>
     );
   }
@@ -852,19 +854,20 @@ export default function ProfileView() {
   }
 
   return (
-    <View className="flex-1 bg-gray-50">
-      <StatusBar barStyle="light-content" />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDarkColorScheme ? "light-content" : "dark-content"} />
 
       {/* Back Button */}
       <TouchableOpacity
-        className="absolute top-12 left-4 z-10 bg-white/90 rounded-full p-2 shadow-lg"
+        style={{ backgroundColor: isDarkColorScheme ? 'rgba(30,30,32,0.9)' : 'rgba(255,255,255,0.9)' }}
+        className="absolute top-12 left-4 z-10 rounded-full p-2 shadow-lg"
         onPress={() => router.back()}
       >
-        <MaterialCommunityIcons name="arrow-left" size={24} color="#374151" />
+        <MaterialCommunityIcons name="arrow-left" size={24} color={colors.foreground} />
       </TouchableOpacity>
 
       {/* Report/Block Menu */}
-      <View className="absolute top-12 right-4 z-10 bg-white/90 rounded-full shadow-lg">
+      <View style={{ backgroundColor: isDarkColorScheme ? 'rgba(30,30,32,0.9)' : 'rgba(255,255,255,0.9)' }} className="absolute top-12 right-4 z-10 rounded-full shadow-lg">
         <ModerationMenu
           profileId={id}
           profileName={profile.display_name}
@@ -1483,7 +1486,7 @@ export default function ProfileView() {
               animate={{ opacity: 1, translateY: 0 }}
               transition={{ type: 'timing', duration: 500 }}
               style={{
-                backgroundColor: 'white',
+                backgroundColor: colors.card,
                 borderRadius: 20,
                 padding: 20,
                 marginBottom: 16,
@@ -1496,7 +1499,7 @@ export default function ProfileView() {
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
                 <MaterialCommunityIcons name="heart-multiple" size={24} color="#A08AB7" />
-                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827', marginLeft: 12 }}>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.foreground, marginLeft: 12 }}>
                   Why We Match
                 </Text>
               </View>
@@ -1668,7 +1671,9 @@ export default function ProfileView() {
       {/* Fixed Action Buttons with Animations */}
       {!isMatched ? (
         <LinearGradient
-          colors={['transparent', 'rgba(255,255,255,0.9)', 'white']}
+          colors={isDarkColorScheme
+            ? ['transparent', 'rgba(10,10,11,0.9)', colors.background]
+            : ['transparent', 'rgba(255,255,255,0.9)', colors.background]}
           className="absolute bottom-0 left-0 right-0 pt-8"
           style={{ paddingBottom: Math.max(insets.bottom, 32) }}
         >
@@ -1680,7 +1685,8 @@ export default function ProfileView() {
               transition={{ type: 'spring', delay: 100 }}
             >
               <TouchableOpacity
-                className="bg-white rounded-full w-14 h-14 items-center justify-center shadow-xl border border-gray-200"
+                style={{ backgroundColor: colors.card, borderColor: colors.border }}
+                className="rounded-full w-14 h-14 items-center justify-center shadow-xl border"
                 onPress={handlePass}
                 disabled={isLiked || isSuperLiked}
               >
@@ -1719,9 +1725,8 @@ export default function ProfileView() {
               transition={{ type: 'spring', delay: 300 }}
             >
               <TouchableOpacity
-                className={`rounded-full w-14 h-14 items-center justify-center shadow-xl ${
-                  isLiked ? 'bg-green-500' : 'bg-white border border-gray-200'
-                }`}
+                style={isLiked ? { backgroundColor: '#22C55E' } : { backgroundColor: colors.card, borderColor: colors.border }}
+                className="rounded-full w-14 h-14 items-center justify-center shadow-xl border"
                 onPress={handleLike}
                 disabled={isLiked || isSuperLiked}
               >
@@ -1743,7 +1748,9 @@ export default function ProfileView() {
         </LinearGradient>
       ) : (
         <LinearGradient
-          colors={['transparent', 'rgba(255,255,255,0.9)', 'white']}
+          colors={isDarkColorScheme
+            ? ['transparent', 'rgba(10,10,11,0.9)', colors.background]
+            : ['transparent', 'rgba(255,255,255,0.9)', colors.background]}
           className="absolute bottom-0 left-0 right-0 pt-8"
           style={{ paddingBottom: Math.max(insets.bottom, 32) }}
         >
@@ -1753,11 +1760,8 @@ export default function ProfileView() {
               <TouchableOpacity
                 onPress={togglePhotoReveal}
                 disabled={revealLoading}
-                className={`rounded-full py-3 shadow-lg border-2 ${
-                  hasRevealedPhotos
-                    ? 'bg-white border-purple-600'
-                    : 'bg-purple-100 border-purple-300'
-                }`}
+                style={hasRevealedPhotos ? { backgroundColor: colors.card, borderColor: '#9333EA' } : { backgroundColor: isDarkColorScheme ? '#3B2A4D' : '#F3E8FF', borderColor: '#D8B4FE' }}
+                className="rounded-full py-3 shadow-lg border-2"
               >
                 <View className="flex-row items-center justify-center gap-2">
                   {revealLoading ? (
@@ -1784,9 +1788,9 @@ export default function ProfileView() {
                 <MaterialCommunityIcons
                   name={otherUserRevealed ? "lock-open" : "lock"}
                   size={16}
-                  color={otherUserRevealed ? "#10B981" : "#6B7280"}
+                  color={otherUserRevealed ? "#10B981" : colors.mutedForeground}
                 />
-                <Text className="text-xs text-gray-600">
+                <Text style={{ color: colors.mutedForeground }} className="text-xs">
                   {otherUserRevealed
                     ? `${profile.display_name} revealed their photos to you`
                     : `${profile.display_name}'s photos are blurred`}
@@ -1806,10 +1810,10 @@ export default function ProfileView() {
                 </View>
               </TouchableOpacity>
             ) : (
-              <View className="bg-gray-200 rounded-full py-4">
+              <View style={{ backgroundColor: isDarkColorScheme ? '#2D2D30' : '#E5E7EB' }} className="rounded-full py-4">
                 <View className="flex-row items-center justify-center gap-2">
-                  <MaterialCommunityIcons name="eye" size={24} color="#6B7280" />
-                  <Text className="text-gray-500 text-lg font-semibold">Viewing Profile</Text>
+                  <MaterialCommunityIcons name="eye" size={24} color={colors.mutedForeground} />
+                  <Text style={{ color: colors.mutedForeground }} className="text-lg font-semibold">Viewing Profile</Text>
                 </View>
               </View>
             )}

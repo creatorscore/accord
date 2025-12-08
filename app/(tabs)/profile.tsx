@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
+import { useColorScheme } from '@/lib/useColorScheme';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import ProfilePhotoCarousel from '@/components/profile/ProfilePhotoCarousel';
 import ProfileStoryCard from '@/components/profile/ProfileStoryCard';
@@ -96,6 +97,7 @@ export default function Profile() {
   const { t } = useTranslation();
   const { user, signOut } = useAuth();
   const { isPremium, isPlatinum, subscriptionTier, isLoading: subscriptionLoading } = useSubscription();
+  const { colors, isDarkColorScheme } = useColorScheme();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
@@ -265,10 +267,10 @@ export default function Profile() {
 
   if (loading || subscriptionLoading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#A08AB7" />
-          <Text style={styles.loadingText}>{t('profile.loadingProfile')}</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>{t('profile.loadingProfile')}</Text>
         </View>
       </View>
     );
@@ -306,8 +308,8 @@ export default function Profile() {
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDarkColorScheme ? "light-content" : "dark-content"} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Enhanced Photo Carousel */}
@@ -395,7 +397,7 @@ export default function Profile() {
               <Text style={{
                 fontSize: 20,
                 fontWeight: 'bold',
-                color: '#111827',
+                color: colors.foreground,
                 marginBottom: 12,
               }}>{t('profile.myInterests')}</Text>
               <View style={{
@@ -412,8 +414,11 @@ export default function Profile() {
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ type: 'spring', delay: index * 50 }}
                     style={{
-                      backgroundColor: index % 3 === 0 ? '#F5F2F7' :
-                                       index % 3 === 1 ? '#FEF3C7' : '#DBEAFE',
+                      backgroundColor: isDarkColorScheme
+                        ? (index % 3 === 0 ? 'rgba(160, 138, 183, 0.2)' :
+                           index % 3 === 1 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(59, 130, 246, 0.2)')
+                        : (index % 3 === 0 ? '#F5F2F7' :
+                           index % 3 === 1 ? '#FEF3C7' : '#DBEAFE'),
                       paddingHorizontal: 16,
                       paddingVertical: 8,
                       borderRadius: 20,
@@ -484,7 +489,7 @@ export default function Profile() {
 
           {/* Preview Profile Button */}
           <TouchableOpacity
-            style={styles.previewProfileButton}
+            style={[styles.previewProfileButton, { backgroundColor: colors.card }]}
             onPress={handlePreviewProfile}
           >
             <MaterialCommunityIcons name="eye-outline" size={20} color="#A08AB7" />
@@ -607,32 +612,32 @@ export default function Profile() {
 
           {/* Menu Items */}
           <View style={styles.menuSection}>
-        <Text style={styles.menuSectionTitle}>{t('profile.account')}</Text>
+        <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>{t('profile.account')}</Text>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/privacy')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="cog-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.settingsPrivacy')}</Text>
+            <MaterialCommunityIcons name="cog-outline" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.settingsPrivacy')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/notifications')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="bell-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.notifications')}</Text>
+            <MaterialCommunityIcons name="bell-outline" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.notifications')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/screenshot-alerts')}
         >
           <View style={styles.menuItemLeft}>
@@ -643,7 +648,7 @@ export default function Profile() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/matching-preferences')}
         >
           <View style={styles.menuItemLeft}>
@@ -654,108 +659,119 @@ export default function Profile() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/language')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="translate" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.language')}</Text>
+            <MaterialCommunityIcons name="translate" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.language')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
+          onPress={() => router.push('/settings/appearance')}
+        >
+          <View style={styles.menuItemLeft}>
+            <MaterialCommunityIcons name="theme-light-dark" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.appearance')}</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/reviews/my-reviews')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="star-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.myReviews')}</Text>
+            <MaterialCommunityIcons name="star-outline" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.myReviews')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/review-settings')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="star-settings-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.reviewSettings')}</Text>
+            <MaterialCommunityIcons name="star-settings-outline" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.reviewSettings')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/privacy')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="shield-check-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.photoVerification')}</Text>
+            <MaterialCommunityIcons name="shield-check-outline" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.photoVerification')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/subscription')}
         >
           <View style={styles.menuItemLeft}>
             <MaterialCommunityIcons
               name={isPremium ? "credit-card-outline" : "crown-outline"}
               size={24}
-              color={isPremium ? "#6B7280" : "#A08AB7"}
+              color={isPremium ? colors.mutedForeground : "#A08AB7"}
             />
-            <Text style={[styles.menuItemText, !isPremium && { color: '#A08AB7', fontWeight: '600' }]}>
+            <Text style={[styles.menuItemText, { color: isPremium ? colors.foreground : '#A08AB7' }, !isPremium && { fontWeight: '600' }]}>
               {isPremium ? t('profile.manageSubscription') : t('profile.upgradeToPremium')}
             </Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={isPremium ? "#D1D5DB" : "#A08AB7"} />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={isPremium ? colors.border : "#A08AB7"} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/safety-center')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="shield-check-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.safetyCenter')}</Text>
+            <MaterialCommunityIcons name="shield-check-outline" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.safetyCenter')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/blocked-users')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="cancel" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.blockedUsers')}</Text>
+            <MaterialCommunityIcons name="cancel" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.blockedUsers')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/contact-blocking')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="phone-off" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.blockContacts')}</Text>
+            <MaterialCommunityIcons name="phone-off" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.blockContacts')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/country-blocking')}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="earth-off" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.blockCountries')}</Text>
+            <MaterialCommunityIcons name="earth-off" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.blockCountries')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
 
         {/* Admin Panel - Only visible to admins */}
@@ -820,25 +836,25 @@ export default function Profile() {
         )}
 
         <TouchableOpacity
-          style={styles.menuItem}
+          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => {
             Linking.openURL('mailto:hello@joinaccord.app?subject=Support Request&body=Hi Accord Team,\n\n');
           }}
         >
           <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="help-circle-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>{t('profile.helpSupport')}</Text>
+            <MaterialCommunityIcons name="help-circle-outline" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.helpSupport')}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#D1D5DB" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
           </View>
 
           {/* Danger Zone */}
           <View style={styles.menuSection}>
-        <Text style={styles.menuSectionTitle}>{t('profile.dangerZone')}</Text>
+        <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>{t('profile.dangerZone')}</Text>
 
         <TouchableOpacity
-          style={[styles.menuItem, { borderColor: '#FEE2E2', borderWidth: 1 }]}
+          style={[styles.menuItem, { backgroundColor: colors.card, borderColor: '#FEE2E2', borderWidth: 1 }]}
           onPress={() => router.push('/settings/delete-account')}
         >
           <View style={styles.menuItemLeft}>
@@ -859,7 +875,7 @@ export default function Profile() {
           </TouchableOpacity>
 
           {/* App Info */}
-          <Text style={styles.appVersion}>{t('profile.appVersion')}</Text>
+          <Text style={[styles.appVersion, { color: colors.mutedForeground }]}>{t('profile.appVersion')}</Text>
 
           {/* Spacing */}
           <View style={{ height: 40 }} />

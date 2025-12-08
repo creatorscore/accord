@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet, Keyboard } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
@@ -64,6 +64,38 @@ export default function SignUp() {
 
     setLoading(true);
     try {
+      // Check if email already exists and get the provider
+      const { data: emailCheck } = await supabase.rpc('check_email_provider', {
+        check_email: email.toLowerCase(),
+      });
+
+      if (emailCheck && emailCheck.length > 0 && emailCheck[0].email_exists) {
+        const provider = emailCheck[0].auth_provider;
+        let errorMessage = t('auth.signUp.errorAccountExistsMessage');
+
+        if (provider === 'google') {
+          errorMessage = t('auth.signUp.errorAccountExistsGoogle');
+        } else if (provider === 'apple') {
+          errorMessage = t('auth.signUp.errorAccountExistsApple');
+        } else if (provider === 'email') {
+          errorMessage = t('auth.signUp.errorAccountExistsEmail');
+        }
+
+        Alert.alert(
+          t('auth.signUp.errorAccountExists'),
+          errorMessage,
+          [
+            { text: t('auth.signIn.gotIt'), style: 'cancel' },
+            {
+              text: t('auth.signUp.signInLink'),
+              onPress: () => router.push('/(auth)/sign-in')
+            }
+          ]
+        );
+        setLoading(false);
+        return;
+      }
+
       // Check if user is banned before allowing signup
       const deviceId = await getDeviceFingerprint();
 
@@ -101,6 +133,7 @@ export default function SignUp() {
         // Track successful sign-up
         trackUserAction.signUp('email');
         identifyUser(result.user!.id, { email: email.toLowerCase() });
+        Keyboard.dismiss();
         setTimeout(() => {
           router.replace('/(onboarding)/language');
         }, 500);
@@ -109,6 +142,7 @@ export default function SignUp() {
         console.log('User created, attempting sign in...');
         try {
           await signIn(email, password);
+          Keyboard.dismiss();
           router.replace('/(onboarding)/language');
         } catch (signInError) {
           // Email confirmation is likely required
@@ -156,6 +190,7 @@ export default function SignUp() {
         }
         // Let the root layout handle navigation based on profile/onboarding status
         // Don't force navigate to onboarding - the app will route correctly
+        Keyboard.dismiss();
         setTimeout(() => {
           router.replace('/');
         }, 500);
@@ -183,6 +218,7 @@ export default function SignUp() {
           identifyUser(result.user.id, { email: result.user.email });
         }
         // Let the root layout handle navigation based on profile/onboarding status
+        Keyboard.dismiss();
         setTimeout(() => {
           router.replace('/');
         }, 500);
@@ -252,10 +288,14 @@ export default function SignUp() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {/* Back Button */}
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => {
+            Keyboard.dismiss();
+            router.back();
+          }}
           style={styles.backButton}
         >
           <Ionicons name="chevron-back" size={24} color="#A08AB7" />
@@ -364,7 +404,10 @@ export default function SignUp() {
           {/* Sign In Link */}
           <View style={styles.signInContainer}>
             <Text style={styles.signInText}>{t('auth.signUp.haveAccount')}</Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/sign-in')}>
+            <TouchableOpacity onPress={() => {
+              Keyboard.dismiss();
+              router.push('/(auth)/sign-in');
+            }}>
               <Text style={styles.signInLink}>{t('auth.signUp.signInLink')}</Text>
             </TouchableOpacity>
           </View>

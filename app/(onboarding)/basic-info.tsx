@@ -681,15 +681,16 @@ export default function BasicInfo() {
                 <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 8 }}>
                   <DateTimePicker
                     mode="date"
-                    value={birthDate || new Date()}
+                    value={birthDate || maxBirthDate}
                     onChange={(event, selectedDate) => {
-                      if (event.type === 'set' && selectedDate) {
+                      if (selectedDate) {
                         setBirthDate(selectedDate);
                       }
                     }}
                     maximumDate={maxBirthDate}
                     minimumDate={minBirthDate}
                     display="spinner"
+                    themeVariant="light"
                   />
                 </View>
 

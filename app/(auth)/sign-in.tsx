@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet, Keyboard } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
@@ -41,11 +41,11 @@ export default function SignIn() {
       if (banCheck === true) {
         // Sign out the banned user
         await signOut();
-        Alert.alert(
-          'Account Restricted',
-          'This account has been restricted from using Accord. If you believe this is an error, please contact support at hello@joinaccord.app.',
-          [{ text: 'OK' }]
-        );
+        // Navigate to banned screen with user info
+        router.replace({
+          pathname: '/(auth)/banned',
+          params: { email: userEmail.toLowerCase() }
+        });
         return false;
       }
       return true;
@@ -75,6 +75,8 @@ export default function SignIn() {
 
       // Track successful sign-in
       trackUserAction.signIn('email');
+      // Dismiss keyboard before navigation to prevent UIKeyboardTaskQueue hangs
+      Keyboard.dismiss();
       // Let index.tsx handle navigation based on profile status
       await new Promise(resolve => setTimeout(resolve, 300));
       router.replace('/');
@@ -109,52 +111,56 @@ export default function SignIn() {
       if (errorMessage.includes('Invalid login credentials')) {
         // Check if this email exists and which provider they used
         try {
-          const { data: userData } = await supabase.rpc('get_user_auth_providers', {
-            user_email: email.toLowerCase().trim()
+          const { data: emailCheck } = await supabase.rpc('check_email_provider', {
+            check_email: email.toLowerCase().trim()
           });
 
-          if (userData && userData.length > 0) {
-            const providers = userData.map((p: any) => p.provider);
+          if (emailCheck && emailCheck.length > 0 && emailCheck[0].email_exists) {
+            const provider = emailCheck[0].auth_provider;
 
-            // If they have email provider, credentials are just wrong
-            if (providers.includes('email')) {
+            // If they signed up with email, credentials are just wrong
+            if (provider === 'email') {
               Alert.alert(
                 'Incorrect Password',
-                'The password you entered is incorrect. Please try again or reset your password.',
-                [{ text: 'OK' }]
+                'The password you entered is incorrect. Please try again or use "Forgot password?" to reset it.',
+                [
+                  { text: 'OK', style: 'cancel' },
+                  { text: 'Reset Password', onPress: () => router.push('/(auth)/forgot-password') }
+                ]
               );
               return;
             }
 
-            // If they only have Google
-            if (providers.includes('google') && !providers.includes('apple')) {
+            // If they signed up with Google
+            if (provider === 'google') {
               Alert.alert(
                 'Use Google Sign-In',
-                'This email is registered with Google Sign-In. Please use the "Continue with Google" button to sign in.',
+                'This email is registered with Google. Please tap "Continue with Google" below to sign in.',
                 [{ text: 'Got It' }]
               );
               return;
             }
 
-            // If they only have Apple
-            if (providers.includes('apple') && !providers.includes('google')) {
+            // If they signed up with Apple
+            if (provider === 'apple') {
               Alert.alert(
                 'Use Apple Sign-In',
-                'This email is registered with Apple Sign-In. Please use the "Continue with Apple" button to sign in.',
+                'This email is registered with Apple. Please tap "Continue with Apple" below to sign in.',
                 [{ text: 'Got It' }]
               );
               return;
             }
-
-            // If they have both Google and Apple
-            if (providers.includes('google') && providers.includes('apple')) {
-              Alert.alert(
-                'Use Social Sign-In',
-                'This email is registered with Google or Apple Sign-In. Please use one of those buttons to sign in.',
-                [{ text: 'Got It' }]
-              );
-              return;
-            }
+          } else {
+            // Email doesn't exist - they need to sign up
+            Alert.alert(
+              'Account Not Found',
+              'No account exists with this email. Would you like to create one?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Sign Up', onPress: () => router.push('/(auth)/sign-up') }
+              ]
+            );
+            return;
           }
         } catch (checkError) {
           console.log('Could not check providers:', checkError);
@@ -204,6 +210,8 @@ export default function SignIn() {
 
         // Track successful Google sign-in
         trackUserAction.signIn('google');
+        // Dismiss keyboard before navigation to prevent UIKeyboardTaskQueue hangs
+        Keyboard.dismiss();
         // Wait for auth state to update, then let index.tsx redirect
         await new Promise(resolve => setTimeout(resolve, 300));
         router.replace('/');
@@ -254,6 +262,8 @@ export default function SignIn() {
 
         // Track successful Apple sign-in
         trackUserAction.signIn('apple');
+        // Dismiss keyboard before navigation to prevent UIKeyboardTaskQueue hangs
+        Keyboard.dismiss();
         // Let index.tsx handle navigation based on profile status
         await new Promise(resolve => setTimeout(resolve, 300));
         router.replace('/');
@@ -295,10 +305,14 @@ export default function SignIn() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {/* Back Button */}
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => {
+            Keyboard.dismiss();
+            router.back();
+          }}
           style={styles.backButton}
         >
           <Ionicons name="chevron-back" size={24} color="#A08AB7" />
@@ -353,7 +367,10 @@ export default function SignIn() {
           {/* Forgot Password Link */}
           <TouchableOpacity
             style={styles.forgotPassword}
-            onPress={() => router.push('/(auth)/forgot-password')}
+            onPress={() => {
+              Keyboard.dismiss();
+              router.push('/(auth)/forgot-password');
+            }}
           >
             <Text style={styles.linkText}>{t('auth.signIn.forgotPassword')}</Text>
           </TouchableOpacity>
@@ -393,7 +410,10 @@ export default function SignIn() {
           {/* Sign Up Link */}
           <View style={styles.signUpContainer}>
             <Text style={styles.signUpText}>{t('auth.signIn.noAccount')}</Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/sign-up')}>
+            <TouchableOpacity onPress={() => {
+              Keyboard.dismiss();
+              router.push('/(auth)/sign-up');
+            }}>
               <Text style={styles.signUpLink}>{t('auth.signIn.signUpLink')}</Text>
             </TouchableOpacity>
           </View>

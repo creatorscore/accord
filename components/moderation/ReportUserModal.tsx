@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Modal,
   View,
@@ -10,7 +10,10 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
@@ -89,6 +92,7 @@ export default function ReportUserModal({
   reportedProfileName,
 }: ReportUserModalProps) {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [details, setDetails] = useState('');
   const [loading, setLoading] = useState(false);
@@ -163,6 +167,15 @@ export default function ReportUserModal({
   const handleSubmit = async () => {
     if (!selectedReason) {
       Alert.alert('Error', 'Please select a reason for reporting');
+      return;
+    }
+
+    // Require explanation for all reports
+    if (!details.trim() || details.trim().length < 20) {
+      Alert.alert(
+        'Explanation Required',
+        'Please provide a detailed explanation (at least 20 characters) of why you are reporting this user.'
+      );
       return;
     }
 
@@ -244,8 +257,13 @@ export default function ReportUserModal({
       transparent={true}
       onRequestClose={handleClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Report {reportedProfileName}</Text>
@@ -346,11 +364,17 @@ export default function ReportUserModal({
             {/* Additional Details */}
             <View style={styles.detailsSection}>
               <Text style={styles.detailsLabel}>
-                Additional Details {selectedReason !== 'blackmail' && '(Optional)'}
+                Explain why you're reporting <Text style={{ color: '#EF4444' }}>*</Text>
+              </Text>
+              <Text style={styles.detailsHint}>
+                Please describe the specific behavior or content that violates our guidelines.
               </Text>
               <TextInput
-                style={styles.detailsInput}
-                placeholder="Provide any additional context that might help our team..."
+                style={[
+                  styles.detailsInput,
+                  details.trim().length > 0 && details.trim().length < 20 && styles.detailsInputError
+                ]}
+                placeholder="What did this user do? Be specific - include dates, messages, or behavior details..."
                 value={details}
                 onChangeText={setDetails}
                 multiline
@@ -358,7 +382,14 @@ export default function ReportUserModal({
                 textAlignVertical="top"
                 maxLength={500}
               />
-              <Text style={styles.characterCount}>{details.length}/500</Text>
+              <View style={styles.detailsFooter}>
+                <Text style={[
+                  styles.characterCount,
+                  details.trim().length > 0 && details.trim().length < 20 && { color: '#EF4444' }
+                ]}>
+                  {details.trim().length < 20 ? `${20 - details.trim().length} more characters needed` : `${details.length}/500`}
+                </Text>
+              </View>
             </View>
 
             {/* Privacy Notice */}
@@ -371,7 +402,7 @@ export default function ReportUserModal({
           </ScrollView>
 
           {/* Footer */}
-          <View style={styles.footer}>
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={handleClose}
@@ -383,10 +414,10 @@ export default function ReportUserModal({
             <TouchableOpacity
               style={[
                 styles.submitButton,
-                (!selectedReason || loading) && styles.submitButtonDisabled,
+                (!selectedReason || loading || details.trim().length < 20) && styles.submitButtonDisabled,
               ]}
               onPress={handleSubmit}
-              disabled={!selectedReason || loading}
+              disabled={!selectedReason || loading || details.trim().length < 20}
             >
               {loading ? (
                 <ActivityIndicator color="white" />
@@ -396,12 +427,16 @@ export default function ReportUserModal({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoid: {
+    flex: 1,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -478,6 +513,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#111827',
+    marginBottom: 4,
+  },
+  detailsHint: {
+    fontSize: 12,
+    color: '#6B7280',
     marginBottom: 8,
   },
   detailsInput: {
@@ -489,11 +529,18 @@ const styles = StyleSheet.create({
     color: '#111827',
     minHeight: 100,
   },
+  detailsInputError: {
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+  },
+  detailsFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 4,
+  },
   characterCount: {
     fontSize: 12,
     color: '#9CA3AF',
-    textAlign: 'right',
-    marginTop: 4,
   },
   noticeBox: {
     flexDirection: 'row',

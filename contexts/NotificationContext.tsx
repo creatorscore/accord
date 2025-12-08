@@ -10,6 +10,9 @@ import {
   removePushToken,
   ensurePushTokenSaved,
 } from '@/lib/notifications';
+import { supabase } from '@/lib/supabase';
+import { useToast } from './ToastContext';
+import { useMatch } from './MatchContext';
 
 interface NotificationContextType {
   pushToken: string | null;
@@ -27,6 +30,8 @@ export function useNotifications() {
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { showToast, showMessageToast, showLikeToast } = useToast();
+  const { showMatchCelebration } = useMatch();
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
@@ -59,6 +64,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const initializePushNotifications = async () => {
     try {
+      // Clear badge count on app launch
+      try {
+        await Notifications.setBadgeCountAsync(0);
+      } catch (e) {
+        // Ignore badge errors
+      }
+
       // Register and get push token
       const token = await registerForPushNotifications();
 
@@ -114,9 +126,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Retry saving push token when app comes to foreground
   // This catches users who completed onboarding while app was in background
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         console.log('📱 App foregrounded - checking push token');
+
+        // Clear badge count when app is opened
+        try {
+          await Notifications.setBadgeCountAsync(0);
+          console.log('🔔 Badge count cleared');
+        } catch (error) {
+          console.warn('Failed to clear badge:', error);
+        }
+
         if (user?.id && pushToken) {
           // Reset retry count and try again
           retryCount.current = 0;
@@ -144,8 +165,37 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     // Handle notifications received while app is in foreground
     notificationListener.current = Notifications.addNotificationReceivedListener(
       (notification) => {
-        console.log('Notification received:', notification);
-        // You can show in-app notification UI here
+        console.log('Notification received in foreground:', notification);
+
+        const data = notification.request.content.data;
+        const title = notification.request.content.title || '';
+        const body = notification.request.content.body || '';
+
+        // Show in-app toast based on notification type
+        if (data?.type === 'new_message' && data?.matchId) {
+          // Extract sender name from title (format: "New message from Name")
+          const senderName = title.replace('New message from ', '');
+          showMessageToast(senderName, body, data.matchId as string);
+        } else if (data?.type === 'new_like') {
+          const isPremium = data?.isPremium === true;
+          const likerName = isPremium && title ? title.replace(' likes you!', '') : 'Someone';
+          showLikeToast(likerName, isPremium);
+        } else if (data?.type === 'new_match' && data?.matchId) {
+          // For matches, show a toast (the full celebration modal is shown from discover screen)
+          showToast({
+            type: 'match',
+            title: title || "It's a Match!",
+            message: body || 'You have a new match!',
+            onPress: () => router.push('/(tabs)/matches'),
+          });
+        } else if (title || body) {
+          // Generic notification toast
+          showToast({
+            type: 'info',
+            title: title || 'Notification',
+            message: body,
+          });
+        }
       }
     );
 
@@ -155,7 +205,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
   };
 
-  const handleNotificationResponse = (data: any) => {
+  const handleNotificationResponse = async (data: any) => {
     if (!data || !data.type) return;
 
     // Store the navigation data for the app to handle
@@ -186,7 +236,43 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           }
           break;
         case 'new_like':
-          // Navigate to likes tab
+          // For premium users, check if the liker has become a match
+          // (happens when user swiped right on them from Discover before tapping notification)
+          if (data.likerProfileId && user?.id) {
+            try {
+              // Get current user's profile ID
+              const { data: currentProfile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user.id)
+                .single();
+
+              if (currentProfile) {
+                // Check if there's already a match with this liker
+                const profile1Id = currentProfile.id < data.likerProfileId ? currentProfile.id : data.likerProfileId;
+                const profile2Id = currentProfile.id < data.likerProfileId ? data.likerProfileId : currentProfile.id;
+
+                const { data: existingMatch } = await supabase
+                  .from('matches')
+                  .select('id')
+                  .eq('profile1_id', profile1Id)
+                  .eq('profile2_id', profile2Id)
+                  .eq('status', 'active')
+                  .maybeSingle();
+
+                if (existingMatch) {
+                  // The like has become a match! Redirect to matches instead
+                  console.log('Like is now a match, redirecting to matches tab');
+                  router.push('/(tabs)/matches');
+                  return;
+                }
+              }
+            } catch (error) {
+              console.error('Error checking if like is now a match:', error);
+              // Fall through to default likes navigation
+            }
+          }
+          // Navigate to likes tab (default behavior)
           router.push('/(tabs)/likes');
           break;
         default:

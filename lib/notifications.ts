@@ -392,6 +392,7 @@ export async function sendMatchNotification(
 /**
  * Send notification when a new message is received
  * Sends to ALL devices for the user (multi-device support)
+ * Skips push notification if user was recently active (likely already in-app)
  */
 export async function sendMessageNotification(
   recipientProfileId: string,
@@ -400,15 +401,28 @@ export async function sendMessageNotification(
   matchId: string
 ): Promise<void> {
   try {
-    // Get recipient's push settings
+    // Get recipient's push settings and last active time
     const { data: profile, error } = await supabase
       .from('profiles')
-      .select('push_token, push_enabled, display_name')
+      .select('push_token, push_enabled, display_name, last_active_at')
       .eq('id', recipientProfileId)
       .single();
 
     if (error || !profile?.push_enabled) {
       return;
+    }
+
+    // Skip push notification if user was active within the last minute
+    // They're likely in the app and will see the in-app notification
+    if (profile.last_active_at) {
+      const lastActive = new Date(profile.last_active_at);
+      const now = new Date();
+      const secondsSinceActive = (now.getTime() - lastActive.getTime()) / 1000;
+
+      if (secondsSinceActive < 60) {
+        console.log(`Skipping push notification for ${recipientProfileId} - user active ${Math.round(secondsSinceActive)}s ago`);
+        return;
+      }
     }
 
     // Get all device tokens for this user (new multi-device system)

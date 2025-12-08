@@ -13,6 +13,8 @@ import * as SplashScreenExpo from 'expo-splash-screen';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
+import { ToastProvider } from '@/contexts/ToastContext';
+import { MatchProvider } from '@/contexts/MatchContext';
 import { SplashScreen } from '@/components/shared/SplashScreen';
 import { ActivityTracker } from '@/components/shared/ActivityTracker';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
@@ -135,25 +137,29 @@ export default function RootLayout() {
           <PaperProvider>
             <AuthProvider>
               <SubscriptionProvider>
-                <NotificationProvider>
-                  <ActivityTracker />
-                  {/* Only render Stack after i18n is initialized to prevent showing raw translation keys */}
-                  {i18nInitialized ? (
-                    <Stack screenOptions={{ headerShown: false }} />
-                  ) : null}
-                  <StatusBar style={isDarkColorScheme ? 'light' : 'dark'} />
+                <ToastProvider>
+                  <MatchProvider>
+                    <NotificationProvider>
+                      <ActivityTracker />
+                      {/* Only render Stack after i18n is initialized to prevent showing raw translation keys */}
+                      {i18nInitialized ? (
+                        <Stack screenOptions={{ headerShown: false }} />
+                      ) : null}
+                      <StatusBar style={isDarkColorScheme ? 'light' : 'dark'} />
 
-                  {/* Check for app updates */}
-                  {!showSplash && <AppUpdateChecker />}
+                      {/* Check for app updates */}
+                      {!showSplash && <AppUpdateChecker />}
 
-                  {/* Overlay splash screen while initializing */}
-                  {showSplash && (
-                    <SplashScreen onFinish={() => setSplashAnimationDone(true)} />
-                  )}
+                      {/* Overlay splash screen while initializing */}
+                      {showSplash && (
+                        <SplashScreen onFinish={() => setSplashAnimationDone(true)} />
+                      )}
 
-                  {/* Security overlay for screenshot protection (iOS) */}
-                  <ScreenCaptureOverlay visible={showSecurityOverlay} />
-                </NotificationProvider>
+                      {/* Security overlay for screenshot protection (iOS) */}
+                      <ScreenCaptureOverlay visible={showSecurityOverlay} />
+                    </NotificationProvider>
+                  </MatchProvider>
+                </ToastProvider>
               </SubscriptionProvider>
             </AuthProvider>
           </PaperProvider>

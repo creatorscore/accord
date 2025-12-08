@@ -1,5 +1,6 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
+import * as Crypto from 'expo-crypto';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
@@ -114,6 +115,21 @@ const signInWithGoogleBrowser = async () => {
   return null;
 };
 
+// Generate a random nonce for secure OAuth
+const generateNonce = async (): Promise<{ rawNonce: string; hashedNonce: string }> => {
+  const rawNonce = Array.from(
+    await Crypto.getRandomBytesAsync(16),
+    (byte) => byte.toString(16).padStart(2, '0')
+  ).join('');
+
+  const hashedNonce = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    rawNonce
+  );
+
+  return { rawNonce, hashedNonce };
+};
+
 // Native Google Sign-In (no browser redirect!)
 const signInWithGoogleNative = async () => {
   // Ensure Google Sign-In is configured
@@ -122,7 +138,9 @@ const signInWithGoogleNative = async () => {
   // Check if Google Play Services are available (Android)
   await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
-  // Sign in with native Google modal (stays in app!)
+  // Note: nonce parameter in GoogleSignin.signIn() is only available in the PAID version
+  // of react-native-google-signin. For the free version, we skip nonce validation.
+  // See: https://github.com/react-native-google-signin/docs/blob/main/docs/api/index.mdx
   const response = await GoogleSignin.signIn();
 
   console.log('Google Sign-In response:', response);
@@ -134,7 +152,7 @@ const signInWithGoogleNative = async () => {
       throw new Error('No ID token returned from Google');
     }
 
-    // Sign in to Supabase with the Google ID token
+    // Sign in to Supabase with the Google ID token (without nonce for free version)
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: 'google',
       token: idToken,
@@ -150,7 +168,9 @@ const signInWithGoogleNative = async () => {
   }
 };
 
-// Main Google Sign-In function - uses native when available, browser fallback otherwise
+// Main Google Sign-In function
+// iOS: Always use browser OAuth (native has nonce issues with free version of react-native-google-signin)
+// Android: Use native if available, browser fallback otherwise
 export const signInWithGoogle = async () => {
   try {
     // For web, always use OAuth redirect flow
@@ -166,7 +186,15 @@ export const signInWithGoogle = async () => {
       return data;
     }
 
-    // For mobile, use native if available, otherwise browser fallback
+    // iOS: Always use browser OAuth to avoid nonce mismatch issues
+    // The free version of react-native-google-signin doesn't support nonce properly,
+    // which causes "passed nonce and nonce in id_token should either both exist or not" errors
+    if (Platform.OS === 'ios') {
+      console.log('iOS: Using browser OAuth (native has nonce compatibility issues)');
+      return await signInWithGoogleBrowser();
+    }
+
+    // Android: Use native if available, otherwise browser fallback
     if (nativeGoogleAvailable) {
       return await signInWithGoogleNative();
     } else {
@@ -174,7 +202,7 @@ export const signInWithGoogle = async () => {
       return await signInWithGoogleBrowser();
     }
   } catch (error: any) {
-    // Handle native Google Sign-In specific errors
+    // Handle native Google Sign-In specific errors (Android only now)
     if (nativeGoogleAvailable && isErrorWithCode && isErrorWithCode(error)) {
       switch (error.code) {
         case statusCodes.SIGN_IN_CANCELLED:
