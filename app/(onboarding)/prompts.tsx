@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,6 +39,7 @@ interface PromptAnswer {
 export default function Prompts() {
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [profileId, setProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -58,14 +60,26 @@ export default function Prompts() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, prompt_answers')
         .eq('user_id', user?.id)
         .single();
 
-      if (error) throw error;
-      setProfileId(data.id);
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        setProfileId(data.id);
+        // Pre-fill prompts if data exists
+        if (data.prompt_answers && Array.isArray(data.prompt_answers) && data.prompt_answers.length > 0) {
+          // Pad with empty slots if less than 3 prompts saved
+          const loadedPrompts = [...data.prompt_answers];
+          while (loadedPrompts.length < 3) {
+            loadedPrompts.push({ prompt: '', answer: '' });
+          }
+          setSelectedPrompts(loadedPrompts.slice(0, 3));
+        }
+      }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to load profile');
+      console.error('Error loading profile:', error);
     }
   };
 
@@ -161,8 +175,11 @@ export default function Prompts() {
   const availablePrompts = PROMPTS.filter((p) => !usedPrompts.includes(p));
 
   return (
-    <ScrollView className="flex-1 bg-white">
-      <View className="px-6 pt-16 pb-8">
+    <ScrollView
+      className="flex-1 bg-white"
+      contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 32 }}
+    >
+      <View className="px-6" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">

@@ -147,7 +147,7 @@ export default function PhotoVerificationCard() {
       } else {
         Alert.alert(
           'Verification Unsuccessful',
-          `${data.message}\n\nPlease ensure:\n• Good lighting\n• Clear view of your face\n• Same person as profile photos\n• No sunglasses or masks`,
+          `${data.message}\n\nTo improve your chances:\n\n• Take your selfie in bright, natural daylight\n• Make sure your primary profile photo is recent\n• Face the camera directly\n• Remove sunglasses, hats, or masks\n• Avoid shadows on your face`,
           [
             { text: 'Try Again', onPress: takeSelfie },
             { text: 'Cancel', style: 'cancel' }
@@ -257,6 +257,19 @@ export default function PhotoVerificationCard() {
           : 'Verify your photos by taking a selfie. We\'ll compare it to your profile photos using face recognition.'}
       </Text>
 
+      {/* Important notice for non-verified users */}
+      {!isVerified && (
+        <View className="bg-amber-50 rounded-lg p-4 mb-4 border border-amber-200">
+          <View className="flex-row items-center mb-2">
+            <MaterialCommunityIcons name="lightbulb-outline" size={20} color="#d97706" />
+            <Text className="text-amber-800 font-bold ml-2">Before You Start</Text>
+          </View>
+          <Text className="text-amber-700 text-sm leading-5">
+            Make sure your <Text className="font-bold">primary profile photo</Text> (first photo) is a recent, clear photo of your face. The selfie you take will be compared against your profile photos.
+          </Text>
+        </View>
+      )}
+
       {/* Attempts counter */}
       {attempts > 0 && !isVerified && (
         <View className="bg-gray-50 rounded-lg p-3 mb-4">
@@ -270,8 +283,8 @@ export default function PhotoVerificationCard() {
       {isFailed && (
         <View className="bg-red-50 rounded-lg p-4 mb-4 border border-red-200">
           <Text className="text-red-800 font-medium mb-1">Verification Unsuccessful</Text>
-          <Text className="text-red-700 text-sm">
-            The selfie didn't match your profile photos well enough. Try again with better lighting and a clear face shot.
+          <Text className="text-red-700 text-sm leading-5">
+            The selfie didn't match your profile photos well enough. For best results, take your selfie in bright natural daylight and make sure your primary profile photo is a recent, clear photo of your face.
           </Text>
         </View>
       )}
@@ -304,21 +317,23 @@ export default function PhotoVerificationCard() {
       {/* Benefits or tips */}
       {!isVerified ? (
         <View className="mt-4 space-y-2">
-          <Text className="text-gray-500 text-sm font-semibold mb-2">Tips for best results:</Text>
+          <Text className="text-gray-700 text-sm font-bold mb-3">For best results:</Text>
           {[
-            'Face the camera directly',
-            'Ensure good lighting (natural light works best)',
-            'Remove sunglasses, hats, and masks',
-            'Match the same person in your profile photos'
+            { icon: 'white-balance-sunny', text: 'Take your selfie in bright, natural daylight', highlight: true },
+            { icon: 'face-recognition', text: 'Face the camera directly with a neutral expression' },
+            { icon: 'image-check', text: 'Ensure your primary profile photo is recent and shows your face clearly' },
+            { icon: 'glasses', text: 'Remove sunglasses, hats, and face coverings' },
+            { icon: 'lightbulb-on', text: 'Avoid harsh shadows or backlit environments' },
+            { icon: 'account-check', text: 'Your selfie must match the person in your profile photos' },
           ].map((tip, index) => (
-            <View key={index} className="flex-row items-start">
+            <View key={index} className={`flex-row items-start ${tip.highlight ? 'bg-lavender-50 p-2 rounded-lg -mx-2' : ''}`}>
               <MaterialCommunityIcons
-                name="check"
-                size={16}
-                color="#A08AB7"
-                style={{ marginTop: 2, marginRight: 8 }}
+                name={tip.icon as any}
+                size={18}
+                color={tip.highlight ? '#8B5CF6' : '#A08AB7'}
+                style={{ marginTop: 1, marginRight: 10 }}
               />
-              <Text className="text-gray-600 text-sm flex-1">{tip}</Text>
+              <Text className={`text-sm flex-1 ${tip.highlight ? 'text-lavender-700 font-medium' : 'text-gray-600'}`}>{tip.text}</Text>
             </View>
           ))}
         </View>

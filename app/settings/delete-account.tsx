@@ -60,44 +60,35 @@ export default function DeleteAccount() {
     setDeleting(true);
 
     try {
-      // Get user's profile ID
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user?.id)
-        .single();
-
-      if (profile) {
-        // Save deletion feedback (optional - store before deletion)
-        try {
-          await supabase.from('account_deletions').insert({
-            profile_id: profile.id,
-            reason: selectedReason,
-            feedback: feedback.trim() || null,
-          });
-        } catch (error) {
-          // Ignore feedback errors - continue with deletion
-          console.log('Could not save deletion feedback:', error);
-        }
-
-        // Delete profile (cascade delete will handle related data)
-        const { error: deleteError } = await supabase
-          .from('profiles')
-          .delete()
-          .eq('id', profile.id);
-
-        if (deleteError) throw deleteError;
+      // Get auth token for the Edge Function
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No active session');
       }
 
-      // Delete auth user
-      const { error: authError } = await supabase.auth.admin.deleteUser(
-        user?.id || ''
+      // Call the delete-account Edge Function
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://xcaktvlosjsaxcntxbyf.supabase.co'}/functions/v1/delete-account`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            reason: selectedReason,
+            feedback: feedback.trim() || null,
+          }),
+        }
       );
 
-      // Note: In production, you'd use an Edge Function with service role key
-      // For now, we'll just sign out (admin API won't work from client)
+      const result = await response.json();
 
-      // Sign out user
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to delete account');
+      }
+
+      // Sign out user locally
       await signOut();
 
       Alert.alert(
@@ -114,7 +105,7 @@ export default function DeleteAccount() {
       console.error('Error deleting account:', error);
       Alert.alert(
         'Error',
-        'Failed to delete account. Please contact support at support@joinaccord.app for assistance.'
+        error.message || 'Failed to delete account. Please contact support at support@joinaccord.app for assistance.'
       );
     } finally {
       setDeleting(false);

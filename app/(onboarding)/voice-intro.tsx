@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, TextInput, Platform, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
@@ -73,23 +73,63 @@ export default function VoiceIntro() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, voice_intro_url, voice_intro_prompt, voice_intro_duration')
         .eq('user_id', user?.id)
         .single();
 
-      if (error) throw error;
-      setProfileId(data.id);
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        setProfileId(data.id);
+        // Pre-fill with existing voice intro if available
+        if (data.voice_intro_url) {
+          setRecordingUri(data.voice_intro_url);
+          if (data.voice_intro_duration) {
+            setRecordingDuration(data.voice_intro_duration);
+          }
+        }
+        if (data.voice_intro_prompt) {
+          // Check if it's a predefined prompt or custom
+          if (VOICE_PROMPTS.includes(data.voice_intro_prompt)) {
+            setSelectedPrompt(data.voice_intro_prompt);
+          } else {
+            setCustomPrompt(data.voice_intro_prompt);
+            setShowCustomInput(true);
+          }
+        }
+      }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to load profile');
+      console.error('Error loading profile:', error);
     }
   };
 
   const startRecording = async () => {
     try {
       // Request permissions
-      const { status } = await Audio.requestPermissionsAsync();
+      const { status, canAskAgain } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Microphone access is needed to record your voice intro');
+        if (!canAskAgain) {
+          // Permission was previously denied and user chose "Don't ask again"
+          Alert.alert(
+            'Microphone Permission Required',
+            'To record a voice intro, please enable microphone access in your device settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: () => {
+                  if (Platform.OS === 'ios') {
+                    Linking.openURL('app-settings:');
+                  } else {
+                    Linking.openSettings();
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          Alert.alert('Permission Denied', 'Microphone access is needed to record your voice intro');
+        }
         return;
       }
 
@@ -238,7 +278,7 @@ export default function VoiceIntro() {
 
   return (
     <ScrollView className="flex-1 bg-pink-50">
-      <View className="px-6 pt-16 pb-8">
+      <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -67,10 +67,38 @@ export default function MatchingPreferences() {
         .eq('user_id', user?.id)
         .single();
 
-      if (error) throw error;
-      setProfileId(data.id);
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        setProfileId(data.id);
+
+        // Load existing preferences
+        const { data: prefs, error: prefsError } = await supabase
+          .from('preferences')
+          .select('age_min, age_max, max_distance_miles, distance_unit, willing_to_relocate, gender_preference')
+          .eq('profile_id', data.id)
+          .single();
+
+        if (prefsError && prefsError.code !== 'PGRST116') {
+          console.error('Error loading preferences:', prefsError);
+        }
+
+        if (prefs) {
+          // Pre-fill form with existing data
+          if (prefs.age_min) setAgeMin(prefs.age_min);
+          if (prefs.age_max) setAgeMax(prefs.age_max);
+          if (prefs.max_distance_miles) setMaxDistance(prefs.max_distance_miles);
+          if (prefs.distance_unit) setDistanceUnit(prefs.distance_unit);
+          if (prefs.willing_to_relocate !== null && prefs.willing_to_relocate !== undefined) {
+            setWillingToRelocate(prefs.willing_to_relocate);
+          }
+          if (prefs.gender_preference) {
+            setGenderPreference(Array.isArray(prefs.gender_preference) ? prefs.gender_preference : [prefs.gender_preference]);
+          }
+        }
+      }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to load profile');
+      console.error('Error loading profile:', error);
     }
   };
 
@@ -206,7 +234,7 @@ export default function MatchingPreferences() {
 
   return (
     <ScrollView className="flex-1 bg-white">
-      <View className="px-6 pt-16 pb-8">
+      <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">

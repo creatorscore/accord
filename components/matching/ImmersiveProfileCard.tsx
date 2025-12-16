@@ -23,7 +23,6 @@ import { Audio } from 'expo-av';
 import { formatDistance } from '@/lib/geolocation';
 import { formatHeight, HeightUnit } from '@/lib/height-utils';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
-import { logScreenshotEvent } from '@/lib/screenshot-tracking';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
 import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
@@ -292,12 +291,8 @@ export default function ImmersiveProfileCard({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Screenshot tracking - log when someone screenshots this profile
-  useScreenCaptureProtection(visible, async () => {
-    if (currentProfileId && profile.id) {
-      await logScreenshotEvent(currentProfileId, profile.id, 'swipe_card');
-    }
-  });
+  // Enable screenshot protection when card is visible
+  useScreenCaptureProtection(visible);
 
   useEffect(() => {
     return () => {

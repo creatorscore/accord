@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, useColorScheme } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -23,6 +23,9 @@ export default function IntroMessages({
   onSelectMessage,
   onClose,
 }: IntroMessagesProps) {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
   if (!visible) return null;
 
   const generateMessages = (): string[] => {
@@ -61,10 +64,27 @@ export default function IntroMessages({
 
   const messages = generateMessages();
 
+  // Dynamic colors based on theme
+  const colors = {
+    container: isDark ? '#1C1C1E' : '#FFFFFF',
+    border: isDark ? '#2C2C2E' : '#E5E7EB',
+    headerGradient: isDark
+      ? ['rgba(139, 92, 246, 0.15)', 'rgba(236, 72, 153, 0.15)'] as const
+      : ['rgba(139, 92, 246, 0.1)', 'rgba(236, 72, 153, 0.1)'] as const,
+    closeButtonBg: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+    closeIcon: isDark ? '#9CA3AF' : '#6B7280',
+    cardGradient: isDark
+      ? ['#2C2C2E', '#1C1C1E'] as const
+      : ['#F3F4F6', '#FFFFFF'] as const,
+    messageText: isDark ? '#E5E7EB' : '#374151',
+    footer: isDark ? '#2C2C2E' : '#F9FAFB',
+    footerText: isDark ? '#9CA3AF' : '#6B7280',
+  };
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.container, borderBottomColor: colors.border }]}>
       <LinearGradient
-        colors={['rgba(139, 92, 246, 0.1)', 'rgba(236, 72, 153, 0.1)']}
+        colors={colors.headerGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
@@ -74,8 +94,11 @@ export default function IntroMessages({
             <MaterialCommunityIcons name="auto-fix" size={20} color="#A08AB7" />
             <Text style={styles.headerTitle}>Intro Message Suggestions</Text>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <MaterialCommunityIcons name="close" size={20} color="#6B7280" />
+          <TouchableOpacity
+            onPress={onClose}
+            style={[styles.closeButton, { backgroundColor: colors.closeButtonBg }]}
+          >
+            <MaterialCommunityIcons name="close" size={20} color={colors.closeIcon} />
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -88,17 +111,17 @@ export default function IntroMessages({
         {messages.map((message, index) => (
           <TouchableOpacity
             key={index}
-            style={styles.messageCard}
+            style={[styles.messageCard, isDark && styles.messageCardDark]}
             onPress={() => onSelectMessage(message)}
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={['#F3F4F6', '#FFFFFF']}
+              colors={colors.cardGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={styles.messageCardGradient}
             >
-              <Text style={styles.messageText} numberOfLines={3}>
+              <Text style={[styles.messageText, { color: colors.messageText }]} numberOfLines={3}>
                 {message}
               </Text>
               <View style={styles.useButton}>
@@ -110,9 +133,9 @@ export default function IntroMessages({
         ))}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <MaterialCommunityIcons name="information-outline" size={16} color="#6B7280" />
-        <Text style={styles.footerText}>
+      <View style={[styles.footer, { backgroundColor: colors.footer }]}>
+        <MaterialCommunityIcons name="information-outline" size={16} color={colors.footerText} />
+        <Text style={[styles.footerText, { color: colors.footerText }]}>
           Tap to use a suggestion, or write your own message
         </Text>
       </View>
@@ -122,9 +145,7 @@ export default function IntroMessages({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   headerGradient: {
     paddingHorizontal: 16,
@@ -152,7 +173,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.05)',
   },
   messagesContainer: {
     paddingHorizontal: 16,
@@ -169,6 +189,9 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
+  messageCardDark: {
+    shadowOpacity: 0.3,
+  },
   messageCardGradient: {
     padding: 16,
     height: 140,
@@ -177,7 +200,6 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#374151',
     flex: 1,
   },
   useButton: {
@@ -197,10 +219,8 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#F9FAFB',
   },
   footerText: {
     fontSize: 12,
-    color: '#6B7280',
   },
 });

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -72,14 +72,41 @@ export default function Personality() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, zodiac_sign, height_inches, height_unit, personality_type, love_language, languages_spoken, religion, political_views')
         .eq('user_id', user?.id)
         .single();
 
-      if (error) throw error;
-      setProfileId(data.id);
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        setProfileId(data.id);
+        // Pre-fill form if data exists
+        if (data.zodiac_sign) setZodiacSign(data.zodiac_sign);
+        if (data.personality_type) setPersonalityType(data.personality_type);
+        if (data.love_language) setLoveLanguage(Array.isArray(data.love_language) ? data.love_language : [data.love_language]);
+        if (data.languages_spoken) setSelectedLanguages(Array.isArray(data.languages_spoken) ? data.languages_spoken : [data.languages_spoken]);
+        if (data.religion) setReligion(data.religion);
+        if (data.political_views) setPoliticalViews(data.political_views);
+
+        // Handle height based on saved unit preference
+        if (data.height_unit) setHeightUnit(data.height_unit);
+        if (data.height_inches) {
+          const unit = data.height_unit || 'imperial';
+          if (unit === 'metric') {
+            // Convert inches to cm for display
+            const cm = Math.round(data.height_inches * 2.54);
+            setHeightCm(cm.toString());
+          } else {
+            // Convert total inches to feet and inches
+            const feet = Math.floor(data.height_inches / 12);
+            const inches = data.height_inches % 12;
+            setHeightFeet(feet.toString());
+            setHeightInches(inches.toString());
+          }
+        }
+      }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to load profile');
+      console.error('Error loading profile:', error);
     }
   };
 
@@ -168,7 +195,7 @@ export default function Personality() {
 
   return (
     <ScrollView className="flex-1 bg-cream">
-      <View className="px-6 pt-16 pb-8">
+      <View className="px-6 pb-4" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">

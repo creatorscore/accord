@@ -84,11 +84,11 @@ export default function AdminPushNotifications() {
         .eq('is_premium', false)
         .eq('is_platinum', false);
 
-      // Get verified users
+      // Get verified users (photo verified)
       const { count: verifiedUsers } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true })
-        .eq('is_verified', true);
+        .eq('photo_verified', true);
 
       // Get users with push tokens
       const { count: usersWithTokens } = await supabase

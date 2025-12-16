@@ -181,7 +181,7 @@ export default function Interests() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: 120 }}
       >
-        <View className="px-6 pt-16 pb-8">
+        <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">

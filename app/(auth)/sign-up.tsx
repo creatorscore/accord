@@ -20,6 +20,8 @@ export default function SignUp() {
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
   const { signUp, signIn } = useAuth();
 
   useEffect(() => {
@@ -230,28 +232,103 @@ export default function SignUp() {
     }
   };
 
-  // Email Verification Success Screen
+  // Handle OTP verification
+  const handleVerifyOtp = async () => {
+    if (otpCode.length !== 6) {
+      Alert.alert(t('common.error'), t('auth.signUp.otpInvalidLength', 'Please enter the 6-digit code'));
+      return;
+    }
+
+    setVerifyingOtp(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: userEmail,
+        token: otpCode,
+        type: 'signup',
+      });
+
+      if (error) throw error;
+
+      if (data.session) {
+        // Verification successful - user is now logged in
+        Alert.alert(
+          t('common.success'),
+          t('auth.signUp.verificationSuccess', 'Email verified successfully!'),
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                Keyboard.dismiss();
+                router.replace('/(onboarding)/language');
+              }
+            }
+          ]
+        );
+      }
+    } catch (error: any) {
+      console.error('OTP verification error:', error);
+      Alert.alert(
+        t('common.error'),
+        error.message || t('auth.signUp.otpVerificationFailed', 'Invalid or expired code. Please try again.')
+      );
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  // Email Verification Screen with OTP Input
   if (showVerificationMessage) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
-        <View style={styles.verificationContainer}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+      >
+        <ScrollView
+          contentContainerStyle={styles.verificationContainer}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.iconContainer}>
             <Ionicons name="mail-outline" size={40} color="#A08AB7" />
           </View>
           <Text style={styles.verificationTitle}>{t('auth.signUp.verificationTitle')}</Text>
-          <Text style={styles.verificationMessage}>{t('auth.signUp.verificationMessage')}</Text>
+          <Text style={styles.verificationMessage}>{t('auth.signUp.verificationMessageOtp', 'We sent a 6-digit verification code to')}</Text>
           <Text style={styles.verificationEmail}>{userEmail}</Text>
-          <Text style={styles.verificationInstructions}>{t('auth.signUp.verificationInstructions')}</Text>
+
+          {/* OTP Input */}
+          <View style={styles.otpContainer}>
+            <Text style={styles.otpLabel}>{t('auth.signUp.enterCode', 'Enter verification code')}</Text>
+            <TextInput
+              style={styles.otpInput}
+              placeholder="000000"
+              placeholderTextColor="#A1A1AA"
+              value={otpCode}
+              onChangeText={(text) => setOtpCode(text.replace(/[^0-9]/g, '').slice(0, 6))}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoFocus
+              textAlign="center"
+            />
+          </View>
 
           <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => router.replace('/(auth)/sign-in')}
+            style={[styles.primaryButton, (verifyingOtp || otpCode.length !== 6) && styles.buttonDisabled]}
+            onPress={handleVerifyOtp}
+            disabled={verifyingOtp || otpCode.length !== 6}
           >
-            <Text style={styles.primaryButtonText}>{t('auth.signUp.goToSignIn')}</Text>
+            <Text style={styles.primaryButtonText}>
+              {verifyingOtp ? t('auth.signUp.verifying', 'Verifying...') : t('auth.signUp.verifyEmail', 'Verify Email')}
+            </Text>
           </TouchableOpacity>
 
+          <Text style={styles.verificationInstructions}>
+            {t('auth.signUp.otpInstructions', "Check your email inbox (and spam folder) for the verification code. It may take a few minutes to arrive.")}
+          </Text>
+
           <TouchableOpacity
-            onPress={() => setShowVerificationMessage(false)}
+            onPress={() => {
+              setShowVerificationMessage(false);
+              setOtpCode('');
+            }}
             style={styles.secondaryLink}
           >
             <Text style={styles.linkText}>{t('auth.signUp.useDifferentEmail')}</Text>
@@ -261,6 +338,7 @@ export default function SignUp() {
             style={styles.tertiaryLink}
             onPress={async () => {
               try {
+                setLoading(true);
                 await supabase.auth.resend({
                   type: 'signup',
                   email: userEmail,
@@ -268,13 +346,18 @@ export default function SignUp() {
                 Alert.alert(t('common.success'), t('auth.signUp.verificationEmailResent'));
               } catch (error) {
                 Alert.alert(t('common.error'), t('auth.signUp.resendError'));
+              } finally {
+                setLoading(false);
               }
             }}
+            disabled={loading}
           >
-            <Text style={styles.tertiaryLinkText}>{t('auth.signUp.resendVerificationEmail')}</Text>
+            <Text style={styles.tertiaryLinkText}>
+              {loading ? t('auth.signUp.sendingCode', 'Sending...') : t('auth.signUp.resendCode', 'Resend verification code')}
+            </Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   }
 
@@ -645,5 +728,30 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 16,
     textDecorationLine: 'underline',
+  },
+  // OTP Input styles
+  otpContainer: {
+    width: '100%',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  otpLabel: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#1F2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  otpInput: {
+    borderWidth: 2,
+    borderColor: '#A08AB7',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    color: '#1F2937',
+    fontSize: 28,
+    fontFamily: 'Inter-Bold',
+    letterSpacing: 8,
   },
 });

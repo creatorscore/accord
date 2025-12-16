@@ -92,8 +92,8 @@ android {
         applicationId "com.privyreviews.accord"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 37
-        versionName "1.0.4"
+        versionCode 41
+        versionName "1.0.8"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
 
@@ -158,6 +158,10 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+
+    // TikTok Business SDK for app events tracking
+    // TEMPORARILY DISABLED - Package not found in maven repos, need to investigate correct dependency
+    // implementation 'com.tiktok.business.sdk:tiktok-business-core:1.5.0'
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

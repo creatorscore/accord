@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Alert, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, Image, ScrollView, Alert, Switch, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -18,6 +19,7 @@ interface Photo {
 export default function Photos() {
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -59,7 +61,7 @@ export default function Photos() {
     try {
       const { data: existingPhotos, error } = await supabase
         .from('photos')
-        .select('url, display_order')
+        .select('url, display_order, content_hash')
         .eq('profile_id', profileId)
         .order('display_order', { ascending: true });
 
@@ -70,7 +72,10 @@ export default function Photos() {
 
       if (existingPhotos && existingPhotos.length > 0) {
         console.log('📸 Loaded existing photos:', existingPhotos.length);
-        const photoUris = existingPhotos.map(photo => ({ uri: photo.url }));
+        const photoUris = existingPhotos.map(photo => ({
+          uri: photo.url,
+          contentHash: photo.content_hash // Include hash for deduplication
+        }));
         setPhotos(photoUris);
       }
     } catch (error) {
@@ -93,8 +98,7 @@ export default function Photos() {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [3, 4],
+        allowsEditing: false,
         quality: 0.8,
       });
 
@@ -122,7 +126,10 @@ export default function Photos() {
         // Check for duplicate in current selection (local check)
         const isDuplicateLocal = photos.some(p => p.contentHash === contentHash);
         if (isDuplicateLocal) {
-          Alert.alert('Duplicate Photo', 'You have already selected this photo. Please choose a different one.');
+          Alert.alert(
+            'Photo Already Added',
+            'This photo is already in your profile. Try selecting a different photo to show more sides of yourself!'
+          );
           return;
         }
 
@@ -136,7 +143,10 @@ export default function Photos() {
             .maybeSingle();
 
           if (existingPhoto) {
-            Alert.alert('Duplicate Photo', 'You have already uploaded this photo. Please choose a different one.');
+            Alert.alert(
+              'Photo Already Added',
+              'This photo is already in your profile. Try selecting a different photo to show more sides of yourself!'
+            );
             return;
           }
         }
@@ -150,7 +160,7 @@ export default function Photos() {
       console.error('Error picking image:', error);
       Alert.alert('Error', 'Failed to select photo. Please try again.');
     }
-  }, [photos.length]);
+  }, [photos, profileId]);
 
   const removePhoto = (index: number) => {
     setPhotos(photos.filter((_, i) => i !== index));
@@ -191,12 +201,12 @@ export default function Photos() {
             // Convert URI to ArrayBuffer using optimized utility
             const arrayBuffer = await uriToArrayBuffer(photo.uri);
 
-            // Upload to Supabase Storage
+            // Upload to Supabase Storage (use upsert to handle re-uploads gracefully)
             const { data: uploadData, error: uploadError } = await supabase.storage
               .from('profile-photos')
               .upload(fileName, arrayBuffer, {
                 contentType: 'image/jpeg',
-                upsert: false,
+                upsert: true, // Allow re-upload if file exists (handles going back scenario)
               });
 
             if (uploadError) {
@@ -210,20 +220,28 @@ export default function Photos() {
               .getPublicUrl(fileName);
 
             // Save to photos table with content hash for duplicate detection
+            // Use upsert-like behavior: check first, then insert, and handle constraint errors gracefully
             const { error: dbError } = await supabase
               .from('photos')
               .insert({
                 profile_id: profileId,
                 storage_path: fileName,
                 url: publicUrl,
-                display_order: photos.length - newPhotos.length + i, // Maintain correct order
+                display_order: photos.length - newPhotos.length + i,
                 is_primary: photos.length - newPhotos.length + i === 0,
                 content_hash: photo.contentHash,
               });
 
             if (dbError) {
-              console.error(`Database error for photo ${i}:`, dbError);
-              throw new Error(`Failed to save photo ${i + 1} to database: ${dbError.message}`);
+              // If it's a duplicate constraint error, just skip - photo already exists
+              if (dbError.code === '23505' || dbError.message?.includes('duplicate') || dbError.message?.includes('unique constraint')) {
+                console.log(`📸 Photo ${i + 1} already exists in database, skipping`);
+              } else {
+                console.error(`Database error for photo ${i}:`, dbError);
+                throw new Error(`Failed to save photo ${i + 1}. Please try again.`);
+              }
+            } else {
+              console.log(`✅ Photo ${i + 1} saved to database`);
             }
 
             // Update progress
@@ -269,7 +287,7 @@ export default function Photos() {
 
   return (
     <ScrollView className="flex-1 bg-purple-50">
-      <View className="px-6 pt-16 pb-8">
+      <View className="px-6" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64, paddingBottom: insets.bottom + 16 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">

@@ -23,6 +23,9 @@ prepare_react_native_project!
 target 'AccordLavenderMarriage' do
   use_expo_modules!
 
+  # TikTok Ads SDK - modular_headers required for Swift import
+  pod 'TikTokBusinessSDK', :modular_headers => true
+
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
   else
@@ -56,5 +59,24 @@ target 'AccordLavenderMarriage' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    # Add TikTok SDK required linker flags and enable modular headers for Swift import
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        # Enable modular headers for TikTokBusinessSDK so it can be imported in Swift
+        if target.name == 'TikTokBusinessSDK'
+          config.build_settings['DEFINES_MODULE'] = 'YES'
+          config.build_settings['SWIFT_VERSION'] = '5.0'
+        end
+
+        if target.name == 'AccordLavenderMarriage'
+          flags = config.build_settings['OTHER_LDFLAGS'] || ['$(inherited)']
+          flags = [flags] if flags.is_a?(String)
+          flags << '-ObjC' unless flags.include?('-ObjC')
+          flags << '-lc++' unless flags.include?('-lc++')
+          config.build_settings['OTHER_LDFLAGS'] = flags
+        end
+      end
+    end
   end
 end

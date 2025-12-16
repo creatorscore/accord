@@ -201,16 +201,22 @@ export default function Likes() {
     setLikes(prev => prev.filter(l => l.profile_id !== likeProfileId));
 
     try {
-      // Create a like back
+      // Create a like back (use upsert to handle case where like already exists)
       const { error: likeError } = await supabase
         .from('likes')
-        .insert({
+        .upsert({
           liker_profile_id: currentProfileId,
           liked_profile_id: likeProfileId,
           like_type: 'standard',
+        }, {
+          onConflict: 'liker_profile_id,liked_profile_id',
+          ignoreDuplicates: true, // If already exists, that's fine
         });
 
-      if (likeError) throw likeError;
+      // Ignore duplicate key errors - the like already exists which is fine
+      if (likeError && !likeError.message?.includes('duplicate')) {
+        throw likeError;
+      }
 
       // Fetch both profiles with preferences to calculate compatibility
       const { data: myProfile } = await supabase
@@ -255,18 +261,47 @@ export default function Likes() {
       const profile1Id = currentProfileId < likeProfileId ? currentProfileId : likeProfileId;
       const profile2Id = currentProfileId < likeProfileId ? likeProfileId : currentProfileId;
 
-      const { data: matchData, error: matchError } = await supabase
+      // Check if match already exists first
+      const { data: existingMatch } = await supabase
         .from('matches')
-        .insert({
-          profile1_id: profile1Id,
-          profile2_id: profile2Id,
-          initiated_by: currentProfileId,
-          compatibility_score: compatibilityScore,
-        })
         .select('id')
-        .single();
+        .eq('profile1_id', profile1Id)
+        .eq('profile2_id', profile2Id)
+        .maybeSingle();
 
-      if (matchError) throw matchError;
+      let matchData = existingMatch;
+
+      if (!existingMatch) {
+        // Create new match
+        const { data: newMatch, error: matchError } = await supabase
+          .from('matches')
+          .insert({
+            profile1_id: profile1Id,
+            profile2_id: profile2Id,
+            initiated_by: currentProfileId,
+            compatibility_score: compatibilityScore,
+          })
+          .select('id')
+          .single();
+
+        if (matchError) {
+          // If it's a duplicate key error, the match was created by someone else (race condition)
+          // Try to fetch the existing match
+          if (matchError.code === '23505' || matchError.message?.includes('duplicate')) {
+            const { data: raceMatch } = await supabase
+              .from('matches')
+              .select('id')
+              .eq('profile1_id', profile1Id)
+              .eq('profile2_id', profile2Id)
+              .single();
+            matchData = raceMatch;
+          } else {
+            throw matchError;
+          }
+        } else {
+          matchData = newMatch;
+        }
+      }
 
       // Get the other person's primary photo
       const otherPhoto = otherProfile?.photos?.find((p: any) => p.is_primary)?.url || otherProfile?.photos?.[0]?.url;
@@ -279,7 +314,7 @@ export default function Likes() {
       });
       setMatchId(matchData?.id || null);
       setShowMatchModal(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating match:', error);
       // Restore the like back to UI on error
       loadLikes();

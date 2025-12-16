@@ -1,11 +1,17 @@
 // Edge Function: Process Notification Queue
 // This function is triggered by a cron job every minute to process pending notifications
+// Optimized for high throughput using Expo's batch API (up to 100 per request)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+// Process up to 1000 notifications per run
+// Expo allows batches of 100, so we'll send 10 batch requests
+const BATCH_SIZE = 100
+const MAX_NOTIFICATIONS = 1000
 
 interface NotificationQueueItem {
   id: string
@@ -18,22 +24,33 @@ interface NotificationQueueItem {
 }
 
 interface Profile {
+  id: string
   push_token: string | null
   push_enabled: boolean
+}
+
+interface ExpoMessage {
+  to: string
+  sound: string
+  title: string
+  body: string
+  data: any
+  priority: string
+  badge: number
 }
 
 serve(async (req) => {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Get pending notifications (limit to 50 per run to avoid timeouts)
+    // Get pending notifications
     const { data: notifications, error: fetchError } = await supabase
       .from('notification_queue')
       .select('*')
       .eq('status', 'pending')
-      .lt('attempts', 3) // Max 3 attempts
+      .lt('attempts', 3)
       .order('created_at', { ascending: true })
-      .limit(50)
+      .limit(MAX_NOTIFICATIONS)
 
     if (fetchError) {
       throw fetchError
@@ -48,56 +65,51 @@ serve(async (req) => {
 
     console.log(`Processing ${notifications.length} notifications...`)
 
+    // Get all unique profile IDs
+    const profileIds = [...new Set(notifications.map((n: NotificationQueueItem) => n.recipient_profile_id))]
+
+    // Batch fetch all profiles at once
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, push_token, push_enabled')
+      .in('id', profileIds)
+
+    if (profilesError) {
+      throw profilesError
+    }
+
+    // Create a map for quick profile lookup
+    const profileMap = new Map<string, Profile>()
+    for (const profile of (profiles || [])) {
+      profileMap.set(profile.id, profile as Profile)
+    }
+
     let successCount = 0
     let failureCount = 0
+    let skippedCount = 0
 
-    // Process each notification
+    // Prepare notifications for batch sending
+    const toSend: { notification: NotificationQueueItem; message: ExpoMessage }[] = []
+    const toSkip: { id: string; reason: string }[] = []
+    const toFail: { id: string; error: string; attempts: number }[] = []
+
     for (const notification of notifications as NotificationQueueItem[]) {
-      try {
-        // Get recipient's push token
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('push_token, push_enabled')
-          .eq('id', notification.recipient_profile_id)
-          .single()
+      const profile = profileMap.get(notification.recipient_profile_id)
 
-        if (profileError || !profile) {
-          console.error(`Profile not found for notification ${notification.id}`)
-          // Mark as failed
-          await supabase
-            .from('notification_queue')
-            .update({
-              status: 'failed',
-              error: 'Profile not found',
-              processed_at: new Date().toISOString(),
-              attempts: notification.attempts + 1
-            })
-            .eq('id', notification.id)
-          failureCount++
-          continue
-        }
+      if (!profile) {
+        toFail.push({ id: notification.id, error: 'Profile not found', attempts: notification.attempts })
+        continue
+      }
 
-        const typedProfile = profile as Profile
+      if (!profile.push_enabled || !profile.push_token) {
+        toSkip.push({ id: notification.id, reason: 'Notifications disabled or no token' })
+        continue
+      }
 
-        // Check if user has notifications enabled and has a push token
-        if (!typedProfile.push_enabled || !typedProfile.push_token) {
-          console.log(`User ${notification.recipient_profile_id} has notifications disabled or no token`)
-          // Mark as sent (no point retrying)
-          await supabase
-            .from('notification_queue')
-            .update({
-              status: 'sent',
-              processed_at: new Date().toISOString(),
-              attempts: notification.attempts + 1
-            })
-            .eq('id', notification.id)
-          successCount++
-          continue
-        }
-
-        // Send push notification via Expo Push API
-        const message = {
-          to: typedProfile.push_token,
+      toSend.push({
+        notification,
+        message: {
+          to: profile.push_token,
           sound: 'default',
           title: notification.title,
           body: notification.body,
@@ -105,64 +117,138 @@ serve(async (req) => {
           priority: 'high',
           badge: 1,
         }
-
-        const response = await fetch('https://exp.host/--/api/v2/push/send', {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Accept-Encoding': 'gzip, deflate',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(message),
-        })
-
-        const result = await response.json()
-
-        if (result.data?.status === 'error') {
-          console.error(`Failed to send notification ${notification.id}:`, result.data.message)
-          // Mark as failed, will retry
-          await supabase
-            .from('notification_queue')
-            .update({
-              status: notification.attempts + 1 >= 3 ? 'failed' : 'pending',
-              error: result.data.message,
-              attempts: notification.attempts + 1
-            })
-            .eq('id', notification.id)
-          failureCount++
-        } else {
-          console.log(`Successfully sent notification ${notification.id}`)
-          // Mark as sent
-          await supabase
-            .from('notification_queue')
-            .update({
-              status: 'sent',
-              processed_at: new Date().toISOString(),
-              attempts: notification.attempts + 1
-            })
-            .eq('id', notification.id)
-          successCount++
-        }
-      } catch (error) {
-        console.error(`Error processing notification ${notification.id}:`, error)
-        // Mark as failed
-        await supabase
-          .from('notification_queue')
-          .update({
-            status: notification.attempts + 1 >= 3 ? 'failed' : 'pending',
-            error: error.message,
-            attempts: notification.attempts + 1
-          })
-          .eq('id', notification.id)
-        failureCount++
-      }
+      })
     }
+
+    // Send notifications in batches of 100 (Expo's limit)
+    const sendBatches: Promise<void>[] = []
+
+    for (let i = 0; i < toSend.length; i += BATCH_SIZE) {
+      const batch = toSend.slice(i, i + BATCH_SIZE)
+      const messages = batch.map(b => b.message)
+
+      sendBatches.push((async () => {
+        try {
+          const response = await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              'Accept-Encoding': 'gzip, deflate',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(messages),
+          })
+
+          const result = await response.json()
+          const results = result.data || []
+
+          // Process results - Expo returns array in same order as sent
+          const successIds: string[] = []
+          const failedUpdates: { id: string; error: string; attempts: number }[] = []
+
+          for (let j = 0; j < batch.length; j++) {
+            const notification = batch[j].notification
+            const ticketResult = results[j]
+
+            if (ticketResult?.status === 'error') {
+              failedUpdates.push({
+                id: notification.id,
+                error: ticketResult.message || 'Unknown error',
+                attempts: notification.attempts
+              })
+              failureCount++
+            } else {
+              successIds.push(notification.id)
+              successCount++
+            }
+          }
+
+          // Batch update successful notifications
+          if (successIds.length > 0) {
+            await supabase
+              .from('notification_queue')
+              .update({
+                status: 'sent',
+                processed_at: new Date().toISOString(),
+                attempts: supabase.rpc ? undefined : 1 // Will be handled below
+              })
+              .in('id', successIds)
+
+            // Increment attempts for all - wrapped in try/catch since RPC may not exist
+            try {
+              await supabase.rpc('increment_notification_attempts', { notification_ids: successIds })
+            } catch {
+              // If RPC doesn't exist, that's ok - we already updated status
+            }
+          }
+
+          // Batch update failed notifications
+          for (const failed of failedUpdates) {
+            await supabase
+              .from('notification_queue')
+              .update({
+                status: failed.attempts + 1 >= 3 ? 'failed' : 'pending',
+                error: failed.error,
+                attempts: failed.attempts + 1
+              })
+              .eq('id', failed.id)
+          }
+        } catch (error) {
+          console.error('Batch send error:', error)
+          // Mark all in this batch as failed
+          for (const item of batch) {
+            await supabase
+              .from('notification_queue')
+              .update({
+                status: item.notification.attempts + 1 >= 3 ? 'failed' : 'pending',
+                error: error.message,
+                attempts: item.notification.attempts + 1
+              })
+              .eq('id', item.notification.id)
+            failureCount++
+          }
+        }
+      })())
+    }
+
+    // Wait for all batches to complete
+    await Promise.all(sendBatches)
+
+    // Handle skipped notifications (no token/disabled)
+    if (toSkip.length > 0) {
+      const skipIds = toSkip.map(s => s.id)
+      await supabase
+        .from('notification_queue')
+        .update({
+          status: 'sent',
+          processed_at: new Date().toISOString()
+        })
+        .in('id', skipIds)
+      skippedCount = toSkip.length
+    }
+
+    // Handle failed notifications (no profile)
+    for (const failed of toFail) {
+      await supabase
+        .from('notification_queue')
+        .update({
+          status: 'failed',
+          error: failed.error,
+          processed_at: new Date().toISOString(),
+          attempts: failed.attempts + 1
+        })
+        .eq('id', failed.id)
+      failureCount++
+    }
+
+    console.log(`Processed: ${notifications.length}, Sent: ${successCount}, Skipped: ${skippedCount}, Failed: ${failureCount}`)
 
     return new Response(
       JSON.stringify({
         message: 'Notification processing complete',
         processed: notifications.length,
-        success: successCount,
+        sent: successCount,
+        skipped: skippedCount,
         failed: failureCount
       }),
       { headers: { 'Content-Type': 'application/json' }, status: 200 }

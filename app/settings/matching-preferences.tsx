@@ -148,6 +148,7 @@ export default function MatchingPreferences() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
   const [newCity, setNewCity] = useState('');
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
@@ -171,10 +172,10 @@ export default function MatchingPreferences() {
 
   const loadPreferences = async () => {
     try {
-      // First get the profile_id
+      // First get the profile_id and premium status
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, is_premium, is_platinum')
         .eq('user_id', user?.id)
         .single();
 
@@ -182,6 +183,7 @@ export default function MatchingPreferences() {
       if (!profileData) throw new Error('Profile not found');
 
       setProfileId(profileData.id);
+      setIsPremium(profileData.is_premium || profileData.is_platinum || false);
 
       // Then get preferences using profile_id
       const { data, error } = await supabase
@@ -616,7 +618,9 @@ export default function MatchingPreferences() {
               <View style={styles.switchContent}>
                 <MaterialCommunityIcons name="earth" size={20} color="#A08AB7" style={{ marginRight: 8 }} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.switchTitle}>Search globally</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={styles.switchTitle}>Search globally</Text>
+                  </View>
                   <Text style={styles.switchDescription}>
                     Match with people anywhere in the world
                   </Text>
@@ -634,7 +638,7 @@ export default function MatchingPreferences() {
           </View>
         </View>
 
-        {/* Preferred Cities */}
+        {/* Preferred Cities - Now free for all users */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Location Preferences</Text>
           <View style={styles.card}>

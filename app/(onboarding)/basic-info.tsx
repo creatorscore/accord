@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -136,6 +136,7 @@ export default function BasicInfo() {
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [ageCertified, setAgeCertified] = useState(false);
+  const [manualLocationMode, setManualLocationMode] = useState(false); // For users without location permission
 
   // Check authentication and load existing data on mount
   useEffect(() => {
@@ -304,12 +305,32 @@ export default function BasicInfo() {
 
   // Debounce timer ref
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
+
+  // Request location permission on Android when user wants to search
+  const requestLocationPermissionForSearch = async () => {
+    if (Platform.OS === 'android' && !locationPermissionGranted) {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        setLocationPermissionGranted(true);
+        return true;
+      } else {
+        Alert.alert(
+          'Permission Required',
+          'Location permission is needed to search for cities on Android. You can also use "Get My Location" button instead.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+    }
+    return true; // iOS doesn't need permission for geocoding
+  };
 
   const handleLocationSearch = async (searchText: string) => {
     setLocationSearch(searchText);
 
     // Clear previous suggestions if search is too short
-    if (searchText.trim().length < 3) {
+    if (searchText.trim().length < 2) {
       setLocationSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -320,10 +341,19 @@ export default function BasicInfo() {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Debounce search by 500ms
+    // Debounce search by 400ms (faster for better UX)
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         setSearchingLocation(true);
+
+        // Android requires location permission for geocoding - check if already granted
+        if (Platform.OS === 'android' && !locationPermissionGranted) {
+          const hasPermission = await requestLocationPermissionForSearch();
+          if (!hasPermission) {
+            setSearchingLocation(false);
+            return;
+          }
+        }
 
         // Use expo-location geocoding to find the location
         const results = await Location.geocodeAsync(searchText);
@@ -338,28 +368,80 @@ export default function BasicInfo() {
                   longitude: result.longitude,
                 });
 
+                // Extract city - try multiple fields as different countries use different conventions
+                let city = address.city || address.district || address.subregion || address.name || '';
+                let state = address.region || address.subregion || '';
+                const country = address.country || '';
+
+                // Handle countries with constituent countries/regions (UK, Spain, etc.)
+                // These places have regions that are more like "states" than cities
+                const constituentRegions = [
+                  'Wales', 'Scotland', 'England', 'Northern Ireland', // UK
+                  'Catalonia', 'Andalusia', 'Galicia', 'Basque Country', // Spain
+                  'Bavaria', 'Saxony', 'Hesse', // Germany
+                  'Lombardy', 'Tuscany', 'Sicily', 'Veneto', // Italy
+                  'Queensland', 'Victoria', 'New South Wales', // Australia
+                  'Ontario', 'Quebec', 'British Columbia', 'Alberta', // Canada
+                ];
+
+                // If city is a constituent region, use district/subregion as city instead
+                if (constituentRegions.some(r => city.toLowerCase() === r.toLowerCase())) {
+                  const originalCity = city;
+                  city = address.district || address.subregion || address.name || '';
+                  // If we still don't have a city, use the search term's first part
+                  if (!city) {
+                    city = searchText.split(',')[0].trim();
+                  }
+                  // Use the constituent region as the state
+                  state = originalCity;
+                }
+
+                // If city is still empty, try to extract from name or use search term
+                if (!city && address.name) {
+                  city = address.name;
+                }
+
+                // For countries without states/regions (small countries), leave state empty
+                // but ensure we have at least the country
+                if (!state && city) {
+                  // Some small countries don't have regions - that's okay
+                  state = '';
+                }
+
                 return {
-                  city: address.city || '',
-                  state: address.region || '',
-                  country: address.country || '',
+                  city: city,
+                  state: state,
+                  country: country,
                   latitude: result.latitude,
                   longitude: result.longitude,
                 };
               } catch (error) {
+                console.log('Reverse geocode failed:', error);
                 return null;
               }
             })
           );
 
-          // Filter out null results and duplicates
+          // Filter out null results and results without a city
           const validSuggestions = suggestions.filter(
             (s): s is { city: string; state: string; country: string; latitude: number; longitude: number } =>
               s !== null && s.city !== ''
           );
 
-          setLocationSuggestions(validSuggestions);
-          setShowSuggestions(validSuggestions.length > 0);
+          // Deduplicate by city+state+country combination
+          const uniqueSuggestions = validSuggestions.filter((s, index, self) =>
+            index === self.findIndex((t) =>
+              t.city.toLowerCase() === s.city.toLowerCase() &&
+              t.state.toLowerCase() === s.state.toLowerCase() &&
+              t.country.toLowerCase() === s.country.toLowerCase()
+            )
+          );
+
+          console.log('📍 Location suggestions:', uniqueSuggestions.length, 'results for:', searchText);
+          setLocationSuggestions(uniqueSuggestions);
+          setShowSuggestions(uniqueSuggestions.length > 0);
         } else {
+          console.log('📍 No geocode results for:', searchText);
           setLocationSuggestions([]);
           setShowSuggestions(false);
         }
@@ -370,7 +452,7 @@ export default function BasicInfo() {
       } finally {
         setSearchingLocation(false);
       }
-    }, 500);
+    }, 400);
   };
 
   const selectLocation = (suggestion: { city: string; state: string; country: string; latitude: number; longitude: number }) => {
@@ -449,8 +531,9 @@ export default function BasicInfo() {
       return;
     }
 
-    // Warn if no precise coordinates captured
-    if (!locationCoords) {
+    // Warn if no precise coordinates captured (only if not in manual mode)
+    // In manual mode, user explicitly chose to enter location without GPS
+    if (!locationCoords && !manualLocationMode) {
       Alert.alert(
         'Improve Accuracy',
         'For best matching results, we recommend using "Get My Location" or the search feature to get precise coordinates.\n\nContinue with manual entry?',
@@ -557,18 +640,23 @@ export default function BasicInfo() {
     }
   };
 
+  // Ref for scrolling to location input
+  const scrollViewRef = useRef<ScrollView>(null);
+  const locationInputRef = useRef<View>(null);
+
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
       className="flex-1 bg-cream"
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <ScrollView
+        ref={scrollViewRef}
         className="flex-1"
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ flexGrow: 1 }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
       >
-        <View className="px-6 pt-16 pb-8">
+        <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
@@ -656,59 +744,79 @@ export default function BasicInfo() {
             </TouchableOpacity>
           )}
 
-          {/* Calendar Date Picker Modal */}
-          <Modal
-            visible={showDatePicker}
-            transparent
-            animationType="slide"
-            onRequestClose={() => setShowDatePicker(false)}
-          >
-            <View className="flex-1 bg-black/50 justify-end">
-              <View className="bg-white rounded-t-3xl p-6 pb-8">
-                {/* Header */}
-                <View className="flex-row items-center justify-between mb-4">
-                  <Text className="text-2xl font-bold text-gray-900">Select Birth Date</Text>
-                  <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                    <MaterialCommunityIcons name="close" size={28} color="#6B7280" />
+          {/* Calendar Date Picker - Platform specific */}
+          {Platform.OS === 'ios' ? (
+            // iOS: Use Modal with inline spinner
+            <Modal
+              visible={showDatePicker}
+              transparent
+              animationType="slide"
+              onRequestClose={() => setShowDatePicker(false)}
+            >
+              <View className="flex-1 bg-black/50 justify-end">
+                <View className="bg-white rounded-t-3xl p-6 pb-8">
+                  {/* Header */}
+                  <View className="flex-row items-center justify-between mb-4">
+                    <Text className="text-2xl font-bold text-gray-900">Select Birth Date</Text>
+                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                      <MaterialCommunityIcons name="close" size={28} color="#6B7280" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text className="text-sm text-gray-500 mb-4">
+                    You must be at least 18 years old to use Accord
+                  </Text>
+
+                  {/* Calendar Date Picker */}
+                  <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 8 }}>
+                    <DateTimePicker
+                      mode="date"
+                      value={birthDate || maxBirthDate}
+                      onChange={(event, selectedDate) => {
+                        if (selectedDate) {
+                          setBirthDate(selectedDate);
+                        }
+                      }}
+                      maximumDate={maxBirthDate}
+                      minimumDate={minBirthDate}
+                      display="spinner"
+                      themeVariant="light"
+                    />
+                  </View>
+
+                  {/* Confirm Button */}
+                  <TouchableOpacity
+                    className={`rounded-full py-4 items-center mt-4 ${
+                      birthDate ? 'bg-lavender-500' : 'bg-gray-300'
+                    }`}
+                    onPress={() => setShowDatePicker(false)}
+                    disabled={!birthDate}
+                  >
+                    <Text className="text-white font-bold text-lg">
+                      {birthDate ? 'Confirm' : 'Select a date'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
-
-                <Text className="text-sm text-gray-500 mb-4">
-                  You must be at least 18 years old to use Accord
-                </Text>
-
-                {/* Calendar Date Picker */}
-                <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 8 }}>
-                  <DateTimePicker
-                    mode="date"
-                    value={birthDate || maxBirthDate}
-                    onChange={(event, selectedDate) => {
-                      if (selectedDate) {
-                        setBirthDate(selectedDate);
-                      }
-                    }}
-                    maximumDate={maxBirthDate}
-                    minimumDate={minBirthDate}
-                    display="spinner"
-                    themeVariant="light"
-                  />
-                </View>
-
-                {/* Confirm Button */}
-                <TouchableOpacity
-                  className={`rounded-full py-4 items-center mt-4 ${
-                    birthDate ? 'bg-lavender-500' : 'bg-gray-300'
-                  }`}
-                  onPress={() => setShowDatePicker(false)}
-                  disabled={!birthDate}
-                >
-                  <Text className="text-white font-bold text-lg">
-                    {birthDate ? 'Confirm' : 'Select a date'}
-                  </Text>
-                </TouchableOpacity>
               </View>
-            </View>
-          </Modal>
+            </Modal>
+          ) : (
+            // Android: Use spinner date picker for easier year selection
+            showDatePicker && (
+              <DateTimePicker
+                mode="date"
+                value={birthDate || maxBirthDate}
+                onChange={(event, selectedDate) => {
+                  setShowDatePicker(false); // Android closes picker on any action
+                  if (event.type === 'set' && selectedDate) {
+                    setBirthDate(selectedDate);
+                  }
+                }}
+                maximumDate={maxBirthDate}
+                minimumDate={minBirthDate}
+                display="spinner"
+              />
+            )
+          )}
 
           {/* Gender */}
           <View>
@@ -836,67 +944,196 @@ export default function BasicInfo() {
           <View>
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-sm font-medium text-gray-700">{t('onboarding.location')}</Text>
-              <TouchableOpacity onPress={handleGetLocation} disabled={gettingLocation}>
-                <Text className="text-lavender-500 font-medium">
-                  {gettingLocation ? t('onboarding.gettingLocation') : t('onboarding.useMyLocation')}
+              {!manualLocationMode && (
+                <TouchableOpacity onPress={handleGetLocation} disabled={gettingLocation}>
+                  <Text className="text-lavender-500 font-medium">
+                    {gettingLocation ? t('onboarding.gettingLocation') : t('onboarding.useMyLocation')}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Toggle between search and manual entry */}
+            <View className="flex-row mb-3 bg-gray-100 rounded-xl p-1">
+              <TouchableOpacity
+                className={`flex-1 py-2 rounded-lg ${!manualLocationMode ? 'bg-white shadow-sm' : ''}`}
+                onPress={() => setManualLocationMode(false)}
+              >
+                <Text className={`text-center font-medium ${!manualLocationMode ? 'text-lavender-600' : 'text-gray-500'}`}>
+                  Search
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className={`flex-1 py-2 rounded-lg ${manualLocationMode ? 'bg-white shadow-sm' : ''}`}
+                onPress={() => setManualLocationMode(true)}
+              >
+                <Text className={`text-center font-medium ${manualLocationMode ? 'text-lavender-600' : 'text-gray-500'}`}>
+                  Enter Manually
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {/* Location Search with Autocomplete */}
-            <View className="mb-3">
-              <View className="relative">
-                <TextInput
-                  className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900 pr-12"
-                  placeholder="Search for your city (e.g., Vancouver, BC)"
-                  value={locationSearch}
-                  onChangeText={handleLocationSearch}
-                  onFocus={() => {
-                    if (locationSuggestions.length > 0) {
-                      setShowSuggestions(true);
-                    }
-                  }}
-                />
-                {searchingLocation && (
-                  <View className="absolute right-4 top-3">
-                    <MaterialCommunityIcons name="loading" size={24} color="#9CA3AF" />
+            {!manualLocationMode ? (
+              /* Location Search with Autocomplete */
+              <View className="mb-3">
+                <View className="relative">
+                  <TextInput
+                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900 pr-12"
+                    placeholder="Search for your city (e.g., Vancouver, BC)"
+                    value={locationSearch}
+                    onChangeText={handleLocationSearch}
+                    onFocus={async () => {
+                      // Scroll to make input visible above keyboard
+                      setTimeout(() => {
+                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                      }, 300);
+
+                      // Request location permission early on Android
+                      if (Platform.OS === 'android') {
+                        await requestLocationPermissionForSearch();
+                      }
+
+                      if (locationSuggestions.length > 0) {
+                        setShowSuggestions(true);
+                      }
+                    }}
+                  />
+                  {searchingLocation && (
+                    <View className="absolute right-4 top-3">
+                      <MaterialCommunityIcons name="loading" size={24} color="#9CA3AF" />
+                    </View>
+                  )}
+                </View>
+
+                {/* Autocomplete Suggestions - Modal for better keyboard handling */}
+                <Modal
+                  visible={showSuggestions && locationSuggestions.length > 0}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setShowSuggestions(false)}
+                >
+                  <Pressable
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }}
+                    onPress={() => setShowSuggestions(false)}
+                  >
+                    <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
+                      {/* Stop propagation on the content container so taps inside don't close modal */}
+                      <Pressable onPress={(e) => e.stopPropagation()}>
+                        <View className="bg-white rounded-xl overflow-hidden shadow-lg" style={{ maxHeight: 300 }}>
+                          <View className="bg-lavender-500 px-4 py-3">
+                            <Text className="text-white font-bold text-lg">Select Your City</Text>
+                          </View>
+                          <ScrollView keyboardShouldPersistTaps="handled">
+                            {locationSuggestions.map((suggestion, index) => (
+                              <Pressable
+                                key={`${suggestion.latitude}-${suggestion.longitude}-${index}`}
+                                className="px-4 py-4 border-b border-gray-100 flex-row items-center"
+                                onPress={() => {
+                                  console.log('📍 Location tapped:', suggestion.city);
+                                  selectLocation(suggestion);
+                                }}
+                                android_ripple={{ color: 'rgba(160, 138, 183, 0.2)' }}
+                                style={({ pressed }) => [
+                                  { backgroundColor: pressed ? 'rgba(160, 138, 183, 0.1)' : 'transparent' }
+                                ]}
+                              >
+                                <MaterialCommunityIcons name="map-marker" size={24} color="#A08AB7" />
+                                <View className="ml-3 flex-1">
+                                  <Text className="text-gray-900 font-semibold text-base">
+                                    {suggestion.city}
+                                  </Text>
+                                  <Text className="text-gray-500 text-sm">
+                                    {suggestion.state}, {suggestion.country}
+                                  </Text>
+                                </View>
+                                <MaterialCommunityIcons name="chevron-right" size={20} color="#9CA3AF" />
+                              </Pressable>
+                            ))}
+                          </ScrollView>
+                          <Pressable
+                            className="bg-gray-100 px-4 py-3 items-center"
+                            onPress={() => setShowSuggestions(false)}
+                            android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
+                          >
+                            <Text className="text-gray-600 font-medium">Cancel</Text>
+                          </Pressable>
+                        </View>
+                      </Pressable>
+                    </View>
+                  </Pressable>
+                </Modal>
+
+                <Text className="text-xs text-gray-500 mt-1">
+                  Type your city name (e.g., "Tokyo", "Paris", "São Paulo")
+                </Text>
+
+                {/* More helpful hints for Android users */}
+                {Platform.OS === 'android' && (
+                  <View className="mt-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                    <Text className="text-xs text-blue-700">
+                      <Text className="font-semibold">Tip:</Text> If the search isn't working, tap on "Enter Manually" above to type your location directly.
+                    </Text>
                   </View>
                 )}
               </View>
-
-              {/* Autocomplete Suggestions Dropdown */}
-              {showSuggestions && locationSuggestions.length > 0 && (
-                <View className="bg-white border border-gray-300 rounded-xl mt-2 overflow-hidden shadow-lg" style={{ maxHeight: 200 }}>
-                  <ScrollView nestedScrollEnabled>
-                    {locationSuggestions.map((suggestion, index) => (
-                      <TouchableOpacity
-                        key={`${suggestion.latitude}-${suggestion.longitude}-${index}`}
-                        className="px-4 py-3 border-b border-gray-100 flex-row items-center"
-                        onPress={() => selectLocation(suggestion)}
-                        activeOpacity={0.7}
-                      >
-                        <MaterialCommunityIcons name="map-marker" size={20} color="#A08AB7" />
-                        <View className="ml-3 flex-1">
-                          <Text className="text-gray-900 font-medium">
-                            {suggestion.city}
-                          </Text>
-                          <Text className="text-gray-500 text-xs">
-                            {suggestion.state}, {suggestion.country}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+            ) : (
+              /* Manual Location Entry */
+              <View className="mb-3">
+                <View className="mb-3">
+                  <Text className="text-xs text-gray-600 mb-1">City *</Text>
+                  <TextInput
+                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+                    placeholder="e.g., Toronto"
+                    value={locationCity}
+                    onChangeText={setLocationCity}
+                    onFocus={() => {
+                      setTimeout(() => {
+                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                      }, 300);
+                    }}
+                  />
                 </View>
-              )}
-
-              <Text className="text-xs text-gray-500 mt-1">
-                Start typing to see suggestions, or use "Get My Location"
-              </Text>
-            </View>
+                <View className="mb-3">
+                  <Text className="text-xs text-gray-600 mb-1">State/Province *</Text>
+                  <TextInput
+                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+                    placeholder="e.g., Ontario"
+                    value={locationState}
+                    onChangeText={setLocationState}
+                    onFocus={() => {
+                      setTimeout(() => {
+                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                      }, 300);
+                    }}
+                  />
+                </View>
+                <View>
+                  <Text className="text-xs text-gray-600 mb-1">Country</Text>
+                  <TextInput
+                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+                    placeholder="e.g., Canada"
+                    value={locationCountry}
+                    onChangeText={setLocationCountry}
+                    onFocus={() => {
+                      setTimeout(() => {
+                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                      }, 300);
+                    }}
+                  />
+                </View>
+                <View className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mt-3">
+                  <View className="flex-row items-start">
+                    <MaterialCommunityIcons name="information" size={18} color="#D97706" />
+                    <Text className="text-xs text-amber-700 ml-2 flex-1">
+                      Manual entry may result in less accurate distance calculations for matching. For best results, enable location services.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
 
             {/* Selected Location Display */}
-            {(locationCity || locationState || locationCountry) && (
+            {!manualLocationMode && (locationCity || locationState || locationCountry) && (
               <View className="bg-lavender-50 border border-lavender-200 rounded-xl px-4 py-3 mt-3">
                 <View className="flex-row items-center">
                   <MaterialCommunityIcons name="map-marker-check" size={20} color="#A08AB7" />

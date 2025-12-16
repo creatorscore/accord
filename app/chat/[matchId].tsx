@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   Modal,
   InteractionManager,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
@@ -122,6 +123,7 @@ export default function Chat() {
   const soundRef = useRef<Audio.Sound | null>(null);
   const [showIntroMessages, setShowIntroMessages] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null);
 
   // Photo reveal state
@@ -167,14 +169,24 @@ export default function Chat() {
     loadCurrentProfile();
     setupAudio();
 
-    // Track keyboard visibility
+    // Track keyboard visibility and height (for Android manual handling)
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
-      () => setKeyboardVisible(true)
+      (e) => {
+        setKeyboardVisible(true);
+        if (Platform.OS === 'android') {
+          setKeyboardHeight(e.endCoordinates.height);
+        }
+      }
     );
     const keyboardDidHideListener = Keyboard.addListener(
       'keyboardDidHide',
-      () => setKeyboardVisible(false)
+      () => {
+        setKeyboardVisible(false);
+        if (Platform.OS === 'android') {
+          setKeyboardHeight(0);
+        }
+      }
     );
 
     return () => {
@@ -185,13 +197,33 @@ export default function Chat() {
   }, []);
 
   useEffect(() => {
-    if (currentProfileId) {
+    if (currentProfileId && matchId) {
       loadMatchProfile();
       loadMessages();
-      subscribeToMessages();
+      const unsubscribe = subscribeToMessages();
       markMessagesAsRead();
+
+      // Cleanup subscription when component unmounts or dependencies change
+      return () => {
+        if (unsubscribe) {
+          console.log('🔌 Unsubscribing from chat realtime channel');
+          unsubscribe();
+        }
+      };
     }
-  }, [currentProfileId]);
+  }, [currentProfileId, matchId]);
+
+  // Reload messages when screen comes into focus (e.g., from notification tap)
+  // This ensures messages are fresh when navigating from a push notification
+  useFocusEffect(
+    useCallback(() => {
+      if (currentProfileId && !loading) {
+        console.log('📱 Chat screen focused - refreshing messages');
+        loadMessages();
+        markMessagesAsRead();
+      }
+    }, [currentProfileId, loading])
+  );
 
   useEffect(() => {
     // Auto-show intro messages for Premium users when chat is empty
@@ -1592,7 +1624,8 @@ export default function Chat() {
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      enabled={Platform.OS === 'ios'}
     >
       {/* Dynamic Watermark Overlay for chat */}
       {watermarkReady && matchProfile && (
@@ -1765,7 +1798,12 @@ export default function Chat() {
         // Recording UI
         <View
           key={`recording-${androidLayoutReady}`}
-          style={[styles.recordingContainer, { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: isDarkColorScheme ? '#3D1F1F' : '#FEF2F2', borderTopColor: isDarkColorScheme ? '#5C2C2C' : '#FEE2E2' }]}>
+          style={[styles.recordingContainer, {
+            paddingBottom: Math.max(insets.bottom, 12),
+            marginBottom: Platform.OS === 'android' ? keyboardHeight : 0,
+            backgroundColor: isDarkColorScheme ? '#3D1F1F' : '#FEF2F2',
+            borderTopColor: isDarkColorScheme ? '#5C2C2C' : '#FEE2E2'
+          }]}>
           <TouchableOpacity style={styles.cancelButton} onPress={handleVoiceRecordCancel}>
             <MaterialCommunityIcons name="close" size={24} color="#EF4444" />
           </TouchableOpacity>
@@ -1799,8 +1837,10 @@ export default function Chat() {
         <View
           key={`input-${androidLayoutReady}`}
           style={[styles.inputContainer, {
-            // Both iOS and Android need safe area insets for navigation bar/home indicator
+            // Safe area insets for home indicator/navigation bar
+            // On Android, add keyboard height as margin when keyboard is visible
             paddingBottom: Math.max(insets.bottom, 12),
+            marginBottom: Platform.OS === 'android' ? keyboardHeight : 0,
             backgroundColor: colors.card,
             borderTopColor: colors.border
           }]}>
