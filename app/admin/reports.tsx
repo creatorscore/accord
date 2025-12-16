@@ -331,42 +331,36 @@ export default function AdminReports() {
       const report = reports.find(r => r.id === reportId);
       if (!report) return;
 
-      // Get current admin profile ID
-      const { data: adminProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user?.id)
-        .single();
+      // Get auth session for Edge Function call
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
 
-      if (!adminProfile) throw new Error('Admin profile not found');
+      // Call Edge Function to flag profile (bypasses RLS)
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://xcaktvlosjsaxcntxbyf.supabase.co'}/functions/v1/admin-report-action`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            action: 'photo_review',
+            report_id: report.id,
+            reported_profile_id: report.reported_profile_id,
+            reason: report.reason,
+            details: report.details,
+          }),
+        }
+      );
 
-      // Flag the profile for photo review
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          photo_review_required: true,
-          photo_review_reason: `${report.reason}: ${report.details || 'Photo review required'}`,
-          photo_review_requested_at: new Date().toISOString(),
-        })
-        .eq('id', report.reported_profile_id);
+      const result = await response.json();
 
-      if (profileError) throw profileError;
-
-      // Mark ALL pending reports for this profile as resolved
-      const { error: reportError, count: resolvedCount } = await supabase
-        .from('reports')
-        .update({
-          status: 'resolved',
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('reported_profile_id', report.reported_profile_id)
-        .eq('status', 'pending');
-
-      if (reportError) throw reportError;
-
-      if (resolvedCount && resolvedCount > 1) {
-        console.log(`✅ Resolved ${resolvedCount} reports for profile requiring photo review`);
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to flag profile');
       }
+
+      console.log('✅ Photo review action result:', result);
 
       // Send push notification to the user
       try {
@@ -394,7 +388,7 @@ export default function AdminReports() {
       loadReports();
     } catch (error: any) {
       console.error('Error flagging profile for photo review:', error);
-      Alert.alert('Error', 'Failed to flag profile. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to flag profile. Please try again.');
     }
   };
 
@@ -418,46 +412,36 @@ export default function AdminReports() {
       const report = reports.find(r => r.id === reportId);
       if (!report) return;
 
-      // Get current admin profile ID
-      const { data: adminProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user?.id)
-        .single();
+      // Get auth session for Edge Function call
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
 
-      if (!adminProfile) throw new Error('Admin profile not found');
+      // Call Edge Function to require verification (bypasses RLS)
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://xcaktvlosjsaxcntxbyf.supabase.co'}/functions/v1/admin-report-action`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            action: 'verify_identity',
+            report_id: report.id,
+            reported_profile_id: report.reported_profile_id,
+            reason: report.reason,
+            details: report.details,
+          }),
+        }
+      );
 
-      // Flag the profile for identity verification
-      // Also set photo_review_required to hide from discovery
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          photo_verified: false,
-          photo_verification_status: 'admin_required',
-          is_verified: false,
-          photo_review_required: true,
-          photo_review_reason: `Identity verification required: ${report.reason}`,
-          photo_review_requested_at: new Date().toISOString(),
-        })
-        .eq('id', report.reported_profile_id);
+      const result = await response.json();
 
-      if (profileError) throw profileError;
-
-      // Mark ALL pending reports for this profile as resolved
-      const { error: reportError, count: resolvedCount } = await supabase
-        .from('reports')
-        .update({
-          status: 'resolved',
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('reported_profile_id', report.reported_profile_id)
-        .eq('status', 'pending');
-
-      if (reportError) throw reportError;
-
-      if (resolvedCount && resolvedCount > 1) {
-        console.log(`Resolved ${resolvedCount} reports for profile requiring identity verification`);
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to require verification');
       }
+
+      console.log('✅ Verify identity action result:', result);
 
       // Send push notification to the user
       try {
@@ -484,7 +468,7 @@ export default function AdminReports() {
       loadReports();
     } catch (error: any) {
       console.error('Error flagging profile for identity verification:', error);
-      Alert.alert('Error', 'Failed to require verification. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to require verification. Please try again.');
     }
   };
 

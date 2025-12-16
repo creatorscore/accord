@@ -64,7 +64,7 @@ serve(async (req) => {
     // Build query based on target audience
     let query = supabaseClient
       .from('profiles')
-      .select('id, push_token, push_enabled, display_name, is_premium, is_platinum, is_verified')
+      .select('id, push_token, push_enabled, display_name, is_premium, is_platinum, photo_verified')
       .eq('push_enabled', true);
 
     switch (payload.targetAudience) {
@@ -75,7 +75,7 @@ serve(async (req) => {
         query = query.eq('is_premium', false).eq('is_platinum', false);
         break;
       case 'verified':
-        query = query.eq('is_verified', true);
+        query = query.eq('photo_verified', true);
         break;
       case 'custom':
         if (!payload.customProfileIds || payload.customProfileIds.length === 0) {

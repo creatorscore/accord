@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           error: 'Too many attempts',
-          message: 'You have exceeded the maximum number of verification attempts (5). Please contact support.'
+          message: 'You have exceeded the maximum number of verification attempts (5). Please contact support at hello@joinaccord.app to reset your attempts.'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
       );
@@ -229,36 +229,62 @@ Deno.serve(async (req) => {
         // Download profile photo and convert to base64
         console.log('  - Fetching photo:', photo.url);
         const photoResponse = await fetch(photo.url);
+
+        if (!photoResponse.ok) {
+          console.error(`  - Failed to fetch photo: ${photoResponse.status} ${photoResponse.statusText}`);
+          continue;
+        }
+
         const photoBuffer = await photoResponse.arrayBuffer();
-        const photoBase64 = btoa(String.fromCharCode(...new Uint8Array(photoBuffer)));
+        console.log('  - Photo buffer size:', photoBuffer.byteLength, 'bytes');
+
+        // Convert to base64 safely (handles large files)
+        const photoBytes = new Uint8Array(photoBuffer);
+        let photoBase64 = '';
+        const chunkSize = 32768; // Process in chunks to avoid call stack issues
+        for (let i = 0; i < photoBytes.length; i += chunkSize) {
+          const chunk = photoBytes.subarray(i, Math.min(i + chunkSize, photoBytes.length));
+          photoBase64 += String.fromCharCode.apply(null, chunk as any);
+        }
+        photoBase64 = btoa(photoBase64);
         console.log('  - Photo base64 length:', photoBase64.length);
 
         // Compare faces - AWS expects base64 strings for Bytes
+        console.log('  - Calling CompareFaces...');
         const compareResult = await callRekognition('CompareFaces', {
           SourceImage: { Bytes: selfie_base64 },
           TargetImage: { Bytes: photoBase64 },
           SimilarityThreshold: 80
         });
 
+        console.log('  - CompareFaces response:', JSON.stringify(compareResult).substring(0, 200));
+
         if (compareResult.FaceMatches && compareResult.FaceMatches.length > 0) {
           const similarity = compareResult.FaceMatches[0].Similarity;
-          console.log(`✅ Match found! Similarity: ${similarity}%`);
+          console.log(`  ✅ Match found! Similarity: ${similarity}%`);
 
           if (similarity > highestSimilarity) {
             highestSimilarity = similarity;
             matchedPhotoUrl = photo.url;
           }
+        } else if (compareResult.UnmatchedFaces && compareResult.UnmatchedFaces.length > 0) {
+          console.log(`  ⚠️ Face found in photo but no match. UnmatchedFaces: ${compareResult.UnmatchedFaces.length}`);
+        } else {
+          console.log('  ❌ No face detected in profile photo');
         }
-      } catch (error) {
-        console.error('Error comparing with photo:', photo.url, error);
+      } catch (error: any) {
+        console.error('Error comparing with photo:', photo.url);
+        console.error('  - Error message:', error.message);
+        console.error('  - Error details:', error.toString());
       }
     }
 
     // Step 3: Determine verification result
-    const VERIFICATION_THRESHOLD = 85; // 85% similarity required
+    const VERIFICATION_THRESHOLD = 80;
     const isVerified = highestSimilarity >= VERIFICATION_THRESHOLD;
 
     console.log(`📊 Highest similarity: ${highestSimilarity}%`);
+    console.log(`📊 Threshold: ${VERIFICATION_THRESHOLD}%`);
     console.log(`✅ Verified: ${isVerified}`);
 
     // Update profile with result
@@ -287,14 +313,25 @@ Deno.serve(async (req) => {
       status: 'pending'
     });
 
+    // Generate helpful message based on result
+    let message: string;
+    if (isVerified) {
+      message = `Photos verified! Match confidence: ${Math.round(highestSimilarity)}%`;
+    } else if (highestSimilarity >= 50) {
+      message = `Almost there! Match confidence: ${Math.round(highestSimilarity)}%. Try taking a selfie with better lighting and facing the camera directly, similar to your profile photos.`;
+    } else if (highestSimilarity > 0) {
+      message = `Low match confidence: ${Math.round(highestSimilarity)}%. Make sure your selfie clearly shows your face and matches your profile photos.`;
+    } else {
+      message = `Could not match your selfie to your profile photos. Please ensure your profile photos clearly show your face, and take a well-lit selfie looking directly at the camera.`;
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         verified: isVerified,
         similarity: Math.round(highestSimilarity),
-        message: isVerified
-          ? `Photos verified! Match confidence: ${Math.round(highestSimilarity)}%`
-          : `Verification failed. Match confidence too low: ${Math.round(highestSimilarity)}% (need 85%+)`
+        threshold: VERIFICATION_THRESHOLD,
+        message
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );

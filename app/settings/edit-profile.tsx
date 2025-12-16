@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -824,9 +825,33 @@ export default function EditProfile() {
 
   const startVoiceRecording = async () => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
+      const { status, canAskAgain } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Microphone access is needed');
+        if (!canAskAgain) {
+          // Permission was denied and user must enable it in Settings
+          Alert.alert(
+            'Microphone Permission Required',
+            'To record a voice intro, please enable microphone access in your device settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: () => {
+                  if (Platform.OS === 'ios') {
+                    Linking.openURL('app-settings:');
+                  } else {
+                    Linking.openSettings();
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          Alert.alert(
+            'Microphone Access Needed',
+            'Please grant microphone permission to record a voice intro.'
+          );
+        }
         return;
       }
 
@@ -843,6 +868,7 @@ export default function EditProfile() {
       setIsRecording(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
+      Alert.alert('Recording Error', 'Failed to start recording. Please try again.');
     }
   };
 

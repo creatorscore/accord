@@ -18,7 +18,6 @@ import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
 import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
-import { logScreenshotEvent } from '@/lib/screenshot-tracking';
 import { useColorScheme } from '@/lib/useColorScheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -210,12 +209,8 @@ export default function ProfileView() {
   const [otherUserRevealed, setOtherUserRevealed] = useState(false); // Profile revealed to current user
   const [revealLoading, setRevealLoading] = useState(false);
 
-  // Screenshot tracking - log when someone screenshots this profile
-  useScreenCaptureProtection(true, async () => {
-    if (currentProfileId && id) {
-      await logScreenshotEvent(currentProfileId, id, 'profile_view');
-    }
-  });
+  // Enable screenshot protection for this profile view
+  useScreenCaptureProtection(true);
 
   useEffect(() => {
     loadCurrentProfile();

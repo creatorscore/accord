@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -44,7 +44,7 @@ export default function LanguageSelection() {
 
   return (
     <ScrollView className="flex-1 bg-white">
-      <View className="px-6 pt-16 pb-8">
+      <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Header */}
         <View className="mb-8">
           <View className="items-center mb-6">

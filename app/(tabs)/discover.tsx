@@ -18,7 +18,8 @@ import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import FilterModal, { FilterOptions } from '@/components/matching/FilterModal';
 import ProfileBoostModal from '@/components/premium/ProfileBoostModal';
 import ReportUserModal from '@/components/moderation/ReportUserModal';
-import { sendMatchNotification, sendLikeNotification } from '@/lib/notifications';
+// NOTE: Match and like notifications are sent via database triggers (notify_on_match, notify_on_like)
+// Do NOT import or call sendMatchNotification/sendLikeNotification from client code
 import { calculateCompatibilityScore, getCompatibilityBreakdown } from '@/lib/matching-algorithm';
 import { initializeTracking } from '@/lib/tracking-permissions';
 import { DistanceUnit } from '@/lib/distance-utils';
@@ -29,6 +30,7 @@ import { useColorScheme } from '@/lib/useColorScheme';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { prefetchImages } from '@/components/shared/ConditionalImage';
 import VerificationBanner from '@/components/shared/VerificationBanner';
+import PopularityInsightsModal from '@/components/matching/PopularityInsightsModal';
 
 interface Profile {
   id: string;
@@ -75,8 +77,8 @@ interface Profile {
   preferences?: any;
 }
 
-// Daily swipe limit for free users (fair for everyone)
-const DAILY_SWIPE_LIMIT = 25;
+// Daily swipe limit for free users
+const DAILY_SWIPE_LIMIT = 15;
 
 // Helper function to hash phone numbers for contact blocking
 const hashPhoneNumber = async (phoneNumber: string): Promise<string> => {
@@ -149,6 +151,20 @@ export default function Discover() {
   const [showVerificationBanner, setShowVerificationBanner] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(true); // Default to true to avoid flash
   const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
+
+  // Popularity Insights Modal state
+  const [showPopularityModal, setShowPopularityModal] = useState(false);
+  const [popularityData, setPopularityData] = useState({
+    newLikesCount: 0,
+    totalLikes: 0,
+    percentileRank: undefined as number | undefined,
+    streak: 0,
+  });
+  const hasCheckedPopularity = useRef(false);
+
+  // Premium upgrade prompt for locked features
+  const [showPremiumLocationPrompt, setShowPremiumLocationPrompt] = useState(false);
+  const hasShownPremiumLocationPrompt = useRef(false);
 
   // Quick filter options
   const INTENTIONS = [
@@ -319,6 +335,12 @@ export default function Discover() {
         setShowOnboardingBanner(true);
       }
 
+      // Check popularity insights (shows celebratory modal if user has new likes)
+      // Only check if profile is complete to avoid showing to new users
+      if (profileComplete) {
+        checkPopularityInsights(profileId);
+      }
+
       // Immediately start loading profiles to reduce perceived lag
       // Don't wait for next render cycle
       setLoading(false); // Remove initial loading state immediately
@@ -363,6 +385,125 @@ export default function Discover() {
     }
   };
 
+  // Check popularity insights - shows celebratory modal when user has new likes
+  const checkPopularityInsights = async (profileId: string) => {
+    // Only check once per session
+    if (hasCheckedPopularity.current) return;
+    hasCheckedPopularity.current = true;
+
+    try {
+      // Get last check timestamp from AsyncStorage
+      const lastCheckKey = `popularity_last_check_${profileId}`;
+      const lastCheckStr = await AsyncStorage.getItem(lastCheckKey);
+      const lastCheck = lastCheckStr ? new Date(lastCheckStr) : new Date(Date.now() - 24 * 60 * 60 * 1000); // Default to 24h ago
+
+      // Query likes received since last check
+      const [
+        { data: newLikes, error: newLikesError },
+        { data: totalLikesData, error: totalLikesError },
+        { count: totalActiveProfiles, error: profilesError },
+      ] = await Promise.all([
+        // New likes since last check
+        supabase
+          .from('likes')
+          .select('id, created_at')
+          .eq('liked_profile_id', profileId)
+          .gt('created_at', lastCheck.toISOString()),
+        // Total likes received all time
+        supabase
+          .from('likes')
+          .select('id')
+          .eq('liked_profile_id', profileId),
+        // Total active profiles (for percentile calculation)
+        supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true })
+          .eq('profile_complete', true)
+          .eq('incognito_mode', false),
+      ]);
+
+      const newLikesCount = newLikes?.length || 0;
+      const totalLikes = totalLikesData?.length || 0;
+
+      // Calculate percentile rank (approximate based on like count thresholds)
+      // We use a simple heuristic since getting exact rankings would be expensive
+      let percentileRank: number | undefined;
+      if (totalActiveProfiles && totalActiveProfiles > 10 && totalLikes > 0) {
+        // Approximate percentile based on like count
+        // These thresholds can be adjusted based on your user base
+        if (totalLikes >= 50) {
+          percentileRank = 1; // Top 1%
+        } else if (totalLikes >= 30) {
+          percentileRank = 5; // Top 5%
+        } else if (totalLikes >= 20) {
+          percentileRank = 10; // Top 10%
+        } else if (totalLikes >= 10) {
+          percentileRank = 25; // Top 25%
+        } else if (totalLikes >= 5) {
+          percentileRank = 50; // Top 50%
+        }
+        // If less than 5 likes, don't show percentile (not impressive enough)
+      }
+
+      // Calculate streak (consecutive days with likes)
+      let streak = 0;
+      if (newLikesCount > 0) {
+        const streakKey = `popularity_streak_${profileId}`;
+        const streakData = await AsyncStorage.getItem(streakKey);
+        if (streakData) {
+          const { lastLikeDate, currentStreak } = JSON.parse(streakData);
+          const today = new Date().toDateString();
+          const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
+
+          if (lastLikeDate === yesterday) {
+            streak = currentStreak + 1;
+          } else if (lastLikeDate === today) {
+            streak = currentStreak;
+          } else {
+            streak = 1;
+          }
+        } else {
+          streak = 1;
+        }
+
+        // Save streak
+        await AsyncStorage.setItem(`popularity_streak_${profileId}`, JSON.stringify({
+          lastLikeDate: new Date().toDateString(),
+          currentStreak: streak,
+        }));
+      }
+
+      // Update state
+      setPopularityData({
+        newLikesCount,
+        totalLikes,
+        percentileRank,
+        streak,
+      });
+
+      // Show modal if user has new likes OR if they're in top 25% (and haven't seen it today)
+      const showModalKey = `popularity_modal_shown_${profileId}_${new Date().toDateString()}`;
+      const alreadyShownToday = await AsyncStorage.getItem(showModalKey);
+
+      if (!alreadyShownToday && (newLikesCount > 0 || (percentileRank && percentileRank <= 25))) {
+        // Small delay to let the screen load first
+        setTimeout(() => {
+          setShowPopularityModal(true);
+        }, 1000);
+
+        // Mark as shown today
+        await AsyncStorage.setItem(showModalKey, 'true');
+      }
+
+      // Update last check timestamp
+      await AsyncStorage.setItem(lastCheckKey, new Date().toISOString());
+
+      console.log(`🎉 Popularity check: ${newLikesCount} new likes, ${totalLikes} total, top ${percentileRank}%, ${streak} day streak`);
+    } catch (error) {
+      console.error('Error checking popularity insights:', error);
+    }
+  };
+
   const loadSuperLikesCount = async () => {
     if (!currentProfileId) return;
 
@@ -399,6 +540,18 @@ export default function Discover() {
     // Free users have daily limit (same for everyone)
     if (swipeCount >= DAILY_SWIPE_LIMIT) {
       setShowPaywall(true);
+
+      // Record when user hit swipe limit (for refresh notification)
+      if (currentProfileId) {
+        supabase
+          .from('notification_preferences')
+          .update({ last_swipe_limit_hit_at: new Date().toISOString() })
+          .eq('profile_id', currentProfileId)
+          .then(({ error }) => {
+            if (error) console.warn('Failed to record swipe limit hit:', error);
+          });
+      }
+
       return false;
     }
 
@@ -511,7 +664,10 @@ export default function Discover() {
           : currentUserDataRaw.preferences
       };
 
-      // Check if user has global search enabled
+      // Check premium status (used for other features like advanced filters)
+      const userHasPremium = currentUserData.is_premium || currentUserData.is_platinum || false;
+
+      // Global search is FREE for all users to help grow the user base
       const isSearchingGlobally = currentUserData.preferences?.search_globally === true;
       console.log('🌍 Global search enabled:', isSearchingGlobally);
 
@@ -922,16 +1078,27 @@ export default function Discover() {
           //
           // FILTER DISABLED - Gender preference is the only relevant matching criteria.
 
-          // 4. LOCATION/DISTANCE FILTER (ALWAYS APPLIED - even in search mode unless global)
-          // Use the pre-computed isSearchingGlobally flag from the outer scope
+          // 4. LOCATION/DISTANCE FILTER
+          // IMPORTANT: A user's distance preference is ALWAYS respected.
+          // - search_globally: Only affects what THAT user sees, not who sees them
+          // - preferred_cities: Only affects what THAT user sees, not who sees them
+          //
+          // Example: User in Saudi Arabia adds "NYC" as preferred city
+          // - They WILL see NYC profiles (because NYC is in their preferred cities)
+          // - NYC users with 50-mile limit will NOT see them (their distance pref is respected)
+          //
+          // This prevents users from gaming the system to appear in distant users' feeds.
+          //
+          // NOTE: Global search and preferred cities are now FREE for all users
+          // to help grow the user base during early launch phase.
           const userSearchGlobally = isSearchingGlobally;
-          const profileSearchGlobally = profile.preferences?.search_globally || false;
+
+          // Preferred cities is now FREE for all users
           const userPreferredCities = currentUserData.preferences?.preferred_cities || [];
-          const profilePreferredCities = profile.preferences?.preferred_cities || [];
 
-
-          // Check if profile is in user's preferred cities (exact match)
-          const profileMatchesPreferredCity = userPreferredCities.length > 0 &&
+          // Check if profile is in CURRENT USER's preferred cities
+          // This lets users see profiles in cities they're interested in
+          const profileInUserPreferredCity = userPreferredCities.length > 0 &&
             userPreferredCities.some((city: string) => {
               const [prefCity, prefState] = city.split(',').map((s: string) => s.trim().toLowerCase());
               const profileCity = (profile.location_city || '').toLowerCase();
@@ -943,24 +1110,9 @@ export default function Discover() {
               return false;
             });
 
-          // Check if user is in profile's preferred cities (bidirectional)
-          const userMatchesProfilePreferredCity = profilePreferredCities.length > 0 &&
-            profilePreferredCities.some((city: string) => {
-              const [prefCity, prefState] = city.split(',').map((s: string) => s.trim().toLowerCase());
-              const userCity = (currentUserData.location_city || '').toLowerCase();
-              const userState = (currentUserData.location_state || '').toLowerCase();
-
-              if (prefCity === userCity) {
-                return !prefState || prefState === userState;
-              }
-              return false;
-            });
-
-          // Apply distance filter if:
-          // - Neither is searching globally
-          // - Profile is NOT in preferred cities
-          if (!userSearchGlobally && !profileSearchGlobally &&
-              !profileMatchesPreferredCity && !userMatchesProfilePreferredCity) {
+          // Apply distance filter if current user is NOT searching globally
+          // AND profile is NOT in current user's preferred cities
+          if (!userSearchGlobally && !profileInUserPreferredCity) {
 
             // Recalculate distance in real-time (avoid stale data)
             let realTimeDistance = profile.distance;
@@ -1061,19 +1213,16 @@ export default function Discover() {
           return true;
         });
 
-      // Sort profiles:
-      // 1. People who liked you (highest priority for mutual matching)
-      // 2. Boosted profiles
-      // 3. By compatibility score
-      const sortedProfiles = transformedProfiles.sort((a, b) => {
-        const aLikedYou = peopleWhoLikedMeIds.has(a.id);
-        const bLikedYou = peopleWhoLikedMeIds.has(b.id);
+      // Sort profiles with ORGANIC mixing of people who liked you (Hinge-style)
+      // Instead of putting all "liked you" profiles at top (too obvious),
+      // we mix 1-3 of them randomly throughout the deck for natural discovery
 
-        // People who liked you come FIRST (no paywall, instant match potential)
-        if (aLikedYou && !bLikedYou) return -1;
-        if (!aLikedYou && bLikedYou) return 1;
+      // Separate profiles into two groups
+      const profilesWhoLikedYou = transformedProfiles.filter(p => peopleWhoLikedMeIds.has(p.id));
+      const otherProfiles = transformedProfiles.filter(p => !peopleWhoLikedMeIds.has(p.id));
 
-        // If both or neither liked you, then sort by boosted status
+      // Sort other profiles by: 1) Boosted status, 2) Compatibility score
+      const sortedOtherProfiles = otherProfiles.sort((a, b) => {
         const aIsBoosted = boostedProfileIds.has(a.id);
         const bIsBoosted = boostedProfileIds.has(b.id);
 
@@ -1083,6 +1232,32 @@ export default function Discover() {
         // Otherwise sort by compatibility score
         return (b.compatibility_score || 0) - (a.compatibility_score || 0);
       });
+
+      // ORGANIC MIXING: Take up to 3 profiles who liked you and mix them into the deck
+      // This gives free users a fair chance to match without knowing who liked them
+      const maxLikedYouToMix = 3;
+      const likedYouToMix = profilesWhoLikedYou.slice(0, maxLikedYouToMix);
+      const remainingLikedYou = profilesWhoLikedYou.slice(maxLikedYouToMix);
+
+      // Start with sorted profiles
+      let sortedProfiles = [...sortedOtherProfiles];
+
+      // Mix the "liked you" profiles at random positions throughout the first 10 cards
+      // This ensures they appear early but not all at once
+      likedYouToMix.forEach((profile, index) => {
+        // Place within first 10 positions, spread out
+        // First one: position 1-3, Second: position 4-6, Third: position 7-9
+        const minPos = index * 3 + 1;
+        const maxPos = Math.min(minPos + 2, sortedProfiles.length);
+        const randomPos = Math.floor(Math.random() * (maxPos - minPos + 1)) + minPos;
+        const insertPos = Math.min(randomPos, sortedProfiles.length);
+        sortedProfiles.splice(insertPos, 0, profile);
+      });
+
+      // Add any remaining "liked you" profiles at the end (they'll still appear eventually)
+      sortedProfiles = [...sortedProfiles, ...remainingLikedYou];
+
+      console.log(`📊 Deck composition: ${likedYouToMix.length} "liked you" mixed in first 10, ${remainingLikedYou.length} remaining, ${sortedOtherProfiles.length} others`);
 
       setProfiles(sortedProfiles);
       setCurrentIndex(0);
@@ -1279,10 +1454,8 @@ export default function Discover() {
           setMatchedProfile(targetProfile);
           setShowMatchModal(true);
 
-          // Send match notification (don't await to avoid blocking modal)
-          sendMatchNotification(targetProfile.id, currentUserName, matchData?.id || '').catch(err => {
-            console.error('Failed to send match notification:', err);
-          });
+          // NOTE: Match notification is sent via database trigger (notify_on_match)
+          // Do NOT call sendMatchNotification here - it causes duplicate notifications
         }
 
         // Track last swipe for rewind
@@ -1300,8 +1473,8 @@ export default function Discover() {
       // No match - proceed with normal flow
       console.log('ℹ️ Like recorded, waiting for mutual like');
 
-      // Send like notification to the other user (so they know someone liked them)
-      await sendLikeNotification(targetProfile.id, currentUserName, currentProfileId);
+      // NOTE: Like notification is sent via database trigger (notify_on_like)
+      // Do NOT call sendLikeNotification here - it causes duplicate notifications
 
       // Track last swipe for rewind
       setLastSwipe({
@@ -1471,16 +1644,14 @@ export default function Discover() {
             setMatchedProfile(targetProfile);
             setShowMatchModal(true);
 
-            // Send match notification
-            sendMatchNotification(targetProfile.id, currentUserName, matchData?.id || '').catch(err => {
-              console.error('Failed to send match notification:', err);
-            });
+            // NOTE: Match notification is sent via database trigger (notify_on_match)
+            // Do NOT call sendMatchNotification here - it causes duplicate notifications
           }
         }
       }
 
-      // Send "obsessed" notification to the other user
-      await sendLikeNotification(targetProfile.id, currentUserName, currentProfileId);
+      // NOTE: Like notification is sent via database trigger (notify_on_like)
+      // Do NOT call sendLikeNotification here - it causes duplicate notifications
 
       // Update super likes counter
       const remaining = 5 - ((profileData?.super_likes_count || 0) + 1);
@@ -2595,6 +2766,50 @@ export default function Discover() {
         feature="unlimited_swipes"
       />
 
+      {/* Popularity Insights Modal - Gamification for engagement */}
+      <PopularityInsightsModal
+        visible={showPopularityModal}
+        onClose={() => setShowPopularityModal(false)}
+        newLikesCount={popularityData.newLikesCount}
+        totalLikes={popularityData.totalLikes}
+        percentileRank={popularityData.percentileRank}
+        isPremium={isPremium || isPlatinum}
+        streak={popularityData.streak}
+      />
+
+      {/* ADMIN ONLY: Debug buttons to test Popularity Modal */}
+      {isAdmin && (
+        <View className="absolute bottom-32 left-4 z-50 gap-2">
+          <TouchableOpacity
+            onPress={() => {
+              setPopularityData({ newLikesCount: 1, totalLikes: 5, percentileRank: 50, streak: 1 });
+              setShowPopularityModal(true);
+            }}
+            className="bg-purple-500 px-3 py-2 rounded-lg opacity-80"
+          >
+            <Text className="text-white text-xs font-medium">Test: 1 Like</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              setPopularityData({ newLikesCount: 3, totalLikes: 15, percentileRank: 20, streak: 3 });
+              setShowPopularityModal(true);
+            }}
+            className="bg-purple-600 px-3 py-2 rounded-lg opacity-80"
+          >
+            <Text className="text-white text-xs font-medium">Test: 3 Likes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              setPopularityData({ newLikesCount: 7, totalLikes: 50, percentileRank: 5, streak: 7 });
+              setShowPopularityModal(true);
+            }}
+            className="bg-orange-500 px-3 py-2 rounded-lg opacity-80"
+          >
+            <Text className="text-white text-xs font-medium">Test: 7 Likes 🔥</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Report User Modal */}
       {reportingProfile && (
         <ReportUserModal
@@ -2607,6 +2822,72 @@ export default function Discover() {
           reportedProfileName={reportingProfile.name}
         />
       )}
+
+      {/* Premium Location Features Prompt - Shows when free user has global search or preferred cities saved */}
+      <Modal
+        visible={showPremiumLocationPrompt}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPremiumLocationPrompt(false)}
+      >
+        <View className="flex-1 bg-black/60 justify-center items-center px-6">
+          <View className="bg-card dark:bg-card rounded-3xl w-full max-w-sm overflow-hidden">
+            {/* Header */}
+            <View className="bg-lavender-500 p-6 items-center">
+              <View className="w-16 h-16 rounded-full bg-white/20 items-center justify-center mb-3">
+                <MaterialCommunityIcons name="earth" size={32} color="#fff" />
+              </View>
+              <Text className="text-white text-xl font-sans-bold text-center">
+                Unlock Global Search
+              </Text>
+            </View>
+
+            {/* Body */}
+            <View className="p-6">
+              <Text className="text-foreground dark:text-foreground text-center text-base mb-4">
+                You have location preferences saved that require Premium to use:
+              </Text>
+
+              <View className="bg-lavender-50 dark:bg-lavender-900/30 rounded-xl p-4 mb-4">
+                <View className="flex-row items-center mb-2">
+                  <MaterialCommunityIcons name="check-circle" size={20} color="#A08AB7" />
+                  <Text className="text-foreground dark:text-foreground ml-2">Search globally for matches</Text>
+                </View>
+                <View className="flex-row items-center">
+                  <MaterialCommunityIcons name="check-circle" size={20} color="#A08AB7" />
+                  <Text className="text-foreground dark:text-foreground ml-2">Match in specific cities</Text>
+                </View>
+              </View>
+
+              <Text className="text-muted-foreground dark:text-muted-foreground text-center text-sm mb-6">
+                Upgrade to Premium to activate these features and find matches anywhere in the world.
+              </Text>
+
+              {/* Buttons */}
+              <TouchableOpacity
+                className="bg-lavender-500 rounded-full py-4 mb-3"
+                onPress={() => {
+                  setShowPremiumLocationPrompt(false);
+                  router.push('/settings/subscription');
+                }}
+              >
+                <Text className="text-white text-center font-sans-bold text-base">
+                  Upgrade to Premium
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="py-3"
+                onPress={() => setShowPremiumLocationPrompt(false)}
+              >
+                <Text className="text-muted-foreground dark:text-muted-foreground text-center text-sm">
+                  Maybe Later
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Swipe Counter for Free Users */}
       {!isPremium && (

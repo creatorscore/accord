@@ -736,7 +736,12 @@ export default function Messages() {
                   numberOfLines={2}
                 >
                   {item.last_message.sender_profile_id === currentProfileId ? t('matches.youLabel') : ''}
-                  {item.last_message.decrypted_content || item.last_message.encrypted_content}
+                  {item.last_message.decrypted_content || (
+                    // If no decrypted content and it looks encrypted, show placeholder
+                    item.last_message.encrypted_content?.includes(':')
+                      ? t('messages.encryptedMessage')
+                      : item.last_message.encrypted_content
+                  )}
                 </Text>
                 {isPremium && item.last_message.sender_profile_id === currentProfileId && (
                   <MaterialCommunityIcons

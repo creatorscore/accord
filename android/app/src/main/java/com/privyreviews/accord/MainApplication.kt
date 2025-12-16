@@ -24,7 +24,8 @@ class MainApplication : Application(), ReactApplication {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
               // Packages that cannot be autolinked yet can be added manually here, for example:
-              // add(MyReactNativePackage())
+              // TikTok Analytics is temporarily disabled until SDK dependency is resolved
+              // add(TikTokAnalyticsPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
@@ -47,6 +48,9 @@ class MainApplication : Application(), ReactApplication {
     }
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
+
+    // TikTok SDK initialization is temporarily disabled
+    // initTikTokSdk()
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

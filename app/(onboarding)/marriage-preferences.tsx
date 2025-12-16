@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, TextInput, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -112,10 +112,44 @@ export default function MarriagePreferences() {
         .eq('user_id', user?.id)
         .single();
 
-      if (error) throw error;
-      setProfileId(data.id);
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        setProfileId(data.id);
+
+        // Load existing preferences
+        const { data: prefs, error: prefsError } = await supabase
+          .from('preferences')
+          .select('*')
+          .eq('profile_id', data.id)
+          .single();
+
+        if (prefsError && prefsError.code !== 'PGRST116') {
+          console.error('Error loading preferences:', prefsError);
+        }
+
+        if (prefs) {
+          // Pre-fill form with existing data
+          if (prefs.primary_reasons) setPrimaryReason(Array.isArray(prefs.primary_reasons) ? prefs.primary_reasons : [prefs.primary_reasons]);
+          else if (prefs.primary_reason) setPrimaryReason([prefs.primary_reason]);
+          if (prefs.relationship_type) setRelationshipType(prefs.relationship_type);
+          if (prefs.wants_children !== null && prefs.wants_children !== undefined) setWantsChildren(prefs.wants_children);
+          if (prefs.children_arrangement) setChildrenArrangement(Array.isArray(prefs.children_arrangement) ? prefs.children_arrangement : [prefs.children_arrangement]);
+          if (prefs.housing_preference) setHousingPreference(Array.isArray(prefs.housing_preference) ? prefs.housing_preference : [prefs.housing_preference]);
+          if (prefs.financial_arrangement) setFinancialArrangement(Array.isArray(prefs.financial_arrangement) ? prefs.financial_arrangement : [prefs.financial_arrangement]);
+          if (prefs.dealbreakers) setDealbreakers(Array.isArray(prefs.dealbreakers) ? prefs.dealbreakers : [prefs.dealbreakers]);
+          if (prefs.must_haves) setMustHaves(Array.isArray(prefs.must_haves) ? prefs.must_haves : [prefs.must_haves]);
+
+          // Lifestyle preferences
+          if (prefs.lifestyle_preferences) {
+            if (prefs.lifestyle_preferences.smoking) setSmoking(prefs.lifestyle_preferences.smoking);
+            if (prefs.lifestyle_preferences.drinking) setDrinking(prefs.lifestyle_preferences.drinking);
+            if (prefs.lifestyle_preferences.pets) setPets(prefs.lifestyle_preferences.pets);
+          }
+        }
+      }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to load profile');
+      console.error('Error loading profile:', error);
     }
   };
 
@@ -228,7 +262,7 @@ export default function MarriagePreferences() {
 
   return (
     <ScrollView className="flex-1 bg-white">
-      <View className="px-6 pt-16 pb-8">
+      <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">

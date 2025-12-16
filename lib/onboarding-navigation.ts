@@ -23,21 +23,16 @@ export type OnboardingRoute = typeof ONBOARDING_STEPS[number];
 
 /**
  * Navigate to the previous onboarding step
- * Uses router.back() if possible, otherwise navigates to the previous step manually
+ * Always navigates to the logically previous step based on ONBOARDING_STEPS order
+ * (Do NOT use router.back() as it goes to where user came from, not the logical previous step)
  */
 export function goToPreviousOnboardingStep(currentRoute: OnboardingRoute) {
-  // Try to use router.back() first (preserves form state if user navigated forward)
-  if (router.canGoBack()) {
-    router.back();
-    return;
-  }
-
-  // If can't go back, manually navigate to previous step
   const currentIndex = ONBOARDING_STEPS.indexOf(currentRoute);
 
   if (currentIndex > 0) {
     const previousRoute = ONBOARDING_STEPS[currentIndex - 1];
-    router.push(previousRoute);
+    // Use replace to avoid building up a confusing navigation stack
+    router.replace(previousRoute);
   } else {
     // First step - sign out
     console.warn('Already at first onboarding step, cannot go back');

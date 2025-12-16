@@ -638,17 +638,6 @@ export default function Profile() {
 
         <TouchableOpacity
           style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/screenshot-alerts')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="shield-alert" size={24} color="#EF4444" />
-            <Text style={[styles.menuItemText, { color: '#EF4444', fontWeight: '600' }]}>{t('profile.screenshotAlerts')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
           onPress={() => router.push('/settings/matching-preferences')}
         >
           <View style={styles.menuItemLeft}>
@@ -806,20 +795,6 @@ export default function Profile() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: '#FEE2E2', borderLeftWidth: 4, borderLeftColor: '#EF4444' }]}
-              onPress={() => router.push('/admin/screenshot-monitor')}
-            >
-              <View style={styles.menuItemLeft}>
-                <MaterialCommunityIcons name="camera-off" size={24} color="#EF4444" />
-                <View>
-                  <Text style={[styles.menuItemText, { color: '#991B1B', fontWeight: '700' }]}>{t('profile.screenshotMonitor')}</Text>
-                  <Text style={{ fontSize: 12, color: '#991B1B', marginTop: 2 }}>{t('profile.banScreenshotUsers')}</Text>
-                </View>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
               style={[styles.menuItem, { backgroundColor: '#F5F2F7', borderLeftWidth: 4, borderLeftColor: '#A08AB7' }]}
               onPress={() => router.push('/admin/push-notifications')}
             >
@@ -831,6 +806,20 @@ export default function Profile() {
                 </View>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: '#ECFDF5', borderLeftWidth: 4, borderLeftColor: '#10B981' }]}
+              onPress={() => router.push('/admin/verification')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="camera-account" size={24} color="#10B981" />
+                <View>
+                  <Text style={[styles.menuItemText, { color: '#065F46', fontWeight: '700' }]}>Photo Verification</Text>
+                  <Text style={{ fontSize: 12, color: '#065F46', marginTop: 2 }}>Reset user attempts</Text>
+                </View>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#10B981" />
             </TouchableOpacity>
           </>
         )}

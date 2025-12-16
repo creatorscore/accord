@@ -23,6 +23,8 @@ const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.privyr
 interface UpdateInfo {
   latest_version: string;
   minimum_version: string;
+  minimum_version_ios?: string;
+  minimum_version_android?: string;
   update_message?: string;
   is_forced: boolean;
 }
@@ -52,9 +54,14 @@ export default function AppUpdateChecker() {
 
       const config = data.value as UpdateInfo;
 
+      // Get platform-specific minimum version, fallback to general minimum_version
+      const minimumVersion = Platform.OS === 'ios'
+        ? (config.minimum_version_ios || config.minimum_version)
+        : (config.minimum_version_android || config.minimum_version);
+
       // Compare versions
       const needsUpdate = compareVersions(CURRENT_VERSION, config.latest_version) < 0;
-      const isForcedUpdate = compareVersions(CURRENT_VERSION, config.minimum_version) < 0;
+      const isForcedUpdate = compareVersions(CURRENT_VERSION, minimumVersion) < 0;
 
       if (needsUpdate) {
         setUpdateInfo(config);

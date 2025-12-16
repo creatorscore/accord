@@ -2609,6 +2609,7 @@ PODS:
     - libwebp (~> 1.0)
     - SDWebImage/Core (~> 5.17)
   - Sentry/HybridSDK (8.56.1)
+  - TikTokBusinessSDK (1.5.1)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -2740,6 +2741,7 @@ DEPENDENCIES:
   - "RNSentry (from `../node_modules/@sentry/react-native`)"
   - RNSVG (from `../node_modules/react-native-svg`)
   - RNWorklets (from `../node_modules/react-native-worklets`)
+  - TikTokBusinessSDK
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -2764,6 +2766,7 @@ SPEC REPOS:
     - SDWebImageSVGCoder
     - SDWebImageWebPCoder
     - Sentry
+    - TikTokBusinessSDK
 
 EXTERNAL SOURCES:
   BVLinearGradient:
@@ -3172,8 +3175,9 @@ SPEC CHECKSUMS:
   SDWebImageSVGCoder: 15a300a97ec1c8ac958f009c02220ac0402e936c
   SDWebImageWebPCoder: e38c0a70396191361d60c092933e22c20d5b1380
   Sentry: b3ec44d01708fce73f99b544beb57e890eca4406
+  TikTokBusinessSDK: 6b59d8a69ee23fa714831e8c6f47c34831abc60b
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a
 
-PODFILE CHECKSUM: 7629c105aa990e79de8c1d60e2c905eaf46b04fb
+PODFILE CHECKSUM: e8391d22e2754989599f624a3d891288544a8700
 
 COCOAPODS: 1.16.2

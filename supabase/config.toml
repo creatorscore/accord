@@ -1,0 +1,20 @@
+# Supabase Edge Functions Configuration
+
+# Disable JWT verification for cron-triggered functions
+[functions.process-notifications]
+verify_jwt = false
+
+[functions.email-unread-messages]
+verify_jwt = false
+
+[functions.email-inactive-users]
+verify_jwt = false
+
+[functions.reviews-notify]
+verify_jwt = false
+
+[functions.onboarding-reminders]
+verify_jwt = false
+
+[functions.email-new-match]
+verify_jwt = false

@@ -142,21 +142,27 @@ export async function savePushToken(userId: string, token: string): Promise<void
 
     if (error) throw error;
 
-    // STEP 2: Upsert to device_tokens table (multi-device support)
+    // STEP 2: Remove old tokens for this device type, then insert new one
+    // This prevents accumulation of stale tokens when the app is reinstalled
+    // or the push token changes (which happens periodically)
+
+    // First, delete any existing tokens for this profile + device type
+    // This ensures only ONE token per device type per user
+    await supabase
+      .from('device_tokens')
+      .delete()
+      .eq('profile_id', profile.id)
+      .eq('device_type', deviceType);
+
+    // Then insert the new token
     const { error: deviceError } = await supabase
       .from('device_tokens')
-      .upsert(
-        {
-          profile_id: profile.id,
-          push_token: token,
-          device_type: deviceType,
-          last_used_at: new Date().toISOString(),
-        },
-        {
-          onConflict: 'profile_id,push_token',
-          ignoreDuplicates: false, // Update last_used_at if exists
-        }
-      );
+      .insert({
+        profile_id: profile.id,
+        push_token: token,
+        device_type: deviceType,
+        last_used_at: new Date().toISOString(),
+      });
 
     if (deviceError) {
       // Non-critical - profile token was saved successfully
@@ -206,21 +212,21 @@ export async function ensurePushTokenSaved(userId: string, token: string): Promi
 
     // Legacy check: token saved in old system
     if (profile.push_token === token) {
-      // Migrate to new system while we're here
+      // Migrate to new system - delete old tokens for this device type first
       await supabase
         .from('device_tokens')
-        .upsert(
-          {
-            profile_id: profile.id,
-            push_token: token,
-            device_type: deviceType,
-            last_used_at: new Date().toISOString(),
-          },
-          {
-            onConflict: 'profile_id,push_token',
-            ignoreDuplicates: false,
-          }
-        );
+        .delete()
+        .eq('profile_id', profile.id)
+        .eq('device_type', deviceType);
+
+      await supabase
+        .from('device_tokens')
+        .insert({
+          profile_id: profile.id,
+          push_token: token,
+          device_type: deviceType,
+          last_used_at: new Date().toISOString(),
+        });
       return true;
     }
 
@@ -236,21 +242,21 @@ export async function ensurePushTokenSaved(userId: string, token: string): Promi
 
     if (profileError2) throw profileError2;
 
-    // STEP 2: Add to device_tokens (new system)
+    // STEP 2: Delete old tokens for this device type, then add new one
+    await supabase
+      .from('device_tokens')
+      .delete()
+      .eq('profile_id', profile.id)
+      .eq('device_type', deviceType);
+
     const { error: deviceError } = await supabase
       .from('device_tokens')
-      .upsert(
-        {
-          profile_id: profile.id,
-          push_token: token,
-          device_type: deviceType,
-          last_used_at: new Date().toISOString(),
-        },
-        {
-          onConflict: 'profile_id,push_token',
-          ignoreDuplicates: false,
-        }
-      );
+      .insert({
+        profile_id: profile.id,
+        push_token: token,
+        device_type: deviceType,
+        last_used_at: new Date().toISOString(),
+      });
 
     if (deviceError) {
       // Non-critical - profile token was saved successfully

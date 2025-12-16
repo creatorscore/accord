@@ -125,6 +125,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Retry saving push token when app comes to foreground
   // This catches users who completed onboarding while app was in background
+  // AND users who initially denied permissions but later enabled them in settings
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
@@ -138,10 +139,36 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           console.warn('Failed to clear badge:', error);
         }
 
-        if (user?.id && pushToken) {
-          // Reset retry count and try again
-          retryCount.current = 0;
-          retrySavePushToken();
+        // ALWAYS try to get and save token on foreground if user is logged in
+        // This catches users who:
+        // 1. Initially denied permissions but later enabled in settings
+        // 2. Had token obtained but profile wasn't created yet
+        // 3. Had any other timing issue during onboarding
+        if (user?.id) {
+          try {
+            // If we don't have a token yet, try to get one
+            let currentToken = pushToken;
+            if (!currentToken) {
+              console.log('📱 No push token in state, attempting to register...');
+              currentToken = await registerForPushNotifications();
+              if (currentToken) {
+                setPushToken(currentToken);
+                setNotificationsEnabled(true);
+                console.log('✅ Push token obtained on foreground');
+              }
+            }
+
+            // If we have a token (new or existing), try to save it
+            if (currentToken) {
+              retryCount.current = 0;
+              const saved = await ensurePushTokenSaved(user.id, currentToken);
+              if (saved) {
+                console.log('✅ Push token verified/saved on foreground');
+              }
+            }
+          } catch (error) {
+            console.warn('Error checking push token on foreground:', error);
+          }
         }
       }
       appState.current = nextAppState;

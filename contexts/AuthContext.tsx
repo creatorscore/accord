@@ -110,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Initialize encryption keys for authenticated users
   // Uses deterministic key derivation so the same user gets identical keys on iOS/Android
+  // CRITICAL: This ensures cross-platform messaging works correctly
   useEffect(() => {
     const setupEncryption = async () => {
       if (!user) return;
@@ -117,9 +118,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         // Always initialize encryption - this uses deterministic keys based on userId
         // So the same user gets the same keys on any device (iOS/Android)
-        // If keys already match, initializeEncryption() will skip storing
         console.log('🔐 Initializing deterministic encryption keys...');
         const publicKey = await initializeEncryption(user.id);
+        console.log('🔑 Derived public key:', publicKey.substring(0, 16) + '...');
 
         // Store public key in user's profile (use maybeSingle - profile might not exist yet)
         const { data: profile } = await supabase
@@ -129,16 +130,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           .maybeSingle();
 
         if (profile) {
-          // Always update DB to ensure it has the deterministic public key
-          // This handles migration from old random keys to new deterministic keys
-          if (profile.encryption_public_key !== publicKey) {
-            await supabase
-              .from('profiles')
-              .update({ encryption_public_key: publicKey })
-              .eq('id', profile.id);
-            console.log('✅ Encryption public key updated in database');
+          // CRITICAL FIX: ALWAYS force update the encryption key in the database
+          // This fixes users who had old random keys that don't match deterministic derivation
+          // Without this, iOS/Android users can't read each other's messages
+          const currentDbKey = profile.encryption_public_key;
+          const keysMatch = currentDbKey === publicKey;
+
+          if (!keysMatch) {
+            console.log('⚠️ Database key mismatch detected!');
+            console.log('   DB key:', currentDbKey ? currentDbKey.substring(0, 16) + '...' : 'NULL');
+            console.log('   Correct key:', publicKey.substring(0, 16) + '...');
+          }
+
+          // Always update to ensure consistency across platforms
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ encryption_public_key: publicKey })
+            .eq('id', profile.id);
+
+          if (updateError) {
+            console.error('❌ Failed to update encryption key:', updateError);
           } else {
-            console.log('✅ Encryption keys already synced');
+            console.log('✅ Encryption public key synced to database');
           }
         }
       } catch (error) {
