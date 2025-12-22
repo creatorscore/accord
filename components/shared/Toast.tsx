@@ -10,7 +10,7 @@ import Animated, {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export type ToastType = 'message' | 'like' | 'match' | 'info' | 'success' | 'error';
+export type ToastType = 'message' | 'like' | 'match' | 'reaction' | 'info' | 'success' | 'error';
 
 interface ToastProps {
   visible: boolean;
@@ -27,6 +27,7 @@ const toastConfig: Record<ToastType, { icon: string; color: string; bgColor: str
   message: { icon: 'message', color: '#A08AB7', bgColor: '#F3F0F7' },
   like: { icon: 'heart', color: '#F43F5E', bgColor: '#FEF2F2' },
   match: { icon: 'heart-multiple', color: '#A08AB7', bgColor: '#F3F0F7' },
+  reaction: { icon: 'emoticon-happy', color: '#F59E0B', bgColor: '#FFFBEB' },
   info: { icon: 'information', color: '#3B82F6', bgColor: '#EFF6FF' },
   success: { icon: 'check-circle', color: '#10B981', bgColor: '#ECFDF5' },
   error: { icon: 'alert-circle', color: '#EF4444', bgColor: '#FEF2F2' },

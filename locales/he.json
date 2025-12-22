@@ -619,5 +619,265 @@
     "goToMatches": "עבור להתאמות",
     "errorLoadingLikes": "טעינת הלייקים נכשלה. אנא נסה שוב.",
     "errorCreatingMatch": "יצירת ההתאמה נכשלה. אנא נסה שוב."
+  },
+  "activity": {
+    "title": "פעילות",
+    "back": "חזור",
+    "markAllRead": "סמן הכל כנקרא",
+    "loading": "טוען פעילות...",
+    "tryAgain": "נסה שוב",
+    "noActivityYet": "עדיין אין פעילות",
+    "noActivityDescription": "כאשר מישהו יאהב אותך, תתאים או תקבל הודעות, תראה זאת כאן.",
+    "today": "היום",
+    "yesterday": "אתמול",
+    "thisWeek": "השבוע",
+    "earlier": "קודם",
+    "premiumTitle": "פיד פעילות",
+    "premiumDescription": "ראה מי אהב אותך, מתי התאמת, הודעות חדשות, ביקורות ועוד - הכל במקום אחד.",
+    "upgradeToPremium": "שדרג לפרימיום"
+  },
+  "betaFeedback": {
+    "title": "משוב בטא",
+    "subtitle": "עזור לנו לשפר את Accord",
+    "overallRating": "דירוג כולל",
+    "rateExperience": "דרג את החוויה שלך",
+    "subject": "נושא",
+    "subjectPlaceholder": "על מה המשוב שלך?",
+    "description": "תיאור",
+    "descriptionPlaceholder": "ספר לנו עוד על החוויה שלך...",
+    "feedbackType": "סוג משוב",
+    "bug": "דיווח על באג",
+    "feature": "בקשת תכונה",
+    "improvement": "שיפור",
+    "other": "אחר",
+    "allowContact": "אפשר יצירת קשר למעקב",
+    "allowContactDesc": "אנו עשויים ליצור קשר כדי ללמוד עוד על המשוב שלך",
+    "submit": "שלח משוב",
+    "submitting": "שולח...",
+    "missingInfo": "מידע חסר",
+    "missingInfoMessage": "אנא ספק נושא ותיאור למשוב שלך.",
+    "ratingRequired": "דירוג נדרש",
+    "ratingRequiredMessage": "אנא ספק דירוג כולל.",
+    "thankYou": "תודה!",
+    "thankYouMessage": "המשוב שלך עוזר לנו לשפר את Accord עבור כולם.",
+    "error": "שגיאה",
+    "errorMessage": "שליחת המשוב נכשלה. נסה שוב."
+  },
+  "deleteAccount": {
+    "title": "מחק חשבון",
+    "warning": "אזהרה",
+    "warningMessage": "פעולה זו היא קבועה ולא ניתן לבטל אותה. כל הנתונים, ההתאמות, ההודעות ומידע הפרופיל שלך יימחקו לצמיתות.",
+    "confirmTitle": "האם אתה בטוח?",
+    "confirmMessage": "אנא הקלד DELETE כדי לאשר שאתה רוצה למחוק את חשבונך לצמיתות.",
+    "confirmPlaceholder": "הקלד DELETE לאישור",
+    "deleteButton": "מחק את החשבון שלי",
+    "deleting": "מוחק...",
+    "incorrectConfirmation": "אישור שגוי",
+    "incorrectConfirmationMessage": "אנא הקלד DELETE בדיוק כדי לאשר.",
+    "accountDeleted": "החשבון נמחק",
+    "accountDeletedMessage": "חשבונך נמחק לצמיתות.",
+    "error": "שגיאה",
+    "errorMessage": "מחיקת החשבון נכשלה. נסה שוב או פנה לתמיכה."
+  },
+  "notificationSettings": {
+    "title": "הגדרות התראות",
+    "subtitle": "נהל את ההתראות שלך",
+    "pushNotifications": "התראות דחיפה",
+    "pushNotificationsDesc": "קבל התראות דחיפה במכשיר שלך",
+    "newMatches": "התאמות חדשות",
+    "newMatchesDesc": "כאשר אתה מתאים עם מישהו",
+    "newMessages": "הודעות חדשות",
+    "newMessagesDesc": "כאשר אתה מקבל הודעה חדשה",
+    "newLikes": "לייקים חדשים",
+    "newLikesDesc": "כאשר מישהו אוהב את הפרופיל שלך",
+    "reviews": "ביקורות",
+    "reviewsDesc": "כאשר ביקורות מוכנות או נחשפות",
+    "marketing": "שיווק",
+    "marketingDesc": "טיפים, עדכונים ומבצעים",
+    "emailNotifications": "התראות אימייל",
+    "emailNotificationsDesc": "קבל עדכונים באמצעות אימייל",
+    "saved": "ההגדרות נשמרו",
+    "savedMessage": "העדפות ההתראות שלך עודכנו.",
+    "error": "שגיאה",
+    "errorMessage": "שמירת ההגדרות נכשלה. נסה שוב."
+  },
+  "safetyCenter": {
+    "title": "מרכז בטיחות",
+    "subtitle": "הישאר בטוח ב-Accord",
+    "emergencyResources": "משאבי חירום",
+    "emergencyResourcesDesc": "קווי משבר ושירותי תמיכה",
+    "reportUser": "דווח על משתמש",
+    "reportUserDesc": "דווח על הטרדה, הונאה או בעיות אחרות",
+    "blockingOptions": "אפשרויות חסימה",
+    "blockingOptionsDesc": "חסום אנשי קשר, מדינות או משתמשים ספציפיים",
+    "safetyTips": "טיפי בטיחות",
+    "safetyTipsDesc": "הנחיות לדייטים בטוחים באינטרנט",
+    "privacyGuide": "מדריך פרטיות",
+    "privacyGuideDesc": "הגן על המידע האישי שלך",
+    "meetingSafely": "פגישה בטוחה",
+    "meetingSafelyDesc": "טיפים לפגישה עם התאמות באופן אישי",
+    "lgbtqResources": "משאבי LGBTQ+",
+    "lgbtqResourcesDesc": "ארגוני תמיכה וקווים חמים"
+  },
+  "subscriptionSettings": {
+    "title": "מנוי",
+    "chooseYourPlan": "בחר את התוכנית שלך",
+    "loadingPlans": "טוען תוכניות...",
+    "renewsOn": "מתחדש ב: {{date}}",
+    "activeDevelopmentMode": "פעיל (מצב פיתוח)",
+    "developmentModeNA": "לא זמין (מצב פיתוח)",
+    "developmentMode": "מצב פיתוח",
+    "developmentModeDescription": "RevenueCat מושבת בפיתוח. מצב המנוי שלך נשלט על ידי דגלי is_premium ו-is_platinum במסד הנתונים.",
+    "developmentModeProductionNote": "בייצור, מסך זה יציג חבילות מנוי אמיתיות ויאפשר למשתמשים לנהל את המנויים שלהם דרך App Store או Play Store.",
+    "status": {
+      "platinumMember": "חבר פלטינום",
+      "premiumMember": "חבר פרימיום",
+      "freePlan": "תוכנית חינמית",
+      "allFeaturesUnlocked": "כל התכונות הפרימיום נפתחו",
+      "enhancedFeaturesUnlocked": "תכונות משופרות נפתחו",
+      "freeDescription": "25 החלקות ליום, הודעות בסיסיות"
+    },
+    "plans": {
+      "premium": "פרימיום",
+      "platinum": "פלטינום"
+    },
+    "periods": {
+      "monthly": "חודשי",
+      "threeMonths": "3 חודשים",
+      "annual": "שנתי"
+    },
+    "save22": "חסוך 22%",
+    "save33": "חסוך 33%",
+    "bestValueSave22": "הערך הטוב ביותר - חסוך 22%",
+    "perMonth": "חודש",
+    "perThreeMonths": "3 חודשים",
+    "perYear": "שנה",
+    "quarterlyPopular": "רק $11.66/חודש — התוכנית הפופולרית ביותר שלנו!",
+    "processing": "מעבד...",
+    "subscribeToPremium": "הירשם לפרימיום",
+    "subscribeToPlatinum": "הירשם לפלטינום",
+    "premiumIncludes": "פרימיום כולל:",
+    "premiumFeaturesList": "• החלקות ללא הגבלה\n• ראה מי אהב אותך\n• 5 סופר-לייקים/שבוע\n• הודעות קוליות\n• אישורי קריאה\n• מסננים מתקדמים\n• החזרה",
+    "everythingInPremiumPlus": "כל מה שיש בפרימיום, בנוסף:",
+    "platinumFeaturesList": "• חיזוק פרופיל שבועי\n• בדיקות רקע\n• משאבים משפטיים\n• תמיכה מועדפת",
+    "platinumComingSoonMessage": "הישאר מעודכן! רמת פלטינום תושק בקרוב.",
+    "comingSoon": "בקרוב",
+    "planNotAvailable": "תוכנית {{plan}} {{period}} לא זמינה ב-RevenueCat",
+    "premiumFeaturesTitle": "תכונות פרימיום",
+    "features": {
+      "unlimitedSwipes": "החלקות ללא הגבלה",
+      "seeWhoLikedYou": "ראה מי אהב אותך",
+      "superLikesPerWeek": "5 סופר-לייקים בשבוע",
+      "voiceMessages": "הודעות קוליות",
+      "readReceipts": "אישורי קריאה",
+      "advancedFilters": "מסננים מתקדמים",
+      "rewindLastSwipe": "החזר את ההחלקה האחרונה",
+      "backgroundChecks": "בדיקות רקע",
+      "legalResources": "משאבים משפטיים",
+      "weeklyProfileBoost": "חיזוק פרופיל שבועי",
+      "prioritySupport": "תמיכה מועדפת"
+    },
+    "restorePurchases": "שחזר רכישות",
+    "restoring": "משחזר...",
+    "opening": "פותח...",
+    "redeemPromoCode": "מימוש קוד קידום",
+    "manageSubscription": "נהל מנוי",
+    "infoTextIOS": "מנויים מנוהלים דרך חשבון App Store שלך. אתה יכול לבטל בכל עת מהגדרות החשבון שלך.",
+    "infoTextAndroid": "מנויים מנוהלים דרך חשבון Google Play שלך. אתה יכול לבטל בכל עת מהגדרות החשבון שלך.",
+    "termsOfUse": "תנאי שימוש",
+    "privacyPolicy": "מדיניות פרטיות",
+    "unableToLoadTitle": "לא ניתן לטעון אפשרויות מנוי",
+    "unableToLoadDescription": "יש לנו בעיה בטעינת תוכניות מנוי. זה יכול להיות בגלל:",
+    "errorReasons": {
+      "revenueCat": "• הצעות לא מוגדרות ב-RevenueCat",
+      "network": "• בעיית חיבור רשת",
+      "serviceUnavailable": "• שירות RevenueCat אינו זמין זמנית"
+    },
+    "alerts": {
+      "unableToLoadTitle": "לא ניתן לטעון מנויים",
+      "unableToLoadMessage": "אנא בדוק את חיבור האינטרנט שלך ונסה שוב.",
+      "tryAgain": "נסה שוב",
+      "successTitle": "הצלחה!",
+      "purchasesRestoredSuccess": "הרכישות שלך שוחזרו בהצלחה.",
+      "noPurchasesFoundTitle": "לא נמצאו רכישות",
+      "noPurchasesFoundMessage": "לא הצלחנו למצוא רכישות לשחזור. אם אתה מאמין שזו שגיאה, אנא צור קשר עם התמיכה.",
+      "restoreFailedTitle": "השחזור נכשל",
+      "restoreFailedMessage": "שחזור הרכישות נכשל. אנא נסה שוב מאוחר יותר.",
+      "developmentModeTitle": "מצב פיתוח",
+      "developmentModeMessage": "ניהול מנויים מתבצע דרך מסד הנתונים במצב פיתוח.\n\nבייצור, זה יפתח את הגדרות המנוי שלך ב-App Store או Play Store.",
+      "couldNotOpenManagement": "לא ניתן לפתוח ניהול מנויים",
+      "notAvailableTitle": "לא זמין",
+      "promoCodeAndroidMessage": "מימוש קוד קידום זמין רק במכשירי iOS. ב-Android, אתה יכול למימוש קודים ישירות ב-Google Play Store.",
+      "codeRedemptionFailed": "פתיחת מימוש הקוד נכשלה. אנא נסה שוב.",
+      "subscriptionActivated": "המנוי שלך הופעל.",
+      "subscriptionExistsTitle": "מנוי כבר קיים",
+      "subscriptionExistsAndroid": "יש לך מנוי מבוטל בחשבון Google Play הנוכחי שלך.\n\nאפשרויות:\n\n1. הפעל מחדש את המנוי הקיים שלך בהגדרות Google Play\n\n2. השתמש בחשבון Google Play אחר: התנתק מ-Google Play במכשיר שלך, לאחר מכן התחבר עם חשבון אחר ונסה שוב",
+      "subscriptionExistsIOS": "יש לך מנוי מבוטל ב-Apple ID הנוכחי שלך.\n\nאפשרויות:\n\n1. הפעל מחדש את המנוי הקיים שלך בהגדרות App Store\n\n2. השתמש ב-Apple ID אחר: התנתק בהגדרות > [השם שלך], לאחר מכן התחבר עם Apple ID אחר ונסה שוב",
+      "gotIt": "הבנתי",
+      "openSettings": "פתח הגדרות",
+      "purchaseFailedTitle": "הרכישה נכשלה",
+      "purchaseFailedMessage": "השלמת הרכישה נכשלה. אנא נסה שוב או צור קשר עם התמיכה אם הבעיה נמשכת."
+    }
+  },
+  "whatsNew": {
+    "title": "מה חדש",
+    "version": "גרסה {{version}}",
+    "continue": "בואו נתחיל!",
+    "new": "חדש",
+    "v109": {
+      "headline": "הישאר מחובר עם מרכז הפעילות ודיוק מיקום משופר!",
+      "features": {
+        "activityCenter": {
+          "title": "מרכז פעילות",
+          "description": "עקוב אחר כל הלייקים, ההתאמות וצפיות הפרופיל שלך במקום אחד נוח"
+        },
+        "betterLocation": {
+          "title": "דיוק מיקום טוב יותר",
+          "description": "התאמת מיקום מדויקת יותר כדי למצוא אנשים תואמים ליד"
+        },
+        "moreLanguages": {
+          "title": "שפות נוספות",
+          "description": "תמיכה מלאה בתרגום לכל מסכי האפליקציה ב-18 שפות"
+        },
+        "bugFixes": {
+          "title": "תיקוני באגים ושיפורים",
+          "description": "שיפורי ביצועים ותיקוני באגים שונים לחוויה חלקה יותר"
+        }
+      }
+    },
+    "v108": {
+      "headline": "תכונות בטיחות משופרות ואימות תמונה!",
+      "features": {
+        "photoVerification": {
+          "title": "אימות תמונה",
+          "description": "אימות סלפי כדי להוכיח שהתמונות שלך באמת שלך"
+        },
+        "screenshotProtection": {
+          "title": "הגנת צילום מסך",
+          "description": "התמונות שלך מוגנות מצילומי מסך בצ'אט"
+        },
+        "improvedSafety": {
+          "title": "בטיחות משופרת",
+          "description": "מערכת חסימה משופרת ושיפורי אבטחה"
+        }
+      }
+    },
+    "v104": {
+      "headline": "שיפורי חיפוש ותיקוני אבטחה!",
+      "features": {
+        "searchImprovements": {
+          "title": "חיפוש טוב יותר",
+          "description": "אלגוריתם התאמה משופר לתוצאות רלוונטיות יותר"
+        },
+        "encryptionFix": {
+          "title": "תיקון הצפנה",
+          "description": "הצפנה מקצה לקצה תוקנה להודעות מאובטחות"
+        },
+        "bugFixes": {
+          "title": "תיקוני באגים",
+          "description": "שיפורי יציבות וביצועים שונים"
+        }
+      }
+    }
   }
 }

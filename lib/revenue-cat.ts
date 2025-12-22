@@ -283,6 +283,60 @@ export const getSubscriptionExpirationDate = (customerInfo: CustomerInfo | null)
 };
 
 /**
+ * Check if user is in a trial period
+ */
+export const isInTrialPeriod = (customerInfo: CustomerInfo | null): boolean => {
+  if (!customerInfo) return false;
+
+  const activeEntitlements = customerInfo.entitlements.active;
+  const firstEntitlement = Object.values(activeEntitlements)[0];
+
+  if (firstEntitlement) {
+    // Check periodType - RevenueCat uses 'trial' for trial periods
+    return firstEntitlement.periodType === 'TRIAL';
+  }
+
+  return false;
+};
+
+/**
+ * Get days remaining in trial or subscription
+ */
+export const getDaysRemaining = (customerInfo: CustomerInfo | null): number | null => {
+  const expirationDate = getSubscriptionExpirationDate(customerInfo);
+  if (!expirationDate) return null;
+
+  const now = new Date();
+  const diffMs = expirationDate.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  return diffDays > 0 ? diffDays : 0;
+};
+
+/**
+ * Get trial/subscription status details
+ */
+export interface SubscriptionStatus {
+  isActive: boolean;
+  isTrial: boolean;
+  expirationDate: Date | null;
+  daysRemaining: number | null;
+  willRenew: boolean;
+  tier: SubscriptionTier | null;
+}
+
+export const getSubscriptionStatus = (customerInfo: CustomerInfo | null): SubscriptionStatus => {
+  return {
+    isActive: hasActiveSubscription(customerInfo),
+    isTrial: isInTrialPeriod(customerInfo),
+    expirationDate: getSubscriptionExpirationDate(customerInfo),
+    daysRemaining: getDaysRemaining(customerInfo),
+    willRenew: willRenew(customerInfo),
+    tier: getSubscriptionTier(customerInfo),
+  };
+};
+
+/**
  * Check if subscription will auto-renew
  */
 export const willRenew = (customerInfo: CustomerInfo | null): boolean => {

@@ -20,6 +20,7 @@ import { ActivityTracker } from '@/components/shared/ActivityTracker';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { ScreenCaptureOverlay } from '@/components/shared/ScreenCaptureOverlay';
 import AppUpdateChecker from '@/components/AppUpdateChecker';
+import WhatsNewModal from '@/components/WhatsNewModal';
 import { initI18n, isRTL } from '@/lib/i18n';
 import { initializeSentry } from '@/lib/sentry';
 import { initializePostHog, trackAppLifecycle } from '@/lib/analytics';
@@ -149,6 +150,9 @@ export default function RootLayout() {
 
                       {/* Check for app updates */}
                       {!showSplash && <AppUpdateChecker />}
+
+                      {/* Show What's New modal after updates */}
+                      {!showSplash && <WhatsNewModal />}
 
                       {/* Overlay splash screen while initializing */}
                       {showSplash && (

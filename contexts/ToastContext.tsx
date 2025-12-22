@@ -14,6 +14,7 @@ interface ToastContextType {
   showToast: (toast: Omit<ToastData, 'id'>) => void;
   showMessageToast: (senderName: string, preview: string, matchId: string) => void;
   showLikeToast: (likerName: string, isPremium: boolean) => void;
+  showReactionToast: (reactorName: string, emoji: string, matchId: string) => void;
   hideToast: () => void;
 }
 
@@ -21,6 +22,7 @@ const ToastContext = createContext<ToastContextType>({
   showToast: () => {},
   showMessageToast: () => {},
   showLikeToast: () => {},
+  showReactionToast: () => {},
   hideToast: () => {},
 });
 
@@ -60,6 +62,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     });
   }, [showToast]);
 
+  const showReactionToast = useCallback((reactorName: string, emoji: string, matchId: string) => {
+    showToast({
+      type: 'reaction',
+      title: `${reactorName} reacted ${emoji}`,
+      message: 'Tap to view the conversation',
+      onPress: () => {
+        router.push(`/chat/${matchId}`);
+      },
+    });
+  }, [showToast]);
+
   const hideToast = useCallback(() => {
     setVisible(false);
     // Clear toast data after animation
@@ -67,7 +80,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ToastContext.Provider value={{ showToast, showMessageToast, showLikeToast, hideToast }}>
+    <ToastContext.Provider value={{ showToast, showMessageToast, showLikeToast, showReactionToast, hideToast }}>
       {children}
       {currentToast && (
         <Toast

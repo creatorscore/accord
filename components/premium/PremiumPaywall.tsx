@@ -44,6 +44,11 @@ const PREMIUM_FEATURES = [
     description: 'Filter by lifestyle, goals, and finances',
   },
   {
+    icon: 'incognito',
+    title: 'Incognito Mode',
+    description: 'Browse profiles privately without being seen',
+  },
+  {
     icon: 'message-text',
     title: 'Intro Messages',
     description: 'Stand out with personalized first messages',
@@ -52,6 +57,11 @@ const PREMIUM_FEATURES = [
     icon: 'check-all',
     title: 'Read Receipts',
     description: 'Know when your messages are read',
+  },
+  {
+    icon: 'keyboard',
+    title: 'Typing Indicators',
+    description: 'See when a match is typing a message',
   },
   {
     icon: 'microphone',
@@ -107,14 +117,16 @@ export default function PremiumPaywall({
   const { refreshSubscription, syncWithDatabase } = useSubscription();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('monthly');
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'quarterly' | 'annual'>('quarterly');
 
   const isPlatinum = variant === 'platinum';
   const features = isPlatinum ? PLATINUM_FEATURES : PREMIUM_FEATURES;
   const title = isPlatinum ? 'Accord Platinum' : 'Accord Premium';
   const monthlyPrice = isPlatinum ? '$24.99' : '$14.99';
+  const quarterlyPrice = isPlatinum ? '$54.99' : '$34.99';
   const annualPrice = isPlatinum ? '$199.99' : '$119.99';
-  const annualSavings = isPlatinum ? '33%' : '33%';
+  const quarterlySavings = '22%';
+  const annualSavings = '33%';
 
   const handlePurchase = async () => {
     try {
@@ -182,10 +194,18 @@ export default function PremiumPaywall({
 
         // Check billing period with multiple patterns
         const isMonthly = id.includes('month') || productId.includes('month') || id.includes('1m') || productId.includes('1m');
+        const isQuarterly = id.includes('quarter') || productId.includes('quarter') || id.includes('3m') || productId.includes('3m') || id.includes('3_month') || productId.includes('3_month');
         const isAnnual = id.includes('annual') || productId.includes('annual') || id.includes('year') || productId.includes('year') || id.includes('12m') || productId.includes('12m');
 
-        const periodMatch = selectedPlan === 'monthly' ? isMonthly : isAnnual;
-        console.log(`  - Period match (looking for ${selectedPlan}):`, periodMatch, `(isMonthly: ${isMonthly}, isAnnual: ${isAnnual})`);
+        let periodMatch = false;
+        if (selectedPlan === 'monthly') {
+          periodMatch = isMonthly && !isQuarterly;
+        } else if (selectedPlan === 'quarterly') {
+          periodMatch = isQuarterly;
+        } else {
+          periodMatch = isAnnual;
+        }
+        console.log(`  - Period match (looking for ${selectedPlan}):`, periodMatch, `(isMonthly: ${isMonthly}, isQuarterly: ${isQuarterly}, isAnnual: ${isAnnual})`);
 
         const matches = tierMatch && periodMatch;
         console.log(`  - Overall match:`, matches);
@@ -403,37 +423,80 @@ export default function PremiumPaywall({
 
           {/* Plan Selection */}
           <View style={styles.planContainer}>
+            {/* 3 Months - Most Popular (Featured) */}
             <TouchableOpacity
-              style={[styles.planCard, selectedPlan === 'monthly' && styles.planCardSelected]}
-              onPress={() => setSelectedPlan('monthly')}
+              style={[styles.planRow, selectedPlan === 'quarterly' && styles.planRowSelected, styles.planRowFeatured]}
+              onPress={() => setSelectedPlan('quarterly')}
               activeOpacity={0.8}
             >
-              <View style={styles.planHeader}>
-                <Text style={styles.planName}>Monthly</Text>
-                {selectedPlan === 'monthly' && (
-                  <MaterialCommunityIcons name="check-circle" size={24} color="#10B981" />
-                )}
+              <View style={styles.planRowLeft}>
+                <View style={styles.radioOuter}>
+                  {selectedPlan === 'quarterly' && <View style={styles.radioInner} />}
+                </View>
+                <View style={styles.planRowInfo}>
+                  <View style={styles.planNameRow}>
+                    <Text style={styles.planRowName}>3 Months</Text>
+                    <View style={styles.mostPopularBadgeInline}>
+                      <Text style={styles.mostPopularBadgeInlineText}>MOST POPULAR</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.planRowSubtext}>$11.66/mo • 7-day free trial</Text>
+                </View>
               </View>
-              <Text style={styles.planPrice}>{monthlyPrice}/mo USD</Text>
-              <Text style={styles.planDescription}>7-day free trial</Text>
+              <View style={styles.planRowRight}>
+                <Text style={styles.planRowPrice}>{quarterlyPrice}</Text>
+                <View style={styles.savingsBadgeInline}>
+                  <Text style={styles.savingsBadgeInlineText}>SAVE {quarterlySavings}</Text>
+                </View>
+              </View>
             </TouchableOpacity>
 
+            {/* Annual - Best Value */}
             <TouchableOpacity
-              style={[styles.planCard, selectedPlan === 'annual' && styles.planCardSelected]}
+              style={[styles.planRow, selectedPlan === 'annual' && styles.planRowSelected]}
               onPress={() => setSelectedPlan('annual')}
               activeOpacity={0.8}
             >
-              <View style={styles.savingsBadge}>
-                <Text style={styles.savingsBadgeText}>SAVE {annualSavings}</Text>
+              <View style={styles.planRowLeft}>
+                <View style={styles.radioOuter}>
+                  {selectedPlan === 'annual' && <View style={styles.radioInner} />}
+                </View>
+                <View style={styles.planRowInfo}>
+                  <View style={styles.planNameRow}>
+                    <Text style={styles.planRowName}>Annual</Text>
+                    <View style={styles.bestValueBadgeInline}>
+                      <Text style={styles.bestValueBadgeInlineText}>BEST VALUE</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.planRowSubtext}>$10.00/mo • 7-day free trial</Text>
+                </View>
               </View>
-              <View style={styles.planHeader}>
-                <Text style={styles.planName}>Annual</Text>
-                {selectedPlan === 'annual' && (
-                  <MaterialCommunityIcons name="check-circle" size={24} color="#10B981" />
-                )}
+              <View style={styles.planRowRight}>
+                <Text style={styles.planRowPrice}>{annualPrice}</Text>
+                <View style={styles.savingsBadgeInline}>
+                  <Text style={styles.savingsBadgeInlineText}>SAVE {annualSavings}</Text>
+                </View>
               </View>
-              <Text style={styles.planPrice}>{annualPrice}/yr USD</Text>
-              <Text style={styles.planDescription}>7-day free trial</Text>
+            </TouchableOpacity>
+
+            {/* Monthly */}
+            <TouchableOpacity
+              style={[styles.planRow, selectedPlan === 'monthly' && styles.planRowSelected]}
+              onPress={() => setSelectedPlan('monthly')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.planRowLeft}>
+                <View style={styles.radioOuter}>
+                  {selectedPlan === 'monthly' && <View style={styles.radioInner} />}
+                </View>
+                <View style={styles.planRowInfo}>
+                  <Text style={styles.planRowName}>Monthly</Text>
+                  <Text style={styles.planRowSubtext}>$14.99/mo • 7-day free trial</Text>
+                </View>
+              </View>
+              <View style={styles.planRowRight}>
+                <Text style={styles.planRowPrice}>{monthlyPrice}</Text>
+              </View>
             </TouchableOpacity>
           </View>
 
@@ -472,8 +535,8 @@ export default function PremiumPaywall({
                 <>
                   <Text style={styles.ctaButtonText}>Start 7-Day Free Trial</Text>
                   <Text style={styles.ctaButtonSubtext}>
-                    Then {selectedPlan === 'monthly' ? monthlyPrice : annualPrice}/
-                    {selectedPlan === 'monthly' ? 'mo' : 'yr'}
+                    Then {selectedPlan === 'monthly' ? monthlyPrice : selectedPlan === 'quarterly' ? quarterlyPrice : annualPrice}/
+                    {selectedPlan === 'monthly' ? 'mo' : selectedPlan === 'quarterly' ? '3 mo' : 'yr'}
                   </Text>
                 </>
               )}
@@ -569,55 +632,111 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   planContainer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 12,
     marginBottom: 32,
   },
-  planCard: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 3,
-    borderColor: 'transparent',
-    position: 'relative',
-  },
-  planCardSelected: {
-    borderColor: '#10B981',
-  },
-  planHeader: {
+  planRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
-  planName: {
-    fontSize: 18,
+  planRowSelected: {
+    borderColor: '#10B981',
+    backgroundColor: 'white',
+  },
+  planRowFeatured: {
+    borderColor: '#A08AB7',
+    borderWidth: 2,
+  },
+  planRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  radioOuter: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#A08AB7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+  },
+  planRowInfo: {
+    flex: 1,
+  },
+  planNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  planRowName: {
+    fontSize: 17,
     fontWeight: '600',
     color: '#111827',
   },
-  planPrice: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#A08AB7',
-    marginBottom: 4,
-  },
-  planDescription: {
+  planRowSubtext: {
     fontSize: 13,
     color: '#6B7280',
+    marginTop: 2,
   },
-  savingsBadge: {
-    position: 'absolute',
-    top: -10,
-    right: 12,
+  planRowRight: {
+    alignItems: 'flex-end',
+  },
+  planRowPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#A08AB7',
+  },
+  planRowPeriod: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  savingsBadgeInline: {
     backgroundColor: '#10B981',
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginTop: 4,
   },
-  savingsBadgeText: {
+  savingsBadgeInlineText: {
     color: 'white',
-    fontSize: 11,
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  bestValueBadgeInline: {
+    backgroundColor: '#10B981',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  bestValueBadgeInlineText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  mostPopularBadgeInline: {
+    backgroundColor: '#A08AB7',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  mostPopularBadgeInlineText: {
+    color: 'white',
+    fontSize: 10,
     fontWeight: 'bold',
   },
   featuresContainer: {

@@ -1,12 +1,15 @@
 import { Tabs } from 'expo-router';
+import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/lib/useColorScheme';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { unreadMessageCount } = useNotifications();
 
   // Add extra padding for safe area (home indicator on iPhone X+, navigation bar on Android)
   const tabBarHeight = 60 + insets.bottom;
@@ -65,7 +68,16 @@ export default function TabsLayout() {
         options={{
           title: 'Messages',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="message" size={size} color={color} />
+            <View>
+              <MaterialCommunityIcons name="message" size={size} color={color} />
+              {unreadMessageCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           ),
         }}
       />
@@ -81,3 +93,23 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    right: -8,
+    top: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+});

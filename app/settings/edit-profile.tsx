@@ -19,6 +19,7 @@ import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { MotiView } from 'moti';
 import { Audio } from 'expo-av';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -349,6 +350,7 @@ export default function EditProfile() {
   const [education, setEducation] = useState('');
   const [locationCity, setLocationCity] = useState('');
   const [locationState, setLocationState] = useState('');
+  const [refreshingLocation, setRefreshingLocation] = useState(false);
   const [gender, setGender] = useState<string[]>([]);
   const [pronouns, setPronouns] = useState('');
   const [ethnicity, setEthnicity] = useState<string[]>([]);
@@ -892,6 +894,88 @@ export default function EditProfile() {
     }
   };
 
+  // Refresh location using GPS (no manual entry allowed)
+  const refreshLocation = async () => {
+    setRefreshingLocation(true);
+    try {
+      // Request permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Please enable location access in your device settings to update your location.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+
+      // Get current location with high accuracy
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Highest,
+      });
+
+      // Reject locations with low accuracy (prevents iOS approximate location)
+      if (location.coords.accuracy && location.coords.accuracy > 100) {
+        Alert.alert(
+          'Precise Location Required',
+          'Please enable precise location access in Settings > Privacy > Location Services > Accord.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+
+      // Reverse geocode to get city/state
+      const reverseGeocode = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+
+      if (reverseGeocode.length > 0) {
+        const place = reverseGeocode[0];
+        const city = place.city || place.subregion || '';
+        const state = place.region || '';
+
+        // Update local state
+        setLocationCity(city);
+        setLocationState(state);
+
+        // Save to database immediately
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', user?.id)
+          .single();
+
+        if (profile) {
+          await supabase
+            .from('profiles')
+            .update({
+              location_city: city,
+              location_state: state,
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            })
+            .eq('id', profile.id);
+        }
+
+        Alert.alert('Location Updated', `Your location has been updated to ${city}${state ? `, ${state}` : ''}`);
+      } else {
+        Alert.alert('Error', 'Could not determine your location. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error refreshing location:', error);
+      Alert.alert('Error', 'Failed to update location. Please try again.');
+    } finally {
+      setRefreshingLocation(false);
+    }
+  };
+
   const saveProfile = async (skipAlert = false) => {
     if (!displayName) {
       Alert.alert('Required Fields', 'Please fill in your name');
@@ -941,8 +1025,8 @@ export default function EditProfile() {
         bio,
         occupation,
         education,
-        location_city: locationCity,
-        location_state: locationState,
+        // NOTE: location_city and location_state are NOT included here
+        // Location can only be updated via GPS refresh button (no manual editing)
         gender: gender.length > 0 ? gender : null,
         pronouns,
         ethnicity: ethnicity.length > 0 ? ethnicity : null,
@@ -1762,33 +1846,49 @@ export default function EditProfile() {
           </View>
         </View>
 
-        {/* Location Section */}
+        {/* Location Section - GPS Only (no manual editing) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Location</Text>
+          <Text style={styles.sectionSubtitle}>
+            Your location is automatically detected via GPS
+          </Text>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>City</Text>
-            <TextInput
-              style={styles.input}
-              value={locationCity}
-              onChangeText={setLocationCity}
-              placeholder="City"
-              placeholderTextColor="#9CA3AF"
-            />
+          {/* Current Location Display */}
+          <View style={styles.locationDisplayContainer}>
+            <View style={styles.locationIconContainer}>
+              <MaterialCommunityIcons name="map-marker" size={24} color="#A08AB7" />
+            </View>
+            <View style={styles.locationTextContainer}>
+              <Text style={styles.locationDisplayText}>
+                {locationCity && locationState
+                  ? `${locationCity}, ${locationState}`
+                  : locationCity || locationState || 'Location not set'}
+              </Text>
+              <Text style={styles.locationHelpText}>
+                Tap refresh to update your location
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>State</Text>
-            <TextInput
-              style={styles.input}
-              value={locationState}
-              onChangeText={setLocationState}
-              placeholder="State"
-              placeholderTextColor="#9CA3AF"
-              maxLength={2}
-              autoCapitalize="characters"
-            />
-          </View>
+          {/* Refresh Location Button */}
+          <TouchableOpacity
+            style={styles.refreshLocationButton}
+            onPress={refreshLocation}
+            disabled={refreshingLocation}
+          >
+            {refreshingLocation ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#FFFFFF" />
+                <Text style={styles.refreshLocationButtonText}>Refresh My Location</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <Text style={styles.locationNote}>
+            Your location is used to show you relevant matches nearby. You cannot manually change your location.
+          </Text>
         </View>
 
         {/* Hobbies Section */}
@@ -2552,6 +2652,7 @@ export default function EditProfile() {
               bio,
               occupation,
               education,
+              // Location is read-only - set via GPS only
               location_city: locationCity,
               location_state: locationState,
               gender: gender.length > 0 ? gender : null,
@@ -3101,5 +3202,58 @@ const styles = StyleSheet.create({
   },
   unitToggleTextActive: {
     color: '#FFFFFF',
+  },
+  // Location Section Styles (GPS only)
+  locationDisplayContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  locationIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F3F0F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  locationTextContainer: {
+    flex: 1,
+  },
+  locationDisplayText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  locationHelpText: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  refreshLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#A08AB7',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  refreshLocationButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  locationNote: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 12,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

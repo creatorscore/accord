@@ -611,5 +611,265 @@
     "restartRequired": "কিছু পরিবর্তন পরবর্তী শুরুতে কার্যকর হতে পারে",
     "systemDefault": "সিস্টেম ডিফল্ট",
     "useSystemLanguage": "সিস্টেম ভাষা ব্যবহার করুন"
+  },
+  "activity": {
+    "title": "কার্যকলাপ",
+    "back": "পিছনে",
+    "markAllRead": "সব পঠিত হিসাবে চিহ্নিত করুন",
+    "loading": "কার্যকলাপ লোড হচ্ছে...",
+    "tryAgain": "আবার চেষ্টা করুন",
+    "noActivityYet": "এখনও কোনো কার্যকলাপ নেই",
+    "noActivityDescription": "যখন কেউ আপনাকে পছন্দ করবে, আপনি ম্যাচ করবেন, বা মেসেজ পাবেন, আপনি এখানে দেখতে পাবেন।",
+    "today": "আজ",
+    "yesterday": "গতকাল",
+    "thisWeek": "এই সপ্তাহ",
+    "earlier": "আগে",
+    "premiumTitle": "কার্যকলাপ ফিড",
+    "premiumDescription": "কে আপনাকে পছন্দ করেছে, কখন ম্যাচ হয়েছে, নতুন মেসেজ, রিভিউ এবং আরও দেখুন — সবকিছু এক জায়গায়।",
+    "upgradeToPremium": "প্রিমিয়ামে আপগ্রেড করুন"
+  },
+  "betaFeedback": {
+    "title": "বিটা ফিডব্যাক",
+    "subtitle": "Accord উন্নত করতে আমাদের সাহায্য করুন",
+    "overallRating": "সামগ্রিক রেটিং",
+    "rateExperience": "আপনার অভিজ্ঞতা রেট করুন",
+    "subject": "বিষয়",
+    "subjectPlaceholder": "আপনার ফিডব্যাক কিসের বিষয়ে?",
+    "description": "বিবরণ",
+    "descriptionPlaceholder": "আপনার অভিজ্ঞতা সম্পর্কে আমাদের আরও বলুন...",
+    "feedbackType": "ফিডব্যাক প্রকার",
+    "bug": "বাগ রিপোর্ট",
+    "feature": "ফিচার অনুরোধ",
+    "improvement": "উন্নতি",
+    "other": "অন্যান্য",
+    "allowContact": "ফলো-আপের জন্য যোগাযোগের অনুমতি দিন",
+    "allowContactDesc": "আমরা আপনার ফিডব্যাক সম্পর্কে আরও জানতে যোগাযোগ করতে পারি",
+    "submit": "ফিডব্যাক জমা দিন",
+    "submitting": "জমা দেওয়া হচ্ছে...",
+    "missingInfo": "তথ্য অনুপস্থিত",
+    "missingInfoMessage": "অনুগ্রহ করে আপনার ফিডব্যাকের জন্য একটি বিষয় এবং বিবরণ প্রদান করুন।",
+    "ratingRequired": "রেটিং প্রয়োজন",
+    "ratingRequiredMessage": "অনুগ্রহ করে একটি সামগ্রিক রেটিং প্রদান করুন।",
+    "thankYou": "ধন্যবাদ!",
+    "thankYouMessage": "আপনার ফিডব্যাক সবার জন্য Accord কে আরও ভালো করতে সাহায্য করে।",
+    "error": "ত্রুটি",
+    "errorMessage": "ফিডব্যাক জমা দিতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন।"
+  },
+  "deleteAccount": {
+    "title": "অ্যাকাউন্ট মুছুন",
+    "warning": "সতর্কতা",
+    "warningMessage": "এই কাজটি স্থায়ী এবং পূর্বাবস্থায় ফেরানো যাবে না। আপনার সমস্ত ডেটা, ম্যাচ, মেসেজ এবং প্রোফাইল তথ্য স্থায়ীভাবে মুছে ফেলা হবে।",
+    "confirmTitle": "আপনি কি নিশ্চিত?",
+    "confirmMessage": "অনুগ্রহ করে DELETE টাইপ করুন নিশ্চিত করতে যে আপনি স্থায়ীভাবে আপনার অ্যাকাউন্ট মুছতে চান।",
+    "confirmPlaceholder": "নিশ্চিত করতে DELETE টাইপ করুন",
+    "deleteButton": "আমার অ্যাকাউন্ট মুছুন",
+    "deleting": "মুছে ফেলা হচ্ছে...",
+    "incorrectConfirmation": "ভুল নিশ্চিতকরণ",
+    "incorrectConfirmationMessage": "অনুগ্রহ করে নিশ্চিত করতে DELETE সঠিকভাবে টাইপ করুন।",
+    "accountDeleted": "অ্যাকাউন্ট মুছে ফেলা হয়েছে",
+    "accountDeletedMessage": "আপনার অ্যাকাউন্ট স্থায়ীভাবে মুছে ফেলা হয়েছে।",
+    "error": "ত্রুটি",
+    "errorMessage": "অ্যাকাউন্ট মুছতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন বা সাপোর্টের সাথে যোগাযোগ করুন।"
+  },
+  "notificationSettings": {
+    "title": "বিজ্ঞপ্তি সেটিংস",
+    "subtitle": "আপনার বিজ্ঞপ্তিগুলি পরিচালনা করুন",
+    "pushNotifications": "পুশ বিজ্ঞপ্তি",
+    "pushNotificationsDesc": "আপনার ডিভাইসে পুশ বিজ্ঞপ্তি পান",
+    "newMatches": "নতুন ম্যাচ",
+    "newMatchesDesc": "যখন আপনি কারো সাথে ম্যাচ করেন",
+    "newMessages": "নতুন মেসেজ",
+    "newMessagesDesc": "যখন আপনি একটি নতুন মেসেজ পান",
+    "newLikes": "নতুন লাইক",
+    "newLikesDesc": "যখন কেউ আপনার প্রোফাইল লাইক করে",
+    "reviews": "রিভিউ",
+    "reviewsDesc": "যখন রিভিউ প্রস্তুত বা প্রকাশিত হয়",
+    "marketing": "মার্কেটিং",
+    "marketingDesc": "টিপস, আপডেট এবং প্রচার",
+    "emailNotifications": "ইমেইল বিজ্ঞপ্তি",
+    "emailNotificationsDesc": "ইমেইলের মাধ্যমে আপডেট পান",
+    "saved": "সেটিংস সংরক্ষিত",
+    "savedMessage": "আপনার বিজ্ঞপ্তি পছন্দ আপডেট করা হয়েছে।",
+    "error": "ত্রুটি",
+    "errorMessage": "সেটিংস সংরক্ষণ করতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন।"
+  },
+  "safetyCenter": {
+    "title": "নিরাপত্তা কেন্দ্র",
+    "subtitle": "Accord এ নিরাপদ থাকুন",
+    "emergencyResources": "জরুরি সম্পদ",
+    "emergencyResourcesDesc": "সংকট হটলাইন এবং সহায়তা সেবা",
+    "reportUser": "একজন ব্যবহারকারী রিপোর্ট করুন",
+    "reportUserDesc": "হয়রানি, স্ক্যাম বা অন্যান্য সমস্যা রিপোর্ট করুন",
+    "blockingOptions": "ব্লকিং বিকল্প",
+    "blockingOptionsDesc": "পরিচিতি, দেশ বা নির্দিষ্ট ব্যবহারকারীদের ব্লক করুন",
+    "safetyTips": "নিরাপত্তা টিপস",
+    "safetyTipsDesc": "নিরাপদ অনলাইন ডেটিংয়ের জন্য নির্দেশিকা",
+    "privacyGuide": "গোপনীয়তা গাইড",
+    "privacyGuideDesc": "আপনার ব্যক্তিগত তথ্য রক্ষা করুন",
+    "meetingSafely": "নিরাপদে দেখা করা",
+    "meetingSafelyDesc": "ব্যক্তিগতভাবে ম্যাচের সাথে দেখা করার টিপস",
+    "lgbtqResources": "LGBTQ+ সম্পদ",
+    "lgbtqResourcesDesc": "সহায়তা সংস্থা এবং হেল্পলাইন"
+  },
+  "subscriptionSettings": {
+    "title": "সাবস্ক্রিপশন",
+    "chooseYourPlan": "আপনার প্ল্যান বেছে নিন",
+    "loadingPlans": "প্ল্যান লোড হচ্ছে...",
+    "renewsOn": "নবায়ন তারিখ: {{date}}",
+    "activeDevelopmentMode": "সক্রিয় (ডেভেলপমেন্ট মোড)",
+    "developmentModeNA": "প্রযোজ্য নয় (ডেভেলপমেন্ট মোড)",
+    "developmentMode": "ডেভেলপমেন্ট মোড",
+    "developmentModeDescription": "ডেভেলপমেন্টে RevenueCat নিষ্ক্রিয়। আপনার সাবস্ক্রিপশন স্ট্যাটাস ডাটাবেসে is_premium এবং is_platinum ফ্ল্যাগ দ্বারা নিয়ন্ত্রিত।",
+    "developmentModeProductionNote": "প্রোডাকশনে, এই স্ক্রিনটি প্রকৃত সাবস্ক্রিপশন প্যাকেজ দেখাবে এবং ব্যবহারকারীদের App Store বা Play Store এর মাধ্যমে তাদের সাবস্ক্রিপশন পরিচালনা করতে দেবে।",
+    "status": {
+      "platinumMember": "প্ল্যাটিনাম সদস্য",
+      "premiumMember": "প্রিমিয়াম সদস্য",
+      "freePlan": "বিনামূল্যে প্ল্যান",
+      "allFeaturesUnlocked": "সমস্ত প্রিমিয়াম বৈশিষ্ট্য আনলক",
+      "enhancedFeaturesUnlocked": "উন্নত বৈশিষ্ট্য আনলক",
+      "freeDescription": "প্রতিদিন 25টি স্বাইপ, মৌলিক মেসেজিং"
+    },
+    "plans": {
+      "premium": "প্রিমিয়াম",
+      "platinum": "প্ল্যাটিনাম"
+    },
+    "periods": {
+      "monthly": "মাসিক",
+      "threeMonths": "৩ মাস",
+      "annual": "বার্ষিক"
+    },
+    "save22": "২২% সাশ্রয়",
+    "save33": "৩৩% সাশ্রয়",
+    "bestValueSave22": "সর্বোত্তম মূল্য - ২২% সাশ্রয়",
+    "perMonth": "মাস",
+    "perThreeMonths": "৩ মাস",
+    "perYear": "বছর",
+    "quarterlyPopular": "মাত্র $11.66/মাস — আমাদের সবচেয়ে জনপ্রিয় প্ল্যান!",
+    "processing": "প্রসেসিং হচ্ছে...",
+    "subscribeToPremium": "প্রিমিয়ামে সাবস্ক্রাইব করুন",
+    "subscribeToPlatinum": "প্ল্যাটিনামে সাবস্ক্রাইব করুন",
+    "premiumIncludes": "প্রিমিয়াম অন্তর্ভুক্ত:",
+    "premiumFeaturesList": "• সীমাহীন স্বাইপ\n• কে আপনাকে পছন্দ করেছে দেখুন\n• সপ্তাহে ৫টি সুপার লাইক\n• ভয়েস মেসেজ\n• পঠন রসিদ\n• উন্নত ফিল্টার\n• রিওয়াইন্ড",
+    "everythingInPremiumPlus": "প্রিমিয়ামের সবকিছু, এছাড়াও:",
+    "platinumFeaturesList": "• সাপ্তাহিক প্রোফাইল বুস্ট\n• পটভূমি পরীক্ষা\n• আইনি সংস্থান\n• অগ্রাধিকার সহায়তা",
+    "platinumComingSoonMessage": "অপেক্ষা করুন! প্ল্যাটিনাম টায়ার শীঘ্রই আসছে।",
+    "comingSoon": "শীঘ্রই আসছে",
+    "planNotAvailable": "RevenueCat-এ {{plan}} {{period}} প্ল্যান উপলব্ধ নেই",
+    "premiumFeaturesTitle": "প্রিমিয়াম বৈশিষ্ট্য",
+    "features": {
+      "unlimitedSwipes": "সীমাহীন স্বাইপ",
+      "seeWhoLikedYou": "কে আপনাকে পছন্দ করেছে দেখুন",
+      "superLikesPerWeek": "সপ্তাহে ৫টি সুপার লাইক",
+      "voiceMessages": "ভয়েস মেসেজ",
+      "readReceipts": "পঠন রসিদ",
+      "advancedFilters": "উন্নত ফিল্টার",
+      "rewindLastSwipe": "শেষ স্বাইপ রিওয়াইন্ড করুন",
+      "backgroundChecks": "পটভূমি পরীক্ষা",
+      "legalResources": "আইনি সংস্থান",
+      "weeklyProfileBoost": "সাপ্তাহিক প্রোফাইল বুস্ট",
+      "prioritySupport": "অগ্রাধিকার সহায়তা"
+    },
+    "restorePurchases": "ক্রয় পুনরুদ্ধার করুন",
+    "restoring": "পুনরুদ্ধার করা হচ্ছে...",
+    "opening": "খোলা হচ্ছে...",
+    "redeemPromoCode": "প্রোমো কোড রিডিম করুন",
+    "manageSubscription": "সাবস্ক্রিপশন পরিচালনা করুন",
+    "infoTextIOS": "সাবস্ক্রিপশনগুলি আপনার App Store অ্যাকাউন্টের মাধ্যমে পরিচালিত হয়। আপনি যে কোনো সময় আপনার অ্যাকাউন্ট সেটিংস থেকে বাতিল করতে পারেন।",
+    "infoTextAndroid": "সাবস্ক্রিপশনগুলি আপনার Google Play অ্যাকাউন্টের মাধ্যমে পরিচালিত হয়। আপনি যে কোনো সময় আপনার অ্যাকাউন্ট সেটিংস থেকে বাতিল করতে পারেন।",
+    "termsOfUse": "ব্যবহারের শর্তাবলী",
+    "privacyPolicy": "গোপনীয়তা নীতি",
+    "unableToLoadTitle": "সাবস্ক্রিপশন বিকল্প লোড করতে অক্ষম",
+    "unableToLoadDescription": "আমরা সাবস্ক্রিপশন প্ল্যান লোড করতে সমস্যায় পড়েছি। এটি হতে পারে কারণ:",
+    "errorReasons": {
+      "revenueCat": "• RevenueCat-এ অফারিং কনফিগার করা হয়নি",
+      "network": "• নেটওয়ার্ক সংযোগ সমস্যা",
+      "serviceUnavailable": "• RevenueCat সেবা সাময়িকভাবে অনুপলব্ধ"
+    },
+    "alerts": {
+      "unableToLoadTitle": "সাবস্ক্রিপশন লোড করতে অক্ষম",
+      "unableToLoadMessage": "অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ পরীক্ষা করুন এবং আবার চেষ্টা করুন।",
+      "tryAgain": "আবার চেষ্টা করুন",
+      "successTitle": "সফল!",
+      "purchasesRestoredSuccess": "আপনার ক্রয় সফলভাবে পুনরুদ্ধার করা হয়েছে।",
+      "noPurchasesFoundTitle": "কোনো ক্রয় পাওয়া যায়নি",
+      "noPurchasesFoundMessage": "আমরা পুনরুদ্ধার করার জন্য কোনো ক্রয় খুঁজে পাইনি। আপনি যদি মনে করেন এটি একটি ত্রুটি, অনুগ্রহ করে সহায়তার সাথে যোগাযোগ করুন।",
+      "restoreFailedTitle": "পুনরুদ্ধার ব্যর্থ",
+      "restoreFailedMessage": "ক্রয় পুনরুদ্ধার করতে ব্যর্থ। অনুগ্রহ করে পরে আবার চেষ্টা করুন।",
+      "developmentModeTitle": "ডেভেলপমেন্ট মোড",
+      "developmentModeMessage": "ডেভেলপমেন্ট মোডে, সাবস্ক্রিপশন পরিচালনা ডাটাবেসের মাধ্যমে পরিচালিত হয়।\n\nপ্রোডাকশনে, এটি আপনার App Store বা Play Store সাবস্ক্রিপশন সেটিংস খুলবে।",
+      "couldNotOpenManagement": "সাবস্ক্রিপশন পরিচালনা খুলতে পারেনি",
+      "notAvailableTitle": "উপলব্ধ নেই",
+      "promoCodeAndroidMessage": "প্রোমো কোড রিডেম্পশন শুধুমাত্র iOS ডিভাইসে উপলব্ধ। Android-এ, আপনি সরাসরি Google Play Store-এ কোড রিডিম করতে পারেন।",
+      "codeRedemptionFailed": "কোড রিডেম্পশন খুলতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন।",
+      "subscriptionActivated": "আপনার সাবস্ক্রিপশন সক্রিয় করা হয়েছে।",
+      "subscriptionExistsTitle": "সাবস্ক্রিপশন ইতিমধ্যে বিদ্যমান",
+      "subscriptionExistsAndroid": "আপনার বর্তমান Google Play অ্যাকাউন্টে একটি বাতিল করা সাবস্ক্রিপশন আছে।\n\nবিকল্প:\n\n1. Google Play সেটিংসে আপনার বিদ্যমান সাবস্ক্রিপশন পুনরায় সক্রিয় করুন\n\n2. একটি ভিন্ন Google Play অ্যাকাউন্ট ব্যবহার করুন: আপনার ডিভাইসে Google Play থেকে সাইন আউট করুন, তারপর একটি ভিন্ন অ্যাকাউন্ট দিয়ে সাইন ইন করুন এবং আবার চেষ্টা করুন",
+      "subscriptionExistsIOS": "আপনার বর্তমান Apple ID-তে একটি বাতিল করা সাবস্ক্রিপশন আছে।\n\nবিকল্প:\n\n1. App Store সেটিংসে আপনার বিদ্যমান সাবস্ক্রিপশন পুনরায় সক্রিয় করুন\n\n2. একটি ভিন্ন Apple ID ব্যবহার করুন: সেটিংস > [আপনার নাম]-এ সাইন আউট করুন, তারপর একটি ভিন্ন Apple ID দিয়ে সাইন ইন করুন এবং আবার চেষ্টা করুন",
+      "gotIt": "বুঝেছি",
+      "openSettings": "সেটিংস খুলুন",
+      "purchaseFailedTitle": "ক্রয় ব্যর্থ",
+      "purchaseFailedMessage": "ক্রয় সম্পূর্ণ করতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন বা সমস্যা অব্যাহত থাকলে সহায়তার সাথে যোগাযোগ করুন।"
+    }
+  },
+  "whatsNew": {
+    "title": "নতুন কী আছে",
+    "version": "সংস্করণ {{version}}",
+    "continue": "চলুন শুরু করি!",
+    "new": "নতুন",
+    "v109": {
+      "headline": "আপনার অ্যাক্টিভিটি সেন্টার এবং উন্নত অবস্থান নির্ভুলতার সাথে সংযুক্ত থাকুন!",
+      "features": {
+        "activityCenter": {
+          "title": "অ্যাক্টিভিটি সেন্টার",
+          "description": "একটি সুবিধাজনক স্থানে আপনার সমস্ত লাইক, ম্যাচ এবং প্রোফাইল ভিউ ট্র্যাক করুন"
+        },
+        "betterLocation": {
+          "title": "আরও ভাল অবস্থান নির্ভুলতা",
+          "description": "আপনার কাছাকাছি সামঞ্জস্যপূর্ণ মানুষ খুঁজে পেতে আরও সুনির্দিষ্ট অবস্থান মিলান"
+        },
+        "moreLanguages": {
+          "title": "আরও ভাষা",
+          "description": "18টি ভাষায় সমস্ত অ্যাপ স্ক্রিনের জন্য সম্পূর্ণ অনুবাদ সমর্থন"
+        },
+        "bugFixes": {
+          "title": "বাগ ফিক্স এবং উন্নতি",
+          "description": "একটি মসৃণ অভিজ্ঞতার জন্য বিভিন্ন পারফরম্যান্স উন্নতি এবং বাগ ফিক্স"
+        }
+      }
+    },
+    "v108": {
+      "headline": "বর্ধিত নিরাপত্তা বৈশিষ্ট্য এবং ফটো যাচাইকরণ!",
+      "features": {
+        "photoVerification": {
+          "title": "ফটো যাচাইকরণ",
+          "description": "আপনার ফটো সত্যিই আপনি তা প্রমাণ করতে সেলফি যাচাইকরণ"
+        },
+        "screenshotProtection": {
+          "title": "স্ক্রিনশট সুরক্ষা",
+          "description": "চ্যাটে আপনার ফটো স্ক্রিনশট থেকে সুরক্ষিত"
+        },
+        "improvedSafety": {
+          "title": "উন্নত নিরাপত্তা",
+          "description": "উন্নত নিষেধাজ্ঞা ব্যবস্থা এবং নিরাপত্তা উন্নতি"
+        }
+      }
+    },
+    "v104": {
+      "headline": "অনুসন্ধান উন্নতি এবং নিরাপত্তা ফিক্স!",
+      "features": {
+        "searchImprovements": {
+          "title": "আরও ভাল অনুসন্ধান",
+          "description": "আরও প্রাসঙ্গিক ফলাফলের জন্য উন্নত ম্যাচিং অ্যালগরিদম"
+        },
+        "encryptionFix": {
+          "title": "এনক্রিপশন ফিক্স",
+          "description": "নিরাপদ মেসেজিংয়ের জন্য এন্ড-টু-এন্ড এনক্রিপশন ফিক্স করা হয়েছে"
+        },
+        "bugFixes": {
+          "title": "বাগ ফিক্স",
+          "description": "বিভিন্ন স্থিতিশীলতা এবং পারফরম্যান্স উন্নতি"
+        }
+      }
+    }
   }
 }

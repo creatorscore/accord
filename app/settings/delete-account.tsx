@@ -11,21 +11,23 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
-const DELETE_REASONS = [
-  { id: 'found_match', label: 'I found what I was looking for' },
-  { id: 'not_for_me', label: 'This app isn\'t for me' },
-  { id: 'too_expensive', label: 'Too expensive' },
-  { id: 'privacy_concerns', label: 'Privacy concerns' },
-  { id: 'bad_experience', label: 'Bad experience with other users' },
-  { id: 'technical_issues', label: 'Technical problems' },
-  { id: 'other', label: 'Other reason' },
-];
-
 export default function DeleteAccount() {
+  const { t } = useTranslation();
   const { user, signOut } = useAuth();
+
+  const DELETE_REASONS = [
+    { id: 'found_match', label: t('deleteAccount.reasons.foundMatch') },
+    { id: 'not_for_me', label: t('deleteAccount.reasons.notForMe') },
+    { id: 'too_expensive', label: t('deleteAccount.reasons.tooExpensive') },
+    { id: 'privacy_concerns', label: t('deleteAccount.reasons.privacyConcerns') },
+    { id: 'bad_experience', label: t('deleteAccount.reasons.badExperience') },
+    { id: 'technical_issues', label: t('deleteAccount.reasons.technicalIssues') },
+    { id: 'other', label: t('deleteAccount.reasons.other') },
+  ];
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
   const [confirmText, setConfirmText] = useState('');
@@ -33,22 +35,22 @@ export default function DeleteAccount() {
 
   const handleDeleteAccount = async () => {
     if (confirmText.toUpperCase() !== 'DELETE') {
-      Alert.alert('Error', 'Please type DELETE to confirm account deletion.');
+      Alert.alert(t('common.error'), t('deleteAccount.alerts.typeDeleteToConfirm'));
       return;
     }
 
     if (!selectedReason) {
-      Alert.alert('Error', 'Please select a reason for leaving.');
+      Alert.alert(t('common.error'), t('deleteAccount.alerts.selectReason'));
       return;
     }
 
     Alert.alert(
-      'Delete Account?',
-      'This action is PERMANENT and cannot be undone. All your data will be deleted immediately.\n\nAre you absolutely sure?',
+      t('deleteAccount.alerts.confirmTitle'),
+      t('deleteAccount.alerts.confirmMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete Permanently',
+          text: t('deleteAccount.alerts.deletePermanently'),
           style: 'destructive',
           onPress: confirmDeletion,
         },
@@ -92,11 +94,11 @@ export default function DeleteAccount() {
       await signOut();
 
       Alert.alert(
-        'Account Deleted',
-        'Your account has been permanently deleted. We\'re sorry to see you go.',
+        t('deleteAccount.alerts.successTitle'),
+        t('deleteAccount.alerts.successMessage'),
         [
           {
-            text: 'OK',
+            text: t('common.ok'),
             onPress: () => router.replace('/(auth)/welcome'),
           },
         ]
@@ -104,8 +106,8 @@ export default function DeleteAccount() {
     } catch (error: any) {
       console.error('Error deleting account:', error);
       Alert.alert(
-        'Error',
-        error.message || 'Failed to delete account. Please contact support at support@joinaccord.app for assistance.'
+        t('common.error'),
+        error.message || t('deleteAccount.alerts.errorMessage')
       );
     } finally {
       setDeleting(false);
@@ -119,7 +121,7 @@ export default function DeleteAccount() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Delete Account</Text>
+        <Text style={styles.headerTitle}>{t('deleteAccount.title')}</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -128,24 +130,24 @@ export default function DeleteAccount() {
         <View style={styles.warningBanner}>
           <MaterialCommunityIcons name="alert" size={32} color="#EF4444" />
           <View style={styles.warningContent}>
-            <Text style={styles.warningTitle}>This action is permanent</Text>
+            <Text style={styles.warningTitle}>{t('deleteAccount.warningTitle')}</Text>
             <Text style={styles.warningText}>
-              Once you delete your account, there is no going back. All your data will be permanently removed.
+              {t('deleteAccount.warningText')}
             </Text>
           </View>
         </View>
 
         {/* What Gets Deleted */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>What will be deleted:</Text>
+          <Text style={styles.sectionTitle}>{t('deleteAccount.whatWillBeDeleted')}</Text>
           <View style={styles.deletionList}>
             {[
-              'Your profile and photos',
-              'All your matches and connections',
-              'All your messages and conversations',
-              'Your subscription (if active)',
-              'Your preferences and settings',
-              'Your verification status',
+              t('deleteAccount.deletionItems.profile'),
+              t('deleteAccount.deletionItems.matches'),
+              t('deleteAccount.deletionItems.messages'),
+              t('deleteAccount.deletionItems.subscription'),
+              t('deleteAccount.deletionItems.preferences'),
+              t('deleteAccount.deletionItems.verification'),
             ].map((item, index) => (
               <View key={index} style={styles.deletionItem}>
                 <MaterialCommunityIcons name="close-circle" size={20} color="#EF4444" />
@@ -157,17 +159,17 @@ export default function DeleteAccount() {
 
         {/* Alternatives */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Before you go...</Text>
+          <Text style={styles.sectionTitle}>{t('deleteAccount.beforeYouGo')}</Text>
           <Text style={styles.sectionDescription}>
-            Consider these alternatives to deleting your account:
+            {t('deleteAccount.considerAlternatives')}
           </Text>
 
           <TouchableOpacity style={styles.alternativeCard}>
             <MaterialCommunityIcons name="pause-circle" size={24} color="#A08AB7" />
             <View style={styles.alternativeContent}>
-              <Text style={styles.alternativeTitle}>Take a Break</Text>
+              <Text style={styles.alternativeTitle}>{t('deleteAccount.alternatives.takeBreak')}</Text>
               <Text style={styles.alternativeText}>
-                Hide your profile temporarily without losing your data
+                {t('deleteAccount.alternatives.takeBreakDesc')}
               </Text>
             </View>
           </TouchableOpacity>
@@ -175,9 +177,9 @@ export default function DeleteAccount() {
           <TouchableOpacity style={styles.alternativeCard}>
             <MaterialCommunityIcons name="eye-off" size={24} color="#A08AB7" />
             <View style={styles.alternativeContent}>
-              <Text style={styles.alternativeTitle}>Privacy Settings</Text>
+              <Text style={styles.alternativeTitle}>{t('deleteAccount.alternatives.privacySettings')}</Text>
               <Text style={styles.alternativeText}>
-                Control who can see your profile and contact you
+                {t('deleteAccount.alternatives.privacySettingsDesc')}
               </Text>
             </View>
           </TouchableOpacity>
@@ -185,9 +187,9 @@ export default function DeleteAccount() {
           <TouchableOpacity style={styles.alternativeCard}>
             <MaterialCommunityIcons name="email" size={24} color="#A08AB7" />
             <View style={styles.alternativeContent}>
-              <Text style={styles.alternativeTitle}>Contact Support</Text>
+              <Text style={styles.alternativeTitle}>{t('deleteAccount.alternatives.contactSupport')}</Text>
               <Text style={styles.alternativeText}>
-                We're here to help with any issues you're experiencing
+                {t('deleteAccount.alternatives.contactSupportDesc')}
               </Text>
             </View>
           </TouchableOpacity>
@@ -195,9 +197,9 @@ export default function DeleteAccount() {
 
         {/* Deletion Form */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tell us why you're leaving</Text>
+          <Text style={styles.sectionTitle}>{t('deleteAccount.tellUsWhy')}</Text>
           <Text style={styles.sectionDescription}>
-            Your feedback helps us improve Accord for everyone
+            {t('deleteAccount.feedbackHelps')}
           </Text>
 
           {DELETE_REASONS.map((reason) => (
@@ -220,7 +222,7 @@ export default function DeleteAccount() {
 
           <TextInput
             style={styles.feedbackInput}
-            placeholder="Additional feedback (optional)"
+            placeholder={t('deleteAccount.additionalFeedback')}
             placeholderTextColor="#9CA3AF"
             value={feedback}
             onChangeText={setFeedback}
@@ -234,14 +236,14 @@ export default function DeleteAccount() {
 
         {/* Confirmation */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Type DELETE to confirm</Text>
+          <Text style={styles.sectionTitle}>{t('deleteAccount.typeDeleteToConfirm')}</Text>
           <Text style={styles.sectionDescription}>
-            This confirms that you understand this action is permanent
+            {t('deleteAccount.confirmUnderstand')}
           </Text>
 
           <TextInput
             style={styles.confirmInput}
-            placeholder="Type DELETE here"
+            placeholder={t('deleteAccount.typeDeletePlaceholder')}
             placeholderTextColor="#9CA3AF"
             value={confirmText}
             onChangeText={setConfirmText}
@@ -265,13 +267,13 @@ export default function DeleteAccount() {
           ) : (
             <>
               <MaterialCommunityIcons name="delete-forever" size={20} color="#fff" />
-              <Text style={styles.deleteButtonText}>Delete Account Permanently</Text>
+              <Text style={styles.deleteButtonText}>{t('deleteAccount.deleteButtonText')}</Text>
             </>
           )}
         </TouchableOpacity>
 
         <Text style={styles.footerNote}>
-          If you're having trouble deleting your account, contact us at support@joinaccord.app
+          {t('deleteAccount.footerNote')}
         </Text>
       </ScrollView>
     </View>

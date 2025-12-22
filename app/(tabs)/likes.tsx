@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, RefreshControl } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, RefreshControl, StyleSheet } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import MatchModal from '@/components/matching/MatchModal';
 import { calculateCompatibilityScore } from '@/lib/matching-algorithm';
+import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
 
 interface LikeProfile {
   id: string;
@@ -34,6 +35,7 @@ export default function Likes() {
   const { isPremium, isPlatinum } = useSubscription();
   const insets = useSafeAreaInsets();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const unreadActivityCount = useUnreadActivityCount(currentProfileId);
   const [likes, setLikes] = useState<LikeProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -368,9 +370,27 @@ export default function Likes() {
     return (
       <View className="flex-1 bg-background">
         {/* Header */}
-        <View className="bg-background dark:bg-background px-6 pb-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
-          <Text className="text-heading-2xl font-display-bold text-foreground mb-2">{t('likes.title')}</Text>
-          <Text className="text-body-lg font-sans text-muted-foreground">{t('likes.subtitle')}</Text>
+        <View className="bg-background dark:bg-background px-6 pb-6 border-b border-border flex-row justify-between items-end" style={{ paddingTop: insets.top + 16 }}>
+          <View>
+            <Text className="text-heading-2xl font-display-bold text-foreground mb-2">{t('likes.title')}</Text>
+            <Text className="text-body-lg font-sans text-muted-foreground">{t('likes.subtitle')}</Text>
+          </View>
+          {/* Activity Bell */}
+          <TouchableOpacity
+            onPress={() => router.push('/activity')}
+            style={styles.activityButton}
+          >
+            <View style={{ position: 'relative' }}>
+              <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#A08AB7" />
+              {unreadActivityCount > 0 && (
+                <View style={styles.activityBadge}>
+                  <Text style={styles.activityBadgeText}>
+                    {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
         </View>
 
         <ScrollView className="flex-1 px-6 pt-6">
@@ -435,11 +455,29 @@ export default function Likes() {
   return (
     <View className="flex-1 bg-background">
       {/* Header */}
-      <View className="bg-background dark:bg-background px-6 pb-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
-        <Text className="text-heading-2xl font-display-bold text-foreground mb-2">
-          {t('likes.title')} ({likes.length})
-        </Text>
-        <Text className="text-body-lg font-sans text-muted-foreground">{t('likes.subtitleWithCount')}</Text>
+      <View className="bg-background dark:bg-background px-6 pb-6 border-b border-border flex-row justify-between items-end" style={{ paddingTop: insets.top + 16 }}>
+        <View>
+          <Text className="text-heading-2xl font-display-bold text-foreground mb-2">
+            {t('likes.title')} ({likes.length})
+          </Text>
+          <Text className="text-body-lg font-sans text-muted-foreground">{t('likes.subtitleWithCount')}</Text>
+        </View>
+        {/* Activity Bell */}
+        <TouchableOpacity
+          onPress={() => router.push('/activity')}
+          style={[styles.activityButton, { backgroundColor: '#F5F0FF' }]}
+        >
+          <View style={{ position: 'relative' }}>
+            <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#A08AB7" />
+            {unreadActivityCount > 0 && (
+              <View style={styles.activityBadge}>
+                <Text style={styles.activityBadgeText}>
+                  {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -526,3 +564,30 @@ export default function Likes() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  activityButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  activityBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+});

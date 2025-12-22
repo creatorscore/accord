@@ -20,7 +20,7 @@ import { BlurView } from 'expo-blur';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
-import { formatDistance } from '@/lib/geolocation';
+import { formatDistance, DistanceUnit } from '@/lib/distance-utils';
 import { formatHeight, HeightUnit } from '@/lib/height-utils';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
@@ -120,6 +120,7 @@ interface ImmersiveProfileCardProps {
   visible: boolean;
   isMatched?: boolean; // Hide swipe actions if already matched
   heightUnit?: HeightUnit; // User's preferred height unit for display
+  distanceUnit?: DistanceUnit; // User's preferred distance unit for display
   onSendMessage?: () => void; // Show "Send Message" button instead
   onBlock?: () => void; // Block user
   onReport?: () => void; // Report user
@@ -252,6 +253,7 @@ export default function ImmersiveProfileCard({
   visible,
   isMatched = false,
   heightUnit = 'imperial',
+  distanceUnit = 'miles',
   onSendMessage,
   onBlock,
   onReport,
@@ -273,16 +275,29 @@ export default function ImmersiveProfileCard({
 
   // Fallback waveform bars
   const waveformBars = useMemo(() => {
-    const seed = profile.display_name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const seed = profile.voice_intro_url
+      ? profile.voice_intro_url.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+      : profile.display_name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const bars = [];
-    for (let i = 0; i < 35; i++) {
-      const noise = Math.sin(seed + i * 0.5) * 0.3 + Math.sin(seed + i * 0.2) * 0.2;
-      const base = 0.3 + Math.abs(Math.sin((seed + i) * 0.15)) * 0.5;
-      const height = Math.max(0.15, Math.min(1, base + noise));
+    const numBars = 45; // More bars for smoother look
+
+    // Create wave-like pattern with natural audio characteristics
+    for (let i = 0; i < numBars; i++) {
+      // Multiple sine waves for organic look
+      const wave1 = Math.sin((seed * 0.01) + (i * 0.3)) * 0.3;
+      const wave2 = Math.sin((seed * 0.02) + (i * 0.15)) * 0.2;
+      const wave3 = Math.sin((seed * 0.005) + (i * 0.5)) * 0.15;
+
+      // Add some randomness seeded by position
+      const rand = Math.abs(Math.sin(seed + i * 7.3)) * 0.2;
+
+      // Combine waves with base height
+      const base = 0.35;
+      const height = Math.max(0.15, Math.min(1, base + wave1 + wave2 + wave3 + rand));
       bars.push(height);
     }
     return bars;
-  }, [profile.display_name]);
+  }, [profile.voice_intro_url, profile.display_name]);
 
   const formatTime = (milliseconds: number) => {
     const totalSeconds = Math.floor(milliseconds / 1000);
@@ -461,7 +476,7 @@ export default function ImmersiveProfileCard({
                 <Ionicons name="location" size={18} color="white" />
                 <Text style={styles.heroLocationText}>
                   {profile.location_city}, {profile.location_state}
-                  {profile.distance && ` • ${formatDistance(profile.distance, profile.hide_distance, preferences?.willing_to_relocate)}`}
+                  {profile.distance && ` • ${formatDistance(profile.distance, distanceUnit, profile.hide_distance)}`}
                 </Text>
               </View>
             )}
@@ -504,8 +519,8 @@ export default function ImmersiveProfileCard({
                           style={[
                             styles.voiceWaveBar,
                             {
-                              height: 24 * barHeight,
-                              backgroundColor: isPlayed ? '#A08AB7' : '#EBE6F2',
+                              height: 28 * barHeight,
+                              backgroundColor: isPlayed ? '#4D3A6B' : '#A08AB7',
                             },
                           ]}
                         />
@@ -1297,9 +1312,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 32,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   voiceWaveform: {
-    height: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 28,
+    flex: 1,
   },
   fallbackWaveform: {
     flexDirection: 'row',
@@ -1308,10 +1328,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   voiceWaveBar: {
-    flex: 1,
-    minWidth: 2,
-    maxWidth: 3,
-    borderRadius: 1.5,
+    width: 2.5,
+    borderRadius: 2,
   },
   voiceDuration: {
     fontSize: 13,

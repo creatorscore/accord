@@ -619,5 +619,265 @@
     "goToMatches": "اذهب إلى التطابقات",
     "errorLoadingLikes": "فشل تحميل الإعجابات. يرجى المحاولة مرة أخرى.",
     "errorCreatingMatch": "فشل إنشاء التطابق. يرجى المحاولة مرة أخرى."
+  },
+  "activity": {
+    "title": "النشاط",
+    "back": "رجوع",
+    "markAllRead": "وضع علامة مقروء على الكل",
+    "loading": "جارٍ تحميل النشاط...",
+    "tryAgain": "حاول مرة أخرى",
+    "noActivityYet": "لا يوجد نشاط بعد",
+    "noActivityDescription": "عندما يعجب بك أحد، أو تتطابق، أو تتلقى رسائل، ستراها هنا.",
+    "today": "اليوم",
+    "yesterday": "أمس",
+    "thisWeek": "هذا الأسبوع",
+    "earlier": "سابقاً",
+    "premiumTitle": "موجز النشاط",
+    "premiumDescription": "شاهد من أعجب بك، ومتى تطابقت، والرسائل الجديدة، والمراجعات، والمزيد - كل ذلك في مكان واحد.",
+    "upgradeToPremium": "الترقية إلى Premium"
+  },
+  "betaFeedback": {
+    "title": "ملاحظات النسخة التجريبية",
+    "subtitle": "ساعدنا في تحسين Accord",
+    "overallRating": "التقييم الإجمالي",
+    "rateExperience": "قيّم تجربتك",
+    "subject": "الموضوع",
+    "subjectPlaceholder": "ما الذي تتعلق به ملاحظاتك؟",
+    "description": "الوصف",
+    "descriptionPlaceholder": "أخبرنا المزيد عن تجربتك...",
+    "feedbackType": "نوع الملاحظات",
+    "bug": "بلاغ عن خلل",
+    "feature": "طلب ميزة",
+    "improvement": "تحسين",
+    "other": "أخرى",
+    "allowContact": "السماح بالاتصال للمتابعة",
+    "allowContactDesc": "قد نتواصل معك لمعرفة المزيد عن ملاحظاتك",
+    "submit": "إرسال الملاحظات",
+    "submitting": "جارٍ الإرسال...",
+    "missingInfo": "معلومات مفقودة",
+    "missingInfoMessage": "يرجى تقديم موضوع ووصف لملاحظاتك.",
+    "ratingRequired": "التقييم مطلوب",
+    "ratingRequiredMessage": "يرجى تقديم تقييم إجمالي.",
+    "thankYou": "شكراً لك!",
+    "thankYouMessage": "ملاحظاتك تساعدنا في جعل Accord أفضل للجميع.",
+    "error": "خطأ",
+    "errorMessage": "فشل إرسال الملاحظات. يرجى المحاولة مرة أخرى."
+  },
+  "deleteAccount": {
+    "title": "حذف الحساب",
+    "warning": "تحذير",
+    "warningMessage": "هذا الإجراء دائم ولا يمكن التراجع عنه. سيتم حذف جميع بياناتك وتطابقاتك ورسائلك ومعلومات ملفك الشخصي نهائياً.",
+    "confirmTitle": "هل أنت متأكد؟",
+    "confirmMessage": "يرجى كتابة DELETE لتأكيد رغبتك في حذف حسابك نهائياً.",
+    "confirmPlaceholder": "اكتب DELETE للتأكيد",
+    "deleteButton": "حذف حسابي",
+    "deleting": "جارٍ الحذف...",
+    "incorrectConfirmation": "تأكيد غير صحيح",
+    "incorrectConfirmationMessage": "يرجى كتابة DELETE بالضبط للتأكيد.",
+    "accountDeleted": "تم حذف الحساب",
+    "accountDeletedMessage": "تم حذف حسابك نهائياً.",
+    "error": "خطأ",
+    "errorMessage": "فشل حذف الحساب. يرجى المحاولة مرة أخرى أو الاتصال بالدعم."
+  },
+  "notificationSettings": {
+    "title": "إعدادات الإشعارات",
+    "subtitle": "إدارة إشعاراتك",
+    "pushNotifications": "إشعارات الدفع",
+    "pushNotificationsDesc": "تلقي إشعارات الدفع على جهازك",
+    "newMatches": "تطابقات جديدة",
+    "newMatchesDesc": "عندما تتطابق مع شخص ما",
+    "newMessages": "رسائل جديدة",
+    "newMessagesDesc": "عندما تتلقى رسالة جديدة",
+    "newLikes": "إعجابات جديدة",
+    "newLikesDesc": "عندما يعجب أحد بملفك الشخصي",
+    "reviews": "المراجعات",
+    "reviewsDesc": "عندما تكون المراجعات جاهزة أو تم الكشف عنها",
+    "marketing": "التسويق",
+    "marketingDesc": "نصائح وتحديثات وعروض ترويجية",
+    "emailNotifications": "إشعارات البريد الإلكتروني",
+    "emailNotificationsDesc": "تلقي التحديثات عبر البريد الإلكتروني",
+    "saved": "تم حفظ الإعدادات",
+    "savedMessage": "تم تحديث تفضيلات الإشعارات الخاصة بك.",
+    "error": "خطأ",
+    "errorMessage": "فشل حفظ الإعدادات. يرجى المحاولة مرة أخرى."
+  },
+  "safetyCenter": {
+    "title": "مركز السلامة",
+    "subtitle": "ابقَ آمناً على Accord",
+    "emergencyResources": "موارد الطوارئ",
+    "emergencyResourcesDesc": "خطوط ساخنة للأزمات وخدمات الدعم",
+    "reportUser": "الإبلاغ عن مستخدم",
+    "reportUserDesc": "الإبلاغ عن المضايقات أو الاحتيال أو مشاكل أخرى",
+    "blockingOptions": "خيارات الحظر",
+    "blockingOptionsDesc": "حظر جهات الاتصال أو البلدان أو مستخدمين محددين",
+    "safetyTips": "نصائح السلامة",
+    "safetyTipsDesc": "إرشادات للمواعدة الآمنة عبر الإنترنت",
+    "privacyGuide": "دليل الخصوصية",
+    "privacyGuideDesc": "حماية معلوماتك الشخصية",
+    "meetingSafely": "الاجتماع بأمان",
+    "meetingSafelyDesc": "نصائح للقاء التطابقات شخصياً",
+    "lgbtqResources": "موارد مجتمع الميم",
+    "lgbtqResourcesDesc": "منظمات الدعم والخطوط الساخنة"
+  },
+  "subscriptionSettings": {
+    "title": "الاشتراك",
+    "chooseYourPlan": "اختر خطتك",
+    "loadingPlans": "جارٍ تحميل الخطط...",
+    "renewsOn": "يتجدد في: {{date}}",
+    "activeDevelopmentMode": "نشط (وضع التطوير)",
+    "developmentModeNA": "غير متاح (وضع التطوير)",
+    "developmentMode": "وضع التطوير",
+    "developmentModeDescription": "RevenueCat معطل في التطوير. يتم التحكم في حالة اشتراكك من خلال علامات is_premium و is_platinum في قاعدة البيانات.",
+    "developmentModeProductionNote": "في الإنتاج، ستعرض هذه الشاشة حزم الاشتراك الحقيقية وتسمح للمستخدمين بإدارة اشتراكاتهم من خلال App Store أو Play Store.",
+    "status": {
+      "platinumMember": "عضو بلاتينيوم",
+      "premiumMember": "عضو بريميوم",
+      "freePlan": "خطة مجانية",
+      "allFeaturesUnlocked": "جميع الميزات المميزة مفتوحة",
+      "enhancedFeaturesUnlocked": "الميزات المحسّنة مفتوحة",
+      "freeDescription": "25 سوايب يوميًا، رسائل أساسية"
+    },
+    "plans": {
+      "premium": "Premium",
+      "platinum": "Platinum"
+    },
+    "periods": {
+      "monthly": "شهري",
+      "threeMonths": "3 أشهر",
+      "annual": "سنوي"
+    },
+    "save22": "وفر 22%",
+    "save33": "وفر 33%",
+    "bestValueSave22": "أفضل قيمة - وفر 22%",
+    "perMonth": "شهر",
+    "perThreeMonths": "3 أشهر",
+    "perYear": "سنة",
+    "quarterlyPopular": "فقط $11.66/شهر — خطتنا الأكثر شعبية!",
+    "processing": "جارٍ المعالجة...",
+    "subscribeToPremium": "اشترك في Premium",
+    "subscribeToPlatinum": "اشترك في Platinum",
+    "premiumIncludes": "Premium يشمل:",
+    "premiumFeaturesList": "• سوايبات غير محدودة\n• شاهد من أعجب بك\n• 5 إعجابات خارقة/أسبوع\n• رسائل صوتية\n• إيصالات القراءة\n• فلاتر متقدمة\n• إرجاع",
+    "everythingInPremiumPlus": "كل ما في Premium، بالإضافة إلى:",
+    "platinumFeaturesList": "• تعزيز الملف الشخصي الأسبوعي\n• فحوصات الخلفية\n• موارد قانونية\n• دعم ذو أولوية",
+    "platinumComingSoonMessage": "ابقوا على اطلاع! مستوى Platinum قادم قريبًا.",
+    "comingSoon": "قريبًا",
+    "planNotAvailable": "خطة {{plan}} {{period}} غير متوفرة في RevenueCat",
+    "premiumFeaturesTitle": "ميزات Premium",
+    "features": {
+      "unlimitedSwipes": "سوايبات غير محدودة",
+      "seeWhoLikedYou": "شاهد من أعجب بك",
+      "superLikesPerWeek": "5 إعجابات خارقة في الأسبوع",
+      "voiceMessages": "رسائل صوتية",
+      "readReceipts": "إيصالات القراءة",
+      "advancedFilters": "فلاتر متقدمة",
+      "rewindLastSwipe": "إرجاع آخر سوايب",
+      "backgroundChecks": "فحوصات الخلفية",
+      "legalResources": "موارد قانونية",
+      "weeklyProfileBoost": "تعزيز الملف الشخصي الأسبوعي",
+      "prioritySupport": "دعم ذو أولوية"
+    },
+    "restorePurchases": "استعادة المشتريات",
+    "restoring": "جارٍ الاستعادة...",
+    "opening": "جارٍ الفتح...",
+    "redeemPromoCode": "استرداد رمز ترويجي",
+    "manageSubscription": "إدارة الاشتراك",
+    "infoTextIOS": "تتم إدارة الاشتراكات من خلال حساب App Store الخاص بك. يمكنك الإلغاء في أي وقت من إعدادات حسابك.",
+    "infoTextAndroid": "تتم إدارة الاشتراكات من خلال حساب Google Play الخاص بك. يمكنك الإلغاء في أي وقت من إعدادات حسابك.",
+    "termsOfUse": "شروط الاستخدام",
+    "privacyPolicy": "سياسة الخصوصية",
+    "unableToLoadTitle": "تعذر تحميل خيارات الاشتراك",
+    "unableToLoadDescription": "نواجه مشكلة في تحميل خطط الاشتراك. قد يكون السبب:",
+    "errorReasons": {
+      "revenueCat": "• العروض غير مهيأة في RevenueCat",
+      "network": "• مشكلة في الاتصال بالشبكة",
+      "serviceUnavailable": "• خدمة RevenueCat غير متاحة مؤقتًا"
+    },
+    "alerts": {
+      "unableToLoadTitle": "تعذر تحميل الاشتراكات",
+      "unableToLoadMessage": "يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.",
+      "tryAgain": "حاول مرة أخرى",
+      "successTitle": "نجح!",
+      "purchasesRestoredSuccess": "تمت استعادة مشترياتك بنجاح.",
+      "noPurchasesFoundTitle": "لم يتم العثور على مشتريات",
+      "noPurchasesFoundMessage": "لم نتمكن من العثور على أي مشتريات لاستعادتها. إذا كنت تعتقد أن هذا خطأ، يرجى الاتصال بالدعم.",
+      "restoreFailedTitle": "فشلت الاستعادة",
+      "restoreFailedMessage": "فشل استعادة المشتريات. يرجى المحاولة مرة أخرى لاحقًا.",
+      "developmentModeTitle": "وضع التطوير",
+      "developmentModeMessage": "تتم إدارة الاشتراك عبر قاعدة البيانات في وضع التطوير.\n\nفي الإنتاج، سيفتح هذا إعدادات اشتراك App Store أو Play Store الخاصة بك.",
+      "couldNotOpenManagement": "تعذر فتح إدارة الاشتراك",
+      "notAvailableTitle": "غير متاح",
+      "promoCodeAndroidMessage": "استرداد الرمز الترويجي متاح فقط على أجهزة iOS. على Android، يمكنك استرداد الرموز مباشرة في متجر Google Play.",
+      "codeRedemptionFailed": "فشل فتح استرداد الرمز. يرجى المحاولة مرة أخرى.",
+      "subscriptionActivated": "تم تفعيل اشتراكك.",
+      "subscriptionExistsTitle": "الاشتراك موجود بالفعل",
+      "subscriptionExistsAndroid": "لديك اشتراك ملغى على حساب Google Play الحالي الخاص بك.\n\nالخيارات:\n\n1. أعد تفعيل اشتراكك الحالي في إعدادات Google Play\n\n2. استخدم حساب Google Play مختلف: قم بتسجيل الخروج من Google Play على جهازك، ثم قم بتسجيل الدخول بحساب مختلف وحاول مرة أخرى",
+      "subscriptionExistsIOS": "لديك اشتراك ملغى على Apple ID الحالي الخاص بك.\n\nالخيارات:\n\n1. أعد تفعيل اشتراكك الحالي في إعدادات App Store\n\n2. استخدم Apple ID مختلف: قم بتسجيل الخروج في الإعدادات > [اسمك]، ثم قم بتسجيل الدخول بـ Apple ID مختلف وحاول مرة أخرى",
+      "gotIt": "فهمت",
+      "openSettings": "فتح الإعدادات",
+      "purchaseFailedTitle": "فشل الشراء",
+      "purchaseFailedMessage": "فشل إتمام الشراء. يرجى المحاولة مرة أخرى أو الاتصال بالدعم إذا استمرت المشكلة."
+    }
+  },
+  "whatsNew": {
+    "title": "ما الجديد",
+    "version": "الإصدار {{version}}",
+    "continue": "لنبدأ!",
+    "new": "جديد",
+    "v109": {
+      "headline": "ابقَ على اتصال مع مركز النشاط ودقة الموقع المحسّنة!",
+      "features": {
+        "activityCenter": {
+          "title": "مركز النشاط",
+          "description": "تتبع جميع إعجاباتك وتطابقاتك ومشاهدات الملف الشخصي في مكان واحد مريح"
+        },
+        "betterLocation": {
+          "title": "دقة موقع أفضل",
+          "description": "تطابق موقع أكثر دقة للعثور على أشخاص متوافقين بالقرب منك"
+        },
+        "moreLanguages": {
+          "title": "المزيد من اللغات",
+          "description": "دعم الترجمة الكاملة لجميع شاشات التطبيق في 18 لغة"
+        },
+        "bugFixes": {
+          "title": "إصلاحات الأخطاء والتحسينات",
+          "description": "تحسينات مختلفة في الأداء وإصلاحات الأخطاء لتجربة أكثر سلاسة"
+        }
+      }
+    },
+    "v108": {
+      "headline": "ميزات أمان محسّنة والتحقق من الصور!",
+      "features": {
+        "photoVerification": {
+          "title": "التحقق من الصور",
+          "description": "التحقق من الصورة الشخصية لإثبات أن صورك حقيقية"
+        },
+        "screenshotProtection": {
+          "title": "الحماية من لقطات الشاشة",
+          "description": "صورك محمية من لقطات الشاشة في الدردشة"
+        },
+        "improvedSafety": {
+          "title": "أمان محسّن",
+          "description": "نظام حظر محسّن وتحسينات أمنية"
+        }
+      }
+    },
+    "v104": {
+      "headline": "تحسينات البحث وإصلاحات الأمان!",
+      "features": {
+        "searchImprovements": {
+          "title": "بحث أفضل",
+          "description": "خوارزمية مطابقة محسّنة لنتائج أكثر صلة"
+        },
+        "encryptionFix": {
+          "title": "إصلاح التشفير",
+          "description": "تم إصلاح التشفير من طرف إلى طرف للمراسلة الآمنة"
+        },
+        "bugFixes": {
+          "title": "إصلاحات الأخطاء",
+          "description": "تحسينات مختلفة في الاستقرار والأداء"
+        }
+      }
+    }
   }
 }

@@ -11,6 +11,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 
 interface SafetyTip {
   id: string;
@@ -111,16 +112,17 @@ const CRISIS_RESOURCES = [
 ];
 
 export default function SafetyCenter() {
+  const { t } = useTranslation();
   const [expandedTip, setExpandedTip] = useState<string | null>(null);
 
   const handleCallHotline = (phone: string, name: string) => {
     Alert.alert(
-      `Call ${name}?`,
-      `This will open your phone app to call ${phone}`,
+      t('safetyCenter.alerts.callTitle', { name }),
+      t('safetyCenter.alerts.callMessage', { phone }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Call',
+          text: t('safetyCenter.alerts.call'),
           onPress: () => {
             Linking.openURL(`tel:${phone}`);
           },
@@ -152,14 +154,14 @@ export default function SafetyCenter() {
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <MaterialCommunityIcons name="shield-check" size={40} color="#fff" />
-            <Text style={styles.headerTitle}>Safety Center</Text>
-            <Text style={styles.headerSubtitle}>Your safety is our priority</Text>
+            <Text style={styles.headerTitle}>{t('safetyCenter.title')}</Text>
+            <Text style={styles.headerSubtitle}>{t('safetyCenter.subtitle')}</Text>
           </View>
         </LinearGradient>
 
         {/* Safety Tips */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Safety Tips</Text>
+          <Text style={styles.sectionTitle}>{t('safetyCenter.safetyTipsTitle')}</Text>
           {SAFETY_TIPS.map((tip) => (
             <TouchableOpacity
               key={tip.id}
@@ -201,10 +203,9 @@ export default function SafetyCenter() {
 
         {/* Crisis Resources */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Crisis Resources</Text>
+          <Text style={styles.sectionTitle}>{t('safetyCenter.crisisResourcesTitle')}</Text>
           <Text style={styles.sectionDescription}>
-            If you're in crisis or need immediate support, these organizations
-            are here to help 24/7.
+            {t('safetyCenter.crisisResourcesDescription')}
           </Text>
 
           {CRISIS_RESOURCES.map((resource) => (
@@ -246,7 +247,7 @@ export default function SafetyCenter() {
                     size={16}
                     color="#A08AB7"
                   />
-                  <Text style={styles.websiteButtonText}>Visit Website</Text>
+                  <Text style={styles.websiteButtonText}>{t('safetyCenter.visitWebsite')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -255,7 +256,7 @@ export default function SafetyCenter() {
 
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <Text style={styles.sectionTitle}>{t('safetyCenter.quickActionsTitle')}</Text>
 
           <TouchableOpacity
             style={styles.actionCard}
@@ -265,9 +266,9 @@ export default function SafetyCenter() {
               <MaterialCommunityIcons name="cancel" size={24} color="#A08AB7" />
             </View>
             <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>Blocked Users</Text>
+              <Text style={styles.actionTitle}>{t('safetyCenter.actions.blockedUsers')}</Text>
               <Text style={styles.actionDescription}>
-                Manage users you've blocked
+                {t('safetyCenter.actions.blockedUsersDesc')}
               </Text>
             </View>
             <MaterialCommunityIcons
@@ -285,9 +286,9 @@ export default function SafetyCenter() {
               <MaterialCommunityIcons name="lock" size={24} color="#A08AB7" />
             </View>
             <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>Privacy Settings</Text>
+              <Text style={styles.actionTitle}>{t('safetyCenter.actions.privacySettings')}</Text>
               <Text style={styles.actionDescription}>
-                Control who can see your profile
+                {t('safetyCenter.actions.privacySettingsDesc')}
               </Text>
             </View>
             <MaterialCommunityIcons
@@ -299,9 +300,19 @@ export default function SafetyCenter() {
 
           <TouchableOpacity
             style={styles.actionCard}
-            onPress={() =>
-              Linking.openURL('mailto:hello@joinaccord.app?subject=Safety Concern')
-            }
+            onPress={async () => {
+              const mailtoUrl = 'mailto:hello@joinaccord.app?subject=Safety Concern';
+              const canOpen = await Linking.canOpenURL(mailtoUrl);
+              if (canOpen) {
+                Linking.openURL(mailtoUrl);
+              } else {
+                Alert.alert(
+                  t('safetyCenter.actions.contactSupport'),
+                  t('safetyCenter.alerts.emailUs'),
+                  [{ text: t('common.ok') }]
+                );
+              }
+            }}
           >
             <View style={styles.actionIcon}>
               <MaterialCommunityIcons
@@ -311,9 +322,9 @@ export default function SafetyCenter() {
               />
             </View>
             <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>Contact Support</Text>
+              <Text style={styles.actionTitle}>{t('safetyCenter.actions.contactSupport')}</Text>
               <Text style={styles.actionDescription}>
-                Report safety concerns directly
+                {t('safetyCenter.actions.contactSupportDesc')}
               </Text>
             </View>
             <MaterialCommunityIcons
@@ -327,8 +338,7 @@ export default function SafetyCenter() {
         <View style={styles.footer}>
           <MaterialCommunityIcons name="heart" size={20} color="#CDC2E5" />
           <Text style={styles.footerText}>
-            Your safety and wellbeing matter to us.{'\n'}
-            Stay safe out there!
+            {t('safetyCenter.footerText')}
           </Text>
         </View>
       </ScrollView>

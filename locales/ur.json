@@ -619,5 +619,265 @@
     "goToMatches": "میچز پر جائیں",
     "errorLoadingLikes": "پسندیں لوڈ کرنے میں ناکام۔ براہ کرم دوبارہ کوشش کریں۔",
     "errorCreatingMatch": "میچ بنانے میں ناکام۔ براہ کرم دوبارہ کوشش کریں۔"
+  },
+  "activity": {
+    "title": "سرگرمی",
+    "back": "واپس",
+    "markAllRead": "سب کو پڑھا ہوا نشان زد کریں",
+    "loading": "سرگرمی لوڈ ہو رہی ہے...",
+    "tryAgain": "دوبارہ کوشش کریں",
+    "noActivityYet": "ابھی تک کوئی سرگرمی نہیں",
+    "noActivityDescription": "جب کوئی آپ کو پسند کرے، آپ میچ کریں، یا پیغامات موصول کریں، تو آپ اسے یہاں دیکھیں گے۔",
+    "today": "آج",
+    "yesterday": "کل",
+    "thisWeek": "اس ہفتے",
+    "earlier": "پہلے",
+    "premiumTitle": "سرگرمی فیڈ",
+    "premiumDescription": "دیکھیں کس نے آپ کو پسند کیا، کب میچ ہوا، نئے پیغامات، جائزے، اور مزید - سب ایک جگہ۔",
+    "upgradeToPremium": "پریمیم میں اپ گریڈ کریں"
+  },
+  "betaFeedback": {
+    "title": "بیٹا فیڈبیک",
+    "subtitle": "Accord کو بہتر بنانے میں ہماری مدد کریں",
+    "overallRating": "مجموعی درجہ بندی",
+    "rateExperience": "اپنے تجربے کی درجہ بندی کریں",
+    "subject": "موضوع",
+    "subjectPlaceholder": "آپ کا فیڈبیک کس بارے میں ہے؟",
+    "description": "تفصیل",
+    "descriptionPlaceholder": "اپنے تجربے کے بارے میں ہمیں مزید بتائیں...",
+    "feedbackType": "فیڈبیک کی قسم",
+    "bug": "بگ رپورٹ",
+    "feature": "فیچر کی درخواست",
+    "improvement": "بہتری",
+    "other": "دیگر",
+    "allowContact": "فالو اپ کے لیے رابطے کی اجازت دیں",
+    "allowContactDesc": "ہم آپ کے فیڈبیک کے بارے میں مزید جاننے کے لیے آپ سے رابطہ کر سکتے ہیں",
+    "submit": "فیڈبیک جمع کرائیں",
+    "submitting": "جمع کرایا جا رہا ہے...",
+    "missingInfo": "معلومات غائب ہیں",
+    "missingInfoMessage": "براہ کرم اپنے فیڈبیک کے لیے موضوع اور تفصیل فراہم کریں۔",
+    "ratingRequired": "درجہ بندی ضروری ہے",
+    "ratingRequiredMessage": "براہ کرم ایک مجموعی درجہ بندی فراہم کریں۔",
+    "thankYou": "شکریہ!",
+    "thankYouMessage": "آپ کا فیڈبیک ہمیں Accord کو سب کے لیے بہتر بنانے میں مدد کرتا ہے۔",
+    "error": "خرابی",
+    "errorMessage": "فیڈبیک جمع کرانے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔"
+  },
+  "deleteAccount": {
+    "title": "اکاؤنٹ حذف کریں",
+    "warning": "انتباہ",
+    "warningMessage": "یہ عمل مستقل ہے اور اسے واپس نہیں کیا جا سکتا۔ آپ کا تمام ڈیٹا، میچز، پیغامات، اور پروفائل کی معلومات مستقل طور پر حذف ہو جائیں گی۔",
+    "confirmTitle": "کیا آپ کو یقین ہے؟",
+    "confirmMessage": "براہ کرم DELETE ٹائپ کریں تاکہ تصدیق ہو کہ آپ اپنے اکاؤنٹ کو مستقل طور پر حذف کرنا چاہتے ہیں۔",
+    "confirmPlaceholder": "تصدیق کے لیے DELETE ٹائپ کریں",
+    "deleteButton": "میرا اکاؤنٹ حذف کریں",
+    "deleting": "حذف کیا جا رہا ہے...",
+    "incorrectConfirmation": "غلط تصدیق",
+    "incorrectConfirmationMessage": "براہ کرم تصدیق کے لیے بالکل DELETE ٹائپ کریں۔",
+    "accountDeleted": "اکاؤنٹ حذف ہو گیا",
+    "accountDeletedMessage": "آپ کا اکاؤنٹ مستقل طور پر حذف ہو گیا ہے۔",
+    "error": "خرابی",
+    "errorMessage": "اکاؤنٹ حذف کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں یا سپورٹ سے رابطہ کریں۔"
+  },
+  "notificationSettings": {
+    "title": "اطلاعات کی ترتیبات",
+    "subtitle": "اپنی اطلاعات کا انتظام کریں",
+    "pushNotifications": "پش اطلاعات",
+    "pushNotificationsDesc": "اپنے آلے پر پش اطلاعات وصول کریں",
+    "newMatches": "نئے میچز",
+    "newMatchesDesc": "جب آپ کسی سے میچ کریں",
+    "newMessages": "نئے پیغامات",
+    "newMessagesDesc": "جب آپ کو نیا پیغام ملے",
+    "newLikes": "نئی پسندیں",
+    "newLikesDesc": "جب کوئی آپ کی پروفائل کو پسند کرے",
+    "reviews": "جائزے",
+    "reviewsDesc": "جب جائزے تیار یا ظاہر ہوں",
+    "marketing": "مارکیٹنگ",
+    "marketingDesc": "تجاویز، اپ ڈیٹس، اور پروموشنز",
+    "emailNotifications": "ای میل اطلاعات",
+    "emailNotificationsDesc": "ای میل کے ذریعے اپ ڈیٹس حاصل کریں",
+    "saved": "ترتیبات محفوظ ہو گئیں",
+    "savedMessage": "آپ کی اطلاعات کی ترجیحات اپ ڈیٹ ہو گئی ہیں۔",
+    "error": "خرابی",
+    "errorMessage": "ترتیبات محفوظ کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔"
+  },
+  "safetyCenter": {
+    "title": "حفاظتی مرکز",
+    "subtitle": "Accord پر محفوظ رہیں",
+    "emergencyResources": "ایمرجنسی وسائل",
+    "emergencyResourcesDesc": "بحرانی ہاٹ لائنز اور معاونت کی خدمات",
+    "reportUser": "صارف کی رپورٹ کریں",
+    "reportUserDesc": "ہراساں کرنے، گھوٹالوں، یا دیگر مسائل کی رپورٹ کریں",
+    "blockingOptions": "مسدود کرنے کے اختیارات",
+    "blockingOptionsDesc": "رابطے، ممالک، یا مخصوص صارفین کو مسدود کریں",
+    "safetyTips": "حفاظتی تجاویز",
+    "safetyTipsDesc": "محفوظ آن لائن ڈیٹنگ کے لیے رہنما خطوط",
+    "privacyGuide": "رازداری گائیڈ",
+    "privacyGuideDesc": "اپنی ذاتی معلومات کی حفاظت کریں",
+    "meetingSafely": "محفوظ طریقے سے ملاقات",
+    "meetingSafelyDesc": "میچز سے ذاتی طور پر ملنے کے لیے تجاویز",
+    "lgbtqResources": "LGBTQ+ وسائل",
+    "lgbtqResourcesDesc": "معاونت کی تنظیمیں اور ہیلپ لائنز"
+  },
+  "subscriptionSettings": {
+    "title": "سبسکرپشن",
+    "chooseYourPlan": "اپنا پلان منتخب کریں",
+    "loadingPlans": "پلان لوڈ ہو رہے ہیں...",
+    "renewsOn": "تجدید: {{date}}",
+    "activeDevelopmentMode": "فعال (ڈیولپمنٹ موڈ)",
+    "developmentModeNA": "دستیاب نہیں (ڈیولپمنٹ موڈ)",
+    "developmentMode": "ڈیولپمنٹ موڈ",
+    "developmentModeDescription": "ڈیولپمنٹ میں RevenueCat غیر فعال ہے۔ آپ کی سبسکرپشن کی حالت ڈیٹا بیس میں is_premium اور is_platinum فلیگز کے ذریعے کنٹرول کی جاتی ہے۔",
+    "developmentModeProductionNote": "پروڈکشن میں، یہ اسکرین حقیقی سبسکرپشن پیکجز دکھائے گی اور صارفین کو App Store یا Play Store کے ذریعے اپنی سبسکرپشنز کا انتظام کرنے کی اجازت دے گی۔",
+    "status": {
+      "platinumMember": "پلاٹینم ممبر",
+      "premiumMember": "پریمیم ممبر",
+      "freePlan": "مفت پلان",
+      "allFeaturesUnlocked": "تمام پریمیم فیچرز کھل گئے",
+      "enhancedFeaturesUnlocked": "بہتر فیچرز کھل گئے",
+      "freeDescription": "روزانہ 25 سوائپس، بنیادی پیغام رسانی"
+    },
+    "plans": {
+      "premium": "پریمیم",
+      "platinum": "پلاٹینم"
+    },
+    "periods": {
+      "monthly": "ماہانہ",
+      "threeMonths": "3 ماہ",
+      "annual": "سالانہ"
+    },
+    "save22": "22% بچت",
+    "save33": "33% بچت",
+    "bestValueSave22": "بہترین قیمت - 22% بچت",
+    "perMonth": "ماہ",
+    "perThreeMonths": "3 ماہ",
+    "perYear": "سال",
+    "quarterlyPopular": "صرف $11.66/ماہ — ہمارا سب سے مقبول پلان!",
+    "processing": "پروسیسنگ...",
+    "subscribeToPremium": "پریمیم میں سبسکرائب کریں",
+    "subscribeToPlatinum": "پلاٹینم میں سبسکرائب کریں",
+    "premiumIncludes": "پریمیم میں شامل ہے:",
+    "premiumFeaturesList": "• لامحدود سوائپس\n• دیکھیں کس نے آپ کو لائک کیا\n• 5 سپر لائکس/ہفتہ\n• صوتی پیغامات\n• پڑھنے کی رسیدیں\n• جدید فلٹرز\n• واپسی",
+    "everythingInPremiumPlus": "پریمیم میں سب کچھ، نیز:",
+    "platinumFeaturesList": "• ہفتہ وار پروفائل بوسٹ\n• پس منظر کی جانچ\n• قانونی وسائل\n• ترجیحی معاونت",
+    "platinumComingSoonMessage": "منتظر رہیں! پلاٹینم درجہ جلد شروع ہو رہا ہے۔",
+    "comingSoon": "جلد آ رہا ہے",
+    "planNotAvailable": "{{plan}} {{period}} پلان RevenueCat میں دستیاب نہیں",
+    "premiumFeaturesTitle": "پریمیم فیچرز",
+    "features": {
+      "unlimitedSwipes": "لامحدود سوائپس",
+      "seeWhoLikedYou": "دیکھیں کس نے آپ کو لائک کیا",
+      "superLikesPerWeek": "ہفتے میں 5 سپر لائکس",
+      "voiceMessages": "صوتی پیغامات",
+      "readReceipts": "پڑھنے کی رسیدیں",
+      "advancedFilters": "جدید فلٹرز",
+      "rewindLastSwipe": "آخری سوائپ واپس کریں",
+      "backgroundChecks": "پس منظر کی جانچ",
+      "legalResources": "قانونی وسائل",
+      "weeklyProfileBoost": "ہفتہ وار پروفائل بوسٹ",
+      "prioritySupport": "ترجیحی معاونت"
+    },
+    "restorePurchases": "خریداریاں بحال کریں",
+    "restoring": "بحال ہو رہی ہیں...",
+    "opening": "کھل رہا ہے...",
+    "redeemPromoCode": "پرومو کوڈ استعمال کریں",
+    "manageSubscription": "سبسکرپشن کا انتظام کریں",
+    "infoTextIOS": "سبسکرپشنز آپ کے App Store اکاؤنٹ کے ذریعے منظم کی جاتی ہیں۔ آپ اپنے اکاؤنٹ کی ترتیبات سے کسی بھی وقت منسوخ کر سکتے ہیں۔",
+    "infoTextAndroid": "سبسکرپشنز آپ کے Google Play اکاؤنٹ کے ذریعے منظم کی جاتی ہیں۔ آپ اپنے اکاؤنٹ کی ترتیبات سے کسی بھی وقت منسوخ کر سکتے ہیں۔",
+    "termsOfUse": "استعمال کی شرائط",
+    "privacyPolicy": "پرائیویسی پالیسی",
+    "unableToLoadTitle": "سبسکرپشن کے اختیارات لوڈ کرنے سے قاصر",
+    "unableToLoadDescription": "ہم سبسکرپشن پلانز لوڈ کرنے میں پریشانی کا سامنا کر رہے ہیں۔ یہ ہو سکتا ہے کیونکہ:",
+    "errorReasons": {
+      "revenueCat": "• RevenueCat میں پیشکشیں ترتیب نہیں دی گئیں",
+      "network": "• نیٹ ورک کنکشن کا مسئلہ",
+      "serviceUnavailable": "• RevenueCat سروس عارضی طور پر دستیاب نہیں"
+    },
+    "alerts": {
+      "unableToLoadTitle": "سبسکرپشنز لوڈ کرنے سے قاصر",
+      "unableToLoadMessage": "براہ کرم اپنا انٹرنیٹ کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
+      "tryAgain": "دوبارہ کوشش کریں",
+      "successTitle": "کامیابی!",
+      "purchasesRestoredSuccess": "آپ کی خریداریاں کامیابی سے بحال ہو گئیں۔",
+      "noPurchasesFoundTitle": "کوئی خریداریاں نہیں ملیں",
+      "noPurchasesFoundMessage": "ہم بحال کرنے کے لیے کوئی خریداریاں تلاش نہیں کر سکے۔ اگر آپ کو لگتا ہے کہ یہ غلطی ہے، تو براہ کرم سپورٹ سے رابطہ کریں۔",
+      "restoreFailedTitle": "بحالی ناکام ہوئی",
+      "restoreFailedMessage": "خریداریاں بحال کرنا ناکام ہوا۔ براہ کرم بعد میں دوبارہ کوشش کریں۔",
+      "developmentModeTitle": "ڈیولپمنٹ موڈ",
+      "developmentModeMessage": "ڈیولپمنٹ موڈ میں سبسکرپشن کا انتظام ڈیٹا بیس کے ذریعے ہوتا ہے۔\n\nپروڈکشن میں، یہ آپ کی App Store یا Play Store سبسکرپشن کی ترتیبات کھولے گا۔",
+      "couldNotOpenManagement": "سبسکرپشن کا انتظام نہیں کھول سکے",
+      "notAvailableTitle": "دستیاب نہیں",
+      "promoCodeAndroidMessage": "پرومو کوڈ کا استعمال صرف iOS ڈیوائسز پر دستیاب ہے۔ Android پر، آپ Google Play Store میں براہ راست کوڈز استعمال کر سکتے ہیں۔",
+      "codeRedemptionFailed": "کوڈ کا استعمال کھولنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔",
+      "subscriptionActivated": "آپ کی سبسکرپشن فعال ہو گئی ہے۔",
+      "subscriptionExistsTitle": "سبسکرپشن پہلے سے موجود ہے",
+      "subscriptionExistsAndroid": "آپ کے موجودہ Google Play اکاؤنٹ پر منسوخ شدہ سبسکرپشن ہے۔\n\nاختیارات:\n\n1. Google Play کی ترتیبات میں اپنی موجودہ سبسکرپشن دوبارہ فعال کریں\n\n2. مختلف Google Play اکاؤنٹ استعمال کریں: اپنے ڈیوائس پر Google Play سے سائن آؤٹ کریں، پھر مختلف اکاؤنٹ سے سائن ان کریں اور دوبارہ کوشش کریں",
+      "subscriptionExistsIOS": "آپ کی موجودہ Apple ID پر منسوخ شدہ سبسکرپشن ہے۔\n\nاختیارات:\n\n1. App Store کی ترتیبات میں اپنی موجودہ سبسکرپشن دوبارہ فعال کریں\n\n2. مختلف Apple ID استعمال کریں: ترتیبات > [آپ کا نام] میں سائن آؤٹ کریں، پھر مختلف Apple ID سے سائن ان کریں اور دوبارہ کوشش کریں",
+      "gotIt": "سمجھ گیا",
+      "openSettings": "ترتیبات کھولیں",
+      "purchaseFailedTitle": "خریداری ناکام ہوئی",
+      "purchaseFailedMessage": "خریداری مکمل کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں یا اگر مسئلہ برقرار رہے تو سپورٹ سے رابطہ کریں۔"
+    }
+  },
+  "whatsNew": {
+    "title": "نیا کیا ہے",
+    "version": "ورژن {{version}}",
+    "continue": "چلیں شروع کریں!",
+    "new": "نیا",
+    "v109": {
+      "headline": "اپنی ایکٹیویٹی سینٹر اور بہتر مقام کی درستگی کے ساتھ جڑے رہیں!",
+      "features": {
+        "activityCenter": {
+          "title": "ایکٹیویٹی سینٹر",
+          "description": "ایک آسان جگہ پر اپنی تمام پسندیں، میچز اور پروفائل دیکھنے کو ٹریک کریں"
+        },
+        "betterLocation": {
+          "title": "بہتر مقام کی درستگی",
+          "description": "آپ کے قریب موجود مطابقت پذیر لوگوں کو تلاش کرنے کے لیے زیادہ درست مقام کی میچنگ"
+        },
+        "moreLanguages": {
+          "title": "مزید زبانیں",
+          "description": "18 زبانوں میں تمام ایپ اسکرینز کے لیے مکمل ترجمے کی معاونت"
+        },
+        "bugFixes": {
+          "title": "بگ فکسز اور بہتریاں",
+          "description": "ہموار تجربے کے لیے مختلف کارکردگی کی بہتریاں اور بگ فکسز"
+        }
+      }
+    },
+    "v108": {
+      "headline": "بہتر حفاظتی خصوصیات اور تصویری تصدیق!",
+      "features": {
+        "photoVerification": {
+          "title": "تصویری تصدیق",
+          "description": "یہ ثابت کرنے کے لیے سیلفی کی تصدیق کہ آپ کی تصاویر واقعی آپ کی ہیں"
+        },
+        "screenshotProtection": {
+          "title": "اسکرین شاٹ سے تحفظ",
+          "description": "چیٹ میں آپ کی تصاویر اسکرین شاٹس سے محفوظ ہیں"
+        },
+        "improvedSafety": {
+          "title": "بہتر حفاظت",
+          "description": "بہتر پابندی کا نظام اور حفاظتی بہتریاں"
+        }
+      }
+    },
+    "v104": {
+      "headline": "تلاش کی بہتریاں اور حفاظتی اصلاحات!",
+      "features": {
+        "searchImprovements": {
+          "title": "بہتر تلاش",
+          "description": "زیادہ متعلقہ نتائج کے لیے بہتر میچنگ الگورتھم"
+        },
+        "encryptionFix": {
+          "title": "خفیہ کاری کی اصلاح",
+          "description": "محفوظ پیغام رسانی کے لیے اینڈ-ٹو-اینڈ خفیہ کاری ٹھیک کی گئی"
+        },
+        "bugFixes": {
+          "title": "بگ فکسز",
+          "description": "مختلف استحکام اور کارکردگی کی بہتریاں"
+        }
+      }
+    }
   }
 }

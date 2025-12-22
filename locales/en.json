@@ -27,7 +27,16 @@
     "submit": "Submit",
     "loading": "Loading...",
     "error": "Error",
-    "success": "Success"
+    "success": "Success",
+    "day": "day",
+    "days": "days",
+    "left": "left"
+  },
+  "subscription": {
+    "trialEndsToday": "Your free trial ends today!",
+    "trialEnds1Day": "Your free trial ends tomorrow!",
+    "trialEndsDays": "Your free trial ends in {{count}} days",
+    "tapToSubscribe": "Tap to subscribe and keep your premium features"
   },
   "discover": {
     "title": "Discover",
@@ -497,6 +506,7 @@
   "chat": {
     "loadingChat": "Loading chat...",
     "secureMessaging": "Secure messaging",
+    "typing": "typing...",
     "cannotSendMessage": "Cannot Send Message",
     "conversationEnded": "This conversation has ended.",
     "typeMessage": "Type a message...",
@@ -654,5 +664,265 @@
     "goToMatches": "Go to Matches",
     "errorLoadingLikes": "Failed to load likes. Please try again.",
     "errorCreatingMatch": "Failed to create match. Please try again."
+  },
+  "activity": {
+    "title": "Activity",
+    "back": "Back",
+    "markAllRead": "Mark all read",
+    "loading": "Loading activity...",
+    "tryAgain": "Try Again",
+    "noActivityYet": "No Activity Yet",
+    "noActivityDescription": "When someone likes you, you match, or receive messages, you'll see it here.",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "This Week",
+    "earlier": "Earlier",
+    "premiumTitle": "Activity Feed",
+    "premiumDescription": "See who liked you, when you matched, new messages, reviews, and more — all in one place.",
+    "upgradeToPremium": "Upgrade to Premium"
+  },
+  "betaFeedback": {
+    "title": "Beta Feedback",
+    "subtitle": "Help us improve Accord",
+    "overallRating": "Overall Rating",
+    "rateExperience": "Rate your experience",
+    "subject": "Subject",
+    "subjectPlaceholder": "What's your feedback about?",
+    "description": "Description",
+    "descriptionPlaceholder": "Tell us more about your experience...",
+    "feedbackType": "Feedback Type",
+    "bug": "Bug Report",
+    "feature": "Feature Request",
+    "improvement": "Improvement",
+    "other": "Other",
+    "allowContact": "Allow contact for follow-up",
+    "allowContactDesc": "We may reach out to learn more about your feedback",
+    "submit": "Submit Feedback",
+    "submitting": "Submitting...",
+    "missingInfo": "Missing Information",
+    "missingInfoMessage": "Please provide a subject and description for your feedback.",
+    "ratingRequired": "Rating Required",
+    "ratingRequiredMessage": "Please provide an overall rating.",
+    "thankYou": "Thank You!",
+    "thankYouMessage": "Your feedback helps us make Accord better for everyone.",
+    "error": "Error",
+    "errorMessage": "Failed to submit feedback. Please try again."
+  },
+  "deleteAccount": {
+    "title": "Delete Account",
+    "warning": "Warning",
+    "warningMessage": "This action is permanent and cannot be undone. All your data, matches, messages, and profile information will be permanently deleted.",
+    "confirmTitle": "Are you sure?",
+    "confirmMessage": "Please type DELETE to confirm you want to permanently delete your account.",
+    "confirmPlaceholder": "Type DELETE to confirm",
+    "deleteButton": "Delete My Account",
+    "deleting": "Deleting...",
+    "incorrectConfirmation": "Incorrect Confirmation",
+    "incorrectConfirmationMessage": "Please type DELETE exactly to confirm.",
+    "accountDeleted": "Account Deleted",
+    "accountDeletedMessage": "Your account has been permanently deleted.",
+    "error": "Error",
+    "errorMessage": "Failed to delete account. Please try again or contact support."
+  },
+  "notificationSettings": {
+    "title": "Notification Settings",
+    "subtitle": "Manage your notifications",
+    "pushNotifications": "Push Notifications",
+    "pushNotificationsDesc": "Receive push notifications on your device",
+    "newMatches": "New Matches",
+    "newMatchesDesc": "When you match with someone",
+    "newMessages": "New Messages",
+    "newMessagesDesc": "When you receive a new message",
+    "newLikes": "New Likes",
+    "newLikesDesc": "When someone likes your profile",
+    "reviews": "Reviews",
+    "reviewsDesc": "When reviews are ready or revealed",
+    "marketing": "Marketing",
+    "marketingDesc": "Tips, updates, and promotions",
+    "emailNotifications": "Email Notifications",
+    "emailNotificationsDesc": "Receive updates via email",
+    "saved": "Settings Saved",
+    "savedMessage": "Your notification preferences have been updated.",
+    "error": "Error",
+    "errorMessage": "Failed to save settings. Please try again."
+  },
+  "safetyCenter": {
+    "title": "Safety Center",
+    "subtitle": "Stay safe on Accord",
+    "emergencyResources": "Emergency Resources",
+    "emergencyResourcesDesc": "Crisis hotlines and support services",
+    "reportUser": "Report a User",
+    "reportUserDesc": "Report harassment, scams, or other issues",
+    "blockingOptions": "Blocking Options",
+    "blockingOptionsDesc": "Block contacts, countries, or specific users",
+    "safetyTips": "Safety Tips",
+    "safetyTipsDesc": "Guidelines for safe online dating",
+    "privacyGuide": "Privacy Guide",
+    "privacyGuideDesc": "Protect your personal information",
+    "meetingSafely": "Meeting Safely",
+    "meetingSafelyDesc": "Tips for meeting matches in person",
+    "lgbtqResources": "LGBTQ+ Resources",
+    "lgbtqResourcesDesc": "Support organizations and helplines"
+  },
+  "subscriptionSettings": {
+    "title": "Subscription",
+    "chooseYourPlan": "Choose Your Plan",
+    "loadingPlans": "Loading plans...",
+    "renewsOn": "Renews on: {{date}}",
+    "activeDevelopmentMode": "Active (Development Mode)",
+    "developmentModeNA": "N/A (Development Mode)",
+    "developmentMode": "Development Mode",
+    "developmentModeDescription": "RevenueCat is disabled in development. Your subscription status is controlled by the is_premium and is_platinum flags in the database.",
+    "developmentModeProductionNote": "In production, this screen will show real subscription packages and allow users to manage their subscriptions through the App Store or Play Store.",
+    "status": {
+      "platinumMember": "Platinum Member",
+      "premiumMember": "Premium Member",
+      "freePlan": "Free Plan",
+      "allFeaturesUnlocked": "All premium features unlocked",
+      "enhancedFeaturesUnlocked": "Enhanced features unlocked",
+      "freeDescription": "25 swipes per day, basic messaging"
+    },
+    "plans": {
+      "premium": "Premium",
+      "platinum": "Platinum"
+    },
+    "periods": {
+      "monthly": "Monthly",
+      "threeMonths": "3 Months",
+      "annual": "Annual"
+    },
+    "save22": "Save 22%",
+    "save33": "Save 33%",
+    "bestValueSave22": "BEST VALUE - SAVE 22%",
+    "perMonth": "month",
+    "perThreeMonths": "3 months",
+    "perYear": "year",
+    "quarterlyPopular": "Just $11.66/month — our most popular plan!",
+    "processing": "Processing...",
+    "subscribeToPremium": "Subscribe to Premium",
+    "subscribeToPlatinum": "Subscribe to Platinum",
+    "premiumIncludes": "Premium includes:",
+    "premiumFeaturesList": "• Unlimited swipes\n• See who liked you\n• 5 Super Likes/week\n• Voice messages\n• Read receipts\n• Advanced filters\n• Rewind",
+    "everythingInPremiumPlus": "Everything in Premium, plus:",
+    "platinumFeaturesList": "• Weekly profile boost\n• Background checks\n• Legal resources\n• Priority support",
+    "platinumComingSoonMessage": "Stay tuned! Platinum tier launching soon.",
+    "comingSoon": "COMING SOON",
+    "planNotAvailable": "{{plan}} {{period}} plan not available in RevenueCat",
+    "premiumFeaturesTitle": "Premium Features",
+    "features": {
+      "unlimitedSwipes": "Unlimited swipes",
+      "seeWhoLikedYou": "See who liked you",
+      "superLikesPerWeek": "5 Super Likes per week",
+      "voiceMessages": "Voice messages",
+      "readReceipts": "Read receipts",
+      "advancedFilters": "Advanced filters",
+      "rewindLastSwipe": "Rewind last swipe",
+      "backgroundChecks": "Background checks",
+      "legalResources": "Legal resources",
+      "weeklyProfileBoost": "Weekly profile boost",
+      "prioritySupport": "Priority support"
+    },
+    "restorePurchases": "Restore Purchases",
+    "restoring": "Restoring...",
+    "opening": "Opening...",
+    "redeemPromoCode": "Redeem Promo Code",
+    "manageSubscription": "Manage Subscription",
+    "infoTextIOS": "Subscriptions are managed through your App Store account. You can cancel anytime from your account settings.",
+    "infoTextAndroid": "Subscriptions are managed through your Google Play account. You can cancel anytime from your account settings.",
+    "termsOfUse": "Terms of Use",
+    "privacyPolicy": "Privacy Policy",
+    "unableToLoadTitle": "Unable to Load Subscription Options",
+    "unableToLoadDescription": "We're having trouble loading subscription plans. This could be because:",
+    "errorReasons": {
+      "revenueCat": "• Offerings not configured in RevenueCat",
+      "network": "• Network connection issue",
+      "serviceUnavailable": "• RevenueCat service temporarily unavailable"
+    },
+    "alerts": {
+      "unableToLoadTitle": "Unable to Load Subscriptions",
+      "unableToLoadMessage": "Please check your internet connection and try again.",
+      "tryAgain": "Try Again",
+      "successTitle": "Success!",
+      "purchasesRestoredSuccess": "Your purchases have been restored successfully.",
+      "noPurchasesFoundTitle": "No Purchases Found",
+      "noPurchasesFoundMessage": "We couldn't find any purchases to restore. If you believe this is an error, please contact support.",
+      "restoreFailedTitle": "Restore Failed",
+      "restoreFailedMessage": "Failed to restore purchases. Please try again later.",
+      "developmentModeTitle": "Development Mode",
+      "developmentModeMessage": "Subscription management is handled via the database in development mode.\n\nIn production, this will open your App Store or Play Store subscription settings.",
+      "couldNotOpenManagement": "Could not open subscription management",
+      "notAvailableTitle": "Not Available",
+      "promoCodeAndroidMessage": "Promo code redemption is only available on iOS devices. On Android, you can redeem codes directly in the Google Play Store.",
+      "codeRedemptionFailed": "Failed to open code redemption. Please try again.",
+      "subscriptionActivated": "Your subscription has been activated.",
+      "subscriptionExistsTitle": "Subscription Already Exists",
+      "subscriptionExistsAndroid": "You have a canceled subscription on your current Google Play account.\n\nOptions:\n\n1. Reactivate your existing subscription in Google Play Settings\n\n2. Use a different Google Play account: Sign out of Google Play on your device, then sign in with a different account and try again",
+      "subscriptionExistsIOS": "You have a canceled subscription on your current Apple ID.\n\nOptions:\n\n1. Reactivate your existing subscription in App Store Settings\n\n2. Use a different Apple ID: Sign out in Settings > [Your Name], then sign in with a different Apple ID and try again",
+      "gotIt": "Got It",
+      "openSettings": "Open Settings",
+      "purchaseFailedTitle": "Purchase Failed",
+      "purchaseFailedMessage": "Failed to complete purchase. Please try again or contact support if the problem persists."
+    }
+  },
+  "whatsNew": {
+    "title": "What's New",
+    "version": "Version {{version}}",
+    "continue": "Let's Go!",
+    "new": "NEW",
+    "v109": {
+      "headline": "Stay connected with your Activity Center and improved location accuracy!",
+      "features": {
+        "activityCenter": {
+          "title": "Activity Center",
+          "description": "Track all your likes, matches, and profile views in one convenient place"
+        },
+        "betterLocation": {
+          "title": "Better Location Accuracy",
+          "description": "More precise location matching to find compatible people near you"
+        },
+        "moreLanguages": {
+          "title": "More Languages",
+          "description": "Full translation support for all app screens in 18 languages"
+        },
+        "bugFixes": {
+          "title": "Bug Fixes & Improvements",
+          "description": "Various performance improvements and bug fixes for a smoother experience"
+        }
+      }
+    },
+    "v108": {
+      "headline": "Enhanced safety features and photo verification!",
+      "features": {
+        "photoVerification": {
+          "title": "Photo Verification",
+          "description": "Selfie verification to prove your photos are really you"
+        },
+        "screenshotProtection": {
+          "title": "Screenshot Protection",
+          "description": "Your photos are protected from screenshots in chat"
+        },
+        "improvedSafety": {
+          "title": "Improved Safety",
+          "description": "Enhanced ban system and security improvements"
+        }
+      }
+    },
+    "v104": {
+      "headline": "Search improvements and security fixes!",
+      "features": {
+        "searchImprovements": {
+          "title": "Better Search",
+          "description": "Improved matching algorithm for more relevant results"
+        },
+        "encryptionFix": {
+          "title": "Encryption Fix",
+          "description": "Fixed end-to-end encryption for secure messaging"
+        },
+        "bugFixes": {
+          "title": "Bug Fixes",
+          "description": "Various stability and performance improvements"
+        }
+      }
+    }
   }
 }

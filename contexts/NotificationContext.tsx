@@ -17,11 +17,15 @@ import { useMatch } from './MatchContext';
 interface NotificationContextType {
   pushToken: string | null;
   notificationsEnabled: boolean;
+  unreadMessageCount: number;
+  refreshUnreadCount: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType>({
   pushToken: null,
   notificationsEnabled: false,
+  unreadMessageCount: 0,
+  refreshUnreadCount: async () => {},
 });
 
 export function useNotifications() {
@@ -30,16 +34,93 @@ export function useNotifications() {
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const { showToast, showMessageToast, showLikeToast } = useToast();
+  const { showToast, showMessageToast, showLikeToast, showReactionToast } = useToast();
   const { showMatchCelebration } = useMatch();
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
   const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
   const pendingNavigation = useRef<any>(null);
   const appState = useRef<AppStateStatus>(AppState.currentState);
   const retryCount = useRef<number>(0);
   const maxRetries = 10; // Will retry up to 10 times with exponential backoff
+
+  // Fetch profile ID when user is available
+  useEffect(() => {
+    const fetchProfileId = async () => {
+      if (!user?.id) {
+        setProfileId(null);
+        setUnreadMessageCount(0);
+        return;
+      }
+
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (data?.id) {
+          setProfileId(data.id);
+        }
+      } catch (error) {
+        console.error('Error fetching profile ID:', error);
+      }
+    };
+
+    fetchProfileId();
+  }, [user?.id]);
+
+  // Fetch unread message count
+  const refreshUnreadCount = async () => {
+    if (!profileId) return;
+
+    try {
+      const { count, error } = await supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('receiver_profile_id', profileId)
+        .is('read_at', null);
+
+      if (!error && count !== null) {
+        setUnreadMessageCount(count);
+      }
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+    }
+  };
+
+  // Fetch unread count when profile is available
+  useEffect(() => {
+    if (profileId) {
+      refreshUnreadCount();
+
+      // Subscribe to new messages in real-time
+      const channel = supabase
+        .channel('unread-messages')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'messages',
+            filter: `receiver_profile_id=eq.${profileId}`,
+          },
+          () => {
+            // Refresh count when messages change
+            refreshUnreadCount();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [profileId]);
 
   useEffect(() => {
     if (user) {
@@ -203,6 +284,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           // Extract sender name from title (format: "New message from Name")
           const senderName = title.replace('New message from ', '');
           showMessageToast(senderName, body, data.matchId as string);
+        } else if (data?.type === 'message_reaction' && data?.matchId) {
+          // Extract reactor name and emoji from title (format: "Name reacted emoji")
+          const match = title.match(/^(.+) reacted (.+)$/);
+          if (match) {
+            const reactorName = match[1];
+            const emoji = match[2];
+            showReactionToast(reactorName, emoji, data.matchId as string);
+          }
         } else if (data?.type === 'new_like') {
           const isPremium = data?.isPremium === true;
           const likerName = isPremium && title ? title.replace(' likes you!', '') : 'Someone';
@@ -255,6 +344,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           router.push('/(tabs)/matches');
           break;
         case 'new_message':
+        case 'message_reaction':
           // Navigate to chat if matchId is available
           if (data.matchId) {
             router.push(`/chat/${data.matchId}`);
@@ -316,6 +406,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       value={{
         pushToken,
         notificationsEnabled,
+        unreadMessageCount,
+        refreshUnreadCount,
       }}
     >
       {children}

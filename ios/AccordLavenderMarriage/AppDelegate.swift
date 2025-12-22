@@ -35,22 +35,10 @@ public class AppDelegate: ExpoAppDelegate {
     // Use configWithAccessToken to set access token during initialization (it's readonly after)
     let tiktokConfig = TikTokConfig(accessToken: "TTU0EP4k4Xx9xe1fx1FMX62rCgMI0KaU", appId: "7582252261456281618", tiktokAppId: "7582252261456281618")
 
-    // TEMPORARY: Enable debug mode for TikTok verification
-    // TODO: Set debugModeEnabled to false after TikTok verifies events are received correctly
-    tiktokConfig?.enableDebugMode()  // Enables debug mode - test events will appear in TikTok Events Manager
-    tiktokConfig?.setLogLevel(TikTokLogLevelDebug) // Enable verbose logging
-
     tiktokConfig?.disableAutomaticTracking()
     TikTokBusiness.initializeSdk(tiktokConfig) { success, error in
       if success {
-        print("[TikTok SDK] Initialized successfully (DEBUG MODE ENABLED)")
-        // Get the test event code for reference
-        let testCode = TikTokBusiness.getTestEventCode() ?? "none"
-        print("[TikTok SDK] Test Event Code: \(testCode)")
-        // Send a test LaunchApp event to verify integration
-        let launchEvent = TikTokBaseEvent(eventName: "LaunchAPP")
-        TikTokBusiness.trackTTEvent(launchEvent)
-        print("[TikTok SDK] Test LaunchAPP event sent")
+        print("[TikTok SDK] Initialized successfully")
       } else {
         print("[TikTok SDK] Initialization failed: \(error?.localizedDescription ?? "unknown error")")
       }

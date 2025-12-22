@@ -275,13 +275,14 @@ serve(async (req) => {
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     // Get incomplete profiles created in the last 7 days (but at least 24 hours ago)
+    // Only include active users (is_active = true means not banned/deactivated)
     const { data: incompleteProfiles, error: profilesError } = await supabase
       .from('profiles')
       .select('id, user_id, display_name, onboarding_step, created_at')
       .eq('profile_complete', false)
       .lt('created_at', twentyFourHoursAgo)
       .gt('created_at', sevenDaysAgo)
-      .is('is_banned', null)
+      .eq('is_active', true)
       .order('created_at', { ascending: true })
       .limit(100);
 

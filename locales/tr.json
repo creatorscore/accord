@@ -611,5 +611,265 @@
     "restartRequired": "Bazı değişiklikler bir sonraki başlatmada geçerli olabilir",
     "systemDefault": "Sistem Varsayılanı",
     "useSystemLanguage": "Sistem dilini kullan"
+  },
+  "activity": {
+    "title": "Etkinlik",
+    "back": "Geri",
+    "markAllRead": "Tümünü okundu işaretle",
+    "loading": "Etkinlik yükleniyor...",
+    "tryAgain": "Tekrar Dene",
+    "noActivityYet": "Henüz Etkinlik Yok",
+    "noActivityDescription": "Birisi sizi beğendiğinde, eşleştiğinizde veya mesaj aldığınızda burada göreceksiniz.",
+    "today": "Bugün",
+    "yesterday": "Dün",
+    "thisWeek": "Bu Hafta",
+    "earlier": "Daha Önce",
+    "premiumTitle": "Etkinlik Akışı",
+    "premiumDescription": "Kimin sizi beğendiğini, ne zaman eşleştiğinizi, yeni mesajları, incelemeleri ve daha fazlasını görün — hepsi tek bir yerde.",
+    "upgradeToPremium": "Premium'a Yükselt"
+  },
+  "betaFeedback": {
+    "title": "Beta Geri Bildirimi",
+    "subtitle": "Accord'u iyileştirmemize yardımcı olun",
+    "overallRating": "Genel Değerlendirme",
+    "rateExperience": "Deneyiminizi değerlendirin",
+    "subject": "Konu",
+    "subjectPlaceholder": "Geri bildiriminiz ne hakkında?",
+    "description": "Açıklama",
+    "descriptionPlaceholder": "Deneyiminiz hakkında bize daha fazla bilgi verin...",
+    "feedbackType": "Geri Bildirim Türü",
+    "bug": "Hata Raporu",
+    "feature": "Özellik İsteği",
+    "improvement": "İyileştirme",
+    "other": "Diğer",
+    "allowContact": "Takip için iletişime izin ver",
+    "allowContactDesc": "Geri bildiriminiz hakkında daha fazla bilgi almak için sizinle iletişime geçebiliriz",
+    "submit": "Geri Bildirim Gönder",
+    "submitting": "Gönderiliyor...",
+    "missingInfo": "Eksik Bilgi",
+    "missingInfoMessage": "Lütfen geri bildiriminiz için bir konu ve açıklama sağlayın.",
+    "ratingRequired": "Değerlendirme Gerekli",
+    "ratingRequiredMessage": "Lütfen genel bir değerlendirme sağlayın.",
+    "thankYou": "Teşekkürler!",
+    "thankYouMessage": "Geri bildiriminiz Accord'u herkes için daha iyi hale getirmemize yardımcı oluyor.",
+    "error": "Hata",
+    "errorMessage": "Geri bildirim gönderilemedi. Lütfen tekrar deneyin."
+  },
+  "deleteAccount": {
+    "title": "Hesabı Sil",
+    "warning": "Uyarı",
+    "warningMessage": "Bu işlem kalıcıdır ve geri alınamaz. Tüm verileriniz, eşleşmeleriniz, mesajlarınız ve profil bilgileriniz kalıcı olarak silinecektir.",
+    "confirmTitle": "Emin misiniz?",
+    "confirmMessage": "Hesabınızı kalıcı olarak silmek istediğinizi onaylamak için lütfen DELETE yazın.",
+    "confirmPlaceholder": "Onaylamak için DELETE yazın",
+    "deleteButton": "Hesabımı Sil",
+    "deleting": "Siliniyor...",
+    "incorrectConfirmation": "Yanlış Onay",
+    "incorrectConfirmationMessage": "Lütfen onaylamak için DELETE yazın.",
+    "accountDeleted": "Hesap Silindi",
+    "accountDeletedMessage": "Hesabınız kalıcı olarak silindi.",
+    "error": "Hata",
+    "errorMessage": "Hesap silinemedi. Lütfen tekrar deneyin veya destekle iletişime geçin."
+  },
+  "notificationSettings": {
+    "title": "Bildirim Ayarları",
+    "subtitle": "Bildirimlerinizi yönetin",
+    "pushNotifications": "Anlık Bildirimler",
+    "pushNotificationsDesc": "Cihazınızda anlık bildirimler alın",
+    "newMatches": "Yeni Eşleşmeler",
+    "newMatchesDesc": "Biriyle eşleştiğinizde",
+    "newMessages": "Yeni Mesajlar",
+    "newMessagesDesc": "Yeni bir mesaj aldığınızda",
+    "newLikes": "Yeni Beğeniler",
+    "newLikesDesc": "Birisi profilinizi beğendiğinde",
+    "reviews": "İncelemeler",
+    "reviewsDesc": "İncelemeler hazır olduğunda veya açığa çıktığında",
+    "marketing": "Pazarlama",
+    "marketingDesc": "İpuçları, güncellemeler ve promosyonlar",
+    "emailNotifications": "E-posta Bildirimleri",
+    "emailNotificationsDesc": "E-posta ile güncellemeler alın",
+    "saved": "Ayarlar Kaydedildi",
+    "savedMessage": "Bildirim tercihleriniz güncellendi.",
+    "error": "Hata",
+    "errorMessage": "Ayarlar kaydedilemedi. Lütfen tekrar deneyin."
+  },
+  "safetyCenter": {
+    "title": "Güvenlik Merkezi",
+    "subtitle": "Accord'da güvende kalın",
+    "emergencyResources": "Acil Durum Kaynakları",
+    "emergencyResourcesDesc": "Kriz hatları ve destek hizmetleri",
+    "reportUser": "Kullanıcıyı Bildir",
+    "reportUserDesc": "Taciz, dolandırıcılık veya diğer sorunları bildirin",
+    "blockingOptions": "Engelleme Seçenekleri",
+    "blockingOptionsDesc": "Kişileri, ülkeleri veya belirli kullanıcıları engelleyin",
+    "safetyTips": "Güvenlik İpuçları",
+    "safetyTipsDesc": "Güvenli çevrimiçi flört için rehber",
+    "privacyGuide": "Gizlilik Rehberi",
+    "privacyGuideDesc": "Kişisel bilgilerinizi koruyun",
+    "meetingSafely": "Güvenli Buluşma",
+    "meetingSafelyDesc": "Eşleşmelerle yüz yüze buluşma ipuçları",
+    "lgbtqResources": "LGBTQ+ Kaynakları",
+    "lgbtqResourcesDesc": "Destek organizasyonları ve yardım hatları"
+  },
+  "subscriptionSettings": {
+    "title": "Abonelik",
+    "chooseYourPlan": "Planınızı Seçin",
+    "loadingPlans": "Planlar yükleniyor...",
+    "renewsOn": "Yenilenme tarihi: {{date}}",
+    "activeDevelopmentMode": "Aktif (Geliştirme Modu)",
+    "developmentModeNA": "Geçerli Değil (Geliştirme Modu)",
+    "developmentMode": "Geliştirme Modu",
+    "developmentModeDescription": "Geliştirmede RevenueCat devre dışı. Abonelik durumunuz veritabanındaki is_premium ve is_platinum bayrakları tarafından kontrol edilir.",
+    "developmentModeProductionNote": "Üretimde, bu ekran gerçek abonelik paketlerini gösterecek ve kullanıcıların aboneliklerini App Store veya Play Store üzerinden yönetmelerine izin verecektir.",
+    "status": {
+      "platinumMember": "Platinum Üye",
+      "premiumMember": "Premium Üye",
+      "freePlan": "Ücretsiz Plan",
+      "allFeaturesUnlocked": "Tüm premium özellikler açık",
+      "enhancedFeaturesUnlocked": "Gelişmiş özellikler açık",
+      "freeDescription": "Günde 25 kaydırma, temel mesajlaşma"
+    },
+    "plans": {
+      "premium": "Premium",
+      "platinum": "Platinum"
+    },
+    "periods": {
+      "monthly": "Aylık",
+      "threeMonths": "3 Ay",
+      "annual": "Yıllık"
+    },
+    "save22": "%22 tasarruf",
+    "save33": "%33 tasarruf",
+    "bestValueSave22": "En İyi Değer - %22 tasarruf",
+    "perMonth": "ay",
+    "perThreeMonths": "3 ay",
+    "perYear": "yıl",
+    "quarterlyPopular": "Sadece $11.66/ay — En popüler planımız!",
+    "processing": "İşleniyor...",
+    "subscribeToPremium": "Premium'a Abone Ol",
+    "subscribeToPlatinum": "Platinum'a Abone Ol",
+    "premiumIncludes": "Premium içerir:",
+    "premiumFeaturesList": "• Sınırsız kaydırma\n• Sizi kimin beğendiğini görün\n• Haftada 5 Süper Beğeni\n• Sesli mesajlar\n• Okundu bilgisi\n• Gelişmiş filtreler\n• Geri al",
+    "everythingInPremiumPlus": "Premium'daki her şey, artı:",
+    "platinumFeaturesList": "• Haftalık profil artırma\n• Geçmiş kontrolleri\n• Hukuki kaynaklar\n• Öncelikli destek",
+    "platinumComingSoonMessage": "Beklemede kalın! Platinum seviyesi yakında geliyor.",
+    "comingSoon": "Yakında Geliyor",
+    "planNotAvailable": "{{plan}} {{period}} planı RevenueCat'te mevcut değil",
+    "premiumFeaturesTitle": "Premium Özellikler",
+    "features": {
+      "unlimitedSwipes": "Sınırsız kaydırma",
+      "seeWhoLikedYou": "Sizi kimin beğendiğini görün",
+      "superLikesPerWeek": "Haftada 5 Süper Beğeni",
+      "voiceMessages": "Sesli mesajlar",
+      "readReceipts": "Okundu bilgisi",
+      "advancedFilters": "Gelişmiş filtreler",
+      "rewindLastSwipe": "Son kaydırmayı geri al",
+      "backgroundChecks": "Geçmiş kontrolleri",
+      "legalResources": "Hukuki kaynaklar",
+      "weeklyProfileBoost": "Haftalık profil artırma",
+      "prioritySupport": "Öncelikli destek"
+    },
+    "restorePurchases": "Satın Almaları Geri Yükle",
+    "restoring": "Geri yükleniyor...",
+    "opening": "Açılıyor...",
+    "redeemPromoCode": "Promosyon Kodu Kullan",
+    "manageSubscription": "Aboneliği Yönet",
+    "infoTextIOS": "Abonelikler App Store hesabınız üzerinden yönetilir. Hesap ayarlarınızdan istediğiniz zaman iptal edebilirsiniz.",
+    "infoTextAndroid": "Abonelikler Google Play hesabınız üzerinden yönetilir. Hesap ayarlarınızdan istediğiniz zaman iptal edebilirsiniz.",
+    "termsOfUse": "Kullanım Koşulları",
+    "privacyPolicy": "Gizlilik Politikası",
+    "unableToLoadTitle": "Abonelik Seçenekleri Yüklenemiyor",
+    "unableToLoadDescription": "Abonelik planlarını yüklerken sorun yaşıyoruz. Bu şunlardan kaynaklanabilir:",
+    "errorReasons": {
+      "revenueCat": "• RevenueCat'te teklif yapılandırılmamış",
+      "network": "• Ağ bağlantı sorunu",
+      "serviceUnavailable": "• RevenueCat hizmeti geçici olarak kullanılamıyor"
+    },
+    "alerts": {
+      "unableToLoadTitle": "Abonelikler Yüklenemiyor",
+      "unableToLoadMessage": "Lütfen internet bağlantınızı kontrol edin ve tekrar deneyin.",
+      "tryAgain": "Tekrar Dene",
+      "successTitle": "Başarılı!",
+      "purchasesRestoredSuccess": "Satın almalarınız başarıyla geri yüklendi.",
+      "noPurchasesFoundTitle": "Satın Alma Bulunamadı",
+      "noPurchasesFoundMessage": "Geri yüklenecek satın alma bulamadık. Bunun bir hata olduğunu düşünüyorsanız, lütfen destekle iletişime geçin.",
+      "restoreFailedTitle": "Geri Yükleme Başarısız",
+      "restoreFailedMessage": "Satın almaları geri yüklenemedi. Lütfen daha sonra tekrar deneyin.",
+      "developmentModeTitle": "Geliştirme Modu",
+      "developmentModeMessage": "Geliştirme modunda, abonelik yönetimi veritabanı üzerinden yapılır.\n\nÜretimde, bu App Store veya Play Store abonelik ayarlarınızı açacaktır.",
+      "couldNotOpenManagement": "Abonelik yönetimi açılamadı",
+      "notAvailableTitle": "Kullanılamıyor",
+      "promoCodeAndroidMessage": "Promosyon kodu kullanımı yalnızca iOS cihazlarında mevcuttur. Android'de, kodu doğrudan Google Play Store'da kullanabilirsiniz.",
+      "codeRedemptionFailed": "Kod kullanımı açılamadı. Lütfen tekrar deneyin.",
+      "subscriptionActivated": "Aboneliğiniz etkinleştirildi.",
+      "subscriptionExistsTitle": "Abonelik Zaten Var",
+      "subscriptionExistsAndroid": "Mevcut Google Play hesabınızda iptal edilmiş bir abonelik var.\n\nSeçenekler:\n\n1. Google Play ayarlarında mevcut aboneliğinizi yeniden etkinleştirin\n\n2. Farklı bir Google Play hesabı kullanın: Cihazınızda Google Play'den çıkış yapın, ardından farklı bir hesapla giriş yapın ve tekrar deneyin",
+      "subscriptionExistsIOS": "Mevcut Apple ID'nizde iptal edilmiş bir abonelik var.\n\nSeçenekler:\n\n1. App Store ayarlarında mevcut aboneliğinizi yeniden etkinleştirin\n\n2. Farklı bir Apple ID kullanın: Ayarlar > [Adınız]'da çıkış yapın, ardından farklı bir Apple ID ile giriş yapın ve tekrar deneyin",
+      "gotIt": "Anladım",
+      "openSettings": "Ayarları Aç",
+      "purchaseFailedTitle": "Satın Alma Başarısız",
+      "purchaseFailedMessage": "Satın alma tamamlanamadı. Lütfen tekrar deneyin veya sorun devam ederse destekle iletişime geçin."
+    }
+  },
+  "whatsNew": {
+    "title": "Yenilikler",
+    "version": "Sürüm {{version}}",
+    "continue": "Hadi Başlayalım!",
+    "new": "YENİ",
+    "v109": {
+      "headline": "Etkinlik Merkeziniz ve gelişmiş konum doğruluğu ile bağlı kalın!",
+      "features": {
+        "activityCenter": {
+          "title": "Etkinlik Merkezi",
+          "description": "Tüm beğenilerinizi, eşleşmelerinizi ve profil görüntülemelerinizi tek bir uygun yerde takip edin"
+        },
+        "betterLocation": {
+          "title": "Daha İyi Konum Doğruluğu",
+          "description": "Yakınınızdaki uyumlu insanları bulmak için daha hassas konum eşleştirme"
+        },
+        "moreLanguages": {
+          "title": "Daha Fazla Dil",
+          "description": "Tüm uygulama ekranları için 18 dilde tam çeviri desteği"
+        },
+        "bugFixes": {
+          "title": "Hata Düzeltmeleri ve İyileştirmeler",
+          "description": "Daha sorunsuz bir deneyim için çeşitli performans iyileştirmeleri ve hata düzeltmeleri"
+        }
+      }
+    },
+    "v108": {
+      "headline": "Gelişmiş güvenlik özellikleri ve fotoğraf doğrulama!",
+      "features": {
+        "photoVerification": {
+          "title": "Fotoğraf Doğrulama",
+          "description": "Fotoğraflarınızın gerçekten siz olduğunu kanıtlamak için selfie doğrulaması"
+        },
+        "screenshotProtection": {
+          "title": "Ekran Görüntüsü Koruması",
+          "description": "Fotoğraflarınız sohbette ekran görüntüsüne karşı korunuyor"
+        },
+        "improvedSafety": {
+          "title": "Gelişmiş Güvenlik",
+          "description": "Gelişmiş yasaklama sistemi ve güvenlik iyileştirmeleri"
+        }
+      }
+    },
+    "v104": {
+      "headline": "Arama iyileştirmeleri ve güvenlik düzeltmeleri!",
+      "features": {
+        "searchImprovements": {
+          "title": "Daha İyi Arama",
+          "description": "Daha alakalı sonuçlar için geliştirilmiş eşleştirme algoritması"
+        },
+        "encryptionFix": {
+          "title": "Şifreleme Düzeltmesi",
+          "description": "Güvenli mesajlaşma için uçtan uca şifreleme düzeltildi"
+        },
+        "bugFixes": {
+          "title": "Hata Düzeltmeleri",
+          "description": "Çeşitli kararlılık ve performans iyileştirmeleri"
+        }
+      }
+    }
   }
 }

@@ -136,7 +136,7 @@ export default function BasicInfo() {
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [ageCertified, setAgeCertified] = useState(false);
-  const [manualLocationMode, setManualLocationMode] = useState(false); // For users without location permission
+  // GPS location is now required - no manual mode allowed
 
   // Check authentication and load existing data on mount
   useEffect(() => {
@@ -526,21 +526,21 @@ export default function BasicInfo() {
       return;
     }
 
-    if (!locationCity || !locationState) {
-      Alert.alert('Required', 'Please enter your location');
+    // GPS location is required - no manual entry allowed
+    if (!locationCoords) {
+      Alert.alert(
+        'Location Required',
+        'Please use the "Get My Location" button to detect your location. GPS location is required for matching.',
+        [{ text: 'OK', style: 'default' }]
+      );
       return;
     }
 
-    // Warn if no precise coordinates captured (only if not in manual mode)
-    // In manual mode, user explicitly chose to enter location without GPS
-    if (!locationCoords && !manualLocationMode) {
+    if (!locationCity || !locationState) {
       Alert.alert(
-        'Improve Accuracy',
-        'For best matching results, we recommend using "Get My Location" or the search feature to get precise coordinates.\n\nContinue with manual entry?',
-        [
-          { text: 'Go Back', style: 'cancel', onPress: () => {} },
-          { text: 'Continue Anyway', style: 'default', onPress: () => proceedWithSave() },
-        ]
+        'Location Error',
+        'We could not determine your city. Please try getting your location again.',
+        [{ text: 'OK', style: 'default' }]
       );
       return;
     }
@@ -559,20 +559,8 @@ export default function BasicInfo() {
         throw new Error('Not authenticated. Please sign in again.');
       }
 
-      // Use stored coordinates if available (from "Use my location"), otherwise geocode the city
-      let coords = locationCoords;
-      if (!coords) {
-        try {
-          const geocoded = await Location.geocodeAsync(`${locationCity}, ${locationState}`);
-          coords = geocoded[0] ? {
-            latitude: geocoded[0].latitude,
-            longitude: geocoded[0].longitude
-          } : null;
-        } catch (geocodeError) {
-          // Geocoding failed, but we can still save without coordinates
-          console.warn('Geocoding failed:', geocodeError);
-        }
-      }
+      // GPS coordinates are required and validated before reaching this point
+      const coords = locationCoords;
 
       // Calculate age and zodiac sign from birth date
       const birthDateObj = new Date(birthDate as Date);
@@ -940,200 +928,80 @@ export default function BasicInfo() {
             )}
           </View>
 
-          {/* Location */}
+          {/* Location - GPS Only (no manual entry) */}
           <View>
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-sm font-medium text-gray-700">{t('onboarding.location')}</Text>
-              {!manualLocationMode && (
-                <TouchableOpacity onPress={handleGetLocation} disabled={gettingLocation}>
-                  <Text className="text-lavender-500 font-medium">
-                    {gettingLocation ? t('onboarding.gettingLocation') : t('onboarding.useMyLocation')}
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
 
-            {/* Toggle between search and manual entry */}
-            <View className="flex-row mb-3 bg-gray-100 rounded-xl p-1">
-              <TouchableOpacity
-                className={`flex-1 py-2 rounded-lg ${!manualLocationMode ? 'bg-white shadow-sm' : ''}`}
-                onPress={() => setManualLocationMode(false)}
-              >
-                <Text className={`text-center font-medium ${!manualLocationMode ? 'text-lavender-600' : 'text-gray-500'}`}>
-                  Search
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className={`flex-1 py-2 rounded-lg ${manualLocationMode ? 'bg-white shadow-sm' : ''}`}
-                onPress={() => setManualLocationMode(true)}
-              >
-                <Text className={`text-center font-medium ${manualLocationMode ? 'text-lavender-600' : 'text-gray-500'}`}>
-                  Enter Manually
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {!manualLocationMode ? (
-              /* Location Search with Autocomplete */
-              <View className="mb-3">
-                <View className="relative">
-                  <TextInput
-                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900 pr-12"
-                    placeholder="Search for your city (e.g., Vancouver, BC)"
-                    value={locationSearch}
-                    onChangeText={handleLocationSearch}
-                    onFocus={async () => {
-                      // Scroll to make input visible above keyboard
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                      }, 300);
-
-                      // Request location permission early on Android
-                      if (Platform.OS === 'android') {
-                        await requestLocationPermissionForSearch();
-                      }
-
-                      if (locationSuggestions.length > 0) {
-                        setShowSuggestions(true);
-                      }
-                    }}
-                  />
-                  {searchingLocation && (
-                    <View className="absolute right-4 top-3">
-                      <MaterialCommunityIcons name="loading" size={24} color="#9CA3AF" />
-                    </View>
-                  )}
-                </View>
-
-                {/* Autocomplete Suggestions - Modal for better keyboard handling */}
-                <Modal
-                  visible={showSuggestions && locationSuggestions.length > 0}
-                  transparent
-                  animationType="fade"
-                  onRequestClose={() => setShowSuggestions(false)}
+            {/* GPS Location Detection */}
+            <View className="mb-3">
+              {/* Get Location Button */}
+              {!locationCity && !locationState ? (
+                <TouchableOpacity
+                  className={`bg-lavender-500 rounded-xl py-4 flex-row items-center justify-center ${gettingLocation ? 'opacity-70' : ''}`}
+                  onPress={handleGetLocation}
+                  disabled={gettingLocation}
                 >
-                  <Pressable
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }}
-                    onPress={() => setShowSuggestions(false)}
-                  >
-                    <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
-                      {/* Stop propagation on the content container so taps inside don't close modal */}
-                      <Pressable onPress={(e) => e.stopPropagation()}>
-                        <View className="bg-white rounded-xl overflow-hidden shadow-lg" style={{ maxHeight: 300 }}>
-                          <View className="bg-lavender-500 px-4 py-3">
-                            <Text className="text-white font-bold text-lg">Select Your City</Text>
-                          </View>
-                          <ScrollView keyboardShouldPersistTaps="handled">
-                            {locationSuggestions.map((suggestion, index) => (
-                              <Pressable
-                                key={`${suggestion.latitude}-${suggestion.longitude}-${index}`}
-                                className="px-4 py-4 border-b border-gray-100 flex-row items-center"
-                                onPress={() => {
-                                  console.log('📍 Location tapped:', suggestion.city);
-                                  selectLocation(suggestion);
-                                }}
-                                android_ripple={{ color: 'rgba(160, 138, 183, 0.2)' }}
-                                style={({ pressed }) => [
-                                  { backgroundColor: pressed ? 'rgba(160, 138, 183, 0.1)' : 'transparent' }
-                                ]}
-                              >
-                                <MaterialCommunityIcons name="map-marker" size={24} color="#A08AB7" />
-                                <View className="ml-3 flex-1">
-                                  <Text className="text-gray-900 font-semibold text-base">
-                                    {suggestion.city}
-                                  </Text>
-                                  <Text className="text-gray-500 text-sm">
-                                    {suggestion.state}, {suggestion.country}
-                                  </Text>
-                                </View>
-                                <MaterialCommunityIcons name="chevron-right" size={20} color="#9CA3AF" />
-                              </Pressable>
-                            ))}
-                          </ScrollView>
-                          <Pressable
-                            className="bg-gray-100 px-4 py-3 items-center"
-                            onPress={() => setShowSuggestions(false)}
-                            android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
-                          >
-                            <Text className="text-gray-600 font-medium">Cancel</Text>
-                          </Pressable>
-                        </View>
-                      </Pressable>
+                  {gettingLocation ? (
+                    <>
+                      <MaterialCommunityIcons name="loading" size={24} color="white" />
+                      <Text className="text-white font-semibold text-base ml-2">
+                        {t('onboarding.gettingLocation')}
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons name="crosshairs-gps" size={24} color="white" />
+                      <Text className="text-white font-semibold text-base ml-2">
+                        {t('onboarding.useMyLocation')}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              ) : (
+                /* Show detected location with option to refresh */
+                <View className="bg-lavender-50 border border-lavender-200 rounded-xl px-4 py-4">
+                  <View className="flex-row items-center">
+                    <View className="w-10 h-10 rounded-full bg-lavender-100 items-center justify-center mr-3">
+                      <MaterialCommunityIcons name="map-marker-check" size={24} color="#A08AB7" />
                     </View>
-                  </Pressable>
-                </Modal>
-
-                <Text className="text-xs text-gray-500 mt-1">
-                  Type your city name (e.g., "Tokyo", "Paris", "São Paulo")
-                </Text>
-
-                {/* More helpful hints for Android users */}
-                {Platform.OS === 'android' && (
-                  <View className="mt-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                    <Text className="text-xs text-blue-700">
-                      <Text className="font-semibold">Tip:</Text> If the search isn't working, tap on "Enter Manually" above to type your location directly.
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ) : (
-              /* Manual Location Entry */
-              <View className="mb-3">
-                <View className="mb-3">
-                  <Text className="text-xs text-gray-600 mb-1">City *</Text>
-                  <TextInput
-                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                    placeholder="e.g., Toronto"
-                    value={locationCity}
-                    onChangeText={setLocationCity}
-                    onFocus={() => {
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                      }, 300);
-                    }}
-                  />
-                </View>
-                <View className="mb-3">
-                  <Text className="text-xs text-gray-600 mb-1">State/Province *</Text>
-                  <TextInput
-                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                    placeholder="e.g., Ontario"
-                    value={locationState}
-                    onChangeText={setLocationState}
-                    onFocus={() => {
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                      }, 300);
-                    }}
-                  />
-                </View>
-                <View>
-                  <Text className="text-xs text-gray-600 mb-1">Country</Text>
-                  <TextInput
-                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                    placeholder="e.g., Canada"
-                    value={locationCountry}
-                    onChangeText={setLocationCountry}
-                    onFocus={() => {
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                      }, 300);
-                    }}
-                  />
-                </View>
-                <View className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mt-3">
-                  <View className="flex-row items-start">
-                    <MaterialCommunityIcons name="information" size={18} color="#D97706" />
-                    <Text className="text-xs text-amber-700 ml-2 flex-1">
-                      Manual entry may result in less accurate distance calculations for matching. For best results, enable location services.
-                    </Text>
+                    <View className="flex-1">
+                      <Text className="text-gray-900 font-semibold text-base">
+                        {locationCity}{locationState ? `, ${locationState}` : ''}
+                      </Text>
+                      {locationCountry && (
+                        <Text className="text-gray-500 text-sm">{locationCountry}</Text>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      className="ml-2 p-2"
+                      onPress={handleGetLocation}
+                      disabled={gettingLocation}
+                    >
+                      <MaterialCommunityIcons
+                        name={gettingLocation ? "loading" : "refresh"}
+                        size={22}
+                        color="#A08AB7"
+                      />
+                    </TouchableOpacity>
                   </View>
                 </View>
-              </View>
-            )}
+              )}
 
-            {/* Selected Location Display */}
-            {!manualLocationMode && (locationCity || locationState || locationCountry) && (
+              {/* Info message */}
+              <View className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mt-3">
+                <View className="flex-row items-start">
+                  <MaterialCommunityIcons name="shield-check" size={18} color="#2563EB" />
+                  <Text className="text-xs text-blue-700 ml-2 flex-1">
+                    Your location is detected via GPS to ensure accurate matching with nearby users. You cannot manually change your location.
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Legacy: Selected Location Display (kept for backwards compatibility) */}
+            {(locationCity || locationState || locationCountry) && false && (
               <View className="bg-lavender-50 border border-lavender-200 rounded-xl px-4 py-3 mt-3">
                 <View className="flex-row items-center">
                   <MaterialCommunityIcons name="map-marker-check" size={20} color="#A08AB7" />

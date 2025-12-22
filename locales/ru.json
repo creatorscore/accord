@@ -611,5 +611,265 @@
     "restartRequired": "Некоторые изменения могут вступить в силу при следующем запуске",
     "systemDefault": "По умолчанию системы",
     "useSystemLanguage": "Использовать системный язык"
+  },
+  "activity": {
+    "title": "Активность",
+    "back": "Назад",
+    "markAllRead": "Отметить все как прочитанное",
+    "loading": "Загрузка активности...",
+    "tryAgain": "Попробовать снова",
+    "noActivityYet": "Пока нет активности",
+    "noActivityDescription": "Когда кто-то поставит вам лайк, вы найдёте совпадение или получите сообщения, вы увидите это здесь.",
+    "today": "Сегодня",
+    "yesterday": "Вчера",
+    "thisWeek": "На этой неделе",
+    "earlier": "Раньше",
+    "premiumTitle": "Лента активности",
+    "premiumDescription": "Смотрите, кто поставил вам лайк, когда вы совпали, новые сообщения, отзывы и многое другое — всё в одном месте.",
+    "upgradeToPremium": "Обновиться до Premium"
+  },
+  "betaFeedback": {
+    "title": "Отзыв о бета-версии",
+    "subtitle": "Помогите нам улучшить Accord",
+    "overallRating": "Общая оценка",
+    "rateExperience": "Оцените свой опыт",
+    "subject": "Тема",
+    "subjectPlaceholder": "О чём ваш отзыв?",
+    "description": "Описание",
+    "descriptionPlaceholder": "Расскажите нам больше о вашем опыте...",
+    "feedbackType": "Тип отзыва",
+    "bug": "Сообщение об ошибке",
+    "feature": "Запрос функции",
+    "improvement": "Улучшение",
+    "other": "Другое",
+    "allowContact": "Разрешить связь для уточнения",
+    "allowContactDesc": "Мы можем связаться с вами, чтобы узнать больше о вашем отзыве",
+    "submit": "Отправить отзыв",
+    "submitting": "Отправка...",
+    "missingInfo": "Отсутствующая информация",
+    "missingInfoMessage": "Пожалуйста, укажите тему и описание вашего отзыва.",
+    "ratingRequired": "Требуется оценка",
+    "ratingRequiredMessage": "Пожалуйста, поставьте общую оценку.",
+    "thankYou": "Спасибо!",
+    "thankYouMessage": "Ваш отзыв помогает нам сделать Accord лучше для всех.",
+    "error": "Ошибка",
+    "errorMessage": "Не удалось отправить отзыв. Попробуйте снова."
+  },
+  "deleteAccount": {
+    "title": "Удалить аккаунт",
+    "warning": "Предупреждение",
+    "warningMessage": "Это действие необратимо и не может быть отменено. Все ваши данные, совпадения, сообщения и информация профиля будут безвозвратно удалены.",
+    "confirmTitle": "Вы уверены?",
+    "confirmMessage": "Пожалуйста, введите DELETE, чтобы подтвердить, что вы хотите навсегда удалить свой аккаунт.",
+    "confirmPlaceholder": "Введите DELETE для подтверждения",
+    "deleteButton": "Удалить мой аккаунт",
+    "deleting": "Удаление...",
+    "incorrectConfirmation": "Неверное подтверждение",
+    "incorrectConfirmationMessage": "Пожалуйста, введите DELETE точно для подтверждения.",
+    "accountDeleted": "Аккаунт удалён",
+    "accountDeletedMessage": "Ваш аккаунт был навсегда удалён.",
+    "error": "Ошибка",
+    "errorMessage": "Не удалось удалить аккаунт. Попробуйте снова или свяжитесь с поддержкой."
+  },
+  "notificationSettings": {
+    "title": "Настройки уведомлений",
+    "subtitle": "Управление вашими уведомлениями",
+    "pushNotifications": "Push-уведомления",
+    "pushNotificationsDesc": "Получать push-уведомления на ваше устройство",
+    "newMatches": "Новые совпадения",
+    "newMatchesDesc": "Когда вы совпадаете с кем-то",
+    "newMessages": "Новые сообщения",
+    "newMessagesDesc": "Когда вы получаете новое сообщение",
+    "newLikes": "Новые лайки",
+    "newLikesDesc": "Когда кто-то лайкает ваш профиль",
+    "reviews": "Отзывы",
+    "reviewsDesc": "Когда отзывы готовы или показаны",
+    "marketing": "Маркетинг",
+    "marketingDesc": "Советы, обновления и акции",
+    "emailNotifications": "Email-уведомления",
+    "emailNotificationsDesc": "Получать обновления по электронной почте",
+    "saved": "Настройки сохранены",
+    "savedMessage": "Ваши настройки уведомлений были обновлены.",
+    "error": "Ошибка",
+    "errorMessage": "Не удалось сохранить настройки. Попробуйте снова."
+  },
+  "safetyCenter": {
+    "title": "Центр безопасности",
+    "subtitle": "Оставайтесь в безопасности в Accord",
+    "emergencyResources": "Экстренные ресурсы",
+    "emergencyResourcesDesc": "Кризисные горячие линии и службы поддержки",
+    "reportUser": "Пожаловаться на пользователя",
+    "reportUserDesc": "Сообщить о преследовании, мошенничестве или других проблемах",
+    "blockingOptions": "Параметры блокировки",
+    "blockingOptionsDesc": "Заблокировать контакты, страны или конкретных пользователей",
+    "safetyTips": "Советы по безопасности",
+    "safetyTipsDesc": "Рекомендации для безопасных онлайн-знакомств",
+    "privacyGuide": "Руководство по конфиденциальности",
+    "privacyGuideDesc": "Защитите свою личную информацию",
+    "meetingSafely": "Безопасная встреча",
+    "meetingSafelyDesc": "Советы для встречи с совпадениями лично",
+    "lgbtqResources": "ЛГБТК+ ресурсы",
+    "lgbtqResourcesDesc": "Организации поддержки и горячие линии"
+  },
+  "subscriptionSettings": {
+    "title": "Подписка",
+    "chooseYourPlan": "Выберите свой план",
+    "loadingPlans": "Загрузка планов...",
+    "renewsOn": "Продлится: {{date}}",
+    "activeDevelopmentMode": "Активна (Режим разработки)",
+    "developmentModeNA": "Н/Д (Режим разработки)",
+    "developmentMode": "Режим разработки",
+    "developmentModeDescription": "RevenueCat отключен в режиме разработки. Статус подписки управляется флагами is_premium и is_platinum в базе данных.",
+    "developmentModeProductionNote": "В продакшене на этом экране будут показаны реальные пакеты подписки и пользователи смогут управлять своими подписками через App Store или Play Store.",
+    "status": {
+      "platinumMember": "Platinum участник",
+      "premiumMember": "Premium участник",
+      "freePlan": "Бесплатный план",
+      "allFeaturesUnlocked": "Все премиум функции разблокированы",
+      "enhancedFeaturesUnlocked": "Расширенные функции разблокированы",
+      "freeDescription": "25 свайпов в день, базовые сообщения"
+    },
+    "plans": {
+      "premium": "Premium",
+      "platinum": "Platinum"
+    },
+    "periods": {
+      "monthly": "Ежемесячно",
+      "threeMonths": "3 месяца",
+      "annual": "Годовая"
+    },
+    "save22": "Экономия 22%",
+    "save33": "Экономия 33%",
+    "bestValueSave22": "ЛУЧШЕЕ ПРЕДЛОЖЕНИЕ - ЭКОНОМИЯ 22%",
+    "perMonth": "месяц",
+    "perThreeMonths": "3 месяца",
+    "perYear": "год",
+    "quarterlyPopular": "Всего $11.66/мес — наш самый популярный план!",
+    "processing": "Обработка...",
+    "subscribeToPremium": "Подписаться на Premium",
+    "subscribeToPlatinum": "Подписаться на Platinum",
+    "premiumIncludes": "Premium включает:",
+    "premiumFeaturesList": "• Безлимитные свайпы\n• Смотрите, кто лайкнул вас\n• 5 Супер-лайков/неделю\n• Голосовые сообщения\n• Уведомления о прочтении\n• Расширенные фильтры\n• Отмена свайпа",
+    "everythingInPremiumPlus": "Всё из Premium, плюс:",
+    "platinumFeaturesList": "• Еженедельное продвижение профиля\n• Проверка анкетных данных\n• Юридические ресурсы\n• Приоритетная поддержка",
+    "platinumComingSoonMessage": "Следите за обновлениями! Уровень Platinum скоро запустится.",
+    "comingSoon": "СКОРО",
+    "planNotAvailable": "{{plan}} {{period}} план недоступен в RevenueCat",
+    "premiumFeaturesTitle": "Premium функции",
+    "features": {
+      "unlimitedSwipes": "Безлимитные свайпы",
+      "seeWhoLikedYou": "Смотрите, кто лайкнул вас",
+      "superLikesPerWeek": "5 Супер-лайков в неделю",
+      "voiceMessages": "Голосовые сообщения",
+      "readReceipts": "Уведомления о прочтении",
+      "advancedFilters": "Расширенные фильтры",
+      "rewindLastSwipe": "Отмена последнего свайпа",
+      "backgroundChecks": "Проверка анкетных данных",
+      "legalResources": "Юридические ресурсы",
+      "weeklyProfileBoost": "Еженедельное продвижение профиля",
+      "prioritySupport": "Приоритетная поддержка"
+    },
+    "restorePurchases": "Восстановить покупки",
+    "restoring": "Восстановление...",
+    "opening": "Открытие...",
+    "redeemPromoCode": "Активировать промокод",
+    "manageSubscription": "Управление подпиской",
+    "infoTextIOS": "Подписки управляются через вашу учетную запись App Store. Вы можете отменить в любое время в настройках учетной записи.",
+    "infoTextAndroid": "Подписки управляются через вашу учетную запись Google Play. Вы можете отменить в любое время в настройках учетной записи.",
+    "termsOfUse": "Условия использования",
+    "privacyPolicy": "Политика конфиденциальности",
+    "unableToLoadTitle": "Не удается загрузить варианты подписки",
+    "unableToLoadDescription": "У нас возникли проблемы с загрузкой планов подписки. Это может быть из-за:",
+    "errorReasons": {
+      "revenueCat": "• Предложения не настроены в RevenueCat",
+      "network": "• Проблема с сетевым подключением",
+      "serviceUnavailable": "• Сервис RevenueCat временно недоступен"
+    },
+    "alerts": {
+      "unableToLoadTitle": "Не удается загрузить подписки",
+      "unableToLoadMessage": "Пожалуйста, проверьте подключение к интернету и повторите попытку.",
+      "tryAgain": "Попробовать снова",
+      "successTitle": "Успешно!",
+      "purchasesRestoredSuccess": "Ваши покупки успешно восстановлены.",
+      "noPurchasesFoundTitle": "Покупки не найдены",
+      "noPurchasesFoundMessage": "Мы не смогли найти покупки для восстановления. Если вы считаете, что это ошибка, пожалуйста, свяжитесь с поддержкой.",
+      "restoreFailedTitle": "Восстановление не удалось",
+      "restoreFailedMessage": "Не удалось восстановить покупки. Пожалуйста, попробуйте позже.",
+      "developmentModeTitle": "Режим разработки",
+      "developmentModeMessage": "Управление подпиской осуществляется через базу данных в режиме разработки.\n\nВ продакшене это откроет настройки подписки в App Store или Play Store.",
+      "couldNotOpenManagement": "Не удалось открыть управление подпиской",
+      "notAvailableTitle": "Недоступно",
+      "promoCodeAndroidMessage": "Активация промокода доступна только на устройствах iOS. На Android вы можете активировать коды непосредственно в Google Play Store.",
+      "codeRedemptionFailed": "Не удалось открыть активацию кода. Пожалуйста, попробуйте снова.",
+      "subscriptionActivated": "Ваша подписка активирована.",
+      "subscriptionExistsTitle": "Подписка уже существует",
+      "subscriptionExistsAndroid": "У вас есть отмененная подписка в текущей учетной записи Google Play.\n\nВарианты:\n\n1. Повторно активируйте существующую подписку в настройках Google Play\n\n2. Используйте другую учетную запись Google Play: Выйдите из Google Play на устройстве, затем войдите с другой учетной записью и попробуйте снова",
+      "subscriptionExistsIOS": "У вас есть отмененная подписка в текущем Apple ID.\n\nВарианты:\n\n1. Повторно активируйте существующую подписку в настройках App Store\n\n2. Используйте другой Apple ID: Выйдите в Настройки > [Ваше имя], затем войдите с другим Apple ID и попробуйте снова",
+      "gotIt": "Понятно",
+      "openSettings": "Открыть настройки",
+      "purchaseFailedTitle": "Покупка не удалась",
+      "purchaseFailedMessage": "Не удалось завершить покупку. Пожалуйста, попробуйте снова или свяжитесь с поддержкой, если проблема сохраняется."
+    }
+  },
+  "whatsNew": {
+    "title": "Что нового",
+    "version": "Версия {{version}}",
+    "continue": "Поехали!",
+    "new": "НОВОЕ",
+    "v109": {
+      "headline": "Оставайтесь на связи с Центром активности и улучшенной точностью геолокации!",
+      "features": {
+        "activityCenter": {
+          "title": "Центр активности",
+          "description": "Отслеживайте все ваши лайки, совпадения и просмотры профиля в одном удобном месте"
+        },
+        "betterLocation": {
+          "title": "Лучшая точность местоположения",
+          "description": "Более точное определение местоположения для поиска совместимых людей рядом с вами"
+        },
+        "moreLanguages": {
+          "title": "Больше языков",
+          "description": "Полная поддержка перевода всех экранов приложения на 18 языков"
+        },
+        "bugFixes": {
+          "title": "Исправления ошибок и улучшения",
+          "description": "Различные улучшения производительности и исправления ошибок для более плавной работы"
+        }
+      }
+    },
+    "v108": {
+      "headline": "Расширенные функции безопасности и проверка фотографий!",
+      "features": {
+        "photoVerification": {
+          "title": "Проверка фотографий",
+          "description": "Проверка селфи, чтобы доказать, что ваши фотографии действительно ваши"
+        },
+        "screenshotProtection": {
+          "title": "Защита от скриншотов",
+          "description": "Ваши фотографии защищены от скриншотов в чате"
+        },
+        "improvedSafety": {
+          "title": "Улучшенная безопасность",
+          "description": "Расширенная система банов и улучшения безопасности"
+        }
+      }
+    },
+    "v104": {
+      "headline": "Улучшения поиска и исправления безопасности!",
+      "features": {
+        "searchImprovements": {
+          "title": "Лучший поиск",
+          "description": "Улучшенный алгоритм подбора для более релевантных результатов"
+        },
+        "encryptionFix": {
+          "title": "Исправление шифрования",
+          "description": "Исправлено сквозное шифрование для безопасного обмена сообщениями"
+        },
+        "bugFixes": {
+          "title": "Исправления ошибок",
+          "description": "Различные улучшения стабильности и производительности"
+        }
+      }
+    }
   }
 }

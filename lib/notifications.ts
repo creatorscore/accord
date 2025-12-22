@@ -16,14 +16,15 @@ try {
   Device = require('expo-device');
 
   // Configure how notifications are handled when app is in foreground
+  // Set shouldShowAlert to FALSE so push banners don't appear - we show in-app toasts instead
   if (Notifications) {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
+        shouldShowAlert: false,  // Don't show system push banner (we use in-app toasts)
+        shouldPlaySound: false,  // Don't play sound (in-app toast handles this)
+        shouldSetBadge: true,    // Still update badge count
+        shouldShowBanner: false, // No system banner
+        shouldShowList: false,   // Don't add to notification center when in foreground
       }),
     });
   }
@@ -481,6 +482,93 @@ export async function sendMessageNotification(
     });
   } catch (error) {
     console.error('Error sending message notification:', error);
+  }
+}
+
+/**
+ * Send notification when someone reacts to your message with an emoji
+ * Sends to ALL devices for the user (multi-device support)
+ * Skips push notification if user was recently active (likely already in-app)
+ */
+export async function sendReactionNotification(
+  recipientProfileId: string,
+  reactorName: string,
+  emoji: string,
+  matchId: string
+): Promise<void> {
+  try {
+    // Get recipient's push settings and last active time
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('push_token, push_enabled, last_active_at')
+      .eq('id', recipientProfileId)
+      .single();
+
+    if (error || !profile?.push_enabled) {
+      return;
+    }
+
+    // Skip push notification if user was active within the last minute
+    // They're likely in the app and will see the in-app notification
+    if (profile.last_active_at) {
+      const lastActive = new Date(profile.last_active_at);
+      const now = new Date();
+      const secondsSinceActive = (now.getTime() - lastActive.getTime()) / 1000;
+
+      if (secondsSinceActive < 60) {
+        console.log(`Skipping reaction push notification for ${recipientProfileId} - user active ${Math.round(secondsSinceActive)}s ago`);
+        return;
+      }
+    }
+
+    // Get all device tokens for this user (new multi-device system)
+    const { data: deviceTokens } = await supabase
+      .from('device_tokens')
+      .select('push_token')
+      .eq('profile_id', recipientProfileId);
+
+    // Collect all tokens (from both device_tokens and profiles.push_token)
+    const tokens = new Set<string>();
+    if (deviceTokens) {
+      deviceTokens.forEach(dt => tokens.add(dt.push_token));
+    }
+    if (profile.push_token) {
+      tokens.add(profile.push_token);
+    }
+
+    if (tokens.size === 0) {
+      return;
+    }
+
+    const title = `${reactorName} reacted ${emoji}`;
+    const body = 'Tap to view the conversation';
+
+    // Send notification to all devices
+    const notificationPromises = Array.from(tokens).map(token =>
+      sendPushNotification(
+        token,
+        title,
+        body,
+        {
+          type: 'message_reaction',
+          matchId,
+          screen: 'chat',
+        }
+      )
+    );
+
+    await Promise.allSettled(notificationPromises);
+
+    // Log notification (once per user, not per device)
+    await supabase.from('push_notifications').insert({
+      profile_id: recipientProfileId,
+      notification_type: 'message_reaction',
+      title,
+      body,
+      data: { matchId, type: 'message_reaction', emoji },
+    });
+  } catch (error) {
+    console.error('Error sending reaction notification:', error);
   }
 }
 

@@ -73,10 +73,10 @@ serve(async (req) => {
     // Check if subscription is active (not expired)
     const isActive = expiration_at_ms ? expiration_at_ms > Date.now() : false;
 
-    // Get the user's profile ID from auth.users -> profiles
+    // Get the user's profile ID and admin status from auth.users -> profiles
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, is_admin')
       .eq('user_id', app_user_id)
       .single();
 
@@ -91,32 +91,59 @@ serve(async (req) => {
       );
     }
 
+    // Check if user is admin (admins always keep premium)
+    const isAdmin = profile.is_admin === true;
+
+    // Determine if this is a trial subscription
+    const isTrial = payload.event.period_type === 'TRIAL';
+
     // Update subscription status based on event type
     switch (type) {
       case 'INITIAL_PURCHASE':
       case 'RENEWAL':
       case 'UNCANCELLATION':
       case 'PRODUCT_CHANGE':
-        // Activate subscription
-        await updateSubscriptionStatus(profile.id, hasPremium, hasPlatinum, true);
-        console.log('✅ Subscription activated:', { userId: app_user_id, hasPremium, hasPlatinum });
+        // Activate subscription with expiration date
+        await updateSubscriptionStatus(profile.id, hasPremium, hasPlatinum, true, expiration_at_ms, isTrial);
+        console.log('✅ Subscription activated:', {
+          userId: app_user_id,
+          hasPremium,
+          hasPlatinum,
+          expiresAt: expiration_at_ms ? new Date(expiration_at_ms).toISOString() : null,
+          periodType: payload.event.period_type, // TRIAL, INTRO, or NORMAL
+          isTrial,
+        });
         break;
 
       case 'CANCELLATION':
-        // Keep subscription active until expiration
-        console.log('⚠️ Subscription cancelled (will expire):', app_user_id);
-        // Don't deactivate immediately - wait for EXPIRATION event
+        // Keep subscription active until expiration, but update auto_renew to false
+        console.log('⚠️ Subscription cancelled (will expire at ' + (expiration_at_ms ? new Date(expiration_at_ms).toISOString() : 'unknown') + '):', app_user_id);
+        // Update subscription to show it won't renew
+        await supabase
+          .from('subscriptions')
+          .update({ auto_renew: false })
+          .eq('profile_id', profile.id);
         break;
 
       case 'EXPIRATION':
-        // Deactivate subscription
+        // Skip expiration for admin accounts - they always keep premium
+        if (isAdmin) {
+          console.log('⏭️ Skipping expiration for admin account:', app_user_id);
+          break;
+        }
+        // Deactivate subscription - this is critical for trial expirations
         await updateSubscriptionStatus(profile.id, false, false, false);
-        console.log('❌ Subscription expired:', app_user_id);
+        console.log('❌ Subscription/trial expired:', {
+          userId: app_user_id,
+          periodType: payload.event.period_type,
+          wasTrialConversion: payload.event.is_trial_conversion,
+        });
         break;
 
       case 'BILLING_ISSUE':
-        // Keep subscription active temporarily, send notification
+        // Keep subscription active temporarily, but log for monitoring
         console.log('⚠️ Billing issue for user:', app_user_id);
+        // Could add notification to user here
         break;
 
       default:
@@ -143,7 +170,9 @@ async function updateSubscriptionStatus(
   profileId: string,
   isPremium: boolean,
   isPlatinum: boolean,
-  isActive: boolean
+  isActive: boolean,
+  expirationMs?: number | null,
+  isTrial: boolean = false
 ) {
   try {
     // Update profiles table
@@ -162,14 +191,18 @@ async function updateSubscriptionStatus(
 
     // Update or insert into subscriptions table
     const tier = isPlatinum ? 'platinum' : isPremium ? 'premium' : null;
+    const expiresAt = expirationMs ? new Date(expirationMs).toISOString() : null;
+    // Set status to 'trial' for trial periods, 'active' for paid subscriptions
+    const status = isTrial ? 'trial' : 'active';
 
     if (isActive && tier) {
       const { error: subscriptionError } = await supabase.from('subscriptions').upsert(
         {
           profile_id: profileId,
           tier,
-          status: 'active',
+          status,
           auto_renew: true,
+          expires_at: expiresAt,
         },
         { onConflict: 'profile_id' }
       );
@@ -179,10 +212,13 @@ async function updateSubscriptionStatus(
         throw subscriptionError;
       }
     } else if (!isActive) {
-      // Mark subscription as expired
+      // Mark subscription as expired and clear premium status
       const { error: subscriptionError } = await supabase
         .from('subscriptions')
-        .update({ status: 'expired' })
+        .update({
+          status: 'expired',
+          auto_renew: false,
+        })
         .eq('profile_id', profileId);
 
       if (subscriptionError) {
@@ -195,6 +231,9 @@ async function updateSubscriptionStatus(
       isPremium,
       isPlatinum,
       isActive,
+      isTrial,
+      status,
+      expiresAt,
     });
   } catch (error) {
     console.error('Failed to update subscription status:', error);
