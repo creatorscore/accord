@@ -10,6 +10,10 @@ import {
   hasPlatinum,
   getSubscriptionTier,
   canUseFeature,
+  isInTrialPeriod,
+  getDaysRemaining,
+  getSubscriptionExpirationDate,
+  willRenew as checkWillRenew,
   SUBSCRIPTION_TIERS,
   type SubscriptionTier,
 } from '@/lib/revenue-cat';
@@ -23,6 +27,12 @@ interface SubscriptionContextType {
   isPremium: boolean;
   isPlatinum: boolean;
   subscriptionTier: SubscriptionTier | null;
+  // Trial status
+  isTrial: boolean;
+  daysRemaining: number | null;
+  expirationDate: Date | null;
+  willRenew: boolean;
+  // Methods
   refreshSubscription: () => Promise<void>;
   canUseFeature: (feature: string) => boolean;
   syncWithDatabase: (freshCustomerInfo?: CustomerInfo) => Promise<void>;
@@ -36,6 +46,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isLoading, setIsLoading] = useState(true);
   const [dbPremiumStatus, setDbPremiumStatus] = useState(false);
   const [dbPlatinumStatus, setDbPlatinumStatus] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // ALWAYS use RevenueCat - no development mode bypass
   // This ensures subscriptions work in TestFlight and Production
@@ -70,7 +81,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('is_premium, is_platinum')
+        .select('is_premium, is_platinum, is_admin')
         .eq('user_id', user?.id)
         .maybeSingle();
 
@@ -99,12 +110,14 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       const premium = data?.is_premium || false;
       const platinum = data?.is_platinum || false;
+      const admin = data?.is_admin || false;
 
       if (__DEV__) {
-        console.log('✅ Setting premium status:', { premium, platinum });
+        console.log('✅ Setting premium status:', { premium, platinum, admin });
       }
       setDbPremiumStatus(premium);
       setDbPlatinumStatus(platinum);
+      setIsAdmin(admin);
     } catch (error) {
       console.error('❌ Error loading premium status from database:', error);
     }
@@ -163,6 +176,37 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setIsLoading(true);
       const info = await getCustomerInfo();
       setCustomerInfo(info);
+
+      // After loading RevenueCat status, sync with database to ensure consistency
+      // This catches cases where webhook might have failed
+      if (info && user) {
+        const rcPremium = hasPremium(info);
+        const rcPlatinum = hasPlatinum(info);
+
+        // Check admin status directly from database to avoid race condition
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        const userIsAdmin = profileData?.is_admin || false;
+
+        // Skip sync for admin accounts - they always keep their database premium status
+        if (userIsAdmin) {
+          console.log('👑 Skipping RevenueCat sync for admin account');
+        }
+        // If RevenueCat says no subscription but database says yes, fix it (non-admins only)
+        else if (!rcPremium && !rcPlatinum && (dbPremiumStatus || dbPlatinumStatus)) {
+          console.log('🔄 Syncing: RevenueCat says no subscription, updating database...');
+          await syncWithDatabase(info);
+        }
+        // If RevenueCat says subscription but database doesn't match, sync it
+        else if ((rcPremium !== dbPremiumStatus) || (rcPlatinum !== dbPlatinumStatus)) {
+          console.log('🔄 Syncing: Database out of sync with RevenueCat, updating...');
+          await syncWithDatabase(info);
+        }
+      }
     } catch (error) {
       console.error('Error loading subscription status:', error);
     } finally {
@@ -252,28 +296,42 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [user, customerInfo, dbPremiumStatus, dbPlatinumStatus, isDatabaseOnlyMode]);
 
   // In database-only mode (dev), use database status exclusively
-  // In production, use RevenueCat OR database (database as fallback)
-  const isSubscribed = isDatabaseOnlyMode
+  // In production, RevenueCat is the SOURCE OF TRUTH
+  // Database is only used as a fallback when RevenueCat hasn't loaded yet
+  // Once RevenueCat loads, it takes precedence over database
+  // EXCEPTION: Admin accounts always use database status (they get free premium)
+  const hasRevenueCatLoaded = customerInfo !== null;
+
+  const isSubscribed = isDatabaseOnlyMode || isAdmin
     ? (dbPremiumStatus || dbPlatinumStatus)
-    : (hasActiveSubscription(customerInfo) || dbPremiumStatus || dbPlatinumStatus);
+    : hasRevenueCatLoaded
+      ? hasActiveSubscription(customerInfo) // RevenueCat is source of truth
+      : (dbPremiumStatus || dbPlatinumStatus); // Only use DB when RC hasn't loaded
 
-  const isPremium = isDatabaseOnlyMode
+  const isPremium = isDatabaseOnlyMode || isAdmin
     ? dbPremiumStatus
-    : (hasPremium(customerInfo) || dbPremiumStatus);
+    : hasRevenueCatLoaded
+      ? hasPremium(customerInfo) // RevenueCat is source of truth
+      : dbPremiumStatus; // Only use DB when RC hasn't loaded
 
-  const isPlatinum = isDatabaseOnlyMode
+  const isPlatinum = isDatabaseOnlyMode || isAdmin
     ? dbPlatinumStatus
-    : (hasPlatinum(customerInfo) || dbPlatinumStatus);
+    : hasRevenueCatLoaded
+      ? hasPlatinum(customerInfo) // RevenueCat is source of truth
+      : dbPlatinumStatus; // Only use DB when RC hasn't loaded
 
-  const subscriptionTier = isDatabaseOnlyMode
+  const subscriptionTier = isDatabaseOnlyMode || isAdmin
     ? (dbPlatinumStatus ? 'platinum' : dbPremiumStatus ? 'premium' : null)
-    : (getSubscriptionTier(customerInfo) || (dbPlatinumStatus ? 'platinum' : dbPremiumStatus ? 'premium' : null));
+    : hasRevenueCatLoaded
+      ? getSubscriptionTier(customerInfo) // RevenueCat is source of truth
+      : (dbPlatinumStatus ? 'platinum' : dbPremiumStatus ? 'premium' : null); // Only use DB when RC hasn't loaded
 
   // Debug log computed values (only in development to avoid main thread work in production)
   if (__DEV__) {
     console.log('💎 Subscription Status:', {
       appEnv: process.env.EXPO_PUBLIC_APP_ENV,
       isDatabaseOnlyMode,
+      isAdmin,
       dbPremiumStatus,
       dbPlatinumStatus,
       isSubscribed,
@@ -299,6 +357,12 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     [customerInfo]
   );
 
+  // Trial status - only relevant when RevenueCat is loaded
+  const isTrial = hasRevenueCatLoaded ? isInTrialPeriod(customerInfo) : false;
+  const daysRemaining = hasRevenueCatLoaded ? getDaysRemaining(customerInfo) : null;
+  const expirationDate = hasRevenueCatLoaded ? getSubscriptionExpirationDate(customerInfo) : null;
+  const willRenew = hasRevenueCatLoaded ? checkWillRenew(customerInfo) : false;
+
   const value: SubscriptionContextType = {
     customerInfo,
     isLoading,
@@ -306,6 +370,12 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     isPremium,
     isPlatinum,
     subscriptionTier,
+    // Trial status
+    isTrial,
+    daysRemaining,
+    expirationDate,
+    willRenew,
+    // Methods
     refreshSubscription,
     canUseFeature: checkFeature,
     syncWithDatabase,

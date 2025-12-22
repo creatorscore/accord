@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import { AppState, AppStateStatus } from 'react-native';
 import { router } from 'expo-router';
+import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
 import { initializeEncryption } from '@/lib/encryption';
 // import { setUser as setSentryUser } from '@/lib/sentry'; // Temporarily disabled
@@ -36,6 +38,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const appState = useRef<AppStateStatus>(AppState.currentState);
+  const lastLocationUpdate = useRef<number>(0);
 
   useEffect(() => {
     // Get initial session
@@ -160,6 +164,121 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     setupEncryption();
+  }, [user]);
+
+  // Automatic location refresh when app comes to foreground
+  // This ensures users always show their true/live GPS location
+  useEffect(() => {
+    const refreshLocation = async () => {
+      if (!user) return;
+
+      // Throttle updates: only refresh if 5+ minutes have passed since last update
+      const now = Date.now();
+      const minInterval = 5 * 60 * 1000; // 5 minutes
+      if (now - lastLocationUpdate.current < minInterval) {
+        console.log('📍 Skipping location refresh - too recent');
+        return;
+      }
+
+      try {
+        // Check if we have permission
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('📍 Location permission not granted, skipping refresh');
+          return;
+        }
+
+        // Get current GPS location with high accuracy
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+
+        // Validate accuracy - reject if too inaccurate (> 100 meters)
+        if (location.coords.accuracy && location.coords.accuracy > 100) {
+          console.log('📍 Location too inaccurate, skipping refresh');
+          return;
+        }
+
+        // Reverse geocode to get city/state
+        const reverseGeocode = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        const addressInfo = reverseGeocode[0];
+        if (!addressInfo) {
+          console.log('📍 Could not reverse geocode location');
+          return;
+        }
+
+        const city = addressInfo.city || addressInfo.subregion || addressInfo.district || '';
+        const state = addressInfo.region || '';
+
+        // Get profile ID
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, latitude, longitude')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!profile) {
+          console.log('📍 No profile found, skipping location refresh');
+          return;
+        }
+
+        // Check if location has changed significantly (> 100 meters)
+        if (profile.latitude && profile.longitude) {
+          const latDiff = Math.abs(profile.latitude - location.coords.latitude);
+          const lonDiff = Math.abs(profile.longitude - location.coords.longitude);
+          // Roughly 0.001 degrees = ~111 meters
+          if (latDiff < 0.001 && lonDiff < 0.001) {
+            console.log('📍 Location unchanged, skipping update');
+            lastLocationUpdate.current = now;
+            return;
+          }
+        }
+
+        // Update profile with new location
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            location_city: city,
+            location_state: state,
+            last_active_at: new Date().toISOString(),
+          })
+          .eq('id', profile.id);
+
+        if (updateError) {
+          console.error('❌ Failed to update location:', updateError);
+        } else {
+          console.log('✅ Location refreshed:', city, state);
+          lastLocationUpdate.current = now;
+        }
+      } catch (error) {
+        console.error('Error refreshing location:', error);
+      }
+    };
+
+    // Listen for app state changes
+    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
+      // When app comes to foreground, refresh location
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('📱 App foregrounded - refreshing location');
+        await refreshLocation();
+      }
+      appState.current = nextAppState;
+    });
+
+    // Also refresh on initial mount if user is logged in
+    if (user) {
+      refreshLocation();
+    }
+
+    return () => {
+      subscription.remove();
+    };
   }, [user]);
 
   const signIn = async (email: string, password: string) => {

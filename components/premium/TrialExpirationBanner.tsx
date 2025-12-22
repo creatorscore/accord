@@ -1,0 +1,158 @@
+import React from 'react';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MotiView } from 'moti';
+import { useRouter } from 'expo-router';
+import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useTranslation } from 'react-i18next';
+
+/**
+ * TrialExpirationBanner - Shows when user is in a trial that's about to expire
+ *
+ * Shows:
+ * - When trial has 3 or fewer days remaining (warning)
+ * - When trial has 1 day remaining (urgent)
+ * - When trial expires today (critical)
+ */
+export default function TrialExpirationBanner() {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { isTrial, daysRemaining, isSubscribed } = useSubscription();
+
+  // Don't show if not in trial or no days remaining info
+  if (!isTrial || daysRemaining === null) {
+    return null;
+  }
+
+  // Only show warning when 3 or fewer days remaining
+  if (daysRemaining > 3) {
+    return null;
+  }
+
+  // Determine urgency level
+  const isUrgent = daysRemaining <= 1;
+  const isCritical = daysRemaining === 0;
+
+  // Get appropriate message
+  const getMessage = () => {
+    if (isCritical) {
+      return t('subscription.trialEndsToday', 'Your free trial ends today!');
+    } else if (daysRemaining === 1) {
+      return t('subscription.trialEnds1Day', 'Your free trial ends tomorrow!');
+    } else {
+      return t('subscription.trialEndsDays', { count: daysRemaining, defaultValue: `Your free trial ends in ${daysRemaining} days` });
+    }
+  };
+
+  // Get gradient colors based on urgency
+  const getGradientColors = (): [string, string] => {
+    if (isCritical) {
+      return ['#DC2626', '#B91C1C']; // Red for critical
+    } else if (isUrgent) {
+      return ['#F59E0B', '#D97706']; // Amber for urgent
+    }
+    return ['#3B82F6', '#2563EB']; // Blue for warning
+  };
+
+  // Get icon based on urgency
+  const getIcon = () => {
+    if (isCritical || isUrgent) {
+      return 'alert-circle';
+    }
+    return 'clock-alert-outline';
+  };
+
+  const handlePress = () => {
+    router.push('/settings/subscription');
+  };
+
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: -20 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'spring', delay: 300 }}
+    >
+      <TouchableOpacity onPress={handlePress} activeOpacity={0.8}>
+        <LinearGradient
+          colors={getGradientColors()}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{
+            marginHorizontal: 16,
+            marginVertical: 8,
+            borderRadius: 16,
+            padding: 16,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <MaterialCommunityIcons name={getIcon()} size={24} color="white" />
+            </View>
+
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text
+                style={{
+                  color: 'white',
+                  fontWeight: 'bold',
+                  fontSize: 16,
+                }}
+              >
+                {getMessage()}
+              </Text>
+              <Text
+                style={{
+                  color: 'rgba(255, 255, 255, 0.9)',
+                  fontSize: 14,
+                  marginTop: 2,
+                }}
+              >
+                {t('subscription.tapToSubscribe', 'Tap to subscribe and keep your premium features')}
+              </Text>
+            </View>
+
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={24}
+              color="rgba(255, 255, 255, 0.8)"
+            />
+          </View>
+
+          {/* Days countdown badge */}
+          {daysRemaining > 0 && (
+            <View
+              style={{
+                position: 'absolute',
+                top: -8,
+                right: 12,
+                backgroundColor: isCritical ? '#FEE2E2' : isUrgent ? '#FEF3C7' : '#DBEAFE',
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 12,
+              }}
+            >
+              <Text
+                style={{
+                  color: isCritical ? '#991B1B' : isUrgent ? '#92400E' : '#1E40AF',
+                  fontSize: 12,
+                  fontWeight: 'bold',
+                }}
+              >
+                {daysRemaining} {daysRemaining === 1 ? t('common.day', 'day') : t('common.days', 'days')} {t('common.left', 'left')}
+              </Text>
+            </View>
+          )}
+        </LinearGradient>
+      </TouchableOpacity>
+    </MotiView>
+  );
+}

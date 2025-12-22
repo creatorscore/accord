@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   StyleSheet,
   Alert,
@@ -16,51 +15,15 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/lib/useColorScheme';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
+import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
 import ProfilePhotoCarousel from '@/components/profile/ProfilePhotoCarousel';
-import ProfileStoryCard from '@/components/profile/ProfileStoryCard';
-import ProfileInteractiveSection from '@/components/profile/ProfileInteractiveSection';
-import ProfileQuickFacts from '@/components/profile/ProfileQuickFacts';
-import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
 import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
-
-// Helper function to format arrays or strings (handles PostgreSQL array strings)
-const formatArrayOrString = (value?: string | string[]): string => {
-  if (!value) return '';
-
-  // Handle actual arrays
-  if (Array.isArray(value)) {
-    return value.join(', ');
-  }
-
-  // Handle PostgreSQL array format strings like "{value1,value2}"
-  if (typeof value === 'string') {
-    // Check if it's a PostgreSQL array string
-    if (value.startsWith('{') && value.endsWith('}')) {
-      const items = value.slice(1, -1).split(',');
-      return items.join(', ');
-    }
-    // Check if it's a JSON array string like '["value1","value2"]'
-    if (value.startsWith('[') && value.endsWith(']')) {
-      try {
-        const parsed = JSON.parse(value);
-        if (Array.isArray(parsed)) {
-          return parsed.join(', ');
-        }
-      } catch (e) {
-        // Not valid JSON, just return as-is
-      }
-    }
-  }
-
-  return value;
-};
 
 interface ProfileData {
   id: string;
@@ -99,6 +62,7 @@ export default function Profile() {
   const { isPremium, isPlatinum, subscriptionTier, isLoading: subscriptionLoading } = useSubscription();
   const { colors, isDarkColorScheme } = useColorScheme();
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const unreadActivityCount = useUnreadActivityCount(profile?.id || null);
   const [loading, setLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -276,37 +240,6 @@ export default function Profile() {
     );
   }
 
-  // Prepare quick facts for display
-  const quickFacts = [];
-  if (profile?.occupation) {
-    quickFacts.push({
-      emoji: '💼',
-      label: t('profile.work'),
-      value: profile.occupation,
-    });
-  }
-  if (profile?.location_city) {
-    quickFacts.push({
-      emoji: '📍',
-      label: t('profile.location'),
-      value: profile.location_city,
-    });
-  }
-  if (profile?.education) {
-    quickFacts.push({
-      emoji: '🎓',
-      label: t('profile.education'),
-      value: profile.education,
-    });
-  }
-  if (profile?.is_verified) {
-    quickFacts.push({
-      emoji: '✅',
-      label: t('profile.status'),
-      value: t('profile.verified'),
-    });
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDarkColorScheme ? "light-content" : "dark-content"} />
@@ -340,137 +273,8 @@ export default function Profile() {
           </View>
         )}
 
-        {/* Quick Facts */}
-        {quickFacts.length > 0 && (
-          <View style={{ position: 'relative', zIndex: 100, overflow: 'visible' }}>
-            <ProfileQuickFacts facts={quickFacts} />
-          </View>
-        )}
-
-        {/* Voice Introduction */}
-        {profile?.voice_intro_url && (
-          <View style={{ paddingHorizontal: 20, marginTop: 12, marginBottom: 16, position: 'relative', zIndex: 100 }}>
-            <ProfileVoiceNote
-              voiceUrl={profile.voice_intro_url}
-              duration={profile.voice_intro_duration}
-              profileName="Your"
-            />
-          </View>
-        )}
-
         {/* Profile Content */}
         <View style={styles.content}>
-          {/* Bio Story Card */}
-          {profile?.bio && (
-            <ProfileStoryCard
-              title={t('profile.aboutMe')}
-              icon="book-open-variant"
-              content={profile.bio}
-              gradient={['#A08AB7', '#CDC2E5']}
-              delay={100}
-            />
-          )}
-
-          {/* Prompt Answers */}
-          {profile?.prompt_answers && profile.prompt_answers.length > 0 && (
-            <View>
-              {profile.prompt_answers.map((pa, index) => (
-                <ProfileStoryCard
-                  key={index}
-                  title={pa.prompt}
-                  icon="comment-quote"
-                  content={pa.answer}
-                  gradient={
-                    index % 3 === 0 ? ['#10B981', '#34D399'] :
-                    index % 3 === 1 ? ['#F59E0B', '#FBBF24'] :
-                    ['#3B82F6', '#60A5FA']
-                  }
-                  delay={200 + index * 100}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* Interests Section - interests is a JSONB object {movies: [], music: [], books: [], tv_shows: []} */}
-          {profile?.interests && typeof profile.interests === 'object' && Object.keys(profile.interests).length > 0 && (
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{
-                fontSize: 20,
-                fontWeight: 'bold',
-                color: colors.foreground,
-                marginBottom: 12,
-              }}>{t('profile.myInterests')}</Text>
-              <View style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                gap: 8,
-              }}>
-                {Object.entries(profile.interests).flatMap(([category, items]) =>
-                  Array.isArray(items) && items.length > 0 ? items : []
-                ).map((interest, index) => (
-                  <MotiView
-                    key={index}
-                    from={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ type: 'spring', delay: index * 50 }}
-                    style={{
-                      backgroundColor: isDarkColorScheme
-                        ? (index % 3 === 0 ? 'rgba(160, 138, 183, 0.2)' :
-                           index % 3 === 1 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(59, 130, 246, 0.2)')
-                        : (index % 3 === 0 ? '#F5F2F7' :
-                           index % 3 === 1 ? '#FEF3C7' : '#DBEAFE'),
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 20,
-                    }}
-                  >
-                    <Text style={{
-                      color: index % 3 === 0 ? '#A08AB7' :
-                             index % 3 === 1 ? '#F59E0B' : '#3B82F6',
-                      fontWeight: '600',
-                      fontSize: 14,
-                    }}>{interest}</Text>
-                  </MotiView>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* About Section */}
-          {(profile?.occupation || profile?.education || profile?.location_city || profile?.gender || profile?.sexual_orientation) && (
-            <ProfileInteractiveSection
-              title={t('profile.aboutMe')}
-              expandable={false}
-              items={[
-                ...(profile.occupation ? [{
-                  icon: 'briefcase',
-                  label: t('profile.career'),
-                  value: profile.occupation,
-                }] : []),
-                ...(profile.education ? [{
-                  icon: 'school',
-                  label: t('profile.education'),
-                  value: profile.education,
-                }] : []),
-                ...(profile.location_city ? [{
-                  icon: 'map-marker',
-                  label: t('profile.location'),
-                  value: `${profile.location_city}${profile.location_state ? `, ${profile.location_state}` : ''}`,
-                }] : []),
-                ...(profile.gender ? [{
-                  icon: 'gender-transgender',
-                  label: t('profile.gender'),
-                  value: formatArrayOrString(profile.gender),
-                }] : []),
-                ...(profile.sexual_orientation ? [{
-                  icon: 'heart',
-                  label: t('profile.orientation'),
-                  value: formatArrayOrString(profile.sexual_orientation),
-                }] : []),
-              ]}
-            />
-          )}
-
           {/* Edit Profile Button */}
           <TouchableOpacity
             style={styles.editProfileButton}
@@ -610,248 +414,326 @@ export default function Profile() {
           </MotiView>
           )}
 
-          {/* Menu Items */}
+          {/* ===== ACTIVITY & MATCHING ===== */}
           <View style={styles.menuSection}>
-        <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>{t('profile.account')}</Text>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Activity & Matching</Text>
 
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/privacy')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="cog-outline" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.settingsPrivacy')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/notifications')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="bell-outline" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.notifications')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/matching-preferences')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="heart-cog" size={24} color="#A08AB7" />
-            <Text style={[styles.menuItemText, { color: '#A08AB7', fontWeight: '600' }]}>{t('profile.matchingPreferences')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/language')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="translate" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.language')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/appearance')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="theme-light-dark" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.appearance')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/reviews/my-reviews')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="star-outline" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.myReviews')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/review-settings')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="star-settings-outline" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.reviewSettings')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/privacy')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="shield-check-outline" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.photoVerification')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/subscription')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons
-              name={isPremium ? "credit-card-outline" : "crown-outline"}
-              size={24}
-              color={isPremium ? colors.mutedForeground : "#A08AB7"}
-            />
-            <Text style={[styles.menuItemText, { color: isPremium ? colors.foreground : '#A08AB7' }, !isPremium && { fontWeight: '600' }]}>
-              {isPremium ? t('profile.manageSubscription') : t('profile.upgradeToPremium')}
-            </Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={isPremium ? colors.border : "#A08AB7"} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/safety-center')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="shield-check-outline" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.safetyCenter')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/blocked-users')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="cancel" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.blockedUsers')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/contact-blocking')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="phone-off" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.blockContacts')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/settings/country-blocking')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="earth-off" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.blockCountries')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-
-        {/* Admin Panel - Only visible to admins */}
-        {isAdmin && (
-          <>
+            {/* Activity Feed - Premium Feature */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: '#FEF3C7', borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}
-              onPress={() => router.push('/admin/reports')}
+              style={[styles.menuItem, { backgroundColor: isPremium ? '#F5F0FF' : colors.card, borderLeftWidth: isPremium ? 4 : 0, borderLeftColor: '#A08AB7' }]}
+              onPress={() => router.push('/activity')}
             >
               <View style={styles.menuItemLeft}>
-                <MaterialCommunityIcons name="shield-alert" size={24} color="#F59E0B" />
+                <View style={{ position: 'relative' }}>
+                  <MaterialCommunityIcons name="bell-ring-outline" size={24} color="#A08AB7" />
+                  {unreadActivityCount > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>
+                        {unreadActivityCount > 99 ? '99+' : unreadActivityCount}
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 <View>
-                  <Text style={[styles.menuItemText, { color: '#92400E', fontWeight: '700' }]}>{t('profile.adminPanel')}</Text>
-                  <Text style={{ fontSize: 12, color: '#92400E', marginTop: 2 }}>{t('profile.viewReports')}</Text>
+                  <Text style={[styles.menuItemText, { color: '#A08AB7', fontWeight: '600' }]}>Activity</Text>
+                  {!isPremium && (
+                    <Text style={styles.menuItemSubtext}>Premium feature</Text>
+                  )}
                 </View>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: '#DBEAFE', borderLeftWidth: 4, borderLeftColor: '#3B82F6' }]}
-              onPress={() => router.push('/admin/cost-monitoring')}
-            >
-              <View style={styles.menuItemLeft}>
-                <MaterialCommunityIcons name="chart-line" size={24} color="#3B82F6" />
-                <View>
-                  <Text style={[styles.menuItemText, { color: '#1E40AF', fontWeight: '700' }]}>{t('profile.costMonitoring')}</Text>
-                  <Text style={{ fontSize: 12, color: '#1E40AF', marginTop: 2 }}>{t('profile.databaseSize')}</Text>
-                </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {!isPremium && <MaterialCommunityIcons name="crown" size={16} color="#A08AB7" />}
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={24} color="#3B82F6" />
             </TouchableOpacity>
 
+            {/* Matching Preferences */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: '#F5F2F7', borderLeftWidth: 4, borderLeftColor: '#A08AB7' }]}
-              onPress={() => router.push('/admin/push-notifications')}
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/settings/matching-preferences')}
             >
               <View style={styles.menuItemLeft}>
-                <MaterialCommunityIcons name="bell-ring" size={24} color="#A08AB7" />
-                <View>
-                  <Text style={[styles.menuItemText, { color: '#6B21A8', fontWeight: '700' }]}>{t('profile.pushNotifications')}</Text>
-                  <Text style={{ fontSize: 12, color: '#6B21A8', marginTop: 2 }}>{t('profile.sendMessagesToUsers')}</Text>
-                </View>
+                <MaterialCommunityIcons name="heart-cog" size={24} color="#A08AB7" />
+                <Text style={[styles.menuItemText, { color: '#A08AB7', fontWeight: '600' }]}>{t('profile.matchingPreferences')}</Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
             </TouchableOpacity>
+          </View>
 
+          {/* ===== APP SETTINGS ===== */}
+          <View style={styles.menuSection}>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Settings</Text>
+
+            {/* Account & Privacy */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: '#ECFDF5', borderLeftWidth: 4, borderLeftColor: '#10B981' }]}
-              onPress={() => router.push('/admin/verification')}
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/settings/privacy')}
             >
               <View style={styles.menuItemLeft}>
-                <MaterialCommunityIcons name="camera-account" size={24} color="#10B981" />
-                <View>
-                  <Text style={[styles.menuItemText, { color: '#065F46', fontWeight: '700' }]}>Photo Verification</Text>
-                  <Text style={{ fontSize: 12, color: '#065F46', marginTop: 2 }}>Reset user attempts</Text>
-                </View>
+                <MaterialCommunityIcons name="cog-outline" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.settingsPrivacy')}</Text>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={24} color="#10B981" />
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
             </TouchableOpacity>
-          </>
-        )}
 
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card }]}
-          onPress={() => {
-            Linking.openURL('mailto:hello@joinaccord.app?subject=Support Request&body=Hi Accord Team,\n\n');
-          }}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="help-circle-outline" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.helpSupport')}</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
+            {/* Notifications */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/settings/notifications')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="bell-outline" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.notifications')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </TouchableOpacity>
+
+            {/* Language */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/settings/language')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="translate" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.language')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </TouchableOpacity>
+
+            {/* Appearance */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/settings/appearance')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="theme-light-dark" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.appearance')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </TouchableOpacity>
           </View>
 
-          {/* Danger Zone */}
+          {/* ===== REVIEWS ===== */}
           <View style={styles.menuSection}>
-        <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>{t('profile.dangerZone')}</Text>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Reviews</Text>
 
-        <TouchableOpacity
-          style={[styles.menuItem, { backgroundColor: colors.card, borderColor: '#FEE2E2', borderWidth: 1 }]}
-          onPress={() => router.push('/settings/delete-account')}
-        >
-          <View style={styles.menuItemLeft}>
-            <MaterialCommunityIcons name="delete-forever" size={24} color="#EF4444" />
-            <Text style={[styles.menuItemText, { color: '#EF4444' }]}>{t('profile.deleteAccount')}</Text>
+            {/* My Reviews */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/reviews/my-reviews')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="star-outline" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.myReviews')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </TouchableOpacity>
+
+            {/* Review Settings */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/settings/review-settings')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="star-settings-outline" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.reviewSettings')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </TouchableOpacity>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
-        </TouchableOpacity>
+
+          {/* ===== SAFETY & PRIVACY ===== */}
+          <View style={styles.menuSection}>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Safety & Privacy</Text>
+
+            {/* Safety Center */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/settings/safety-center')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="shield-check-outline" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.safetyCenter')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </TouchableOpacity>
+
+            {/* Photo Verification */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/settings/privacy')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="camera-account" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.photoVerification')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </TouchableOpacity>
+
+            {/* Blocked Users */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/settings/blocked-users')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="account-cancel-outline" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.blockedUsers')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </TouchableOpacity>
+
+            {/* Block Contacts */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/settings/contact-blocking')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="phone-off" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.blockContacts')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </TouchableOpacity>
+
+            {/* Block Countries */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={() => router.push('/settings/country-blocking')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="earth-off" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.blockCountries')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </TouchableOpacity>
+          </View>
+
+          {/* ===== SUBSCRIPTION ===== */}
+          <View style={styles.menuSection}>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Subscription</Text>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: !isPremium ? '#F5F0FF' : colors.card, borderLeftWidth: !isPremium ? 4 : 0, borderLeftColor: '#A08AB7' }]}
+              onPress={() => router.push('/settings/subscription')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons
+                  name={isPremium ? "credit-card-outline" : "crown-outline"}
+                  size={24}
+                  color={isPremium ? colors.mutedForeground : "#A08AB7"}
+                />
+                <Text style={[styles.menuItemText, { color: isPremium ? colors.foreground : '#A08AB7' }, !isPremium && { fontWeight: '600' }]}>
+                  {isPremium ? t('profile.manageSubscription') : t('profile.upgradeToPremium')}
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={isPremium ? colors.border : "#A08AB7"} />
+            </TouchableOpacity>
+          </View>
+
+          {/* ===== SUPPORT ===== */}
+          <View style={styles.menuSection}>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Support</Text>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              onPress={async () => {
+                const mailtoUrl = 'mailto:hello@joinaccord.app?subject=Support Request&body=Hi Accord Team,\n\n';
+                const canOpen = await Linking.canOpenURL(mailtoUrl);
+                if (canOpen) {
+                  Linking.openURL(mailtoUrl);
+                } else {
+                  Alert.alert(
+                    'Contact Support',
+                    'Email us at hello@joinaccord.app',
+                    [{ text: 'OK' }]
+                  );
+                }
+              }}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="help-circle-outline" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('profile.helpSupport')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </TouchableOpacity>
+          </View>
+
+          {/* ===== ADMIN PANEL ===== */}
+          {isAdmin && (
+            <View style={styles.menuSection}>
+              <Text style={[styles.menuSectionTitle, { color: '#F59E0B' }]}>Admin Tools</Text>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#FEF3C7', borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}
+                onPress={() => router.push('/admin/reports')}
+              >
+                <View style={styles.menuItemLeft}>
+                  <MaterialCommunityIcons name="shield-alert" size={24} color="#F59E0B" />
+                  <View>
+                    <Text style={[styles.menuItemText, { color: '#92400E', fontWeight: '700' }]}>{t('profile.adminPanel')}</Text>
+                    <Text style={styles.adminSubtext}>{t('profile.viewReports')}</Text>
+                  </View>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#DBEAFE', borderLeftWidth: 4, borderLeftColor: '#3B82F6' }]}
+                onPress={() => router.push('/admin/cost-monitoring')}
+              >
+                <View style={styles.menuItemLeft}>
+                  <MaterialCommunityIcons name="chart-line" size={24} color="#3B82F6" />
+                  <View>
+                    <Text style={[styles.menuItemText, { color: '#1E40AF', fontWeight: '700' }]}>{t('profile.costMonitoring')}</Text>
+                    <Text style={[styles.adminSubtext, { color: '#1E40AF' }]}>{t('profile.databaseSize')}</Text>
+                  </View>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#3B82F6" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#F5F2F7', borderLeftWidth: 4, borderLeftColor: '#A08AB7' }]}
+                onPress={() => router.push('/admin/push-notifications')}
+              >
+                <View style={styles.menuItemLeft}>
+                  <MaterialCommunityIcons name="bell-ring" size={24} color="#A08AB7" />
+                  <View>
+                    <Text style={[styles.menuItemText, { color: '#6B21A8', fontWeight: '700' }]}>{t('profile.pushNotifications')}</Text>
+                    <Text style={[styles.adminSubtext, { color: '#6B21A8' }]}>{t('profile.sendMessagesToUsers')}</Text>
+                  </View>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#ECFDF5', borderLeftWidth: 4, borderLeftColor: '#10B981' }]}
+                onPress={() => router.push('/admin/verification')}
+              >
+                <View style={styles.menuItemLeft}>
+                  <MaterialCommunityIcons name="camera-account" size={24} color="#10B981" />
+                  <View>
+                    <Text style={[styles.menuItemText, { color: '#065F46', fontWeight: '700' }]}>Photo Verification</Text>
+                    <Text style={[styles.adminSubtext, { color: '#065F46' }]}>Reset user attempts</Text>
+                  </View>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#10B981" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ===== DANGER ZONE ===== */}
+          <View style={styles.menuSection}>
+            <Text style={[styles.menuSectionTitle, { color: '#EF4444' }]}>{t('profile.dangerZone')}</Text>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: '#FEE2E2', borderWidth: 1 }]}
+              onPress={() => router.push('/settings/delete-account')}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="delete-forever" size={24} color="#EF4444" />
+                <Text style={[styles.menuItemText, { color: '#EF4444' }]}>{t('profile.deleteAccount')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
+            </TouchableOpacity>
           </View>
 
           {/* Sign Out */}
@@ -1182,6 +1064,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#111827',
+  },
+  menuItemSubtext: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 1,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  adminSubtext: {
+    fontSize: 12,
+    color: '#92400E',
+    marginTop: 2,
   },
   signOutButton: {
     flexDirection: 'row',

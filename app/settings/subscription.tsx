@@ -3,12 +3,14 @@ import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Lin
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { restorePurchases, getCustomerInfo, getOfferings, purchasePackage, presentCodeRedemptionSheet } from '@/lib/revenue-cat';
 import { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 
 export default function SubscriptionManagement() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { customerInfo, isSubscribed, isPremium, isPlatinum, subscriptionTier, refreshSubscription, syncWithDatabase } = useSubscription();
 
   const [loading, setLoading] = useState(false);
@@ -16,7 +18,7 @@ export default function SubscriptionManagement() {
   const [redeeming, setRedeeming] = useState(false);
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [loadingOfferings, setLoadingOfferings] = useState(true);
-  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annual'>('annual'); // Default to annual (best value)
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'quarterly' | 'annual'>('quarterly'); // Default to quarterly (best value)
 
   // ALWAYS use RevenueCat - no development mode bypass
   // This ensures subscriptions work in TestFlight and Production
@@ -40,11 +42,11 @@ export default function SubscriptionManagement() {
       console.error('Error loading offerings:', error);
       // Show user-friendly error message
       Alert.alert(
-        'Unable to Load Subscriptions',
-        error.message || 'Please check your internet connection and try again.',
+        t('subscriptionSettings.alerts.unableToLoadTitle'),
+        error.message || t('subscriptionSettings.alerts.unableToLoadMessage'),
         [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Try Again', onPress: loadOfferings }
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('subscriptionSettings.alerts.tryAgain'), onPress: loadOfferings }
         ]
       );
     } finally {
@@ -63,21 +65,21 @@ export default function SubscriptionManagement() {
         await refreshSubscription();
 
         Alert.alert(
-          'Success!',
-          'Your purchases have been restored successfully.',
-          [{ text: 'OK' }]
+          t('subscriptionSettings.alerts.successTitle'),
+          t('subscriptionSettings.alerts.purchasesRestoredSuccess'),
+          [{ text: t('common.ok') }]
         );
       } else {
         Alert.alert(
-          'No Purchases Found',
-          'We couldn\'t find any purchases to restore. If you believe this is an error, please contact support.'
+          t('subscriptionSettings.alerts.noPurchasesFoundTitle'),
+          t('subscriptionSettings.alerts.noPurchasesFoundMessage')
         );
       }
     } catch (error) {
       console.error('Error restoring purchases:', error);
       Alert.alert(
-        'Restore Failed',
-        'Failed to restore purchases. Please try again later.'
+        t('subscriptionSettings.alerts.restoreFailedTitle'),
+        t('subscriptionSettings.alerts.restoreFailedMessage')
       );
     } finally {
       setRestoring(false);
@@ -88,9 +90,9 @@ export default function SubscriptionManagement() {
     // In development mode, show info alert
     if (isDevelopmentMode) {
       Alert.alert(
-        'Development Mode',
-        'Subscription management is handled via the database in development mode.\n\nIn production, this will open your App Store or Play Store subscription settings.',
-        [{ text: 'OK' }]
+        t('subscriptionSettings.alerts.developmentModeTitle'),
+        t('subscriptionSettings.alerts.developmentModeMessage'),
+        [{ text: t('common.ok') }]
       );
       return;
     }
@@ -103,7 +105,7 @@ export default function SubscriptionManagement() {
         await Linking.openURL('https://play.google.com/store/account/subscriptions');
       }
     } catch (error) {
-      Alert.alert('Error', 'Could not open subscription management');
+      Alert.alert(t('common.error'), t('subscriptionSettings.alerts.couldNotOpenManagement'));
     }
   };
 
@@ -111,9 +113,9 @@ export default function SubscriptionManagement() {
     // Only available on iOS
     if (Platform.OS !== 'ios') {
       Alert.alert(
-        'Not Available',
-        'Promo code redemption is only available on iOS devices. On Android, you can redeem codes directly in the Google Play Store.',
-        [{ text: 'OK' }]
+        t('subscriptionSettings.alerts.notAvailableTitle'),
+        t('subscriptionSettings.alerts.promoCodeAndroidMessage'),
+        [{ text: t('common.ok') }]
       );
       return;
     }
@@ -130,8 +132,8 @@ export default function SubscriptionManagement() {
     } catch (error: any) {
       console.error('Error presenting code redemption:', error);
       Alert.alert(
-        'Error',
-        error.message || 'Failed to open code redemption. Please try again.'
+        t('common.error'),
+        error.message || t('subscriptionSettings.alerts.codeRedemptionFailed')
       );
     } finally {
       setRedeeming(false);
@@ -149,9 +151,9 @@ export default function SubscriptionManagement() {
         await refreshSubscription();
 
         Alert.alert(
-          'Success!',
-          'Your subscription has been activated.',
-          [{ text: 'OK' }]
+          t('subscriptionSettings.alerts.successTitle'),
+          t('subscriptionSettings.alerts.subscriptionActivated'),
+          [{ text: t('common.ok') }]
         );
       }
     } catch (error: any) {
@@ -174,14 +176,14 @@ export default function SubscriptionManagement() {
       ) {
         // User has a canceled subscription - guide them to reactivate or switch accounts
         Alert.alert(
-          'Subscription Already Exists',
+          t('subscriptionSettings.alerts.subscriptionExistsTitle'),
           Platform.OS === 'android'
-            ? 'You have a canceled subscription on your current Google Play account.\n\nOptions:\n\n1. Reactivate your existing subscription in Google Play Settings\n\n2. Use a different Google Play account: Sign out of Google Play on your device, then sign in with a different account and try again'
-            : 'You have a canceled subscription on your current Apple ID.\n\nOptions:\n\n1. Reactivate your existing subscription in App Store Settings\n\n2. Use a different Apple ID: Sign out in Settings > [Your Name], then sign in with a different Apple ID and try again',
+            ? t('subscriptionSettings.alerts.subscriptionExistsAndroid')
+            : t('subscriptionSettings.alerts.subscriptionExistsIOS'),
           [
-            { text: 'Got It', style: 'cancel' },
+            { text: t('subscriptionSettings.alerts.gotIt'), style: 'cancel' },
             {
-              text: 'Open Settings',
+              text: t('subscriptionSettings.alerts.openSettings'),
               onPress: handleManageSubscription
             }
           ]
@@ -189,8 +191,8 @@ export default function SubscriptionManagement() {
       } else {
         // Other purchase errors
         Alert.alert(
-          'Purchase Failed',
-          'Failed to complete purchase. Please try again or contact support if the problem persists.'
+          t('subscriptionSettings.alerts.purchaseFailedTitle'),
+          t('subscriptionSettings.alerts.purchaseFailedMessage')
         );
       }
     } finally {
@@ -202,8 +204,8 @@ export default function SubscriptionManagement() {
     // Check subscription status - use the context values which handle both RevenueCat and DB
     if (isPlatinum) {
       return {
-        title: 'Platinum Member',
-        description: 'All premium features unlocked',
+        title: t('subscriptionSettings.status.platinumMember'),
+        description: t('subscriptionSettings.status.allFeaturesUnlocked'),
         icon: 'crown',
         color: '#FFD700',
       };
@@ -211,16 +213,16 @@ export default function SubscriptionManagement() {
 
     if (isPremium) {
       return {
-        title: 'Premium Member',
-        description: 'Enhanced features unlocked',
+        title: t('subscriptionSettings.status.premiumMember'),
+        description: t('subscriptionSettings.status.enhancedFeaturesUnlocked'),
         icon: 'star',
         color: '#A08AB7',
       };
     }
 
     return {
-      title: 'Free Plan',
-      description: '25 swipes per day, basic messaging',
+      title: t('subscriptionSettings.status.freePlan'),
+      description: t('subscriptionSettings.status.freeDescription'),
       icon: 'account-outline',
       color: '#6B7280',
     };
@@ -232,7 +234,7 @@ export default function SubscriptionManagement() {
   const getExpirationDate = () => {
     // In development mode, show a placeholder
     if (isDevelopmentMode && isSubscribed) {
-      return 'N/A (Development Mode)';
+      return t('subscriptionSettings.developmentModeNA');
     }
 
     if (!customerInfo) return null;
@@ -260,7 +262,7 @@ export default function SubscriptionManagement() {
           >
             <MaterialCommunityIcons name="arrow-left" size={24} color="#111827" />
           </TouchableOpacity>
-          <Text className="text-2xl font-bold text-gray-900">Subscription</Text>
+          <Text className="text-2xl font-bold text-gray-900">{t('subscriptionSettings.title')}</Text>
         </View>
 
         {/* Current Status Card */}
@@ -282,7 +284,7 @@ export default function SubscriptionManagement() {
             {expirationDate && (
               <View className="mt-4 pt-4 border-t border-white/20">
                 <Text className="text-white/90 text-sm">
-                  {isDevelopmentMode ? 'Active (Development Mode)' : `Renews on: ${expirationDate}`}
+                  {isDevelopmentMode ? t('subscriptionSettings.activeDevelopmentMode') : t('subscriptionSettings.renewsOn', { date: expirationDate })}
                 </Text>
               </View>
             )}
@@ -292,17 +294,30 @@ export default function SubscriptionManagement() {
         {/* Subscription Plans */}
         {!isSubscribed && offerings && !loadingOfferings && (
           <View className="mb-6">
-            <Text className="text-xl font-bold text-gray-900 mb-4">Choose Your Plan</Text>
+            <Text className="text-xl font-bold text-gray-900 mb-4">{t('subscriptionSettings.chooseYourPlan')}</Text>
 
             {/* Billing Period Toggle */}
-            <View className="flex-row bg-gray-100 rounded-full p-1 mb-6">
+            <View className="flex-row bg-gray-100 rounded-2xl p-1 mb-6">
               <TouchableOpacity
                 onPress={() => setBillingPeriod('monthly')}
                 className="flex-1"
               >
-                <View className={`py-3 rounded-full ${billingPeriod === 'monthly' ? 'bg-lavender-500' : 'bg-transparent'}`}>
-                  <Text className={`text-center font-bold ${billingPeriod === 'monthly' ? 'text-white' : 'text-gray-600'}`}>
-                    Monthly
+                <View className={`py-3 px-2 rounded-xl ${billingPeriod === 'monthly' ? 'bg-lavender-500' : 'bg-transparent'}`}>
+                  <Text className={`text-center font-bold text-sm ${billingPeriod === 'monthly' ? 'text-white' : 'text-gray-600'}`}>
+                    {t('subscriptionSettings.periods.monthly')}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setBillingPeriod('quarterly')}
+                className="flex-1"
+              >
+                <View className={`py-3 px-2 rounded-xl ${billingPeriod === 'quarterly' ? 'bg-lavender-500' : 'bg-transparent'}`}>
+                  <Text className={`text-center font-bold text-sm ${billingPeriod === 'quarterly' ? 'text-white' : 'text-gray-600'}`}>
+                    {t('subscriptionSettings.periods.threeMonths')}
+                  </Text>
+                  <Text className={`text-center text-xs ${billingPeriod === 'quarterly' ? 'text-white/90' : 'text-green-600'}`}>
+                    {t('subscriptionSettings.save22')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -310,10 +325,12 @@ export default function SubscriptionManagement() {
                 onPress={() => setBillingPeriod('annual')}
                 className="flex-1"
               >
-                <View className={`py-3 rounded-full ${billingPeriod === 'annual' ? 'bg-lavender-500' : 'bg-transparent'}`}>
-                  <Text className={`text-center font-bold ${billingPeriod === 'annual' ? 'text-white' : 'text-gray-600'}`}>
-                    Annual
-                    <Text className="text-xs"> (Save 33%)</Text>
+                <View className={`py-3 px-2 rounded-xl ${billingPeriod === 'annual' ? 'bg-lavender-500' : 'bg-transparent'}`}>
+                  <Text className={`text-center font-bold text-sm ${billingPeriod === 'annual' ? 'text-white' : 'text-gray-600'}`}>
+                    {t('subscriptionSettings.periods.annual')}
+                  </Text>
+                  <Text className={`text-center text-xs ${billingPeriod === 'annual' ? 'text-white/90' : 'text-green-600'}`}>
+                    {t('subscriptionSettings.save33')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -323,7 +340,7 @@ export default function SubscriptionManagement() {
             <View className="mb-6">
               <View className="flex-row items-center mb-3">
                 <MaterialCommunityIcons name="star" size={24} color="#A08AB7" />
-                <Text className="text-lg font-bold text-gray-900 ml-2">Premium</Text>
+                <Text className="text-lg font-bold text-gray-900 ml-2">{t('subscriptionSettings.plans.premium')}</Text>
               </View>
 
               {(() => {
@@ -342,10 +359,13 @@ export default function SubscriptionManagement() {
 
                   // Check if package matches billing period
                   const isMonthly = id.includes('month') || productId.includes('month') || id.includes('1m') || productId.includes('1m');
+                  const isQuarterly = id.includes('quarter') || productId.includes('quarter') || id.includes('3m') || productId.includes('3m') || id.includes('3_month') || productId.includes('3_month');
                   const isAnnual = id.includes('annual') || productId.includes('annual') || id.includes('year') || productId.includes('year') || id.includes('12m') || productId.includes('12m');
 
                   if (billingPeriod === 'monthly') {
-                    return isPremium && isMonthly;
+                    return isPremium && isMonthly && !isQuarterly;
+                  } else if (billingPeriod === 'quarterly') {
+                    return isPremium && isQuarterly;
                   } else {
                     return isPremium && isAnnual;
                   }
@@ -364,7 +384,7 @@ export default function SubscriptionManagement() {
                   console.warn(`⚠️ No premium package found at all`);
                   return (
                     <View className="bg-yellow-50 border border-yellow-300 rounded-2xl p-6">
-                      <Text className="text-yellow-800 text-center">Premium {billingPeriod} plan not available in RevenueCat</Text>
+                      <Text className="text-yellow-800 text-center">{t('subscriptionSettings.planNotAvailable', { plan: 'Premium', period: billingPeriod })}</Text>
                     </View>
                   );
                 }
@@ -376,9 +396,14 @@ export default function SubscriptionManagement() {
                     disabled={loading}
                   >
                     <View className="bg-white border-2 border-lavender-300 rounded-2xl p-6">
+                      {billingPeriod === 'quarterly' && (
+                        <View className="absolute -top-2 right-4 bg-green-500 px-3 py-1 rounded-full">
+                          <Text className="text-white text-xs font-bold">{t('subscriptionSettings.bestValueSave22')}</Text>
+                        </View>
+                      )}
                       {billingPeriod === 'annual' && (
                         <View className="absolute -top-2 right-4 bg-green-500 px-3 py-1 rounded-full">
-                          <Text className="text-white text-xs font-bold">SAVE 33%</Text>
+                          <Text className="text-white text-xs font-bold">{t('subscriptionSettings.save33')}</Text>
                         </View>
                       )}
                       <View className="flex-row items-baseline mb-3">
@@ -386,24 +411,23 @@ export default function SubscriptionManagement() {
                           {displayPackage.product.priceString}
                         </Text>
                         <Text className="text-gray-600 ml-2">
-                          /{billingPeriod === 'monthly' ? 'month' : 'year'}
+                          /{billingPeriod === 'monthly' ? t('subscriptionSettings.perMonth') : billingPeriod === 'quarterly' ? t('subscriptionSettings.perThreeMonths') : t('subscriptionSettings.perYear')}
                         </Text>
                       </View>
+                      {billingPeriod === 'quarterly' && (
+                        <Text className="text-green-600 text-sm font-medium mb-2">
+                          {t('subscriptionSettings.quarterlyPopular')}
+                        </Text>
+                      )}
                       <View className="bg-lavender-500 rounded-xl py-4 mb-4">
                         <Text className="text-white text-center text-lg font-bold">
-                          {loading ? 'Processing...' : 'Subscribe to Premium'}
+                          {loading ? t('subscriptionSettings.processing') : t('subscriptionSettings.subscribeToPremium')}
                         </Text>
                       </View>
                       <View className="bg-lavender-50 rounded-xl p-4">
-                        <Text className="text-xs text-gray-700 font-semibold mb-2">Premium includes:</Text>
+                        <Text className="text-xs text-gray-700 font-semibold mb-2">{t('subscriptionSettings.premiumIncludes')}</Text>
                         <Text className="text-xs text-gray-600 leading-5">
-                          • Unlimited swipes{'\n'}
-                          • See who liked you{'\n'}
-                          • 5 Super Likes/week{'\n'}
-                          • Voice messages{'\n'}
-                          • Read receipts{'\n'}
-                          • Advanced filters{'\n'}
-                          • Rewind
+                          {t('subscriptionSettings.premiumFeaturesList')}
                         </Text>
                       </View>
                     </View>
@@ -439,9 +463,9 @@ export default function SubscriptionManagement() {
                   <View className="mb-6">
                     <View className="flex-row items-center mb-3">
                       <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
-                      <Text className="text-lg font-bold text-gray-900 ml-2">Platinum</Text>
+                      <Text className="text-lg font-bold text-gray-900 ml-2">{t('subscriptionSettings.plans.platinum')}</Text>
                       <View className="bg-blue-100 px-2 py-0.5 rounded-full ml-2">
-                        <Text className="text-blue-700 text-xs font-bold">COMING SOON</Text>
+                        <Text className="text-blue-700 text-xs font-bold">{t('subscriptionSettings.comingSoon')}</Text>
                       </View>
                     </View>
 
@@ -451,22 +475,19 @@ export default function SubscriptionManagement() {
                           {billingPeriod === 'monthly' ? '$24.99' : '$199.99'}
                         </Text>
                         <Text className="text-gray-500 ml-2">
-                          /{billingPeriod === 'monthly' ? 'month' : 'year'}
+                          /{billingPeriod === 'monthly' ? t('subscriptionSettings.perMonth') : t('subscriptionSettings.perYear')}
                         </Text>
                       </View>
                       <View className="bg-gray-300 rounded-xl py-4 mb-4">
-                        <Text className="text-gray-600 text-center text-lg font-bold">Coming Soon</Text>
+                        <Text className="text-gray-600 text-center text-lg font-bold">{t('subscriptionSettings.comingSoon')}</Text>
                       </View>
                       <View className="bg-white/50 rounded-xl p-4">
-                        <Text className="text-xs text-gray-700 font-semibold mb-2">Everything in Premium, plus:</Text>
+                        <Text className="text-xs text-gray-700 font-semibold mb-2">{t('subscriptionSettings.everythingInPremiumPlus')}</Text>
                         <Text className="text-xs text-gray-600 leading-5">
-                          • Weekly profile boost{'\n'}
-                          • Background checks{'\n'}
-                          • Legal resources{'\n'}
-                          • Priority support
+                          {t('subscriptionSettings.platinumFeaturesList')}
                         </Text>
                         <Text className="text-xs text-gray-500 italic mt-2">
-                          Stay tuned! Platinum tier launching soon.
+                          {t('subscriptionSettings.platinumComingSoonMessage')}
                         </Text>
                       </View>
                     </View>
@@ -479,7 +500,7 @@ export default function SubscriptionManagement() {
                 <View className="mb-6">
                   <View className="flex-row items-center mb-3">
                     <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
-                    <Text className="text-lg font-bold text-gray-900 ml-2">Platinum</Text>
+                    <Text className="text-lg font-bold text-gray-900 ml-2">{t('subscriptionSettings.plans.platinum')}</Text>
                   </View>
 
                   <TouchableOpacity
@@ -489,7 +510,7 @@ export default function SubscriptionManagement() {
                     <View className="bg-white border-2 border-yellow-300 rounded-2xl p-6">
                       {billingPeriod === 'annual' && (
                         <View className="absolute -top-2 right-4 bg-green-500 px-3 py-1 rounded-full">
-                          <Text className="text-white text-xs font-bold">SAVE 33%</Text>
+                          <Text className="text-white text-xs font-bold">{t('subscriptionSettings.save33')}</Text>
                         </View>
                       )}
                       <View className="flex-row items-baseline mb-3">
@@ -497,21 +518,18 @@ export default function SubscriptionManagement() {
                           {platinumPackage.product.priceString}
                         </Text>
                         <Text className="text-gray-600 ml-2">
-                          /{billingPeriod === 'monthly' ? 'month' : 'year'}
+                          /{billingPeriod === 'monthly' ? t('subscriptionSettings.perMonth') : t('subscriptionSettings.perYear')}
                         </Text>
                       </View>
                       <View className="bg-yellow-500 rounded-xl py-4 mb-4">
                         <Text className="text-white text-center text-lg font-bold">
-                          {loading ? 'Processing...' : 'Subscribe to Platinum'}
+                          {loading ? t('subscriptionSettings.processing') : t('subscriptionSettings.subscribeToPlatinum')}
                         </Text>
                       </View>
                       <View className="bg-yellow-50 rounded-xl p-4">
-                        <Text className="text-xs text-gray-700 font-semibold mb-2">Everything in Premium, plus:</Text>
+                        <Text className="text-xs text-gray-700 font-semibold mb-2">{t('subscriptionSettings.everythingInPremiumPlus')}</Text>
                         <Text className="text-xs text-gray-600 leading-5">
-                          • Weekly profile boost{'\n'}
-                          • Background checks{'\n'}
-                          • Legal resources{'\n'}
-                          • Priority support
+                          {t('subscriptionSettings.platinumFeaturesList')}
                         </Text>
                       </View>
                     </View>
@@ -525,7 +543,7 @@ export default function SubscriptionManagement() {
         {loadingOfferings && (
           <View className="py-8 items-center">
             <ActivityIndicator size="large" color="#A08AB7" />
-            <Text className="text-gray-600 mt-2">Loading plans...</Text>
+            <Text className="text-gray-600 mt-2">{t('subscriptionSettings.loadingPlans')}</Text>
           </View>
         )}
 
@@ -536,21 +554,21 @@ export default function SubscriptionManagement() {
               <MaterialCommunityIcons name="alert-circle" size={24} color="#DC2626" />
               <View className="flex-1 ml-3">
                 <Text className="text-red-900 font-bold text-lg mb-2">
-                  Unable to Load Subscription Options
+                  {t('subscriptionSettings.unableToLoadTitle')}
                 </Text>
                 <Text className="text-red-800 text-sm mb-3">
-                  We're having trouble loading subscription plans. This could be because:
+                  {t('subscriptionSettings.unableToLoadDescription')}
                 </Text>
-                <Text className="text-red-800 text-sm ml-2 mb-1">• Offerings not configured in RevenueCat</Text>
-                <Text className="text-red-800 text-sm ml-2 mb-1">• Network connection issue</Text>
-                <Text className="text-red-800 text-sm ml-2 mb-3">• RevenueCat service temporarily unavailable</Text>
+                <Text className="text-red-800 text-sm ml-2 mb-1">{t('subscriptionSettings.errorReasons.revenueCat')}</Text>
+                <Text className="text-red-800 text-sm ml-2 mb-1">{t('subscriptionSettings.errorReasons.network')}</Text>
+                <Text className="text-red-800 text-sm ml-2 mb-3">{t('subscriptionSettings.errorReasons.serviceUnavailable')}</Text>
                 <TouchableOpacity
                   onPress={loadOfferings}
                   className="bg-red-600 rounded-full py-3 px-4 mt-2"
                 >
                   <View className="flex-row items-center justify-center">
                     <MaterialCommunityIcons name="refresh" size={20} color="white" />
-                    <Text className="text-white font-bold ml-2">Try Again</Text>
+                    <Text className="text-white font-bold ml-2">{t('subscriptionSettings.alerts.tryAgain')}</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -560,21 +578,21 @@ export default function SubscriptionManagement() {
 
         {/* Features List */}
         <View className="mb-6">
-          <Text className="text-xl font-bold text-gray-900 mb-4">Premium Features</Text>
+          <Text className="text-xl font-bold text-gray-900 mb-4">{t('subscriptionSettings.premiumFeaturesTitle')}</Text>
 
           <View className="bg-lavender-50 rounded-3xl p-6">
             {[
-              { icon: 'infinity', text: 'Unlimited swipes', tier: 'premium' },
-              { icon: 'eye', text: 'See who liked you', tier: 'premium' },
-              { icon: 'star', text: '5 Super Likes per week', tier: 'premium' },
-              { icon: 'microphone', text: 'Voice messages', tier: 'premium' },
-              { icon: 'check-all', text: 'Read receipts', tier: 'premium' },
-              { icon: 'filter', text: 'Advanced filters', tier: 'premium' },
-              { icon: 'undo', text: 'Rewind last swipe', tier: 'premium' },
-              { icon: 'shield-check', text: 'Background checks', tier: 'platinum' },
-              { icon: 'scale-balance', text: 'Legal resources', tier: 'platinum' },
-              { icon: 'rocket', text: 'Weekly profile boost', tier: 'platinum' },
-              { icon: 'headset', text: 'Priority support', tier: 'platinum' },
+              { icon: 'infinity', text: t('subscriptionSettings.features.unlimitedSwipes'), tier: 'premium' },
+              { icon: 'eye', text: t('subscriptionSettings.features.seeWhoLikedYou'), tier: 'premium' },
+              { icon: 'star', text: t('subscriptionSettings.features.superLikesPerWeek'), tier: 'premium' },
+              { icon: 'microphone', text: t('subscriptionSettings.features.voiceMessages'), tier: 'premium' },
+              { icon: 'check-all', text: t('subscriptionSettings.features.readReceipts'), tier: 'premium' },
+              { icon: 'filter', text: t('subscriptionSettings.features.advancedFilters'), tier: 'premium' },
+              { icon: 'undo', text: t('subscriptionSettings.features.rewindLastSwipe'), tier: 'premium' },
+              { icon: 'shield-check', text: t('subscriptionSettings.features.backgroundChecks'), tier: 'platinum' },
+              { icon: 'scale-balance', text: t('subscriptionSettings.features.legalResources'), tier: 'platinum' },
+              { icon: 'rocket', text: t('subscriptionSettings.features.weeklyProfileBoost'), tier: 'platinum' },
+              { icon: 'headset', text: t('subscriptionSettings.features.prioritySupport'), tier: 'platinum' },
             ].map((feature, index) => (
               <View key={index} className="flex-row items-center mb-3">
                 <MaterialCommunityIcons
@@ -585,7 +603,7 @@ export default function SubscriptionManagement() {
                 <Text className="text-gray-800 text-base ml-3 flex-1">{feature.text}</Text>
                 {feature.tier === 'platinum' && (
                   <View className="bg-yellow-400 px-2 py-1 rounded-full">
-                    <Text className="text-yellow-900 text-xs font-bold">PLATINUM</Text>
+                    <Text className="text-yellow-900 text-xs font-bold">{t('subscriptionSettings.plans.platinum').toUpperCase()}</Text>
                   </View>
                 )}
               </View>
@@ -604,12 +622,12 @@ export default function SubscriptionManagement() {
             {restoring ? (
               <View className="flex-row items-center justify-center">
                 <ActivityIndicator size="small" color="#A08AB7" />
-                <Text className="text-lavender-600 font-bold text-lg ml-2">Restoring...</Text>
+                <Text className="text-lavender-600 font-bold text-lg ml-2">{t('subscriptionSettings.restoring')}</Text>
               </View>
             ) : (
               <View className="flex-row items-center justify-center">
                 <MaterialCommunityIcons name="restore" size={20} color="#A08AB7" />
-                <Text className="text-lavender-600 font-bold text-lg ml-2">Restore Purchases</Text>
+                <Text className="text-lavender-600 font-bold text-lg ml-2">{t('subscriptionSettings.restorePurchases')}</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -624,12 +642,12 @@ export default function SubscriptionManagement() {
               {redeeming ? (
                 <View className="flex-row items-center justify-center">
                   <ActivityIndicator size="small" color="#22C55E" />
-                  <Text className="text-green-600 font-bold text-lg ml-2">Opening...</Text>
+                  <Text className="text-green-600 font-bold text-lg ml-2">{t('subscriptionSettings.opening')}</Text>
                 </View>
               ) : (
                 <View className="flex-row items-center justify-center">
                   <MaterialCommunityIcons name="gift" size={20} color="#22C55E" />
-                  <Text className="text-green-600 font-bold text-lg ml-2">Redeem Promo Code</Text>
+                  <Text className="text-green-600 font-bold text-lg ml-2">{t('subscriptionSettings.redeemPromoCode')}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -644,7 +662,7 @@ export default function SubscriptionManagement() {
               <View className="flex-row items-center justify-center">
                 <MaterialCommunityIcons name="cog" size={20} color="#4B5563" />
                 <Text className="text-gray-700 font-bold text-lg ml-2">
-                  Manage Subscription
+                  {t('subscriptionSettings.manageSubscription')}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -657,8 +675,9 @@ export default function SubscriptionManagement() {
             <MaterialCommunityIcons name="information" size={20} color="#3B82F6" />
             <View className="flex-1 ml-3">
               <Text className="text-blue-900 text-sm">
-                Subscriptions are managed through your {Platform.OS === 'ios' ? 'App Store' : 'Google Play'} account.
-                You can cancel anytime from your account settings.
+                {Platform.OS === 'ios'
+                  ? t('subscriptionSettings.infoTextIOS')
+                  : t('subscriptionSettings.infoTextAndroid')}
               </Text>
             </View>
           </View>
@@ -670,14 +689,14 @@ export default function SubscriptionManagement() {
             onPress={() => Linking.openURL('https://joinaccord.app/terms')}
             className="py-2"
           >
-            <Text className="text-lavender-600 text-sm font-medium underline">Terms of Use</Text>
+            <Text className="text-lavender-600 text-sm font-medium underline">{t('subscriptionSettings.termsOfUse')}</Text>
           </TouchableOpacity>
           <Text className="text-gray-400">•</Text>
           <TouchableOpacity
             onPress={() => Linking.openURL('https://joinaccord.app/privacy')}
             className="py-2"
           >
-            <Text className="text-lavender-600 text-sm font-medium underline">Privacy Policy</Text>
+            <Text className="text-lavender-600 text-sm font-medium underline">{t('subscriptionSettings.privacyPolicy')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -687,12 +706,12 @@ export default function SubscriptionManagement() {
             <View className="flex-row items-start">
               <MaterialCommunityIcons name="dev-to" size={20} color="#92400E" />
               <View className="flex-1 ml-3">
-                <Text className="text-yellow-900 text-sm font-bold mb-1">Development Mode</Text>
+                <Text className="text-yellow-900 text-sm font-bold mb-1">{t('subscriptionSettings.developmentMode')}</Text>
                 <Text className="text-yellow-800 text-sm">
-                  RevenueCat is disabled in development. Your subscription status is controlled by the <Text className="font-mono">is_premium</Text> and <Text className="font-mono">is_platinum</Text> flags in the database.
+                  {t('subscriptionSettings.developmentModeDescription')}
                 </Text>
                 <Text className="text-yellow-800 text-sm mt-2">
-                  In production, this screen will show real subscription packages and allow users to manage their subscriptions through the App Store or Play Store.
+                  {t('subscriptionSettings.developmentModeProductionNote')}
                 </Text>
               </View>
             </View>

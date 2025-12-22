@@ -618,5 +618,265 @@
     "goToMatches": "Zu Matches Gehen",
     "errorLoadingLikes": "Likes konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
     "errorCreatingMatch": "Match konnte nicht erstellt werden. Bitte versuchen Sie es erneut."
+  },
+  "activity": {
+    "title": "Aktivität",
+    "back": "Zurück",
+    "markAllRead": "Alle als gelesen markieren",
+    "loading": "Aktivität wird geladen...",
+    "tryAgain": "Erneut Versuchen",
+    "noActivityYet": "Noch Keine Aktivität",
+    "noActivityDescription": "Wenn jemand Sie mag, Sie matchen oder Nachrichten erhalten, sehen Sie es hier.",
+    "today": "Heute",
+    "yesterday": "Gestern",
+    "thisWeek": "Diese Woche",
+    "earlier": "Früher",
+    "premiumTitle": "Aktivitäts-Feed",
+    "premiumDescription": "Sehen Sie, wer Sie geliked hat, wann Sie gematcht haben, neue Nachrichten, Bewertungen und mehr — alles an einem Ort.",
+    "upgradeToPremium": "Auf Premium Upgraden"
+  },
+  "betaFeedback": {
+    "title": "Beta-Feedback",
+    "subtitle": "Helfen Sie uns, Accord zu verbessern",
+    "overallRating": "Gesamtbewertung",
+    "rateExperience": "Bewerten Sie Ihre Erfahrung",
+    "subject": "Betreff",
+    "subjectPlaceholder": "Worum geht es bei Ihrem Feedback?",
+    "description": "Beschreibung",
+    "descriptionPlaceholder": "Erzählen Sie uns mehr über Ihre Erfahrung...",
+    "feedbackType": "Feedback-Typ",
+    "bug": "Fehlerbericht",
+    "feature": "Funktionsanfrage",
+    "improvement": "Verbesserung",
+    "other": "Sonstiges",
+    "allowContact": "Kontakt für Nachfragen erlauben",
+    "allowContactDesc": "Wir können Sie kontaktieren, um mehr über Ihr Feedback zu erfahren",
+    "submit": "Feedback Absenden",
+    "submitting": "Wird gesendet...",
+    "missingInfo": "Fehlende Informationen",
+    "missingInfoMessage": "Bitte geben Sie einen Betreff und eine Beschreibung für Ihr Feedback an.",
+    "ratingRequired": "Bewertung Erforderlich",
+    "ratingRequiredMessage": "Bitte geben Sie eine Gesamtbewertung ab.",
+    "thankYou": "Vielen Dank!",
+    "thankYouMessage": "Ihr Feedback hilft uns, Accord für alle zu verbessern.",
+    "error": "Fehler",
+    "errorMessage": "Feedback konnte nicht gesendet werden. Bitte versuchen Sie es erneut."
+  },
+  "deleteAccount": {
+    "title": "Konto Löschen",
+    "warning": "Warnung",
+    "warningMessage": "Diese Aktion ist dauerhaft und kann nicht rückgängig gemacht werden. Alle Ihre Daten, Matches, Nachrichten und Profilinformationen werden dauerhaft gelöscht.",
+    "confirmTitle": "Sind Sie sicher?",
+    "confirmMessage": "Bitte geben Sie DELETE ein, um zu bestätigen, dass Sie Ihr Konto dauerhaft löschen möchten.",
+    "confirmPlaceholder": "Geben Sie DELETE ein zur Bestätigung",
+    "deleteButton": "Mein Konto Löschen",
+    "deleting": "Wird gelöscht...",
+    "incorrectConfirmation": "Falsche Bestätigung",
+    "incorrectConfirmationMessage": "Bitte geben Sie DELETE genau ein zur Bestätigung.",
+    "accountDeleted": "Konto Gelöscht",
+    "accountDeletedMessage": "Ihr Konto wurde dauerhaft gelöscht.",
+    "error": "Fehler",
+    "errorMessage": "Konto konnte nicht gelöscht werden. Bitte versuchen Sie es erneut oder kontaktieren Sie den Support."
+  },
+  "notificationSettings": {
+    "title": "Benachrichtigungseinstellungen",
+    "subtitle": "Verwalten Sie Ihre Benachrichtigungen",
+    "pushNotifications": "Push-Benachrichtigungen",
+    "pushNotificationsDesc": "Push-Benachrichtigungen auf Ihrem Gerät erhalten",
+    "newMatches": "Neue Matches",
+    "newMatchesDesc": "Wenn Sie mit jemandem matchen",
+    "newMessages": "Neue Nachrichten",
+    "newMessagesDesc": "Wenn Sie eine neue Nachricht erhalten",
+    "newLikes": "Neue Likes",
+    "newLikesDesc": "Wenn jemand Ihr Profil mag",
+    "reviews": "Bewertungen",
+    "reviewsDesc": "Wenn Bewertungen bereit oder enthüllt sind",
+    "marketing": "Marketing",
+    "marketingDesc": "Tipps, Updates und Aktionen",
+    "emailNotifications": "E-Mail-Benachrichtigungen",
+    "emailNotificationsDesc": "Updates per E-Mail erhalten",
+    "saved": "Einstellungen Gespeichert",
+    "savedMessage": "Ihre Benachrichtigungspräferenzen wurden aktualisiert.",
+    "error": "Fehler",
+    "errorMessage": "Einstellungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut."
+  },
+  "safetyCenter": {
+    "title": "Sicherheitszentrum",
+    "subtitle": "Bleiben Sie sicher auf Accord",
+    "emergencyResources": "Notfall-Ressourcen",
+    "emergencyResourcesDesc": "Krisen-Hotlines und Unterstützungsdienste",
+    "reportUser": "Einen Benutzer Melden",
+    "reportUserDesc": "Belästigung, Betrug oder andere Probleme melden",
+    "blockingOptions": "Blockierungsoptionen",
+    "blockingOptionsDesc": "Kontakte, Länder oder bestimmte Benutzer blockieren",
+    "safetyTips": "Sicherheitstipps",
+    "safetyTipsDesc": "Richtlinien für sicheres Online-Dating",
+    "privacyGuide": "Datenschutz-Leitfaden",
+    "privacyGuideDesc": "Schützen Sie Ihre persönlichen Informationen",
+    "meetingSafely": "Sicher Treffen",
+    "meetingSafelyDesc": "Tipps zum persönlichen Treffen mit Matches",
+    "lgbtqResources": "LGBTQ+ Ressourcen",
+    "lgbtqResourcesDesc": "Unterstützungsorganisationen und Hilfslinien"
+  },
+  "subscriptionSettings": {
+    "title": "Abonnement",
+    "chooseYourPlan": "Wählen Sie Ihren Plan",
+    "loadingPlans": "Pläne werden geladen...",
+    "renewsOn": "Verlängert sich am: {{date}}",
+    "activeDevelopmentMode": "Aktiv (Entwicklungsmodus)",
+    "developmentModeNA": "N/V (Entwicklungsmodus)",
+    "developmentMode": "Entwicklungsmodus",
+    "developmentModeDescription": "RevenueCat ist in der Entwicklung deaktiviert. Ihr Abonnementstatus wird durch die Flags is_premium und is_platinum in der Datenbank gesteuert.",
+    "developmentModeProductionNote": "In der Produktion zeigt dieser Bildschirm echte Abonnementpakete an und ermöglicht es Benutzern, ihre Abonnements über den App Store oder Play Store zu verwalten.",
+    "status": {
+      "platinumMember": "Platinum-Mitglied",
+      "premiumMember": "Premium-Mitglied",
+      "freePlan": "Kostenloser Plan",
+      "allFeaturesUnlocked": "Alle Premium-Funktionen freigeschaltet",
+      "enhancedFeaturesUnlocked": "Erweiterte Funktionen freigeschaltet",
+      "freeDescription": "25 Swipes pro Tag, Basis-Messaging"
+    },
+    "plans": {
+      "premium": "Premium",
+      "platinum": "Platinum"
+    },
+    "periods": {
+      "monthly": "Monatlich",
+      "threeMonths": "3 Monate",
+      "annual": "Jährlich"
+    },
+    "save22": "22% sparen",
+    "save33": "33% sparen",
+    "bestValueSave22": "BESTER WERT - 22% SPAREN",
+    "perMonth": "Monat",
+    "perThreeMonths": "3 Monate",
+    "perYear": "Jahr",
+    "quarterlyPopular": "Nur 11,66$/Monat — unser beliebtester Plan!",
+    "processing": "Verarbeitung...",
+    "subscribeToPremium": "Premium Abonnieren",
+    "subscribeToPlatinum": "Platinum Abonnieren",
+    "premiumIncludes": "Premium beinhaltet:",
+    "premiumFeaturesList": "• Unbegrenzte Swipes\n• Sehen Sie, wer Sie geliked hat\n• 5 Super Likes/Woche\n• Sprachnachrichten\n• Lesebestätigungen\n• Erweiterte Filter\n• Zurückspulen",
+    "everythingInPremiumPlus": "Alles in Premium, plus:",
+    "platinumFeaturesList": "• Wöchentlicher Profil-Boost\n• Hintergrundüberprüfungen\n• Rechtliche Ressourcen\n• Prioritäts-Support",
+    "platinumComingSoonMessage": "Bleiben Sie dran! Die Platinum-Stufe wird bald gestartet.",
+    "comingSoon": "DEMNÄCHST",
+    "planNotAvailable": "{{plan}} {{period}} Plan nicht verfügbar in RevenueCat",
+    "premiumFeaturesTitle": "Premium-Funktionen",
+    "features": {
+      "unlimitedSwipes": "Unbegrenzte Swipes",
+      "seeWhoLikedYou": "Sehen Sie, wer Sie geliked hat",
+      "superLikesPerWeek": "5 Super Likes pro Woche",
+      "voiceMessages": "Sprachnachrichten",
+      "readReceipts": "Lesebestätigungen",
+      "advancedFilters": "Erweiterte Filter",
+      "rewindLastSwipe": "Letzten Swipe zurückspulen",
+      "backgroundChecks": "Hintergrundüberprüfungen",
+      "legalResources": "Rechtliche Ressourcen",
+      "weeklyProfileBoost": "Wöchentlicher Profil-Boost",
+      "prioritySupport": "Prioritäts-Support"
+    },
+    "restorePurchases": "Käufe Wiederherstellen",
+    "restoring": "Wird wiederhergestellt...",
+    "opening": "Wird geöffnet...",
+    "redeemPromoCode": "Promo-Code Einlösen",
+    "manageSubscription": "Abonnement Verwalten",
+    "infoTextIOS": "Abonnements werden über Ihr App Store-Konto verwaltet. Sie können jederzeit in Ihren Kontoeinstellungen kündigen.",
+    "infoTextAndroid": "Abonnements werden über Ihr Google Play-Konto verwaltet. Sie können jederzeit in Ihren Kontoeinstellungen kündigen.",
+    "termsOfUse": "Nutzungsbedingungen",
+    "privacyPolicy": "Datenschutzrichtlinie",
+    "unableToLoadTitle": "Abonnementoptionen Können Nicht Geladen Werden",
+    "unableToLoadDescription": "Wir haben Probleme beim Laden der Abonnementpläne. Dies könnte folgende Ursachen haben:",
+    "errorReasons": {
+      "revenueCat": "• Angebote nicht in RevenueCat konfiguriert",
+      "network": "• Netzwerkverbindungsproblem",
+      "serviceUnavailable": "• RevenueCat-Dienst vorübergehend nicht verfügbar"
+    },
+    "alerts": {
+      "unableToLoadTitle": "Abonnements Können Nicht Geladen Werden",
+      "unableToLoadMessage": "Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+      "tryAgain": "Erneut Versuchen",
+      "successTitle": "Erfolg!",
+      "purchasesRestoredSuccess": "Ihre Käufe wurden erfolgreich wiederhergestellt.",
+      "noPurchasesFoundTitle": "Keine Käufe Gefunden",
+      "noPurchasesFoundMessage": "Wir konnten keine Käufe zum Wiederherstellen finden. Wenn Sie glauben, dass dies ein Fehler ist, wenden Sie sich bitte an den Support.",
+      "restoreFailedTitle": "Wiederherstellung Fehlgeschlagen",
+      "restoreFailedMessage": "Käufe konnten nicht wiederhergestellt werden. Bitte versuchen Sie es später erneut.",
+      "developmentModeTitle": "Entwicklungsmodus",
+      "developmentModeMessage": "Die Abonnementverwaltung wird im Entwicklungsmodus über die Datenbank gehandhabt.\n\nIn der Produktion wird dies Ihre App Store- oder Play Store-Abonnementeinstellungen öffnen.",
+      "couldNotOpenManagement": "Abonnementverwaltung konnte nicht geöffnet werden",
+      "notAvailableTitle": "Nicht Verfügbar",
+      "promoCodeAndroidMessage": "Die Einlösung von Promo-Codes ist nur auf iOS-Geräten verfügbar. Auf Android können Sie Codes direkt im Google Play Store einlösen.",
+      "codeRedemptionFailed": "Code-Einlösung konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.",
+      "subscriptionActivated": "Ihr Abonnement wurde aktiviert.",
+      "subscriptionExistsTitle": "Abonnement Existiert Bereits",
+      "subscriptionExistsAndroid": "Sie haben ein gekündigtes Abonnement auf Ihrem aktuellen Google Play-Konto.\n\nOptionen:\n\n1. Reaktivieren Sie Ihr bestehendes Abonnement in den Google Play-Einstellungen\n\n2. Verwenden Sie ein anderes Google Play-Konto: Melden Sie sich von Google Play auf Ihrem Gerät ab, melden Sie sich dann mit einem anderen Konto an und versuchen Sie es erneut",
+      "subscriptionExistsIOS": "Sie haben ein gekündigtes Abonnement auf Ihrer aktuellen Apple ID.\n\nOptionen:\n\n1. Reaktivieren Sie Ihr bestehendes Abonnement in den App Store-Einstellungen\n\n2. Verwenden Sie eine andere Apple ID: Melden Sie sich in Einstellungen > [Ihr Name] ab, melden Sie sich dann mit einer anderen Apple ID an und versuchen Sie es erneut",
+      "gotIt": "Verstanden",
+      "openSettings": "Einstellungen Öffnen",
+      "purchaseFailedTitle": "Kauf Fehlgeschlagen",
+      "purchaseFailedMessage": "Kauf konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut oder kontaktieren Sie den Support, wenn das Problem weiterhin besteht."
+    }
+  },
+  "whatsNew": {
+    "title": "Neuigkeiten",
+    "version": "Version {{version}}",
+    "continue": "Los geht's!",
+    "new": "NEU",
+    "v109": {
+      "headline": "Bleiben Sie verbunden mit Ihrem Aktivitätscenter und verbesserter Standortgenauigkeit!",
+      "features": {
+        "activityCenter": {
+          "title": "Aktivitätscenter",
+          "description": "Verfolgen Sie alle Ihre Likes, Matches und Profilansichten an einem praktischen Ort"
+        },
+        "betterLocation": {
+          "title": "Bessere Standortgenauigkeit",
+          "description": "Präziseres Standort-Matching, um kompatible Personen in Ihrer Nähe zu finden"
+        },
+        "moreLanguages": {
+          "title": "Mehr Sprachen",
+          "description": "Vollständige Übersetzungsunterstützung für alle App-Bildschirme in 18 Sprachen"
+        },
+        "bugFixes": {
+          "title": "Fehlerbehebungen & Verbesserungen",
+          "description": "Verschiedene Leistungsverbesserungen und Fehlerbehebungen für ein reibungsloseres Erlebnis"
+        }
+      }
+    },
+    "v108": {
+      "headline": "Erweiterte Sicherheitsfunktionen und Foto-Verifizierung!",
+      "features": {
+        "photoVerification": {
+          "title": "Foto-Verifizierung",
+          "description": "Selfie-Verifizierung, um zu beweisen, dass Ihre Fotos wirklich Sie sind"
+        },
+        "screenshotProtection": {
+          "title": "Screenshot-Schutz",
+          "description": "Ihre Fotos sind im Chat vor Screenshots geschützt"
+        },
+        "improvedSafety": {
+          "title": "Verbesserte Sicherheit",
+          "description": "Verbessertes Sperrsystem und Sicherheitsverbesserungen"
+        }
+      }
+    },
+    "v104": {
+      "headline": "Suchverbesserungen und Sicherheitskorrekturen!",
+      "features": {
+        "searchImprovements": {
+          "title": "Bessere Suche",
+          "description": "Verbesserter Matching-Algorithmus für relevantere Ergebnisse"
+        },
+        "encryptionFix": {
+          "title": "Verschlüsselungskorrektur",
+          "description": "Ende-zu-Ende-Verschlüsselung für sichere Nachrichtenübermittlung korrigiert"
+        },
+        "bugFixes": {
+          "title": "Fehlerbehebungen",
+          "description": "Verschiedene Stabilitäts- und Leistungsverbesserungen"
+        }
+      }
+    }
   }
 }

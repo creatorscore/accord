@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform, Linking, Switch } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { registerForPushNotifications, savePushToken } from '@/lib/notifications';
@@ -40,6 +41,7 @@ const defaultPreferences: NotificationPreferences = {
 };
 
 export default function NotificationSettings() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -108,7 +110,7 @@ export default function NotificationSettings() {
       }
     } catch (error: any) {
       console.error('Error loading notification settings:', error);
-      Alert.alert('Error', 'Failed to load notification settings');
+      Alert.alert(t('common.error'), t('notificationSettings.alerts.loadError'));
     } finally {
       setLoading(false);
     }
@@ -130,19 +132,19 @@ export default function NotificationSettings() {
     } catch (error: any) {
       // Revert on error
       setPreferences(prev => ({ ...prev, [key]: !value }));
-      Alert.alert('Error', 'Failed to update preference');
+      Alert.alert(t('common.error'), t('notificationSettings.alerts.updateError'));
     }
   };
 
   const handleToggleNotifications = async () => {
     if (pushEnabled) {
       Alert.alert(
-        'Disable Notifications',
-        'You won\'t receive any push notifications. You can re-enable anytime.',
+        t('notificationSettings.alerts.disableTitle'),
+        t('notificationSettings.alerts.disableMessage'),
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: 'Disable',
+            text: t('notificationSettings.alerts.disable'),
             style: 'destructive',
             onPress: async () => {
               try {
@@ -153,7 +155,7 @@ export default function NotificationSettings() {
                   .eq('user_id', user?.id);
                 setPushEnabled(false);
               } catch (error: any) {
-                Alert.alert('Error', 'Failed to update settings');
+                Alert.alert(t('common.error'), t('notificationSettings.alerts.updateError'));
               } finally {
                 setSaving(false);
               }
@@ -173,12 +175,12 @@ export default function NotificationSettings() {
 
       if (currentStatus === 'denied') {
         Alert.alert(
-          'Permission Denied',
-          'Notifications are disabled in your device settings. Please enable them to receive alerts.',
+          t('notificationSettings.alerts.permissionDeniedTitle'),
+          t('notificationSettings.alerts.permissionDeniedMessage'),
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: t('common.cancel'), style: 'cancel' },
             {
-              text: 'Open Settings',
+              text: t('notificationSettings.alerts.openSettings'),
               onPress: () => {
                 if (Platform.OS === 'ios') {
                   Linking.openURL('app-settings:');
@@ -196,8 +198,8 @@ export default function NotificationSettings() {
 
       if (!token) {
         Alert.alert(
-          'Unable to Enable',
-          'Push notifications require a physical device and proper permissions.'
+          t('notificationSettings.alerts.unableToEnableTitle'),
+          t('notificationSettings.alerts.unableToEnableMessage')
         );
         return;
       }
@@ -210,9 +212,9 @@ export default function NotificationSettings() {
       setHasToken(true);
       setPermissionStatus('granted');
 
-      Alert.alert('Notifications Enabled!', 'You\'ll now receive updates about matches, messages, and activity.');
+      Alert.alert(t('notificationSettings.alerts.enabledTitle'), t('notificationSettings.alerts.enabledMessage'));
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to enable notifications. Please try again.');
+      Alert.alert(t('common.error'), t('notificationSettings.alerts.enableError'));
     } finally {
       setSaving(false);
     }
@@ -242,7 +244,7 @@ export default function NotificationSettings() {
             <Text className="text-gray-900 font-medium">{label}</Text>
             {isLocked && (
               <View className="ml-2 bg-amber-100 px-2 py-0.5 rounded">
-                <Text className="text-amber-700 text-xs font-semibold">PREMIUM</Text>
+                <Text className="text-amber-700 text-xs font-semibold">{t('common.premium')}</Text>
               </View>
             )}
           </View>
@@ -253,7 +255,7 @@ export default function NotificationSettings() {
             onPress={() => router.push('/settings/subscription')}
             className="bg-amber-500 px-3 py-1.5 rounded-full"
           >
-            <Text className="text-white text-xs font-semibold">Upgrade</Text>
+            <Text className="text-white text-xs font-semibold">{t('common.upgrade')}</Text>
           </TouchableOpacity>
         ) : (
           <Switch
@@ -286,9 +288,9 @@ export default function NotificationSettings() {
         >
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
-        <Text className="text-3xl font-bold text-white mb-2">Notifications</Text>
+        <Text className="text-3xl font-bold text-white mb-2">{t('notificationSettings.title')}</Text>
         <Text className="text-lavender-100 text-base">
-          Control what notifications you receive
+          {t('notificationSettings.subtitle')}
         </Text>
       </View>
 
@@ -300,9 +302,9 @@ export default function NotificationSettings() {
               <MaterialCommunityIcons name="bell" size={24} color="#A08AB7" />
             </View>
             <View className="flex-1">
-              <Text className="text-lg font-bold text-gray-900 mb-1">Push Notifications</Text>
+              <Text className="text-lg font-bold text-gray-900 mb-1">{t('notificationSettings.pushNotifications')}</Text>
               <Text className="text-sm text-gray-600">
-                {pushEnabled ? 'Enabled' : 'Disabled'} {!hasToken && pushEnabled && '(No token)'}
+                {pushEnabled ? t('notificationSettings.enabled') : t('notificationSettings.disabled')} {!hasToken && pushEnabled && t('notificationSettings.noToken')}
               </Text>
             </View>
             <TouchableOpacity
@@ -319,49 +321,49 @@ export default function NotificationSettings() {
         {/* Push Notification Types */}
         {pushEnabled && (
           <View className="mb-6">
-            <Text className="text-lg font-bold text-gray-900 mb-4">Push Notifications</Text>
+            <Text className="text-lg font-bold text-gray-900 mb-4">{t('notificationSettings.pushNotifications')}</Text>
             <View className="bg-gray-50 rounded-2xl px-4">
-              {renderToggle('New Matches', 'When you match with someone', 'push_new_match', 'heart', '#F43F5E')}
-              {renderToggle('New Messages', 'When you receive a message', 'push_new_message', 'message', '#A08AB7')}
-              {renderToggle('New Likes', 'When someone likes your profile', 'push_new_like', 'star', '#F59E0B')}
-              {renderToggle('Swipes Refreshed', 'Daily reminder when your swipes reset', 'push_swipes_refreshed', 'refresh', '#10B981')}
-              {renderToggle('Profile Views', 'When someone views your profile', 'push_profile_views', 'eye', '#6366F1', false, true)}
-              {renderToggle('Review Reminders', 'Reminders to review your matches', 'push_review_reminders', 'clipboard-check', '#8B5CF6')}
-              {renderToggle('Safety Alerts', 'Important safety notifications', 'push_safety_alerts', 'shield-check', '#EF4444', false)}
+              {renderToggle(t('notificationSettings.push.newMatches'), t('notificationSettings.push.newMatchesDesc'), 'push_new_match', 'heart', '#F43F5E')}
+              {renderToggle(t('notificationSettings.push.newMessages'), t('notificationSettings.push.newMessagesDesc'), 'push_new_message', 'message', '#A08AB7')}
+              {renderToggle(t('notificationSettings.push.newLikes'), t('notificationSettings.push.newLikesDesc'), 'push_new_like', 'star', '#F59E0B')}
+              {renderToggle(t('notificationSettings.push.swipesRefreshed'), t('notificationSettings.push.swipesRefreshedDesc'), 'push_swipes_refreshed', 'refresh', '#10B981')}
+              {renderToggle(t('notificationSettings.push.profileViews'), t('notificationSettings.push.profileViewsDesc'), 'push_profile_views', 'eye', '#6366F1', false, true)}
+              {renderToggle(t('notificationSettings.push.reviewReminders'), t('notificationSettings.push.reviewRemindersDesc'), 'push_review_reminders', 'clipboard-check', '#8B5CF6')}
+              {renderToggle(t('notificationSettings.push.safetyAlerts'), t('notificationSettings.push.safetyAlertsDesc'), 'push_safety_alerts', 'shield-check', '#EF4444', false)}
             </View>
           </View>
         )}
 
         {/* Email Notification Types */}
         <View className="mb-6">
-          <Text className="text-lg font-bold text-gray-900 mb-4">Email Notifications</Text>
+          <Text className="text-lg font-bold text-gray-900 mb-4">{t('notificationSettings.emailNotifications')}</Text>
           <View className="bg-gray-50 rounded-2xl px-4">
-            {renderToggle('New Match Emails', 'Email when you get a new match', 'email_new_match', 'heart', '#F43F5E')}
-            {renderToggle('Unread Messages', 'Digest of unread messages', 'email_unread_messages', 'email', '#A08AB7')}
-            {renderToggle('Weekly Summary', 'Weekly activity summary', 'email_weekly_summary', 'calendar-week', '#10B981')}
-            {renderToggle('Come Back Reminders', 'Reminders when you\'ve been away', 'email_inactive_reminder', 'account-alert', '#F59E0B')}
-            {renderToggle('Product Updates', 'New features and improvements', 'email_product_updates', 'rocket-launch', '#6366F1')}
-            {renderToggle('Promotions', 'Special offers and discounts', 'email_promotions', 'tag', '#EC4899')}
+            {renderToggle(t('notificationSettings.email.newMatch'), t('notificationSettings.email.newMatchDesc'), 'email_new_match', 'heart', '#F43F5E')}
+            {renderToggle(t('notificationSettings.email.unreadMessages'), t('notificationSettings.email.unreadMessagesDesc'), 'email_unread_messages', 'email', '#A08AB7')}
+            {renderToggle(t('notificationSettings.email.weeklySummary'), t('notificationSettings.email.weeklySummaryDesc'), 'email_weekly_summary', 'calendar-week', '#10B981')}
+            {renderToggle(t('notificationSettings.email.comeBackReminders'), t('notificationSettings.email.comeBackRemindersDesc'), 'email_inactive_reminder', 'account-alert', '#F59E0B')}
+            {renderToggle(t('notificationSettings.email.productUpdates'), t('notificationSettings.email.productUpdatesDesc'), 'email_product_updates', 'rocket-launch', '#6366F1')}
+            {renderToggle(t('notificationSettings.email.promotions'), t('notificationSettings.email.promotionsDesc'), 'email_promotions', 'tag', '#EC4899')}
           </View>
         </View>
 
         {/* Status Info */}
         <View className="mb-6">
-          <Text className="text-sm font-semibold text-gray-700 mb-3">Status</Text>
+          <Text className="text-sm font-semibold text-gray-700 mb-3">{t('notificationSettings.status')}</Text>
           <View className="bg-gray-50 rounded-xl p-4">
             <View className="flex-row items-center justify-between py-2 border-b border-gray-200">
-              <Text className="text-gray-600">Device Permissions</Text>
+              <Text className="text-gray-600">{t('notificationSettings.devicePermissions')}</Text>
               <View className={`px-3 py-1 rounded-full ${permissionStatus === 'granted' ? 'bg-green-100' : 'bg-yellow-100'}`}>
                 <Text className={`text-xs font-semibold ${permissionStatus === 'granted' ? 'text-green-800' : 'text-yellow-800'}`}>
-                  {permissionStatus === 'granted' ? 'Allowed' : permissionStatus === 'denied' ? 'Denied' : 'Not Set'}
+                  {permissionStatus === 'granted' ? t('notificationSettings.allowed') : permissionStatus === 'denied' ? t('notificationSettings.denied') : t('notificationSettings.notSet')}
                 </Text>
               </View>
             </View>
             <View className="flex-row items-center justify-between py-2">
-              <Text className="text-gray-600">Push Token</Text>
+              <Text className="text-gray-600">{t('notificationSettings.pushToken')}</Text>
               <View className={`px-3 py-1 rounded-full ${hasToken ? 'bg-green-100' : 'bg-gray-200'}`}>
                 <Text className={`text-xs font-semibold ${hasToken ? 'text-green-800' : 'text-gray-600'}`}>
-                  {hasToken ? 'Registered' : 'Not Registered'}
+                  {hasToken ? t('notificationSettings.registered') : t('notificationSettings.notRegistered')}
                 </Text>
               </View>
             </View>
@@ -373,9 +375,9 @@ export default function NotificationSettings() {
           <View className="flex-row items-start">
             <MaterialCommunityIcons name="information" size={20} color="#3B82F6" style={{ marginTop: 2, marginRight: 8 }} />
             <View className="flex-1">
-              <Text className="text-blue-900 font-semibold mb-1">About Notifications</Text>
+              <Text className="text-blue-900 font-semibold mb-1">{t('notificationSettings.aboutTitle')}</Text>
               <Text className="text-blue-800 text-sm leading-5">
-                Stay connected with matches and never miss important activity. Safety alerts cannot be disabled for your protection.
+                {t('notificationSettings.aboutDescription')}
               </Text>
             </View>
           </View>

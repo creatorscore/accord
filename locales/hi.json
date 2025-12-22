@@ -613,5 +613,265 @@
     "goToMatches": "मैच पर जाएं",
     "errorLoadingLikes": "लाइक्स लोड करने में विफल। कृपया पुनः प्रयास करें।",
     "errorCreatingMatch": "मैच बनाने में विफल। कृपया पुनः प्रयास करें।"
+  },
+  "activity": {
+    "title": "गतिविधि",
+    "back": "वापस",
+    "markAllRead": "सभी को पढ़ा हुआ चिह्नित करें",
+    "loading": "गतिविधि लोड हो रही है...",
+    "tryAgain": "पुनः प्रयास करें",
+    "noActivityYet": "अभी तक कोई गतिविधि नहीं",
+    "noActivityDescription": "जब कोई आपको पसंद करता है, आप मैच करते हैं, या संदेश प्राप्त करते हैं, तो आप इसे यहां देखेंगे।",
+    "today": "आज",
+    "yesterday": "कल",
+    "thisWeek": "इस सप्ताह",
+    "earlier": "पहले",
+    "premiumTitle": "गतिविधि फ़ीड",
+    "premiumDescription": "देखें कि किसने आपको पसंद किया, कब मैच हुआ, नए संदेश, समीक्षाएं, और अधिक — सभी एक जगह पर।",
+    "upgradeToPremium": "प्रीमियम में अपग्रेड करें"
+  },
+  "betaFeedback": {
+    "title": "बीटा फीडबैक",
+    "subtitle": "Accord को बेहतर बनाने में हमारी मदद करें",
+    "overallRating": "कुल मिलाकर रेटिंग",
+    "rateExperience": "अपने अनुभव को रेट करें",
+    "subject": "विषय",
+    "subjectPlaceholder": "आपका फीडबैक किस बारे में है?",
+    "description": "विवरण",
+    "descriptionPlaceholder": "हमें अपने अनुभव के बारे में और बताएं...",
+    "feedbackType": "फीडबैक का प्रकार",
+    "bug": "बग रिपोर्ट",
+    "feature": "फीचर अनुरोध",
+    "improvement": "सुधार",
+    "other": "अन्य",
+    "allowContact": "अनुवर्ती के लिए संपर्क की अनुमति दें",
+    "allowContactDesc": "हम आपके फीडबैक के बारे में अधिक जानने के लिए संपर्क कर सकते हैं",
+    "submit": "फीडबैक जमा करें",
+    "submitting": "जमा किया जा रहा है...",
+    "missingInfo": "जानकारी गायब है",
+    "missingInfoMessage": "कृपया अपने फीडबैक के लिए विषय और विवरण प्रदान करें।",
+    "ratingRequired": "रेटिंग आवश्यक है",
+    "ratingRequiredMessage": "कृपया कुल मिलाकर रेटिंग प्रदान करें।",
+    "thankYou": "धन्यवाद!",
+    "thankYouMessage": "आपका फीडबैक हमें सभी के लिए Accord को बेहतर बनाने में मदद करता है।",
+    "error": "त्रुटि",
+    "errorMessage": "फीडबैक जमा करने में विफल। कृपया पुनः प्रयास करें।"
+  },
+  "deleteAccount": {
+    "title": "खाता हटाएं",
+    "warning": "चेतावनी",
+    "warningMessage": "यह क्रिया स्थायी है और इसे पूर्ववत नहीं किया जा सकता। आपका सभी डेटा, मैच, संदेश, और प्रोफ़ाइल जानकारी स्थायी रूप से हटा दी जाएगी।",
+    "confirmTitle": "क्या आप निश्चित हैं?",
+    "confirmMessage": "कृपया पुष्टि करने के लिए DELETE टाइप करें कि आप स्थायी रूप से अपना खाता हटाना चाहते हैं।",
+    "confirmPlaceholder": "पुष्टि करने के लिए DELETE टाइप करें",
+    "deleteButton": "मेरा खाता हटाएं",
+    "deleting": "हटाया जा रहा है...",
+    "incorrectConfirmation": "गलत पुष्टि",
+    "incorrectConfirmationMessage": "कृपया पुष्टि करने के लिए DELETE बिल्कुल टाइप करें।",
+    "accountDeleted": "खाता हटा दिया गया",
+    "accountDeletedMessage": "आपका खाता स्थायी रूप से हटा दिया गया है।",
+    "error": "त्रुटि",
+    "errorMessage": "खाता हटाने में विफल। कृपया पुनः प्रयास करें या समर्थन से संपर्क करें।"
+  },
+  "notificationSettings": {
+    "title": "सूचना सेटिंग्स",
+    "subtitle": "अपनी सूचनाएं प्रबंधित करें",
+    "pushNotifications": "पुश सूचनाएं",
+    "pushNotificationsDesc": "अपने डिवाइस पर पुश सूचनाएं प्राप्त करें",
+    "newMatches": "नए मैच",
+    "newMatchesDesc": "जब आप किसी से मैच करते हैं",
+    "newMessages": "नए संदेश",
+    "newMessagesDesc": "जब आपको नया संदेश मिलता है",
+    "newLikes": "नई पसंद",
+    "newLikesDesc": "जब कोई आपकी प्रोफ़ाइल पसंद करता है",
+    "reviews": "समीक्षाएं",
+    "reviewsDesc": "जब समीक्षाएं तैयार हों या प्रकट हों",
+    "marketing": "मार्केटिंग",
+    "marketingDesc": "सुझाव, अपडेट, और प्रचार",
+    "emailNotifications": "ईमेल सूचनाएं",
+    "emailNotificationsDesc": "ईमेल के माध्यम से अपडेट प्राप्त करें",
+    "saved": "सेटिंग्स सहेजी गईं",
+    "savedMessage": "आपकी सूचना प्राथमिकताएं अपडेट कर दी गई हैं।",
+    "error": "त्रुटि",
+    "errorMessage": "सेटिंग्स सहेजने में विफल। कृपया पुनः प्रयास करें।"
+  },
+  "safetyCenter": {
+    "title": "सुरक्षा केंद्र",
+    "subtitle": "Accord पर सुरक्षित रहें",
+    "emergencyResources": "आपातकालीन संसाधन",
+    "emergencyResourcesDesc": "संकट हॉटलाइन और सहायता सेवाएं",
+    "reportUser": "उपयोगकर्ता की रिपोर्ट करें",
+    "reportUserDesc": "उत्पीड़न, घोटाले, या अन्य मुद्दों की रिपोर्ट करें",
+    "blockingOptions": "अवरोधन विकल्प",
+    "blockingOptionsDesc": "संपर्क, देश, या विशिष्ट उपयोगकर्ताओं को ब्लॉक करें",
+    "safetyTips": "सुरक्षा सुझाव",
+    "safetyTipsDesc": "सुरक्षित ऑनलाइन डेटिंग के लिए दिशानिर्देश",
+    "privacyGuide": "गोपनीयता गाइड",
+    "privacyGuideDesc": "अपनी व्यक्तिगत जानकारी की रक्षा करें",
+    "meetingSafely": "सुरक्षित रूप से मिलना",
+    "meetingSafelyDesc": "व्यक्तिगत रूप से मैच से मिलने के लिए सुझाव",
+    "lgbtqResources": "LGBTQ+ संसाधन",
+    "lgbtqResourcesDesc": "सहायता संगठन और हेल्पलाइन"
+  },
+  "subscriptionSettings": {
+    "title": "सदस्यता",
+    "chooseYourPlan": "अपनी योजना चुनें",
+    "loadingPlans": "योजनाएं लोड हो रही हैं...",
+    "renewsOn": "नवीनीकरण तिथि: {{date}}",
+    "activeDevelopmentMode": "सक्रिय (विकास मोड)",
+    "developmentModeNA": "लागू नहीं (विकास मोड)",
+    "developmentMode": "विकास मोड",
+    "developmentModeDescription": "विकास में RevenueCat अक्षम है। आपकी सदस्यता स्थिति डेटाबेस में is_premium और is_platinum फ़्लैग द्वारा नियंत्रित होती है।",
+    "developmentModeProductionNote": "उत्पादन में, यह स्क्रीन वास्तविक सदस्यता पैकेज दिखाएगी और उपयोगकर्ताओं को App Store या Play Store के माध्यम से अपनी सदस्यता प्रबंधित करने की अनुमति देगी।",
+    "status": {
+      "platinumMember": "प्लेटिनम सदस्य",
+      "premiumMember": "प्रीमियम सदस्य",
+      "freePlan": "मुफ्त योजना",
+      "allFeaturesUnlocked": "सभी प्रीमियम सुविधाएं अनलॉक",
+      "enhancedFeaturesUnlocked": "बढ़ी हुई सुविधाएं अनलॉक",
+      "freeDescription": "प्रति दिन 25 स्वाइप, बुनियादी मैसेजिंग"
+    },
+    "plans": {
+      "premium": "प्रीमियम",
+      "platinum": "प्लेटिनम"
+    },
+    "periods": {
+      "monthly": "मासिक",
+      "threeMonths": "3 महीने",
+      "annual": "वार्षिक"
+    },
+    "save22": "22% बचाएं",
+    "save33": "33% बचाएं",
+    "bestValueSave22": "सर्वश्रेष्ठ मूल्य - 22% बचाएं",
+    "perMonth": "महीना",
+    "perThreeMonths": "3 महीने",
+    "perYear": "वर्ष",
+    "quarterlyPopular": "केवल $11.66/माह — हमारी सबसे लोकप्रिय योजना!",
+    "processing": "प्रसंस्करण हो रहा है...",
+    "subscribeToPremium": "प्रीमियम की सदस्यता लें",
+    "subscribeToPlatinum": "प्लेटिनम की सदस्यता लें",
+    "premiumIncludes": "प्रीमियम में शामिल है:",
+    "premiumFeaturesList": "• असीमित स्वाइप\n• देखें कौन आपको पसंद करता है\n• सप्ताह में 5 सुपर लाइक्स\n• वॉयस संदेश\n• रीड रिसिप्ट\n• उन्नत फ़िल्टर\n• रिवाइंड",
+    "everythingInPremiumPlus": "प्रीमियम में सब कुछ, साथ ही:",
+    "platinumFeaturesList": "• साप्ताहिक प्रोफ़ाइल बूस्ट\n• पृष्ठभूमि जांच\n• कानूनी संसाधन\n• प्राथमिकता सहायता",
+    "platinumComingSoonMessage": "बने रहें! प्लेटिनम टियर जल्द आ रहा है।",
+    "comingSoon": "जल्द आ रहा है",
+    "planNotAvailable": "RevenueCat में {{plan}} {{period}} योजना उपलब्ध नहीं है",
+    "premiumFeaturesTitle": "प्रीमियम सुविधाएं",
+    "features": {
+      "unlimitedSwipes": "असीमित स्वाइप",
+      "seeWhoLikedYou": "देखें कौन आपको पसंद करता है",
+      "superLikesPerWeek": "प्रति सप्ताह 5 सुपर लाइक्स",
+      "voiceMessages": "वॉयस संदेश",
+      "readReceipts": "रीड रिसिप्ट",
+      "advancedFilters": "उन्नत फ़िल्टर",
+      "rewindLastSwipe": "अंतिम स्वाइप रिवाइंड करें",
+      "backgroundChecks": "पृष्ठभूमि जांच",
+      "legalResources": "कानूनी संसाधन",
+      "weeklyProfileBoost": "साप्ताहिक प्रोफ़ाइल बूस्ट",
+      "prioritySupport": "प्राथमिकता सहायता"
+    },
+    "restorePurchases": "खरीदारी पुनर्स्थापित करें",
+    "restoring": "पुनर्स्थापित हो रहा है...",
+    "opening": "खोला जा रहा है...",
+    "redeemPromoCode": "प्रोमो कोड रिडीम करें",
+    "manageSubscription": "सदस्यता प्रबंधित करें",
+    "infoTextIOS": "सदस्यताएं आपके App Store खाते के माध्यम से प्रबंधित की जाती हैं। आप किसी भी समय अपनी खाता सेटिंग्स से रद्द कर सकते हैं।",
+    "infoTextAndroid": "सदस्यताएं आपके Google Play खाते के माध्यम से प्रबंधित की जाती हैं। आप किसी भी समय अपनी खाता सेटिंग्स से रद्द कर सकते हैं।",
+    "termsOfUse": "उपयोग की शर्तें",
+    "privacyPolicy": "गोपनीयता नीति",
+    "unableToLoadTitle": "सदस्यता विकल्प लोड करने में असमर्थ",
+    "unableToLoadDescription": "हमें सदस्यता योजनाएं लोड करने में समस्या हो रही है। यह हो सकता है क्योंकि:",
+    "errorReasons": {
+      "revenueCat": "• RevenueCat में ऑफ़रिंग कॉन्फ़िगर नहीं की गई",
+      "network": "• नेटवर्क कनेक्शन समस्या",
+      "serviceUnavailable": "• RevenueCat सेवा अस्थायी रूप से अनुपलब्ध"
+    },
+    "alerts": {
+      "unableToLoadTitle": "सदस्यताएं लोड करने में असमर्थ",
+      "unableToLoadMessage": "कृपया अपना इंटरनेट कनेक्शन जांचें और पुनः प्रयास करें।",
+      "tryAgain": "पुनः प्रयास करें",
+      "successTitle": "सफलता!",
+      "purchasesRestoredSuccess": "आपकी खरीदारी सफलतापूर्वक पुनर्स्थापित हो गई है।",
+      "noPurchasesFoundTitle": "कोई खरीदारी नहीं मिली",
+      "noPurchasesFoundMessage": "हमें पुनर्स्थापित करने के लिए कोई खरीदारी नहीं मिली। यदि आपको लगता है कि यह एक त्रुटि है, तो कृपया सहायता से संपर्क करें।",
+      "restoreFailedTitle": "पुनर्स्थापना विफल",
+      "restoreFailedMessage": "खरीदारी पुनर्स्थापित करने में विफल। कृपया बाद में पुनः प्रयास करें।",
+      "developmentModeTitle": "विकास मोड",
+      "developmentModeMessage": "विकास मोड में सदस्यता प्रबंधन डेटाबेस के माध्यम से संभाला जाता है।\n\nउत्पादन में, यह आपकी App Store या Play Store सदस्यता सेटिंग्स खोलेगा।",
+      "couldNotOpenManagement": "सदस्यता प्रबंधन नहीं खोल सका",
+      "notAvailableTitle": "उपलब्ध नहीं",
+      "promoCodeAndroidMessage": "प्रोमो कोड रिडेम्पशन केवल iOS डिवाइसों पर उपलब्ध है। Android पर, आप सीधे Google Play Store में कोड रिडीम कर सकते हैं।",
+      "codeRedemptionFailed": "कोड रिडेम्पशन खोलने में विफल। कृपया पुनः प्रयास करें।",
+      "subscriptionActivated": "आपकी सदस्यता सक्रिय कर दी गई है।",
+      "subscriptionExistsTitle": "सदस्यता पहले से मौजूद है",
+      "subscriptionExistsAndroid": "आपके वर्तमान Google Play खाते पर एक रद्द की गई सदस्यता है।\n\nविकल्प:\n\n1. Google Play सेटिंग्स में अपनी मौजूदा सदस्यता को पुनः सक्रिय करें\n\n2. एक अलग Google Play खाते का उपयोग करें: अपने डिवाइस पर Google Play से साइन आउट करें, फिर एक अलग खाते से साइन इन करें और पुनः प्रयास करें",
+      "subscriptionExistsIOS": "आपकी वर्तमान Apple ID पर एक रद्द की गई सदस्यता है।\n\nविकल्प:\n\n1. App Store सेटिंग्स में अपनी मौजूदा सदस्यता को पुनः सक्रिय करें\n\n2. एक अलग Apple ID का उपयोग करें: सेटिंग्स > [आपका नाम] में साइन आउट करें, फिर एक अलग Apple ID से साइन इन करें और पुनः प्रयास करें",
+      "gotIt": "समझ गया",
+      "openSettings": "सेटिंग्स खोलें",
+      "purchaseFailedTitle": "खरीदारी विफल",
+      "purchaseFailedMessage": "खरीदारी पूर्ण करने में विफल। कृपया पुनः प्रयास करें या यदि समस्या बनी रहती है तो सहायता से संपर्क करें।"
+    }
+  },
+  "whatsNew": {
+    "title": "नया क्या है",
+    "version": "संस्करण {{version}}",
+    "continue": "चलें शुरू करें!",
+    "new": "नया",
+    "v109": {
+      "headline": "अपने गतिविधि केंद्र और बेहतर स्थान सटीकता के साथ जुड़े रहें!",
+      "features": {
+        "activityCenter": {
+          "title": "गतिविधि केंद्र",
+          "description": "अपने सभी लाइक्स, मैच और प्रोफ़ाइल व्यू को एक सुविधाजनक स्थान पर ट्रैक करें"
+        },
+        "betterLocation": {
+          "title": "बेहतर स्थान सटीकता",
+          "description": "आपके पास संगत लोगों को खोजने के लिए अधिक सटीक स्थान मिलान"
+        },
+        "moreLanguages": {
+          "title": "अधिक भाषाएं",
+          "description": "18 भाषाओं में सभी ऐप स्क्रीन के लिए पूर्ण अनुवाद समर्थन"
+        },
+        "bugFixes": {
+          "title": "बग फिक्स और सुधार",
+          "description": "एक सहज अनुभव के लिए विभिन्न प्रदर्शन सुधार और बग फिक्स"
+        }
+      }
+    },
+    "v108": {
+      "headline": "बढ़ी हुई सुरक्षा सुविधाएँ और फोटो सत्यापन!",
+      "features": {
+        "photoVerification": {
+          "title": "फोटो सत्यापन",
+          "description": "यह साबित करने के लिए सेल्फी सत्यापन कि आपकी फ़ोटो वास्तव में आप हैं"
+        },
+        "screenshotProtection": {
+          "title": "स्क्रीनशॉट सुरक्षा",
+          "description": "चैट में आपकी फ़ोटो स्क्रीनशॉट से सुरक्षित हैं"
+        },
+        "improvedSafety": {
+          "title": "बेहतर सुरक्षा",
+          "description": "बेहतर प्रतिबंध प्रणाली और सुरक्षा सुधार"
+        }
+      }
+    },
+    "v104": {
+      "headline": "खोज सुधार और सुरक्षा फिक्स!",
+      "features": {
+        "searchImprovements": {
+          "title": "बेहतर खोज",
+          "description": "अधिक प्रासंगिक परिणामों के लिए बेहतर मिलान एल्गोरिदम"
+        },
+        "encryptionFix": {
+          "title": "एन्क्रिप्शन फिक्स",
+          "description": "सुरक्षित संदेश के लिए एंड-टू-एंड एन्क्रिप्शन फिक्स किया गया"
+        },
+        "bugFixes": {
+          "title": "बग फिक्स",
+          "description": "विभिन्न स्थिरता और प्रदर्शन सुधार"
+        }
+      }
+    }
   }
 }

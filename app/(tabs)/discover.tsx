@@ -30,6 +30,7 @@ import { useColorScheme } from '@/lib/useColorScheme';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { prefetchImages } from '@/components/shared/ConditionalImage';
 import VerificationBanner from '@/components/shared/VerificationBanner';
+import TrialExpirationBanner from '@/components/premium/TrialExpirationBanner';
 import PopularityInsightsModal from '@/components/matching/PopularityInsightsModal';
 
 interface Profile {
@@ -118,13 +119,32 @@ export default function Discover() {
   const [superLikesRemaining, setSuperLikesRemaining] = useState(5);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
+    // Free filters
     ageMin: 22,
     ageMax: 50,
     maxDistance: 100,
+    activeToday: false,
+    showBlurredPhotos: true,
+    // Premium filters
     religion: [],
     politicalViews: [],
     housingPreference: [],
     financialArrangement: [],
+    genderPreference: [],
+    ethnicity: [],
+    sexualOrientation: [],
+    heightMin: 48,
+    heightMax: 84,
+    zodiacSign: [],
+    personalityType: [],
+    loveLanguage: [],
+    languagesSpoken: [],
+    smoking: [],
+    drinking: [],
+    pets: [],
+    primaryReason: [],
+    relationshipType: [],
+    wantsChildren: null,
   });
   const [lastSwipe, setLastSwipe] = useState<{
     profile: Profile;
@@ -293,14 +313,33 @@ export default function Discover() {
       // Initialize filters from user's database preferences
       // Note: Supabase returns preferences as array even for single relationship
       const userPreferences = Array.isArray(data.preferences) ? data.preferences[0] : data.preferences;
-      const initialFilters = userPreferences ? {
+      const initialFilters: FilterOptions = userPreferences ? {
+        // Free filters
         ageMin: userPreferences.age_min || 22,
         ageMax: userPreferences.age_max || 50,
         maxDistance: userPreferences.max_distance_miles || 100,
+        activeToday: false,
+        showBlurredPhotos: true,
+        // Premium filters
         religion: [],
         politicalViews: [],
         housingPreference: [],
         financialArrangement: [],
+        genderPreference: [],
+        ethnicity: [],
+        sexualOrientation: [],
+        heightMin: 48,
+        heightMax: 84,
+        zodiacSign: [],
+        personalityType: [],
+        loveLanguage: [],
+        languagesSpoken: [],
+        smoking: [],
+        drinking: [],
+        pets: [],
+        primaryReason: [],
+        relationshipType: [],
+        wantsChildren: null,
       } : filters;
 
       // Load distance unit preference (default to 'miles' for backward compatibility)
@@ -1166,6 +1205,29 @@ export default function Discover() {
           // FILTER REMOVED - Compatibility score handles this preference.
 
           // ====================================================================
+          // FREE FILTERS (Active Today, Blurred Photos)
+          // ====================================================================
+
+          // Active Today filter - only show users active in the last 24 hours
+          if (filters.activeToday) {
+            const lastActiveAt = profile.last_active_at ? new Date(profile.last_active_at) : null;
+            if (lastActiveAt) {
+              const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+              if (lastActiveAt < twentyFourHoursAgo) {
+                return false;
+              }
+            } else {
+              // No last_active_at means we can't verify, skip if filter is on
+              return false;
+            }
+          }
+
+          // Show Blurred Photos filter - hide profiles with photo blur if disabled
+          if (!filters.showBlurredPhotos && profile.photo_blur_enabled) {
+            return false;
+          }
+
+          // ====================================================================
           // PREFERENCE FILTERS (Applied to all users, not just premium)
           // ====================================================================
 
@@ -1205,6 +1267,131 @@ export default function Discover() {
 
             const hasMatch = profileFinancial.some((f: string) => filters.financialArrangement.includes(f));
             if (!hasMatch) {
+              return false;
+            }
+          }
+
+          // ====================================================================
+          // PREMIUM FILTERS - Identity & Background
+          // ====================================================================
+
+          // Gender preference filter
+          if (isPremium && filters.genderPreference.length > 0 && profile.gender) {
+            if (!filters.genderPreference.includes(profile.gender)) {
+              return false;
+            }
+          }
+
+          // Ethnicity filter
+          if (isPremium && filters.ethnicity.length > 0 && profile.ethnicity) {
+            if (!filters.ethnicity.includes(profile.ethnicity)) {
+              return false;
+            }
+          }
+
+          // Sexual orientation filter
+          if (isPremium && filters.sexualOrientation.length > 0 && profile.sexual_orientation) {
+            if (!filters.sexualOrientation.includes(profile.sexual_orientation)) {
+              return false;
+            }
+          }
+
+          // ====================================================================
+          // PREMIUM FILTERS - Physical & Personality
+          // ====================================================================
+
+          // Height filter
+          if (isPremium && (filters.heightMin !== 48 || filters.heightMax !== 84) && profile.height_inches) {
+            if (profile.height_inches < filters.heightMin || profile.height_inches > filters.heightMax) {
+              return false;
+            }
+          }
+
+          // Zodiac sign filter
+          if (isPremium && filters.zodiacSign.length > 0 && profile.zodiac_sign) {
+            if (!filters.zodiacSign.includes(profile.zodiac_sign)) {
+              return false;
+            }
+          }
+
+          // Personality type (MBTI) filter
+          if (isPremium && filters.personalityType.length > 0 && profile.personality_type) {
+            if (!filters.personalityType.includes(profile.personality_type)) {
+              return false;
+            }
+          }
+
+          // Love language filter
+          if (isPremium && filters.loveLanguage.length > 0 && profile.love_language) {
+            if (!filters.loveLanguage.includes(profile.love_language)) {
+              return false;
+            }
+          }
+
+          // ====================================================================
+          // PREMIUM FILTERS - Lifestyle
+          // ====================================================================
+
+          // Languages spoken filter
+          if (isPremium && filters.languagesSpoken.length > 0 && profile.languages_spoken) {
+            const profileLanguages = Array.isArray(profile.languages_spoken)
+              ? profile.languages_spoken
+              : [profile.languages_spoken];
+            const hasMatch = profileLanguages.some((lang: string) => filters.languagesSpoken.includes(lang));
+            if (!hasMatch) {
+              return false;
+            }
+          }
+
+          // Smoking filter
+          if (isPremium && filters.smoking.length > 0 && profile.preferences?.lifestyle_preferences?.smoking) {
+            if (!filters.smoking.includes(profile.preferences.lifestyle_preferences.smoking)) {
+              return false;
+            }
+          }
+
+          // Drinking filter
+          if (isPremium && filters.drinking.length > 0 && profile.preferences?.lifestyle_preferences?.drinking) {
+            if (!filters.drinking.includes(profile.preferences.lifestyle_preferences.drinking)) {
+              return false;
+            }
+          }
+
+          // Pets filter
+          if (isPremium && filters.pets.length > 0 && profile.preferences?.lifestyle_preferences?.pets) {
+            if (!filters.pets.includes(profile.preferences.lifestyle_preferences.pets)) {
+              return false;
+            }
+          }
+
+          // ====================================================================
+          // PREMIUM FILTERS - Marriage Intentions
+          // ====================================================================
+
+          // Primary reason filter
+          if (isPremium && filters.primaryReason.length > 0 && profile.preferences?.primary_reason) {
+            if (!filters.primaryReason.includes(profile.preferences.primary_reason)) {
+              return false;
+            }
+          }
+
+          // Relationship type filter
+          if (isPremium && filters.relationshipType.length > 0 && profile.preferences?.relationship_type) {
+            if (!filters.relationshipType.includes(profile.preferences.relationship_type)) {
+              return false;
+            }
+          }
+
+          // Wants children filter
+          if (isPremium && filters.wantsChildren !== null && profile.preferences?.wants_children !== undefined) {
+            const wantsChildrenMap: { [key: string]: boolean | null } = {
+              'yes': true,
+              'no': false,
+              'maybe': null,
+            };
+            const filterValue = wantsChildrenMap[filters.wantsChildren];
+            // If filter is 'maybe', allow all. Otherwise check exact match
+            if (filterValue !== null && profile.preferences.wants_children !== filterValue) {
               return false;
             }
           }
@@ -2578,6 +2765,9 @@ export default function Discover() {
         <VerificationBanner onDismiss={handleDismissVerificationBanner} />
       )}
 
+      {/* Trial Expiration Banner - Warn users when trial is about to end */}
+      <TrialExpirationBanner />
+
       {/* Photo Review Required Banner */}
       {photoReviewRequired && (
         <TouchableOpacity
@@ -2720,6 +2910,7 @@ export default function Discover() {
             onClose={handleCloseImmersiveProfile}
             visible={showImmersiveProfile}
             heightUnit={heightUnit}
+            distanceUnit={distanceUnit}
             onBlock={handleBlock}
             onReport={handleReport}
             currentProfileId={currentProfileId || undefined}

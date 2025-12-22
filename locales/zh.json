@@ -611,5 +611,265 @@
     "restartRequired": "部分更改可能在下次启动时生效",
     "systemDefault": "系统默认",
     "useSystemLanguage": "使用系统语言"
+  },
+  "activity": {
+    "title": "活动",
+    "back": "返回",
+    "markAllRead": "全部标记为已读",
+    "loading": "正在加载活动...",
+    "tryAgain": "重试",
+    "noActivityYet": "暂无活动",
+    "noActivityDescription": "当有人喜欢您、与您配对或收到消息时，您将在此处看到。",
+    "today": "今天",
+    "yesterday": "昨天",
+    "thisWeek": "本周",
+    "earlier": "更早",
+    "premiumTitle": "活动动态",
+    "premiumDescription": "查看谁喜欢了您、何时配对、新消息、评价等 — 全部集中在一处。",
+    "upgradeToPremium": "升级至高级会员"
+  },
+  "betaFeedback": {
+    "title": "测试版反馈",
+    "subtitle": "帮助我们改进 Accord",
+    "overallRating": "总体评分",
+    "rateExperience": "评价您的体验",
+    "subject": "主题",
+    "subjectPlaceholder": "您的反馈是关于什么？",
+    "description": "描述",
+    "descriptionPlaceholder": "告诉我们更多关于您的体验...",
+    "feedbackType": "反馈类型",
+    "bug": "错误报告",
+    "feature": "功能请求",
+    "improvement": "改进建议",
+    "other": "其他",
+    "allowContact": "允许联系以进行跟进",
+    "allowContactDesc": "我们可能会联系您以了解更多关于您的反馈",
+    "submit": "提交反馈",
+    "submitting": "正在提交...",
+    "missingInfo": "信息缺失",
+    "missingInfoMessage": "请提供反馈的主题和描述。",
+    "ratingRequired": "需要评分",
+    "ratingRequiredMessage": "请提供总体评分。",
+    "thankYou": "谢谢！",
+    "thankYouMessage": "您的反馈帮助我们为每个人改进 Accord。",
+    "error": "错误",
+    "errorMessage": "提交反馈失败。请重试。"
+  },
+  "deleteAccount": {
+    "title": "删除账户",
+    "warning": "警告",
+    "warningMessage": "此操作是永久性的，无法撤销。您的所有数据、配对、消息和档案信息将被永久删除。",
+    "confirmTitle": "您确定吗？",
+    "confirmMessage": "请输入 DELETE 以确认您要永久删除您的账户。",
+    "confirmPlaceholder": "输入 DELETE 以确认",
+    "deleteButton": "删除我的账户",
+    "deleting": "正在删除...",
+    "incorrectConfirmation": "确认不正确",
+    "incorrectConfirmationMessage": "请准确输入 DELETE 以确认。",
+    "accountDeleted": "账户已删除",
+    "accountDeletedMessage": "您的账户已被永久删除。",
+    "error": "错误",
+    "errorMessage": "删除账户失败。请重试或联系支持。"
+  },
+  "notificationSettings": {
+    "title": "通知设置",
+    "subtitle": "管理您的通知",
+    "pushNotifications": "推送通知",
+    "pushNotificationsDesc": "在您的设备上接收推送通知",
+    "newMatches": "新配对",
+    "newMatchesDesc": "当您与某人配对时",
+    "newMessages": "新消息",
+    "newMessagesDesc": "当您收到新消息时",
+    "newLikes": "新喜欢",
+    "newLikesDesc": "当有人喜欢您的档案时",
+    "reviews": "评价",
+    "reviewsDesc": "当评价准备好或显示时",
+    "marketing": "营销",
+    "marketingDesc": "提示、更新和促销",
+    "emailNotifications": "电子邮件通知",
+    "emailNotificationsDesc": "通过电子邮件接收更新",
+    "saved": "设置已保存",
+    "savedMessage": "您的通知偏好已更新。",
+    "error": "错误",
+    "errorMessage": "保存设置失败。请重试。"
+  },
+  "safetyCenter": {
+    "title": "安全中心",
+    "subtitle": "在 Accord 上保持安全",
+    "emergencyResources": "紧急资源",
+    "emergencyResourcesDesc": "危机热线和支持服务",
+    "reportUser": "举报用户",
+    "reportUserDesc": "举报骚扰、诈骗或其他问题",
+    "blockingOptions": "屏蔽选项",
+    "blockingOptionsDesc": "屏蔽联系人、国家或特定用户",
+    "safetyTips": "安全提示",
+    "safetyTipsDesc": "安全在线约会指南",
+    "privacyGuide": "隐私指南",
+    "privacyGuideDesc": "保护您的个人信息",
+    "meetingSafely": "安全见面",
+    "meetingSafelyDesc": "亲自见面配对的提示",
+    "lgbtqResources": "LGBTQ+ 资源",
+    "lgbtqResourcesDesc": "支持组织和帮助热线"
+  },
+  "subscriptionSettings": {
+    "title": "订阅",
+    "chooseYourPlan": "选择您的计划",
+    "loadingPlans": "正在加载计划...",
+    "renewsOn": "续订日期：{{date}}",
+    "activeDevelopmentMode": "活跃（开发模式）",
+    "developmentModeNA": "不适用（开发模式）",
+    "developmentMode": "开发模式",
+    "developmentModeDescription": "RevenueCat在开发中已禁用。您的订阅状态由数据库中的is_premium和is_platinum标志控制。",
+    "developmentModeProductionNote": "在生产环境中，此屏幕将显示真实的订阅套餐，并允许用户通过App Store或Play Store管理订阅。",
+    "status": {
+      "platinumMember": "白金会员",
+      "premiumMember": "高级会员",
+      "freePlan": "免费计划",
+      "allFeaturesUnlocked": "所有高级功能已解锁",
+      "enhancedFeaturesUnlocked": "增强功能已解锁",
+      "freeDescription": "每天25次滑动，基本消息"
+    },
+    "plans": {
+      "premium": "高级会员",
+      "platinum": "白金会员"
+    },
+    "periods": {
+      "monthly": "每月",
+      "threeMonths": "3个月",
+      "annual": "每年"
+    },
+    "save22": "节省22%",
+    "save33": "节省33%",
+    "bestValueSave22": "最超值 - 节省22%",
+    "perMonth": "月",
+    "perThreeMonths": "3个月",
+    "perYear": "年",
+    "quarterlyPopular": "仅$11.66/月 — 我们最受欢迎的计划！",
+    "processing": "处理中...",
+    "subscribeToPremium": "订阅高级会员",
+    "subscribeToPlatinum": "订阅白金会员",
+    "premiumIncludes": "高级会员包括：",
+    "premiumFeaturesList": "• 无限滑动\n• 查看谁喜欢您\n• 每周5次超级喜欢\n• 语音消息\n• 已读回执\n• 高级筛选\n• 撤销",
+    "everythingInPremiumPlus": "高级会员的所有功能，外加：",
+    "platinumFeaturesList": "• 每周档案推广\n• 背景调查\n• 法律资源\n• 优先支持",
+    "platinumComingSoonMessage": "敬请期待！白金会员即将推出。",
+    "comingSoon": "即将推出",
+    "planNotAvailable": "RevenueCat中没有{{plan}} {{period}}计划",
+    "premiumFeaturesTitle": "高级功能",
+    "features": {
+      "unlimitedSwipes": "无限滑动",
+      "seeWhoLikedYou": "查看谁喜欢您",
+      "superLikesPerWeek": "每周5次超级喜欢",
+      "voiceMessages": "语音消息",
+      "readReceipts": "已读回执",
+      "advancedFilters": "高级筛选",
+      "rewindLastSwipe": "撤销上次滑动",
+      "backgroundChecks": "背景调查",
+      "legalResources": "法律资源",
+      "weeklyProfileBoost": "每周档案推广",
+      "prioritySupport": "优先支持"
+    },
+    "restorePurchases": "恢复购买",
+    "restoring": "正在恢复...",
+    "opening": "正在打开...",
+    "redeemPromoCode": "兑换促销代码",
+    "manageSubscription": "管理订阅",
+    "infoTextIOS": "订阅通过您的App Store账户管理。您可以随时从账户设置中取消。",
+    "infoTextAndroid": "订阅通过您的Google Play账户管理。您可以随时从账户设置中取消。",
+    "termsOfUse": "使用条款",
+    "privacyPolicy": "隐私政策",
+    "unableToLoadTitle": "无法加载订阅选项",
+    "unableToLoadDescription": "我们在加载订阅计划时遇到问题。这可能是因为：",
+    "errorReasons": {
+      "revenueCat": "• RevenueCat中未配置产品",
+      "network": "• 网络连接问题",
+      "serviceUnavailable": "• RevenueCat服务暂时不可用"
+    },
+    "alerts": {
+      "unableToLoadTitle": "无法加载订阅",
+      "unableToLoadMessage": "请检查您的互联网连接并重试。",
+      "tryAgain": "重试",
+      "successTitle": "成功！",
+      "purchasesRestoredSuccess": "您的购买已成功恢复。",
+      "noPurchasesFoundTitle": "未找到购买",
+      "noPurchasesFoundMessage": "我们找不到要恢复的任何购买。如果您认为这是错误，请联系支持。",
+      "restoreFailedTitle": "恢复失败",
+      "restoreFailedMessage": "恢复购买失败。请稍后重试。",
+      "developmentModeTitle": "开发模式",
+      "developmentModeMessage": "在开发模式下，订阅管理通过数据库处理。\n\n在生产环境中，这将打开您的App Store或Play Store订阅设置。",
+      "couldNotOpenManagement": "无法打开订阅管理",
+      "notAvailableTitle": "不可用",
+      "promoCodeAndroidMessage": "促销代码兑换仅在iOS设备上可用。在Android上，您可以直接在Google Play商店兑换代码。",
+      "codeRedemptionFailed": "无法打开代码兑换。请重试。",
+      "subscriptionActivated": "您的订阅已激活。",
+      "subscriptionExistsTitle": "订阅已存在",
+      "subscriptionExistsAndroid": "您当前的Google Play账户中有一个已取消的订阅。\n\n选项：\n\n1. 在Google Play设置中重新激活现有订阅\n\n2. 使用其他Google Play账户：在设备上退出Google Play，然后使用其他账户登录并重试",
+      "subscriptionExistsIOS": "您当前的Apple ID中有一个已取消的订阅。\n\n选项：\n\n1. 在App Store设置中重新激活现有订阅\n\n2. 使用其他Apple ID：在设置 > [您的名字]中退出，然后使用其他Apple ID登录并重试",
+      "gotIt": "知道了",
+      "openSettings": "打开设置",
+      "purchaseFailedTitle": "购买失败",
+      "purchaseFailedMessage": "完成购买失败。请重试，如果问题持续存在，请联系支持。"
+    }
+  },
+  "whatsNew": {
+    "title": "新功能",
+    "version": "版本 {{version}}",
+    "continue": "开始使用！",
+    "new": "新",
+    "v109": {
+      "headline": "通过活动中心和改进的位置精度保持联系！",
+      "features": {
+        "activityCenter": {
+          "title": "活动中心",
+          "description": "在一个便捷的地方跟踪所有的喜欢、配对和档案浏览"
+        },
+        "betterLocation": {
+          "title": "更好的位置精度",
+          "description": "更精确的位置匹配，帮助您找到附近的合适人选"
+        },
+        "moreLanguages": {
+          "title": "更多语言",
+          "description": "所有应用界面完全支持18种语言翻译"
+        },
+        "bugFixes": {
+          "title": "错误修复和改进",
+          "description": "各种性能改进和错误修复，带来更流畅的体验"
+        }
+      }
+    },
+    "v108": {
+      "headline": "增强的安全功能和照片验证！",
+      "features": {
+        "photoVerification": {
+          "title": "照片验证",
+          "description": "自拍验证以证明您的照片确实是您本人"
+        },
+        "screenshotProtection": {
+          "title": "截屏保护",
+          "description": "您的照片在聊天中受到截屏保护"
+        },
+        "improvedSafety": {
+          "title": "改进的安全性",
+          "description": "增强的封禁系统和安全改进"
+        }
+      }
+    },
+    "v104": {
+      "headline": "搜索改进和安全修复！",
+      "features": {
+        "searchImprovements": {
+          "title": "更好的搜索",
+          "description": "改进的匹配算法，提供更相关的结果"
+        },
+        "encryptionFix": {
+          "title": "加密修复",
+          "description": "修复端对端加密以实现安全消息传递"
+        },
+        "bugFixes": {
+          "title": "错误修复",
+          "description": "各种稳定性和性能改进"
+        }
+      }
+    }
   }
 }

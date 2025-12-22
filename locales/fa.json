@@ -619,5 +619,265 @@
     "goToMatches": "برو به تطابق‌ها",
     "errorLoadingLikes": "بارگذاری لایک‌ها ناموفق بود. لطفاً دوباره تلاش کنید.",
     "errorCreatingMatch": "ایجاد تطابق ناموفق بود. لطفاً دوباره تلاش کنید."
+  },
+  "activity": {
+    "title": "فعالیت",
+    "back": "بازگشت",
+    "markAllRead": "همه را به عنوان خوانده شده علامت بزن",
+    "loading": "در حال بارگذاری فعالیت...",
+    "tryAgain": "دوباره تلاش کنید",
+    "noActivityYet": "هنوز فعالیتی وجود ندارد",
+    "noActivityDescription": "وقتی کسی شما را لایک کند، تطابق برقرار کنید یا پیام دریافت کنید، آن را اینجا خواهید دید.",
+    "today": "امروز",
+    "yesterday": "دیروز",
+    "thisWeek": "این هفته",
+    "earlier": "قبلی",
+    "premiumTitle": "فید فعالیت",
+    "premiumDescription": "ببینید چه کسی شما را لایک کرده، چه زمانی تطابق برقرار شده، پیام‌های جدید، نقدها و موارد دیگر - همه در یک مکان.",
+    "upgradeToPremium": "ارتقا به پریمیوم"
+  },
+  "betaFeedback": {
+    "title": "بازخورد بتا",
+    "subtitle": "به ما کمک کنید Accord را بهبود دهیم",
+    "overallRating": "امتیاز کلی",
+    "rateExperience": "تجربه خود را امتیاز دهید",
+    "subject": "موضوع",
+    "subjectPlaceholder": "بازخورد شما در مورد چیست؟",
+    "description": "توضیحات",
+    "descriptionPlaceholder": "درباره تجربه خود بیشتر به ما بگویید...",
+    "feedbackType": "نوع بازخورد",
+    "bug": "گزارش باگ",
+    "feature": "درخواست ویژگی",
+    "improvement": "بهبود",
+    "other": "دیگر",
+    "allowContact": "اجازه تماس برای پیگیری",
+    "allowContactDesc": "ممکن است برای کسب اطلاعات بیشتر درباره بازخورد شما با شما تماس بگیریم",
+    "submit": "ارسال بازخورد",
+    "submitting": "در حال ارسال...",
+    "missingInfo": "اطلاعات گم شده",
+    "missingInfoMessage": "لطفاً موضوع و توضیحات برای بازخورد خود ارائه دهید.",
+    "ratingRequired": "امتیاز الزامی است",
+    "ratingRequiredMessage": "لطفاً یک امتیاز کلی ارائه دهید.",
+    "thankYou": "متشکریم!",
+    "thankYouMessage": "بازخورد شما به ما کمک می‌کند Accord را برای همه بهتر کنیم.",
+    "error": "خطا",
+    "errorMessage": "ارسال بازخورد ناموفق بود. لطفاً دوباره تلاش کنید."
+  },
+  "deleteAccount": {
+    "title": "حذف حساب کاربری",
+    "warning": "هشدار",
+    "warningMessage": "این اقدام دائمی است و قابل بازگشت نیست. تمام داده‌ها، تطابق‌ها، پیام‌ها و اطلاعات پروفایل شما به طور دائم حذف خواهند شد.",
+    "confirmTitle": "آیا مطمئن هستید؟",
+    "confirmMessage": "لطفاً DELETE را تایپ کنید تا تأیید کنید که می‌خواهید حساب کاربری خود را به طور دائم حذف کنید.",
+    "confirmPlaceholder": "برای تأیید DELETE تایپ کنید",
+    "deleteButton": "حساب کاربری من را حذف کن",
+    "deleting": "در حال حذف...",
+    "incorrectConfirmation": "تأیید نادرست",
+    "incorrectConfirmationMessage": "لطفاً دقیقاً DELETE را برای تأیید تایپ کنید.",
+    "accountDeleted": "حساب کاربری حذف شد",
+    "accountDeletedMessage": "حساب کاربری شما به طور دائم حذف شده است.",
+    "error": "خطا",
+    "errorMessage": "حذف حساب کاربری ناموفق بود. لطفاً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید."
+  },
+  "notificationSettings": {
+    "title": "تنظیمات اعلان",
+    "subtitle": "اعلان‌های خود را مدیریت کنید",
+    "pushNotifications": "اعلان‌های فشاری",
+    "pushNotificationsDesc": "دریافت اعلان‌های فشاری در دستگاه خود",
+    "newMatches": "تطابق‌های جدید",
+    "newMatchesDesc": "وقتی با کسی تطابق برقرار می‌کنید",
+    "newMessages": "پیام‌های جدید",
+    "newMessagesDesc": "وقتی پیام جدیدی دریافت می‌کنید",
+    "newLikes": "لایک‌های جدید",
+    "newLikesDesc": "وقتی کسی پروفایل شما را لایک می‌کند",
+    "reviews": "نقدها",
+    "reviewsDesc": "وقتی نقدها آماده یا نمایش داده می‌شوند",
+    "marketing": "بازاریابی",
+    "marketingDesc": "نکات، به‌روزرسانی‌ها و تبلیغات",
+    "emailNotifications": "اعلان‌های ایمیل",
+    "emailNotificationsDesc": "دریافت به‌روزرسانی‌ها از طریق ایمیل",
+    "saved": "تنظیمات ذخیره شد",
+    "savedMessage": "ترجیحات اعلان شما به‌روزرسانی شده است.",
+    "error": "خطا",
+    "errorMessage": "ذخیره تنظیمات ناموفق بود. لطفاً دوباره تلاش کنید."
+  },
+  "safetyCenter": {
+    "title": "مرکز ایمنی",
+    "subtitle": "در Accord ایمن بمانید",
+    "emergencyResources": "منابع اضطراری",
+    "emergencyResourcesDesc": "خطوط تلفن بحران و خدمات پشتیبانی",
+    "reportUser": "گزارش کاربر",
+    "reportUserDesc": "گزارش آزار، کلاهبرداری یا سایر مشکلات",
+    "blockingOptions": "گزینه‌های مسدودسازی",
+    "blockingOptionsDesc": "مسدود کردن مخاطبین، کشورها یا کاربران خاص",
+    "safetyTips": "نکات ایمنی",
+    "safetyTipsDesc": "راهنماهای قرار ملاقات آنلاین ایمن",
+    "privacyGuide": "راهنمای حریم خصوصی",
+    "privacyGuideDesc": "از اطلاعات شخصی خود محافظت کنید",
+    "meetingSafely": "ملاقات ایمن",
+    "meetingSafelyDesc": "نکاتی برای ملاقات حضوری با تطابق‌ها",
+    "lgbtqResources": "منابع LGBTQ+",
+    "lgbtqResourcesDesc": "سازمان‌های پشتیبانی و خطوط کمکی"
+  },
+  "subscriptionSettings": {
+    "title": "اشتراک",
+    "chooseYourPlan": "پلن خود را انتخاب کنید",
+    "loadingPlans": "در حال بارگذاری پلن‌ها...",
+    "renewsOn": "تجدید در: {{date}}",
+    "activeDevelopmentMode": "فعال (حالت توسعه)",
+    "developmentModeNA": "موجود نیست (حالت توسعه)",
+    "developmentMode": "حالت توسعه",
+    "developmentModeDescription": "RevenueCat در توسعه غیرفعال است. وضعیت اشتراک شما توسط فلگ‌های is_premium و is_platinum در پایگاه داده کنترل می‌شود.",
+    "developmentModeProductionNote": "در تولید، این صفحه بسته‌های اشتراک واقعی را نشان می‌دهد و به کاربران اجازه می‌دهد اشتراک‌های خود را از طریق App Store یا Play Store مدیریت کنند.",
+    "status": {
+      "platinumMember": "عضو پلاتینیوم",
+      "premiumMember": "عضو پریمیوم",
+      "freePlan": "پلن رایگان",
+      "allFeaturesUnlocked": "تمام ویژگی‌های پریمیوم باز شده",
+      "enhancedFeaturesUnlocked": "ویژگی‌های پیشرفته باز شده",
+      "freeDescription": "25 سوایپ در روز، پیام‌رسانی پایه"
+    },
+    "plans": {
+      "premium": "پریمیوم",
+      "platinum": "پلاتینیوم"
+    },
+    "periods": {
+      "monthly": "ماهانه",
+      "threeMonths": "3 ماهه",
+      "annual": "سالانه"
+    },
+    "save22": "22% صرفه‌جویی",
+    "save33": "33% صرفه‌جویی",
+    "bestValueSave22": "بهترین ارزش - 22% صرفه‌جویی",
+    "perMonth": "ماه",
+    "perThreeMonths": "3 ماه",
+    "perYear": "سال",
+    "quarterlyPopular": "فقط $11.66/ماه — محبوب‌ترین پلن ما!",
+    "processing": "در حال پردازش...",
+    "subscribeToPremium": "اشتراک در پریمیوم",
+    "subscribeToPlatinum": "اشتراک در پلاتینیوم",
+    "premiumIncludes": "پریمیوم شامل:",
+    "premiumFeaturesList": "• سوایپ‌های نامحدود\n• ببینید چه کسانی شما را لایک کرده‌اند\n• 5 سوپر لایک/هفته\n• پیام‌های صوتی\n• رسید خواندن\n• فیلترهای پیشرفته\n• برگشت",
+    "everythingInPremiumPlus": "همه چیز در پریمیوم، به علاوه:",
+    "platinumFeaturesList": "• تقویت هفتگی پروفایل\n• بررسی پیشینه\n• منابع حقوقی\n• پشتیبانی اولویت‌دار",
+    "platinumComingSoonMessage": "منتظر بمانید! سطح پلاتینیوم به زودی راه‌اندازی می‌شود.",
+    "comingSoon": "به زودی",
+    "planNotAvailable": "پلن {{plan}} {{period}} در RevenueCat موجود نیست",
+    "premiumFeaturesTitle": "ویژگی‌های پریمیوم",
+    "features": {
+      "unlimitedSwipes": "سوایپ‌های نامحدود",
+      "seeWhoLikedYou": "ببینید چه کسانی شما را لایک کرده‌اند",
+      "superLikesPerWeek": "5 سوپر لایک در هفته",
+      "voiceMessages": "پیام‌های صوتی",
+      "readReceipts": "رسید خواندن",
+      "advancedFilters": "فیلترهای پیشرفته",
+      "rewindLastSwipe": "برگشت آخرین سوایپ",
+      "backgroundChecks": "بررسی پیشینه",
+      "legalResources": "منابع حقوقی",
+      "weeklyProfileBoost": "تقویت هفتگی پروفایل",
+      "prioritySupport": "پشتیبانی اولویت‌دار"
+    },
+    "restorePurchases": "بازیابی خریدها",
+    "restoring": "در حال بازیابی...",
+    "opening": "در حال باز کردن...",
+    "redeemPromoCode": "استفاده از کد تخفیف",
+    "manageSubscription": "مدیریت اشتراک",
+    "infoTextIOS": "اشتراک‌ها از طریق حساب App Store شما مدیریت می‌شوند. می‌توانید هر زمان از تنظیمات حساب خود لغو کنید.",
+    "infoTextAndroid": "اشتراک‌ها از طریق حساب Google Play شما مدیریت می‌شوند. می‌توانید هر زمان از تنظیمات حساب خود لغو کنید.",
+    "termsOfUse": "شرایط استفاده",
+    "privacyPolicy": "سیاست حفظ حریم خصوصی",
+    "unableToLoadTitle": "بارگذاری گزینه‌های اشتراک ممکن نیست",
+    "unableToLoadDescription": "ما در بارگذاری پلن‌های اشتراک مشکل داریم. این می‌تواند به دلیل:",
+    "errorReasons": {
+      "revenueCat": "• پیشنهادها در RevenueCat پیکربندی نشده‌اند",
+      "network": "• مشکل اتصال به شبکه",
+      "serviceUnavailable": "• سرویس RevenueCat موقتاً در دسترس نیست"
+    },
+    "alerts": {
+      "unableToLoadTitle": "بارگذاری اشتراک‌ها ممکن نیست",
+      "unableToLoadMessage": "لطفاً اتصال اینترنت خود را بررسی کنید و دوباره امتحان کنید.",
+      "tryAgain": "دوباره تلاش کنید",
+      "successTitle": "موفق!",
+      "purchasesRestoredSuccess": "خریدهای شما با موفقیت بازیابی شدند.",
+      "noPurchasesFoundTitle": "خریدی یافت نشد",
+      "noPurchasesFoundMessage": "ما نتوانستیم خریدی برای بازیابی پیدا کنیم. اگر فکر می‌کنید این یک خطا است، لطفاً با پشتیبانی تماس بگیرید.",
+      "restoreFailedTitle": "بازیابی ناموفق بود",
+      "restoreFailedMessage": "بازیابی خریدها ناموفق بود. لطفاً بعداً دوباره امتحان کنید.",
+      "developmentModeTitle": "حالت توسعه",
+      "developmentModeMessage": "مدیریت اشتراک از طریق پایگاه داده در حالت توسعه انجام می‌شود.\n\nدر تولید، این تنظیمات اشتراک App Store یا Play Store شما را باز می‌کند.",
+      "couldNotOpenManagement": "مدیریت اشتراک باز نشد",
+      "notAvailableTitle": "موجود نیست",
+      "promoCodeAndroidMessage": "استفاده از کد تخفیف فقط در دستگاه‌های iOS موجود است. در Android، می‌توانید کدها را مستقیماً در Google Play Store استفاده کنید.",
+      "codeRedemptionFailed": "باز کردن استفاده از کد ناموفق بود. لطفاً دوباره تلاش کنید.",
+      "subscriptionActivated": "اشتراک شما فعال شد.",
+      "subscriptionExistsTitle": "اشتراک از قبل وجود دارد",
+      "subscriptionExistsAndroid": "شما یک اشتراک لغو شده در حساب Google Play فعلی خود دارید.\n\nگزینه‌ها:\n\n1. اشتراک موجود خود را در تنظیمات Google Play دوباره فعال کنید\n\n2. از حساب Google Play متفاوتی استفاده کنید: از Google Play در دستگاه خود خارج شوید، سپس با حساب متفاوتی وارد شوید و دوباره امتحان کنید",
+      "subscriptionExistsIOS": "شما یک اشتراک لغو شده در Apple ID فعلی خود دارید.\n\nگزینه‌ها:\n\n1. اشتراک موجود خود را در تنظیمات App Store دوباره فعال کنید\n\n2. از Apple ID متفاوتی استفاده کنید: در تنظیمات > [نام شما] خارج شوید، سپس با Apple ID متفاوتی وارد شوید و دوباره امتحان کنید",
+      "gotIt": "متوجه شدم",
+      "openSettings": "باز کردن تنظیمات",
+      "purchaseFailedTitle": "خرید ناموفق بود",
+      "purchaseFailedMessage": "تکمیل خرید ناموفق بود. لطفاً دوباره تلاش کنید یا اگر مشکل ادامه دارد با پشتیبانی تماس بگیرید."
+    }
+  },
+  "whatsNew": {
+    "title": "چه چیزی جدید است",
+    "version": "نسخه {{version}}",
+    "continue": "بیایید برویم!",
+    "new": "جدید",
+    "v109": {
+      "headline": "با مرکز فعالیت و دقت بهتر مکان در ارتباط باشید!",
+      "features": {
+        "activityCenter": {
+          "title": "مرکز فعالیت",
+          "description": "همه لایک‌ها، تطابق‌ها و بازدیدهای پروفایل خود را در یک مکان راحت پیگیری کنید"
+        },
+        "betterLocation": {
+          "title": "دقت بهتر مکان",
+          "description": "تطابق مکان دقیق‌تر برای یافتن افراد سازگار در نزدیکی شما"
+        },
+        "moreLanguages": {
+          "title": "زبان‌های بیشتر",
+          "description": "پشتیبانی کامل ترجمه برای همه صفحات برنامه در 18 زبان"
+        },
+        "bugFixes": {
+          "title": "رفع باگ‌ها و بهبودها",
+          "description": "بهبودهای مختلف عملکرد و رفع باگ‌ها برای تجربه‌ای روان‌تر"
+        }
+      }
+    },
+    "v108": {
+      "headline": "ویژگی‌های امنیتی پیشرفته و تأیید عکس!",
+      "features": {
+        "photoVerification": {
+          "title": "تأیید عکس",
+          "description": "تأیید سلفی برای اثبات اینکه عکس‌های شما واقعاً خودتان است"
+        },
+        "screenshotProtection": {
+          "title": "محافظت از اسکرین‌شات",
+          "description": "عکس‌های شما در چت از اسکرین‌شات محافظت می‌شوند"
+        },
+        "improvedSafety": {
+          "title": "امنیت بهبود یافته",
+          "description": "سیستم ممنوعیت پیشرفته و بهبودهای امنیتی"
+        }
+      }
+    },
+    "v104": {
+      "headline": "بهبود جستجو و رفع مشکلات امنیتی!",
+      "features": {
+        "searchImprovements": {
+          "title": "جستجوی بهتر",
+          "description": "الگوریتم تطابق بهبود یافته برای نتایج مرتبط‌تر"
+        },
+        "encryptionFix": {
+          "title": "رفع مشکل رمزگذاری",
+          "description": "رمزگذاری سرتاسر برای پیام‌رسانی امن تعمیر شد"
+        },
+        "bugFixes": {
+          "title": "رفع باگ‌ها",
+          "description": "بهبودهای مختلف ثبات و عملکرد"
+        }
+      }
+    }
   }
 }

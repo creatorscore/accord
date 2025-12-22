@@ -618,5 +618,265 @@
     "goToMatches": "Idź do Dopasowań",
     "errorLoadingLikes": "Nie udało się załadować polubień. Spróbuj ponownie.",
     "errorCreatingMatch": "Nie udało się utworzyć dopasowania. Spróbuj ponownie."
+  },
+  "activity": {
+    "title": "Aktywność",
+    "back": "Wstecz",
+    "markAllRead": "Oznacz wszystko jako przeczytane",
+    "loading": "Ładowanie aktywności...",
+    "tryAgain": "Spróbuj Ponownie",
+    "noActivityYet": "Brak Aktywności",
+    "noActivityDescription": "Gdy ktoś Cię polubi, dopasujecie się lub otrzymasz wiadomości, zobaczysz to tutaj.",
+    "today": "Dzisiaj",
+    "yesterday": "Wczoraj",
+    "thisWeek": "Ten Tydzień",
+    "earlier": "Wcześniej",
+    "premiumTitle": "Kanał Aktywności",
+    "premiumDescription": "Zobacz kto Cię polubił, kiedy się dopasowałeś, nowe wiadomości, recenzje i więcej — wszystko w jednym miejscu.",
+    "upgradeToPremium": "Ulepsz do Premium"
+  },
+  "betaFeedback": {
+    "title": "Opinia o Wersji Beta",
+    "subtitle": "Pomóż nam ulepszyć Accord",
+    "overallRating": "Ogólna Ocena",
+    "rateExperience": "Oceń swoje doświadczenie",
+    "subject": "Temat",
+    "subjectPlaceholder": "Czego dotyczy Twoja opinia?",
+    "description": "Opis",
+    "descriptionPlaceholder": "Powiedz nam więcej o swoim doświadczeniu...",
+    "feedbackType": "Typ Opinii",
+    "bug": "Zgłoszenie Błędu",
+    "feature": "Prośba o Funkcję",
+    "improvement": "Ulepszenie",
+    "other": "Inne",
+    "allowContact": "Zezwól na kontakt w celu uzyskania dodatkowych informacji",
+    "allowContactDesc": "Możemy się z Tobą skontaktować, aby dowiedzieć się więcej o Twojej opinii",
+    "submit": "Prześlij Opinię",
+    "submitting": "Przesyłanie...",
+    "missingInfo": "Brakujące Informacje",
+    "missingInfoMessage": "Proszę podać temat i opis swojej opinii.",
+    "ratingRequired": "Wymagana Ocena",
+    "ratingRequiredMessage": "Proszę podać ogólną ocenę.",
+    "thankYou": "Dziękujemy!",
+    "thankYouMessage": "Twoja opinia pomaga nam uczynić Accord lepszym dla wszystkich.",
+    "error": "Błąd",
+    "errorMessage": "Nie udało się przesłać opinii. Spróbuj ponownie."
+  },
+  "deleteAccount": {
+    "title": "Usuń Konto",
+    "warning": "Ostrzeżenie",
+    "warningMessage": "Ta czynność jest nieodwracalna i nie można jej cofnąć. Wszystkie Twoje dane, dopasowania, wiadomości i informacje profilowe zostaną trwale usunięte.",
+    "confirmTitle": "Czy na pewno?",
+    "confirmMessage": "Proszę wpisać DELETE, aby potwierdzić, że chcesz trwale usunąć swoje konto.",
+    "confirmPlaceholder": "Wpisz DELETE, aby potwierdzić",
+    "deleteButton": "Usuń Moje Konto",
+    "deleting": "Usuwanie...",
+    "incorrectConfirmation": "Nieprawidłowe Potwierdzenie",
+    "incorrectConfirmationMessage": "Proszę wpisać DELETE dokładnie, aby potwierdzić.",
+    "accountDeleted": "Konto Usunięte",
+    "accountDeletedMessage": "Twoje konto zostało trwale usunięte.",
+    "error": "Błąd",
+    "errorMessage": "Nie udało się usunąć konta. Spróbuj ponownie lub skontaktuj się z pomocą techniczną."
+  },
+  "notificationSettings": {
+    "title": "Ustawienia Powiadomień",
+    "subtitle": "Zarządzaj swoimi powiadomieniami",
+    "pushNotifications": "Powiadomienia Push",
+    "pushNotificationsDesc": "Otrzymuj powiadomienia push na swoim urządzeniu",
+    "newMatches": "Nowe Dopasowania",
+    "newMatchesDesc": "Gdy dopasujecie się z kimś",
+    "newMessages": "Nowe Wiadomości",
+    "newMessagesDesc": "Gdy otrzymasz nową wiadomość",
+    "newLikes": "Nowe Polubienia",
+    "newLikesDesc": "Gdy ktoś polubi Twój profil",
+    "reviews": "Recenzje",
+    "reviewsDesc": "Gdy recenzje są gotowe lub ujawnione",
+    "marketing": "Marketing",
+    "marketingDesc": "Wskazówki, aktualizacje i promocje",
+    "emailNotifications": "Powiadomienia Email",
+    "emailNotificationsDesc": "Otrzymuj aktualizacje pocztą email",
+    "saved": "Ustawienia Zapisane",
+    "savedMessage": "Twoje preferencje powiadomień zostały zaktualizowane.",
+    "error": "Błąd",
+    "errorMessage": "Nie udało się zapisać ustawień. Spróbuj ponownie."
+  },
+  "safetyCenter": {
+    "title": "Centrum Bezpieczeństwa",
+    "subtitle": "Pozostań bezpieczny na Accord",
+    "emergencyResources": "Zasoby Awaryjne",
+    "emergencyResourcesDesc": "Infolinie kryzysowe i usługi wsparcia",
+    "reportUser": "Zgłoś Użytkownika",
+    "reportUserDesc": "Zgłoś nękanie, oszustwa lub inne problemy",
+    "blockingOptions": "Opcje Blokowania",
+    "blockingOptionsDesc": "Zablokuj kontakty, kraje lub konkretnych użytkowników",
+    "safetyTips": "Wskazówki Bezpieczeństwa",
+    "safetyTipsDesc": "Wytyczne dotyczące bezpiecznych randek online",
+    "privacyGuide": "Przewodnik Prywatności",
+    "privacyGuideDesc": "Chroń swoje dane osobowe",
+    "meetingSafely": "Bezpieczne Spotkania",
+    "meetingSafelyDesc": "Wskazówki dotyczące spotkań z dopasowaniami osobiście",
+    "lgbtqResources": "Zasoby LGBTQ+",
+    "lgbtqResourcesDesc": "Organizacje wsparcia i infolinie"
+  },
+  "subscriptionSettings": {
+    "title": "Subskrypcja",
+    "chooseYourPlan": "Wybierz Swój Plan",
+    "loadingPlans": "Ładowanie planów...",
+    "renewsOn": "Odnawia się: {{date}}",
+    "activeDevelopmentMode": "Aktywna (Tryb Deweloperski)",
+    "developmentModeNA": "N/D (Tryb Deweloperski)",
+    "developmentMode": "Tryb Deweloperski",
+    "developmentModeDescription": "RevenueCat jest wyłączony w trybie deweloperskim. Status subskrypcji jest kontrolowany przez flagi is_premium i is_platinum w bazie danych.",
+    "developmentModeProductionNote": "W produkcji ten ekran pokaże rzeczywiste pakiety subskrypcji i pozwoli użytkownikom zarządzać swoimi subskrypcjami przez App Store lub Play Store.",
+    "status": {
+      "platinumMember": "Członek Platinum",
+      "premiumMember": "Członek Premium",
+      "freePlan": "Darmowy Plan",
+      "allFeaturesUnlocked": "Wszystkie funkcje premium odblokowane",
+      "enhancedFeaturesUnlocked": "Ulepszone funkcje odblokowane",
+      "freeDescription": "25 przesunięć dziennie, podstawowe wiadomości"
+    },
+    "plans": {
+      "premium": "Premium",
+      "platinum": "Platinum"
+    },
+    "periods": {
+      "monthly": "Miesięcznie",
+      "threeMonths": "3 Miesiące",
+      "annual": "Rocznie"
+    },
+    "save22": "Oszczędź 22%",
+    "save33": "Oszczędź 33%",
+    "bestValueSave22": "NAJLEPSZA WARTOŚĆ - OSZCZĘDŹ 22%",
+    "perMonth": "miesiąc",
+    "perThreeMonths": "3 miesiące",
+    "perYear": "rok",
+    "quarterlyPopular": "Tylko $11.66/miesiąc — nasz najpopularniejszy plan!",
+    "processing": "Przetwarzanie...",
+    "subscribeToPremium": "Subskrybuj Premium",
+    "subscribeToPlatinum": "Subskrybuj Platinum",
+    "premiumIncludes": "Premium zawiera:",
+    "premiumFeaturesList": "• Nieograniczone przesunięcia\n• Zobacz kto Cię polubił\n• 5 Super Polubień/tydzień\n• Wiadomości głosowe\n• Potwierdzenia odczytu\n• Zaawansowane filtry\n• Cofnij",
+    "everythingInPremiumPlus": "Wszystko w Premium, plus:",
+    "platinumFeaturesList": "• Tygodniowe wzmocnienie profilu\n• Sprawdzanie przeszłości\n• Zasoby prawne\n• Priorytetowe wsparcie",
+    "platinumComingSoonMessage": "Wkrótce! Poziom Platinum wkrótce się uruchomi.",
+    "comingSoon": "WKRÓTCE",
+    "planNotAvailable": "Plan {{plan}} {{period}} niedostępny w RevenueCat",
+    "premiumFeaturesTitle": "Funkcje Premium",
+    "features": {
+      "unlimitedSwipes": "Nieograniczone przesunięcia",
+      "seeWhoLikedYou": "Zobacz kto Cię polubił",
+      "superLikesPerWeek": "5 Super Polubień tygodniowo",
+      "voiceMessages": "Wiadomości głosowe",
+      "readReceipts": "Potwierdzenia odczytu",
+      "advancedFilters": "Zaawansowane filtry",
+      "rewindLastSwipe": "Cofnij ostatnie przesunięcie",
+      "backgroundChecks": "Sprawdzanie przeszłości",
+      "legalResources": "Zasoby prawne",
+      "weeklyProfileBoost": "Tygodniowe wzmocnienie profilu",
+      "prioritySupport": "Priorytetowe wsparcie"
+    },
+    "restorePurchases": "Przywróć Zakupy",
+    "restoring": "Przywracanie...",
+    "opening": "Otwieranie...",
+    "redeemPromoCode": "Aktywuj Kod Promocyjny",
+    "manageSubscription": "Zarządzaj Subskrypcją",
+    "infoTextIOS": "Subskrypcje są zarządzane przez Twoje konto App Store. Możesz anulować w dowolnym momencie w ustawieniach konta.",
+    "infoTextAndroid": "Subskrypcje są zarządzane przez Twoje konto Google Play. Możesz anulować w dowolnym momencie w ustawieniach konta.",
+    "termsOfUse": "Warunki Użytkowania",
+    "privacyPolicy": "Polityka Prywatności",
+    "unableToLoadTitle": "Nie Można Załadować Opcji Subskrypcji",
+    "unableToLoadDescription": "Mamy problemy z załadowaniem planów subskrypcji. Może to być spowodowane:",
+    "errorReasons": {
+      "revenueCat": "• Oferty nie skonfigurowane w RevenueCat",
+      "network": "• Problem z połączeniem sieciowym",
+      "serviceUnavailable": "• Usługa RevenueCat tymczasowo niedostępna"
+    },
+    "alerts": {
+      "unableToLoadTitle": "Nie Można Załadować Subskrypcji",
+      "unableToLoadMessage": "Sprawdź swoje połączenie internetowe i spróbuj ponownie.",
+      "tryAgain": "Spróbuj Ponownie",
+      "successTitle": "Sukces!",
+      "purchasesRestoredSuccess": "Twoje zakupy zostały pomyślnie przywrócone.",
+      "noPurchasesFoundTitle": "Nie Znaleziono Zakupów",
+      "noPurchasesFoundMessage": "Nie mogliśmy znaleźć żadnych zakupów do przywrócenia. Jeśli uważasz, że to błąd, skontaktuj się z pomocą techniczną.",
+      "restoreFailedTitle": "Przywracanie Nieudane",
+      "restoreFailedMessage": "Nie udało się przywrócić zakupów. Spróbuj ponownie później.",
+      "developmentModeTitle": "Tryb Deweloperski",
+      "developmentModeMessage": "Zarządzanie subskrypcją odbywa się przez bazę danych w trybie deweloperskim.\n\nW produkcji otworzy to ustawienia subskrypcji w App Store lub Play Store.",
+      "couldNotOpenManagement": "Nie można otworzyć zarządzania subskrypcją",
+      "notAvailableTitle": "Niedostępne",
+      "promoCodeAndroidMessage": "Aktywacja kodu promocyjnego jest dostępna tylko na urządzeniach iOS. Na Androidzie możesz aktywować kody bezpośrednio w Google Play Store.",
+      "codeRedemptionFailed": "Nie udało się otworzyć aktywacji kodu. Spróbuj ponownie.",
+      "subscriptionActivated": "Twoja subskrypcja została aktywowana.",
+      "subscriptionExistsTitle": "Subskrypcja Już Istnieje",
+      "subscriptionExistsAndroid": "Masz anulowaną subskrypcję na swoim obecnym koncie Google Play.\n\nOpcje:\n\n1. Reaktywuj istniejącą subskrypcję w ustawieniach Google Play\n\n2. Użyj innego konta Google Play: Wyloguj się z Google Play na swoim urządzeniu, następnie zaloguj się na inne konto i spróbuj ponownie",
+      "subscriptionExistsIOS": "Masz anulowaną subskrypcję na swoim obecnym Apple ID.\n\nOpcje:\n\n1. Reaktywuj istniejącą subskrypcję w ustawieniach App Store\n\n2. Użyj innego Apple ID: Wyloguj się w Ustawienia > [Twoje Imię], następnie zaloguj się innym Apple ID i spróbuj ponownie",
+      "gotIt": "Rozumiem",
+      "openSettings": "Otwórz Ustawienia",
+      "purchaseFailedTitle": "Zakup Nieudany",
+      "purchaseFailedMessage": "Nie udało się dokończyć zakupu. Spróbuj ponownie lub skontaktuj się z pomocą techniczną, jeśli problem będzie się powtarzał."
+    }
+  },
+  "whatsNew": {
+    "title": "Co nowego",
+    "version": "Wersja {{version}}",
+    "continue": "Zaczynajmy!",
+    "new": "NOWOŚĆ",
+    "v109": {
+      "headline": "Pozostań w kontakcie z Centrum Aktywności i lepszą dokładnością lokalizacji!",
+      "features": {
+        "activityCenter": {
+          "title": "Centrum Aktywności",
+          "description": "Śledź wszystkie swoje polubienia, dopasowania i wyświetlenia profilu w jednym wygodnym miejscu"
+        },
+        "betterLocation": {
+          "title": "Lepsza Dokładność Lokalizacji",
+          "description": "Bardziej precyzyjne dopasowanie lokalizacji, aby znaleźć kompatybilne osoby w pobliżu"
+        },
+        "moreLanguages": {
+          "title": "Więcej Języków",
+          "description": "Pełne wsparcie tłumaczenia dla wszystkich ekranów aplikacji w 18 językach"
+        },
+        "bugFixes": {
+          "title": "Poprawki Błędów i Ulepszenia",
+          "description": "Różne usprawnienia wydajności i poprawki błędów dla płynniejszego działania"
+        }
+      }
+    },
+    "v108": {
+      "headline": "Rozszerzone funkcje bezpieczeństwa i weryfikacja zdjęć!",
+      "features": {
+        "photoVerification": {
+          "title": "Weryfikacja Zdjęć",
+          "description": "Weryfikacja selfie, aby udowodnić, że Twoje zdjęcia to naprawdę Ty"
+        },
+        "screenshotProtection": {
+          "title": "Ochrona przed Zrzutami Ekranu",
+          "description": "Twoje zdjęcia są chronione przed zrzutami ekranu w czacie"
+        },
+        "improvedSafety": {
+          "title": "Ulepszone Bezpieczeństwo",
+          "description": "Rozszerzony system banów i usprawnienia bezpieczeństwa"
+        }
+      }
+    },
+    "v104": {
+      "headline": "Usprawnienia wyszukiwania i poprawki bezpieczeństwa!",
+      "features": {
+        "searchImprovements": {
+          "title": "Lepsze Wyszukiwanie",
+          "description": "Ulepszony algorytm dopasowywania dla bardziej trafnych wyników"
+        },
+        "encryptionFix": {
+          "title": "Poprawka Szyfrowania",
+          "description": "Naprawiono szyfrowanie end-to-end dla bezpiecznych wiadomości"
+        },
+        "bugFixes": {
+          "title": "Poprawki Błędów",
+          "description": "Różne usprawnienia stabilności i wydajności"
+        }
+      }
+    }
   }
 }

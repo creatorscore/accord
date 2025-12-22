@@ -63,7 +63,6 @@ export default function OnboardingLayout() {
         headerTransparent: !isAndroid,
         headerStyle: isAndroid ? {
           backgroundColor: 'transparent',
-          elevation: 0,
         } : undefined,
         headerShadowVisible: false,
         headerTitle: '',

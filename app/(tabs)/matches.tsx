@@ -15,6 +15,7 @@ import { useScreenProtection } from '@/hooks/useScreenProtection';
 import { isOnline, getLastActiveText } from '@/lib/online-status';
 import { realtimeManager } from '@/lib/realtime-manager';
 import { decryptMessage, getPrivateKey } from '@/lib/encryption';
+import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
 
 interface Match {
   id: string;
@@ -52,6 +53,7 @@ export default function Matches() {
   const { colors, isDarkColorScheme } = useColorScheme();
   const insets = useSafeAreaInsets();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const unreadActivityCount = useUnreadActivityCount(currentProfileId);
   const [matches, setMatches] = useState<Match[]>([]);
   const [likesCount, setLikesCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -815,8 +817,26 @@ export default function Matches() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
         <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('matches.title')}</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('matches.subtitle')}</Text>
+          <View>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('matches.title')}</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('matches.subtitle')}</Text>
+          </View>
+          {/* Activity Bell */}
+          <TouchableOpacity
+            onPress={() => router.push('/activity')}
+            style={[styles.activityButton, { backgroundColor: isPremium ? '#F5F0FF' : colors.muted }]}
+          >
+            <View style={{ position: 'relative' }}>
+              <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#A08AB7" />
+              {unreadActivityCount > 0 && (
+                <View style={styles.activityBadge}>
+                  <Text style={styles.activityBadgeText}>
+                    {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.loadingContainer}>
@@ -833,8 +853,26 @@ export default function Matches() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
         <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('matches.title')}</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('matches.subtitle')}</Text>
+          <View>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('matches.title')}</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('matches.subtitle')}</Text>
+          </View>
+          {/* Activity Bell */}
+          <TouchableOpacity
+            onPress={() => router.push('/activity')}
+            style={[styles.activityButton, { backgroundColor: isPremium ? '#F5F0FF' : colors.muted }]}
+          >
+            <View style={{ position: 'relative' }}>
+              <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#A08AB7" />
+              {unreadActivityCount > 0 && (
+                <View style={styles.activityBadge}>
+                  <Text style={styles.activityBadgeText}>
+                    {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.emptyContainer}>
@@ -886,6 +924,22 @@ export default function Matches() {
               : t('matches.connections', { count: matches.length })}
           </Text>
         </View>
+        {/* Activity Bell */}
+        <TouchableOpacity
+          onPress={() => router.push('/activity')}
+          style={[styles.activityButton, { backgroundColor: isPremium ? '#F5F0FF' : colors.muted }]}
+        >
+          <View style={{ position: 'relative' }}>
+            <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#A08AB7" />
+            {unreadActivityCount > 0 && (
+              <View style={styles.activityBadge}>
+                <Text style={styles.activityBadgeText}>
+                  {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Matches List */}
@@ -988,6 +1042,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
     paddingTop: 60,
     paddingBottom: 24,
@@ -1288,5 +1345,28 @@ const styles = StyleSheet.create({
   },
   actionTextDanger: {
     color: '#EF4444',
+  },
+  activityButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });

@@ -618,5 +618,265 @@
     "goToMatches": "Ir a Coincidencias",
     "errorLoadingLikes": "Error al cargar los me gusta. Por favor, inténtalo de nuevo.",
     "errorCreatingMatch": "Error al crear la coincidencia. Por favor, inténtalo de nuevo."
+  },
+  "activity": {
+    "title": "Actividad",
+    "back": "Atrás",
+    "markAllRead": "Marcar todo como leído",
+    "loading": "Cargando actividad...",
+    "tryAgain": "Intentar de Nuevo",
+    "noActivityYet": "Sin Actividad Aún",
+    "noActivityDescription": "Cuando alguien te dé me gusta, hagas match o recibas mensajes, lo verás aquí.",
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "thisWeek": "Esta Semana",
+    "earlier": "Anteriormente",
+    "premiumTitle": "Feed de Actividad",
+    "premiumDescription": "Ve quién te dio me gusta, cuándo hiciste match, nuevos mensajes, reseñas y más — todo en un solo lugar.",
+    "upgradeToPremium": "Actualizar a Premium"
+  },
+  "betaFeedback": {
+    "title": "Comentarios Beta",
+    "subtitle": "Ayúdanos a mejorar Accord",
+    "overallRating": "Calificación General",
+    "rateExperience": "Califica tu experiencia",
+    "subject": "Asunto",
+    "subjectPlaceholder": "¿Sobre qué es tu comentario?",
+    "description": "Descripción",
+    "descriptionPlaceholder": "Cuéntanos más sobre tu experiencia...",
+    "feedbackType": "Tipo de Comentario",
+    "bug": "Reporte de Error",
+    "feature": "Solicitud de Función",
+    "improvement": "Mejora",
+    "other": "Otro",
+    "allowContact": "Permitir contacto para seguimiento",
+    "allowContactDesc": "Podemos contactarte para saber más sobre tus comentarios",
+    "submit": "Enviar Comentarios",
+    "submitting": "Enviando...",
+    "missingInfo": "Información Faltante",
+    "missingInfoMessage": "Por favor proporciona un asunto y descripción para tus comentarios.",
+    "ratingRequired": "Calificación Requerida",
+    "ratingRequiredMessage": "Por favor proporciona una calificación general.",
+    "thankYou": "¡Gracias!",
+    "thankYouMessage": "Tus comentarios nos ayudan a hacer Accord mejor para todos.",
+    "error": "Error",
+    "errorMessage": "Error al enviar comentarios. Por favor, inténtalo de nuevo."
+  },
+  "deleteAccount": {
+    "title": "Eliminar Cuenta",
+    "warning": "Advertencia",
+    "warningMessage": "Esta acción es permanente y no se puede deshacer. Todos tus datos, coincidencias, mensajes e información de perfil se eliminarán permanentemente.",
+    "confirmTitle": "¿Estás seguro?",
+    "confirmMessage": "Por favor escribe DELETE para confirmar que deseas eliminar permanentemente tu cuenta.",
+    "confirmPlaceholder": "Escribe DELETE para confirmar",
+    "deleteButton": "Eliminar Mi Cuenta",
+    "deleting": "Eliminando...",
+    "incorrectConfirmation": "Confirmación Incorrecta",
+    "incorrectConfirmationMessage": "Por favor escribe DELETE exactamente para confirmar.",
+    "accountDeleted": "Cuenta Eliminada",
+    "accountDeletedMessage": "Tu cuenta ha sido eliminada permanentemente.",
+    "error": "Error",
+    "errorMessage": "Error al eliminar la cuenta. Por favor, inténtalo de nuevo o contacta a soporte."
+  },
+  "notificationSettings": {
+    "title": "Configuración de Notificaciones",
+    "subtitle": "Gestiona tus notificaciones",
+    "pushNotifications": "Notificaciones Push",
+    "pushNotificationsDesc": "Recibir notificaciones push en tu dispositivo",
+    "newMatches": "Nuevas Coincidencias",
+    "newMatchesDesc": "Cuando hagas match con alguien",
+    "newMessages": "Nuevos Mensajes",
+    "newMessagesDesc": "Cuando recibas un nuevo mensaje",
+    "newLikes": "Nuevos Me Gusta",
+    "newLikesDesc": "Cuando alguien le dé me gusta a tu perfil",
+    "reviews": "Reseñas",
+    "reviewsDesc": "Cuando las reseñas estén listas o reveladas",
+    "marketing": "Marketing",
+    "marketingDesc": "Consejos, actualizaciones y promociones",
+    "emailNotifications": "Notificaciones por Email",
+    "emailNotificationsDesc": "Recibir actualizaciones por correo electrónico",
+    "saved": "Configuración Guardada",
+    "savedMessage": "Tus preferencias de notificaciones han sido actualizadas.",
+    "error": "Error",
+    "errorMessage": "Error al guardar la configuración. Por favor, inténtalo de nuevo."
+  },
+  "safetyCenter": {
+    "title": "Centro de Seguridad",
+    "subtitle": "Mantente seguro en Accord",
+    "emergencyResources": "Recursos de Emergencia",
+    "emergencyResourcesDesc": "Líneas directas de crisis y servicios de apoyo",
+    "reportUser": "Reportar un Usuario",
+    "reportUserDesc": "Reportar acoso, estafas u otros problemas",
+    "blockingOptions": "Opciones de Bloqueo",
+    "blockingOptionsDesc": "Bloquear contactos, países o usuarios específicos",
+    "safetyTips": "Consejos de Seguridad",
+    "safetyTipsDesc": "Pautas para citas en línea seguras",
+    "privacyGuide": "Guía de Privacidad",
+    "privacyGuideDesc": "Protege tu información personal",
+    "meetingSafely": "Reunirse de Forma Segura",
+    "meetingSafelyDesc": "Consejos para reunirse con coincidencias en persona",
+    "lgbtqResources": "Recursos LGBTQ+",
+    "lgbtqResourcesDesc": "Organizaciones de apoyo y líneas de ayuda"
+  },
+  "subscriptionSettings": {
+    "title": "Suscripción",
+    "chooseYourPlan": "Elige Tu Plan",
+    "loadingPlans": "Cargando planes...",
+    "renewsOn": "Se renueva el: {{date}}",
+    "activeDevelopmentMode": "Activo (Modo Desarrollo)",
+    "developmentModeNA": "N/A (Modo Desarrollo)",
+    "developmentMode": "Modo Desarrollo",
+    "developmentModeDescription": "RevenueCat está deshabilitado en desarrollo. Tu estado de suscripción está controlado por las banderas is_premium e is_platinum en la base de datos.",
+    "developmentModeProductionNote": "En producción, esta pantalla mostrará paquetes de suscripción reales y permitirá a los usuarios gestionar sus suscripciones a través de la App Store o Play Store.",
+    "status": {
+      "platinumMember": "Miembro Platinum",
+      "premiumMember": "Miembro Premium",
+      "freePlan": "Plan Gratuito",
+      "allFeaturesUnlocked": "Todas las funciones premium desbloqueadas",
+      "enhancedFeaturesUnlocked": "Funciones mejoradas desbloqueadas",
+      "freeDescription": "25 deslizamientos por día, mensajería básica"
+    },
+    "plans": {
+      "premium": "Premium",
+      "platinum": "Platinum"
+    },
+    "periods": {
+      "monthly": "Mensual",
+      "threeMonths": "3 Meses",
+      "annual": "Anual"
+    },
+    "save22": "Ahorra 22%",
+    "save33": "Ahorra 33%",
+    "bestValueSave22": "MEJOR VALOR - AHORRA 22%",
+    "perMonth": "mes",
+    "perThreeMonths": "3 meses",
+    "perYear": "año",
+    "quarterlyPopular": "¡Solo $11.66/mes — nuestro plan más popular!",
+    "processing": "Procesando...",
+    "subscribeToPremium": "Suscribirse a Premium",
+    "subscribeToPlatinum": "Suscribirse a Platinum",
+    "premiumIncludes": "Premium incluye:",
+    "premiumFeaturesList": "• Deslizamientos ilimitados\n• Ver quién te dio me gusta\n• 5 Super Likes/semana\n• Mensajes de voz\n• Confirmaciones de lectura\n• Filtros avanzados\n• Retroceder",
+    "everythingInPremiumPlus": "Todo en Premium, más:",
+    "platinumFeaturesList": "• Impulso de perfil semanal\n• Verificaciones de antecedentes\n• Recursos legales\n• Soporte prioritario",
+    "platinumComingSoonMessage": "¡Mantente atento! El nivel Platinum se lanzará pronto.",
+    "comingSoon": "PRÓXIMAMENTE",
+    "planNotAvailable": "Plan {{plan}} {{period}} no disponible en RevenueCat",
+    "premiumFeaturesTitle": "Funciones Premium",
+    "features": {
+      "unlimitedSwipes": "Deslizamientos ilimitados",
+      "seeWhoLikedYou": "Ver quién te dio me gusta",
+      "superLikesPerWeek": "5 Super Likes por semana",
+      "voiceMessages": "Mensajes de voz",
+      "readReceipts": "Confirmaciones de lectura",
+      "advancedFilters": "Filtros avanzados",
+      "rewindLastSwipe": "Retroceder último deslizamiento",
+      "backgroundChecks": "Verificaciones de antecedentes",
+      "legalResources": "Recursos legales",
+      "weeklyProfileBoost": "Impulso de perfil semanal",
+      "prioritySupport": "Soporte prioritario"
+    },
+    "restorePurchases": "Restaurar Compras",
+    "restoring": "Restaurando...",
+    "opening": "Abriendo...",
+    "redeemPromoCode": "Canjear Código Promocional",
+    "manageSubscription": "Gestionar Suscripción",
+    "infoTextIOS": "Las suscripciones se gestionan a través de tu cuenta de App Store. Puedes cancelar en cualquier momento desde la configuración de tu cuenta.",
+    "infoTextAndroid": "Las suscripciones se gestionan a través de tu cuenta de Google Play. Puedes cancelar en cualquier momento desde la configuración de tu cuenta.",
+    "termsOfUse": "Términos de Uso",
+    "privacyPolicy": "Política de Privacidad",
+    "unableToLoadTitle": "No se Pueden Cargar las Opciones de Suscripción",
+    "unableToLoadDescription": "Tenemos problemas para cargar los planes de suscripción. Esto podría deberse a:",
+    "errorReasons": {
+      "revenueCat": "• Ofertas no configuradas en RevenueCat",
+      "network": "• Problema de conexión de red",
+      "serviceUnavailable": "• Servicio de RevenueCat temporalmente no disponible"
+    },
+    "alerts": {
+      "unableToLoadTitle": "No se Pueden Cargar las Suscripciones",
+      "unableToLoadMessage": "Por favor verifica tu conexión a internet e inténtalo de nuevo.",
+      "tryAgain": "Intentar de Nuevo",
+      "successTitle": "¡Éxito!",
+      "purchasesRestoredSuccess": "Tus compras han sido restauradas exitosamente.",
+      "noPurchasesFoundTitle": "No se Encontraron Compras",
+      "noPurchasesFoundMessage": "No pudimos encontrar ninguna compra para restaurar. Si crees que esto es un error, por favor contacta a soporte.",
+      "restoreFailedTitle": "Restauración Fallida",
+      "restoreFailedMessage": "No se pudieron restaurar las compras. Por favor inténtalo de nuevo más tarde.",
+      "developmentModeTitle": "Modo Desarrollo",
+      "developmentModeMessage": "La gestión de suscripciones se maneja a través de la base de datos en modo desarrollo.\n\nEn producción, esto abrirá la configuración de suscripciones de tu App Store o Play Store.",
+      "couldNotOpenManagement": "No se pudo abrir la gestión de suscripciones",
+      "notAvailableTitle": "No Disponible",
+      "promoCodeAndroidMessage": "El canje de códigos promocionales solo está disponible en dispositivos iOS. En Android, puedes canjear códigos directamente en Google Play Store.",
+      "codeRedemptionFailed": "No se pudo abrir el canje de código. Por favor inténtalo de nuevo.",
+      "subscriptionActivated": "Tu suscripción ha sido activada.",
+      "subscriptionExistsTitle": "La Suscripción Ya Existe",
+      "subscriptionExistsAndroid": "Tienes una suscripción cancelada en tu cuenta actual de Google Play.\n\nOpciones:\n\n1. Reactiva tu suscripción existente en Configuración de Google Play\n\n2. Usa una cuenta diferente de Google Play: Cierra sesión de Google Play en tu dispositivo, luego inicia sesión con una cuenta diferente e inténtalo de nuevo",
+      "subscriptionExistsIOS": "Tienes una suscripción cancelada en tu Apple ID actual.\n\nOpciones:\n\n1. Reactiva tu suscripción existente en Configuración de App Store\n\n2. Usa un Apple ID diferente: Cierra sesión en Ajustes > [Tu Nombre], luego inicia sesión con un Apple ID diferente e inténtalo de nuevo",
+      "gotIt": "Entendido",
+      "openSettings": "Abrir Configuración",
+      "purchaseFailedTitle": "Compra Fallida",
+      "purchaseFailedMessage": "No se pudo completar la compra. Por favor inténtalo de nuevo o contacta a soporte si el problema persiste."
+    }
+  },
+  "whatsNew": {
+    "title": "Novedades",
+    "version": "Versión {{version}}",
+    "continue": "¡Vamos!",
+    "new": "NUEVO",
+    "v109": {
+      "headline": "¡Mantente conectado con tu Centro de Actividad y mejor precisión de ubicación!",
+      "features": {
+        "activityCenter": {
+          "title": "Centro de Actividad",
+          "description": "Rastrea todos tus me gusta, coincidencias y vistas de perfil en un lugar conveniente"
+        },
+        "betterLocation": {
+          "title": "Mejor Precisión de Ubicación",
+          "description": "Emparejamiento de ubicación más preciso para encontrar personas compatibles cerca de ti"
+        },
+        "moreLanguages": {
+          "title": "Más Idiomas",
+          "description": "Soporte de traducción completo para todas las pantallas de la aplicación en 18 idiomas"
+        },
+        "bugFixes": {
+          "title": "Correcciones de Errores y Mejoras",
+          "description": "Varias mejoras de rendimiento y correcciones de errores para una experiencia más fluida"
+        }
+      }
+    },
+    "v108": {
+      "headline": "¡Funciones de seguridad mejoradas y verificación de fotos!",
+      "features": {
+        "photoVerification": {
+          "title": "Verificación de Fotos",
+          "description": "Verificación de selfie para demostrar que tus fotos realmente eres tú"
+        },
+        "screenshotProtection": {
+          "title": "Protección de Capturas de Pantalla",
+          "description": "Tus fotos están protegidas de capturas de pantalla en el chat"
+        },
+        "improvedSafety": {
+          "title": "Seguridad Mejorada",
+          "description": "Sistema de prohibición mejorado y mejoras de seguridad"
+        }
+      }
+    },
+    "v104": {
+      "headline": "¡Mejoras de búsqueda y correcciones de seguridad!",
+      "features": {
+        "searchImprovements": {
+          "title": "Mejor Búsqueda",
+          "description": "Algoritmo de emparejamiento mejorado para resultados más relevantes"
+        },
+        "encryptionFix": {
+          "title": "Corrección de Cifrado",
+          "description": "Se corrigió el cifrado de extremo a extremo para mensajería segura"
+        },
+        "bugFixes": {
+          "title": "Correcciones de Errores",
+          "description": "Varias mejoras de estabilidad y rendimiento"
+        }
+      }
+    }
   }
 }

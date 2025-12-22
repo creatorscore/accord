@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import Constants from 'expo-constants';
@@ -19,6 +20,7 @@ import Constants from 'expo-constants';
 type FeedbackType = 'bug_report' | 'feature_request' | 'general_feedback' | 'usability_issue';
 
 export default function BetaFeedback() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [feedbackType, setFeedbackType] = useState<FeedbackType>('general_feedback');
@@ -38,20 +40,20 @@ export default function BetaFeedback() {
   const [ratingDesign, setRatingDesign] = useState(0);
 
   const feedbackTypes: { value: FeedbackType; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { value: 'bug_report', label: 'Bug Report', icon: 'bug' },
-    { value: 'feature_request', label: 'Feature Request', icon: 'bulb' },
-    { value: 'usability_issue', label: 'Usability Issue', icon: 'hand-left' },
-    { value: 'general_feedback', label: 'General Feedback', icon: 'chatbubble' },
+    { value: 'bug_report', label: t('betaFeedback.types.bugReport'), icon: 'bug' },
+    { value: 'feature_request', label: t('betaFeedback.types.featureRequest'), icon: 'bulb' },
+    { value: 'usability_issue', label: t('betaFeedback.types.usabilityIssue'), icon: 'hand-left' },
+    { value: 'general_feedback', label: t('betaFeedback.types.generalFeedback'), icon: 'chatbubble' },
   ];
 
   const handleSubmit = async () => {
     if (!subject.trim() || !description.trim()) {
-      Alert.alert('Missing Information', 'Please provide a subject and description for your feedback.');
+      Alert.alert(t('betaFeedback.alerts.missingInfoTitle'), t('betaFeedback.alerts.missingInfoMessage'));
       return;
     }
 
     if (feedbackType !== 'feature_request' && feedbackType !== 'general_feedback' && ratingOverall === 0) {
-      Alert.alert('Rating Required', 'Please provide an overall rating.');
+      Alert.alert(t('betaFeedback.alerts.ratingRequiredTitle'), t('betaFeedback.alerts.ratingRequiredMessage'));
       return;
     }
 
@@ -99,13 +101,13 @@ export default function BetaFeedback() {
       if (error) throw error;
 
       Alert.alert(
-        'Feedback Submitted',
-        'Thank you for helping us improve Accord! We appreciate your feedback.',
-        [{ text: 'OK', onPress: () => router.back() }]
+        t('betaFeedback.alerts.successTitle'),
+        t('betaFeedback.alerts.successMessage'),
+        [{ text: t('common.ok'), onPress: () => router.back() }]
       );
     } catch (error: any) {
       console.error('Error submitting feedback:', error);
-      Alert.alert('Error', 'Failed to submit feedback. Please try again.');
+      Alert.alert(t('common.error'), t('betaFeedback.alerts.errorMessage'));
     } finally {
       setLoading(false);
     }
@@ -135,13 +137,13 @@ export default function BetaFeedback() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Beta Feedback</Text>
+        <Text style={styles.headerTitle}>{t('betaFeedback.title')}</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Feedback Type Selection */}
-        <Text style={styles.sectionTitle}>What type of feedback do you have?</Text>
+        <Text style={styles.sectionTitle}>{t('betaFeedback.feedbackTypeQuestion')}</Text>
         <View style={styles.typeGrid}>
           {feedbackTypes.map((type) => (
             <TouchableOpacity
@@ -164,10 +166,10 @@ export default function BetaFeedback() {
         </View>
 
         {/* Subject */}
-        <Text style={styles.sectionTitle}>Subject</Text>
+        <Text style={styles.sectionTitle}>{t('betaFeedback.subject')}</Text>
         <TextInput
           style={styles.input}
-          placeholder="Brief summary of your feedback"
+          placeholder={t('betaFeedback.subjectPlaceholder')}
           placeholderTextColor="#9CA3AF"
           value={subject}
           onChangeText={setSubject}
@@ -175,10 +177,10 @@ export default function BetaFeedback() {
         />
 
         {/* Description */}
-        <Text style={styles.sectionTitle}>Description</Text>
+        <Text style={styles.sectionTitle}>{t('betaFeedback.description')}</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="Please provide details about your feedback..."
+          placeholder={t('betaFeedback.descriptionPlaceholder')}
           placeholderTextColor="#9CA3AF"
           value={description}
           onChangeText={setDescription}
@@ -191,10 +193,10 @@ export default function BetaFeedback() {
         {/* Bug Report Fields */}
         {feedbackType === 'bug_report' && (
           <>
-            <Text style={styles.sectionTitle}>Steps to Reproduce</Text>
+            <Text style={styles.sectionTitle}>{t('betaFeedback.stepsToReproduce')}</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="1. Go to..."
+              placeholder={t('betaFeedback.stepsPlaceholder')}
               placeholderTextColor="#9CA3AF"
               value={stepsToReproduce}
               onChangeText={setStepsToReproduce}
@@ -203,10 +205,10 @@ export default function BetaFeedback() {
               textAlignVertical="top"
             />
 
-            <Text style={styles.sectionTitle}>Expected Behavior</Text>
+            <Text style={styles.sectionTitle}>{t('betaFeedback.expectedBehavior')}</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="What should happen?"
+              placeholder={t('betaFeedback.expectedPlaceholder')}
               placeholderTextColor="#9CA3AF"
               value={expectedBehavior}
               onChangeText={setExpectedBehavior}
@@ -215,10 +217,10 @@ export default function BetaFeedback() {
               textAlignVertical="top"
             />
 
-            <Text style={styles.sectionTitle}>Actual Behavior</Text>
+            <Text style={styles.sectionTitle}>{t('betaFeedback.actualBehavior')}</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="What actually happened?"
+              placeholder={t('betaFeedback.actualPlaceholder')}
               placeholderTextColor="#9CA3AF"
               value={actualBehavior}
               onChangeText={setActualBehavior}
@@ -232,22 +234,22 @@ export default function BetaFeedback() {
         {/* Ratings */}
         {feedbackType !== 'feature_request' && (
           <>
-            <Text style={styles.sectionTitle}>Ratings (Optional)</Text>
+            <Text style={styles.sectionTitle}>{t('betaFeedback.ratingsOptional')}</Text>
             <View style={styles.ratingsCard}>
-              {renderStars(ratingOverall, setRatingOverall, 'Overall Experience')}
-              {renderStars(ratingEaseOfUse, setRatingEaseOfUse, 'Ease of Use')}
-              {renderStars(ratingMatchingQuality, setRatingMatchingQuality, 'Match Quality')}
-              {renderStars(ratingPerformance, setRatingPerformance, 'Performance')}
-              {renderStars(ratingDesign, setRatingDesign, 'Design')}
+              {renderStars(ratingOverall, setRatingOverall, t('betaFeedback.ratings.overall'))}
+              {renderStars(ratingEaseOfUse, setRatingEaseOfUse, t('betaFeedback.ratings.easeOfUse'))}
+              {renderStars(ratingMatchingQuality, setRatingMatchingQuality, t('betaFeedback.ratings.matchQuality'))}
+              {renderStars(ratingPerformance, setRatingPerformance, t('betaFeedback.ratings.performance'))}
+              {renderStars(ratingDesign, setRatingDesign, t('betaFeedback.ratings.design'))}
             </View>
           </>
         )}
 
         {/* Contact Info */}
-        <Text style={styles.sectionTitle}>Email (Optional)</Text>
+        <Text style={styles.sectionTitle}>{t('betaFeedback.emailOptional')}</Text>
         <TextInput
           style={styles.input}
-          placeholder="your.email@example.com"
+          placeholder={t('betaFeedback.emailPlaceholder')}
           placeholderTextColor="#9CA3AF"
           value={email}
           onChangeText={setEmail}
@@ -264,7 +266,7 @@ export default function BetaFeedback() {
             size={24}
             color="#A08AB7"
           />
-          <Text style={styles.checkboxLabel}>You can contact me about this feedback</Text>
+          <Text style={styles.checkboxLabel}>{t('betaFeedback.allowContact')}</Text>
         </TouchableOpacity>
 
         {/* Submit Button */}
@@ -276,13 +278,13 @@ export default function BetaFeedback() {
           {loading ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text style={styles.submitButtonText}>Submit Feedback</Text>
+            <Text style={styles.submitButtonText}>{t('betaFeedback.submitButton')}</Text>
           )}
         </TouchableOpacity>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Thank you for helping us improve Accord during the beta phase!
+            {t('betaFeedback.thankYouMessage')}
           </Text>
         </View>
       </ScrollView>

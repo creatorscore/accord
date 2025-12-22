@@ -611,5 +611,265 @@
     "restartRequired": "Beberapa perubahan mungkin berlaku pada peluncuran berikutnya",
     "systemDefault": "Default Sistem",
     "useSystemLanguage": "Gunakan bahasa sistem"
+  },
+  "activity": {
+    "title": "Aktivitas",
+    "back": "Kembali",
+    "markAllRead": "Tandai semua sudah dibaca",
+    "loading": "Memuat aktivitas...",
+    "tryAgain": "Coba Lagi",
+    "noActivityYet": "Belum Ada Aktivitas",
+    "noActivityDescription": "Ketika seseorang menyukai Anda, Anda cocok, atau menerima pesan, Anda akan melihatnya di sini.",
+    "today": "Hari Ini",
+    "yesterday": "Kemarin",
+    "thisWeek": "Minggu Ini",
+    "earlier": "Sebelumnya",
+    "premiumTitle": "Umpan Aktivitas",
+    "premiumDescription": "Lihat siapa yang menyukai Anda, kapan Anda cocok, pesan baru, ulasan, dan lainnya — semua di satu tempat.",
+    "upgradeToPremium": "Tingkatkan ke Premium"
+  },
+  "betaFeedback": {
+    "title": "Umpan Balik Beta",
+    "subtitle": "Bantu kami meningkatkan Accord",
+    "overallRating": "Penilaian Keseluruhan",
+    "rateExperience": "Nilai pengalaman Anda",
+    "subject": "Subjek",
+    "subjectPlaceholder": "Tentang apa umpan balik Anda?",
+    "description": "Deskripsi",
+    "descriptionPlaceholder": "Ceritakan lebih banyak tentang pengalaman Anda...",
+    "feedbackType": "Jenis Umpan Balik",
+    "bug": "Laporan Bug",
+    "feature": "Permintaan Fitur",
+    "improvement": "Peningkatan",
+    "other": "Lainnya",
+    "allowContact": "Izinkan kontak untuk tindak lanjut",
+    "allowContactDesc": "Kami mungkin menghubungi untuk mempelajari lebih lanjut tentang umpan balik Anda",
+    "submit": "Kirim Umpan Balik",
+    "submitting": "Mengirim...",
+    "missingInfo": "Informasi Kurang",
+    "missingInfoMessage": "Harap berikan subjek dan deskripsi untuk umpan balik Anda.",
+    "ratingRequired": "Penilaian Diperlukan",
+    "ratingRequiredMessage": "Harap berikan penilaian keseluruhan.",
+    "thankYou": "Terima Kasih!",
+    "thankYouMessage": "Umpan balik Anda membantu kami membuat Accord lebih baik untuk semua orang.",
+    "error": "Kesalahan",
+    "errorMessage": "Gagal mengirim umpan balik. Silakan coba lagi."
+  },
+  "deleteAccount": {
+    "title": "Hapus Akun",
+    "warning": "Peringatan",
+    "warningMessage": "Tindakan ini permanen dan tidak dapat dibatalkan. Semua data, kecocokan, pesan, dan informasi profil Anda akan dihapus secara permanen.",
+    "confirmTitle": "Apakah Anda yakin?",
+    "confirmMessage": "Harap ketik DELETE untuk mengonfirmasi bahwa Anda ingin menghapus akun Anda secara permanen.",
+    "confirmPlaceholder": "Ketik DELETE untuk konfirmasi",
+    "deleteButton": "Hapus Akun Saya",
+    "deleting": "Menghapus...",
+    "incorrectConfirmation": "Konfirmasi Salah",
+    "incorrectConfirmationMessage": "Harap ketik DELETE dengan tepat untuk mengonfirmasi.",
+    "accountDeleted": "Akun Dihapus",
+    "accountDeletedMessage": "Akun Anda telah dihapus secara permanen.",
+    "error": "Kesalahan",
+    "errorMessage": "Gagal menghapus akun. Silakan coba lagi atau hubungi dukungan."
+  },
+  "notificationSettings": {
+    "title": "Pengaturan Notifikasi",
+    "subtitle": "Kelola notifikasi Anda",
+    "pushNotifications": "Notifikasi Push",
+    "pushNotificationsDesc": "Terima notifikasi push di perangkat Anda",
+    "newMatches": "Kecocokan Baru",
+    "newMatchesDesc": "Ketika Anda cocok dengan seseorang",
+    "newMessages": "Pesan Baru",
+    "newMessagesDesc": "Ketika Anda menerima pesan baru",
+    "newLikes": "Suka Baru",
+    "newLikesDesc": "Ketika seseorang menyukai profil Anda",
+    "reviews": "Ulasan",
+    "reviewsDesc": "Ketika ulasan siap atau ditampilkan",
+    "marketing": "Pemasaran",
+    "marketingDesc": "Tips, pembaruan, dan promosi",
+    "emailNotifications": "Notifikasi Email",
+    "emailNotificationsDesc": "Terima pembaruan melalui email",
+    "saved": "Pengaturan Disimpan",
+    "savedMessage": "Preferensi notifikasi Anda telah diperbarui.",
+    "error": "Kesalahan",
+    "errorMessage": "Gagal menyimpan pengaturan. Silakan coba lagi."
+  },
+  "safetyCenter": {
+    "title": "Pusat Keamanan",
+    "subtitle": "Tetap aman di Accord",
+    "emergencyResources": "Sumber Daya Darurat",
+    "emergencyResourcesDesc": "Hotline krisis dan layanan dukungan",
+    "reportUser": "Laporkan Pengguna",
+    "reportUserDesc": "Laporkan pelecehan, penipuan, atau masalah lainnya",
+    "blockingOptions": "Opsi Pemblokiran",
+    "blockingOptionsDesc": "Blokir kontak, negara, atau pengguna tertentu",
+    "safetyTips": "Tips Keamanan",
+    "safetyTipsDesc": "Panduan untuk kencan online yang aman",
+    "privacyGuide": "Panduan Privasi",
+    "privacyGuideDesc": "Lindungi informasi pribadi Anda",
+    "meetingSafely": "Bertemu dengan Aman",
+    "meetingSafelyDesc": "Tips untuk bertemu kecocokan secara langsung",
+    "lgbtqResources": "Sumber Daya LGBTQ+",
+    "lgbtqResourcesDesc": "Organisasi dukungan dan helpline"
+  },
+  "subscriptionSettings": {
+    "title": "Langganan",
+    "chooseYourPlan": "Pilih Paket Anda",
+    "loadingPlans": "Memuat paket...",
+    "renewsOn": "Diperpanjang pada: {{date}}",
+    "activeDevelopmentMode": "Aktif (Mode Pengembangan)",
+    "developmentModeNA": "T/A (Mode Pengembangan)",
+    "developmentMode": "Mode Pengembangan",
+    "developmentModeDescription": "RevenueCat dinonaktifkan dalam pengembangan. Status langganan Anda dikontrol oleh flag is_premium dan is_platinum dalam database.",
+    "developmentModeProductionNote": "Dalam produksi, layar ini akan menampilkan paket langganan nyata dan memungkinkan pengguna mengelola langganan mereka melalui App Store atau Play Store.",
+    "status": {
+      "platinumMember": "Anggota Platinum",
+      "premiumMember": "Anggota Premium",
+      "freePlan": "Paket Gratis",
+      "allFeaturesUnlocked": "Semua fitur premium terbuka",
+      "enhancedFeaturesUnlocked": "Fitur yang ditingkatkan terbuka",
+      "freeDescription": "25 geseran per hari, pesan dasar"
+    },
+    "plans": {
+      "premium": "Premium",
+      "platinum": "Platinum"
+    },
+    "periods": {
+      "monthly": "Bulanan",
+      "threeMonths": "3 Bulan",
+      "annual": "Tahunan"
+    },
+    "save22": "Hemat 22%",
+    "save33": "Hemat 33%",
+    "bestValueSave22": "Nilai Terbaik - Hemat 22%",
+    "perMonth": "bulan",
+    "perThreeMonths": "3 bulan",
+    "perYear": "tahun",
+    "quarterlyPopular": "Hanya $11.66/bulan — Paket paling populer kami!",
+    "processing": "Memproses...",
+    "subscribeToPremium": "Berlangganan Premium",
+    "subscribeToPlatinum": "Berlangganan Platinum",
+    "premiumIncludes": "Premium termasuk:",
+    "premiumFeaturesList": "• Geseran tanpa batas\n• Lihat siapa yang menyukai Anda\n• 5 Super Like per minggu\n• Pesan suara\n• Tanda terima baca\n• Filter lanjutan\n• Putar ulang",
+    "everythingInPremiumPlus": "Semua di Premium, plus:",
+    "platinumFeaturesList": "• Peningkatan profil mingguan\n• Pemeriksaan latar belakang\n• Sumber daya hukum\n• Dukungan prioritas",
+    "platinumComingSoonMessage": "Tunggu! Tingkat Platinum akan segera hadir.",
+    "comingSoon": "Segera Hadir",
+    "planNotAvailable": "Paket {{plan}} {{period}} tidak tersedia di RevenueCat",
+    "premiumFeaturesTitle": "Fitur Premium",
+    "features": {
+      "unlimitedSwipes": "Geseran tanpa batas",
+      "seeWhoLikedYou": "Lihat siapa yang menyukai Anda",
+      "superLikesPerWeek": "5 Super Like per minggu",
+      "voiceMessages": "Pesan suara",
+      "readReceipts": "Tanda terima baca",
+      "advancedFilters": "Filter lanjutan",
+      "rewindLastSwipe": "Putar ulang geseran terakhir",
+      "backgroundChecks": "Pemeriksaan latar belakang",
+      "legalResources": "Sumber daya hukum",
+      "weeklyProfileBoost": "Peningkatan profil mingguan",
+      "prioritySupport": "Dukungan prioritas"
+    },
+    "restorePurchases": "Pulihkan Pembelian",
+    "restoring": "Memulihkan...",
+    "opening": "Membuka...",
+    "redeemPromoCode": "Tukarkan Kode Promo",
+    "manageSubscription": "Kelola Langganan",
+    "infoTextIOS": "Langganan dikelola melalui akun App Store Anda. Anda dapat membatalkan kapan saja dari pengaturan akun Anda.",
+    "infoTextAndroid": "Langganan dikelola melalui akun Google Play Anda. Anda dapat membatalkan kapan saja dari pengaturan akun Anda.",
+    "termsOfUse": "Ketentuan Penggunaan",
+    "privacyPolicy": "Kebijakan Privasi",
+    "unableToLoadTitle": "Tidak Dapat Memuat Opsi Langganan",
+    "unableToLoadDescription": "Kami mengalami masalah saat memuat paket langganan. Ini mungkin karena:",
+    "errorReasons": {
+      "revenueCat": "• Penawaran tidak dikonfigurasi di RevenueCat",
+      "network": "• Masalah koneksi jaringan",
+      "serviceUnavailable": "• Layanan RevenueCat sementara tidak tersedia"
+    },
+    "alerts": {
+      "unableToLoadTitle": "Tidak Dapat Memuat Langganan",
+      "unableToLoadMessage": "Silakan periksa koneksi internet Anda dan coba lagi.",
+      "tryAgain": "Coba Lagi",
+      "successTitle": "Berhasil!",
+      "purchasesRestoredSuccess": "Pembelian Anda telah berhasil dipulihkan.",
+      "noPurchasesFoundTitle": "Tidak Ada Pembelian Ditemukan",
+      "noPurchasesFoundMessage": "Kami tidak dapat menemukan pembelian untuk dipulihkan. Jika Anda yakin ini adalah kesalahan, silakan hubungi dukungan.",
+      "restoreFailedTitle": "Pemulihan Gagal",
+      "restoreFailedMessage": "Gagal memulihkan pembelian. Silakan coba lagi nanti.",
+      "developmentModeTitle": "Mode Pengembangan",
+      "developmentModeMessage": "Dalam mode pengembangan, manajemen langganan ditangani melalui database.\n\nDalam produksi, ini akan membuka pengaturan langganan App Store atau Play Store Anda.",
+      "couldNotOpenManagement": "Tidak dapat membuka manajemen langganan",
+      "notAvailableTitle": "Tidak Tersedia",
+      "promoCodeAndroidMessage": "Penukaran kode promo hanya tersedia di perangkat iOS. Di Android, Anda dapat menukarkan kode langsung di Google Play Store.",
+      "codeRedemptionFailed": "Gagal membuka penukaran kode. Silakan coba lagi.",
+      "subscriptionActivated": "Langganan Anda telah diaktifkan.",
+      "subscriptionExistsTitle": "Langganan Sudah Ada",
+      "subscriptionExistsAndroid": "Anda memiliki langganan yang dibatalkan di akun Google Play Anda saat ini.\n\nOpsi:\n\n1. Aktifkan kembali langganan yang ada di pengaturan Google Play\n\n2. Gunakan akun Google Play yang berbeda: Keluar dari Google Play di perangkat Anda, lalu masuk dengan akun yang berbeda dan coba lagi",
+      "subscriptionExistsIOS": "Anda memiliki langganan yang dibatalkan di Apple ID Anda saat ini.\n\nOpsi:\n\n1. Aktifkan kembali langganan yang ada di pengaturan App Store\n\n2. Gunakan Apple ID yang berbeda: Keluar di Pengaturan > [Nama Anda], lalu masuk dengan Apple ID yang berbeda dan coba lagi",
+      "gotIt": "Mengerti",
+      "openSettings": "Buka Pengaturan",
+      "purchaseFailedTitle": "Pembelian Gagal",
+      "purchaseFailedMessage": "Gagal menyelesaikan pembelian. Silakan coba lagi atau hubungi dukungan jika masalah berlanjut."
+    }
+  },
+  "whatsNew": {
+    "title": "Yang Baru",
+    "version": "Versi {{version}}",
+    "continue": "Ayo Mulai!",
+    "new": "BARU",
+    "v109": {
+      "headline": "Tetap terhubung dengan Pusat Aktivitas dan akurasi lokasi yang lebih baik!",
+      "features": {
+        "activityCenter": {
+          "title": "Pusat Aktivitas",
+          "description": "Lacak semua suka, kecocokan, dan tampilan profil Anda di satu tempat yang nyaman"
+        },
+        "betterLocation": {
+          "title": "Akurasi Lokasi Lebih Baik",
+          "description": "Pencocokan lokasi yang lebih presisi untuk menemukan orang yang kompatibel di dekat Anda"
+        },
+        "moreLanguages": {
+          "title": "Lebih Banyak Bahasa",
+          "description": "Dukungan terjemahan lengkap untuk semua layar aplikasi dalam 18 bahasa"
+        },
+        "bugFixes": {
+          "title": "Perbaikan Bug & Peningkatan",
+          "description": "Berbagai peningkatan kinerja dan perbaikan bug untuk pengalaman yang lebih lancar"
+        }
+      }
+    },
+    "v108": {
+      "headline": "Fitur keamanan yang ditingkatkan dan verifikasi foto!",
+      "features": {
+        "photoVerification": {
+          "title": "Verifikasi Foto",
+          "description": "Verifikasi selfie untuk membuktikan foto Anda benar-benar Anda"
+        },
+        "screenshotProtection": {
+          "title": "Perlindungan Screenshot",
+          "description": "Foto Anda dilindungi dari screenshot dalam chat"
+        },
+        "improvedSafety": {
+          "title": "Keamanan yang Ditingkatkan",
+          "description": "Sistem larangan yang ditingkatkan dan peningkatan keamanan"
+        }
+      }
+    },
+    "v104": {
+      "headline": "Peningkatan pencarian dan perbaikan keamanan!",
+      "features": {
+        "searchImprovements": {
+          "title": "Pencarian Lebih Baik",
+          "description": "Algoritma pencocokan yang ditingkatkan untuk hasil yang lebih relevan"
+        },
+        "encryptionFix": {
+          "title": "Perbaikan Enkripsi",
+          "description": "Memperbaiki enkripsi end-to-end untuk pesan yang aman"
+        },
+        "bugFixes": {
+          "title": "Perbaikan Bug",
+          "description": "Berbagai peningkatan stabilitas dan kinerja"
+        }
+      }
+    }
   }
 }

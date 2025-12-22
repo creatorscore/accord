@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Alert, Modal, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -10,10 +10,12 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import { getPrivateKey, decryptMessage } from '@/lib/encryption';
 import { useScreenProtection } from '@/hooks/useScreenProtection';
 import { useColorScheme } from '@/lib/useColorScheme';
+import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
 
 interface Conversation {
   match_id: string;
@@ -47,6 +49,7 @@ export default function Messages() {
   const insets = useSafeAreaInsets();
   const { colors, isDarkColorScheme } = useColorScheme();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const unreadActivityCount = useUnreadActivityCount(currentProfileId);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,6 +57,11 @@ export default function Messages() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showActionSheet, setShowActionSheet] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set()); // Set of match_ids where other user is typing
+
+  // Refs for typing indicator subscriptions
+  const typingChannelsRef = useRef<Map<string, RealtimeChannel>>(new Map());
+  const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   // Protect conversation list from screenshots
   useScreenProtection();
@@ -97,127 +105,156 @@ export default function Messages() {
     try {
       if (!currentProfileId) return;
 
-      // Get all matches (filtered by archived status)
-      const { data: matches, error: matchesError } = await supabase
-        .from('matches')
-        .select('id, profile1_id, profile2_id, is_muted, is_archived, is_pinned')
-        .or(`profile1_id.eq.${currentProfileId},profile2_id.eq.${currentProfileId}`)
-        .eq('status', 'active')
-        .eq('is_archived', showArchived);
-
-      if (matchesError) throw matchesError;
-
-      // SAFETY: Filter out blocked users (bidirectional)
-      const { data: blockedByMe } = await supabase
-        .from('blocks')
-        .select('blocked_profile_id')
-        .eq('blocker_profile_id', currentProfileId);
-
-      const { data: blockedMe } = await supabase
-        .from('blocks')
-        .select('blocker_profile_id')
-        .eq('blocked_profile_id', currentProfileId);
-
-      const blockedProfileIds = new Set([
-        ...(blockedByMe?.map(b => b.blocked_profile_id) || []),
-        ...(blockedMe?.map(b => b.blocker_profile_id) || [])
+      // Run initial queries in parallel for better performance
+      const [matchesResult, blockedByMeResult, blockedMeResult, revealsResult] = await Promise.all([
+        // Get all matches (filtered by archived status)
+        supabase
+          .from('matches')
+          .select('id, profile1_id, profile2_id, is_muted, is_archived, is_pinned')
+          .or(`profile1_id.eq.${currentProfileId},profile2_id.eq.${currentProfileId}`)
+          .eq('status', 'active')
+          .eq('is_archived', showArchived),
+        // Get blocked users
+        supabase
+          .from('blocks')
+          .select('blocked_profile_id')
+          .eq('blocker_profile_id', currentProfileId),
+        supabase
+          .from('blocks')
+          .select('blocker_profile_id')
+          .eq('blocked_profile_id', currentProfileId),
+        // Get photo reveals for current user
+        supabase
+          .from('photo_reveals')
+          .select('revealer_profile_id')
+          .eq('revealed_to_profile_id', currentProfileId),
       ]);
 
-      // Filter out matches with blocked users
-      const filteredMatches = (matches || []).filter(match => {
+      if (matchesResult.error) throw matchesResult.error;
+
+      const matches = matchesResult.data || [];
+      const blockedProfileIds = new Set([
+        ...(blockedByMeResult.data?.map(b => b.blocked_profile_id) || []),
+        ...(blockedMeResult.data?.map(b => b.blocker_profile_id) || [])
+      ]);
+      const revealedProfileIds = new Set(
+        revealsResult.data?.map(r => r.revealer_profile_id) || []
+      );
+
+      // Filter out matches with blocked users and get other profile IDs
+      const filteredMatches = matches.filter(match => {
         const otherProfileId = match.profile1_id === currentProfileId
           ? match.profile2_id
           : match.profile1_id;
         return !blockedProfileIds.has(otherProfileId);
       });
 
-      // For each match, get last message and profile
+      if (filteredMatches.length === 0) {
+        setConversations([]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      // Get all other profile IDs
+      const otherProfileIds = filteredMatches.map(match =>
+        match.profile1_id === currentProfileId ? match.profile2_id : match.profile1_id
+      );
+      const matchIds = filteredMatches.map(match => match.id);
+
+      // Batch fetch all profiles and messages in parallel
+      const [profilesResult, messagesResult, unreadCountsResult] = await Promise.all([
+        // Get all profiles at once
+        supabase
+          .from('profiles')
+          .select(`
+            id,
+            display_name,
+            age,
+            is_verified,
+            encryption_public_key,
+            photo_blur_enabled,
+            photos (
+              url,
+              is_primary,
+              display_order
+            )
+          `)
+          .in('id', otherProfileIds),
+        // Get last message for each match using a single query with distinct
+        supabase
+          .from('messages')
+          .select('match_id, encrypted_content, created_at, sender_profile_id, read_at')
+          .in('match_id', matchIds)
+          .order('created_at', { ascending: false }),
+        // Get unread counts for all matches at once
+        supabase
+          .from('messages')
+          .select('match_id', { count: 'exact' })
+          .in('match_id', matchIds)
+          .eq('receiver_profile_id', currentProfileId)
+          .is('read_at', null),
+      ]);
+
+      // Create lookup maps for O(1) access
+      const profilesMap = new Map(
+        (profilesResult.data || []).map(p => [p.id, p])
+      );
+
+      // Get last message per match (first occurrence since sorted desc)
+      const lastMessagesMap = new Map<string, any>();
+      for (const msg of messagesResult.data || []) {
+        if (!lastMessagesMap.has(msg.match_id)) {
+          lastMessagesMap.set(msg.match_id, msg);
+        }
+      }
+
+      // Count unread messages per match
+      const unreadCountsMap = new Map<string, number>();
+      for (const msg of unreadCountsResult.data || []) {
+        const current = unreadCountsMap.get(msg.match_id) || 0;
+        unreadCountsMap.set(msg.match_id, current + 1);
+      }
+
+      // Get private key once for all decryptions
+      const privateKey = await getPrivateKey(user?.id || '');
+
+      // Build conversations with decryption done in parallel
       const conversationsData = await Promise.all(
         filteredMatches.map(async (match) => {
-          const otherProfileId =
-            match.profile1_id === currentProfileId ? match.profile2_id : match.profile1_id;
+          const otherProfileId = match.profile1_id === currentProfileId
+            ? match.profile2_id
+            : match.profile1_id;
 
-          // Get profile with encryption key
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select(`
-              id,
-              display_name,
-              age,
-              is_verified,
-              encryption_public_key,
-              photo_blur_enabled,
-              photos (
-                url,
-                is_primary,
-                display_order
-              )
-            `)
-            .eq('id', otherProfileId)
-            .single();
-
-          // Get last message
-          const { data: lastMessage } = await supabase
-            .from('messages')
-            .select('encrypted_content, created_at, sender_profile_id, read_at')
-            .eq('match_id', match.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-          // Get unread count
-          const { count: unreadCount } = await supabase
-            .from('messages')
-            .select('id', { count: 'exact', head: true })
-            .eq('match_id', match.id)
-            .eq('receiver_profile_id', currentProfileId)
-            .is('read_at', null);
+          const profile = profilesMap.get(otherProfileId);
+          const lastMessage = lastMessagesMap.get(match.id);
+          const unreadCount = unreadCountsMap.get(match.id) || 0;
 
           const photos = profile?.photos?.sort((a: any, b: any) => a.display_order - b.display_order);
           const primaryPhoto = photos?.find((p: any) => p.is_primary) || photos?.[0];
-
-          // Check if this user has revealed photos to current user
-          const { data: revealData } = await supabase
-            .from('photo_reveals')
-            .select('id')
-            .eq('revealer_profile_id', otherProfileId)
-            .eq('revealed_to_profile_id', currentProfileId)
-            .maybeSingle();
-
-          const isRevealed = !!revealData;
+          const isRevealed = revealedProfileIds.has(otherProfileId);
 
           // Decrypt last message if available
           let decryptedContent: string | undefined;
           if (lastMessage && profile?.encryption_public_key) {
             try {
-              const privateKey = await getPrivateKey(user?.id || '');
               if (privateKey) {
-                const senderKey = lastMessage.sender_profile_id === currentProfileId
-                  ? profile.encryption_public_key  // We sent it, use recipient's public key
-                  : profile.encryption_public_key; // They sent it, use their public key
-
                 decryptedContent = await decryptMessage(
                   lastMessage.encrypted_content,
                   privateKey,
-                  senderKey
+                  profile.encryption_public_key
                 );
               } else {
-                // No private key available - show placeholder
                 decryptedContent = t('messages.encryptedMessage');
               }
             } catch (error) {
-              console.log('Could not decrypt preview:', error);
-              // Fall back to placeholder on any decryption error
               decryptedContent = t('messages.encryptedMessage');
             }
           } else if (lastMessage) {
-            // No encryption key for other user - check if message looks encrypted
             const content = lastMessage.encrypted_content;
             if (content && content.includes(':') && /^[A-Za-z0-9+/=]+:/.test(content)) {
-              // Looks like encrypted content
               decryptedContent = t('messages.encryptedMessage');
             } else {
-              // Plain text (legacy message)
               decryptedContent = content;
             }
           }
@@ -238,7 +275,7 @@ export default function Messages() {
               ...lastMessage,
               decrypted_content: decryptedContent
             } : undefined,
-            unread_count: unreadCount || 0,
+            unread_count: unreadCount,
             is_muted: match.is_muted || false,
             is_archived: match.is_archived || false,
             is_pinned: match.is_pinned || false,
@@ -248,11 +285,8 @@ export default function Messages() {
 
       // Sort: pinned first, then by last message time (most recent first)
       const sorted = conversationsData.sort((a, b) => {
-        // Pinned conversations always come first
         if (a.is_pinned && !b.is_pinned) return -1;
         if (!a.is_pinned && b.is_pinned) return 1;
-
-        // Then sort by last message time
         if (!a.last_message) return 1;
         if (!b.last_message) return -1;
         return new Date(b.last_message.created_at).getTime() - new Date(a.last_message.created_at).getTime();
@@ -298,6 +332,93 @@ export default function Messages() {
       channel.unsubscribe();
     };
   };
+
+  // Subscribe to typing indicators for all conversations (Premium feature)
+  const subscribeToTypingIndicators = useCallback((matchIds: string[]) => {
+    if (!isPremium || !currentProfileId) return;
+
+    // Unsubscribe from channels that are no longer needed
+    const currentMatchIds = new Set(matchIds);
+    for (const [matchId, channel] of typingChannelsRef.current) {
+      if (!currentMatchIds.has(matchId)) {
+        channel.unsubscribe();
+        typingChannelsRef.current.delete(matchId);
+        // Clear any pending timeout
+        const timeout = typingTimeoutsRef.current.get(matchId);
+        if (timeout) {
+          clearTimeout(timeout);
+          typingTimeoutsRef.current.delete(matchId);
+        }
+      }
+    }
+
+    // Subscribe to new channels
+    for (const matchId of matchIds) {
+      if (typingChannelsRef.current.has(matchId)) continue;
+
+      const channel = supabase.channel(`typing-${matchId}`, {
+        config: {
+          broadcast: { self: false },
+        },
+      });
+
+      channel
+        .on('broadcast', { event: 'typing' }, (payload) => {
+          // Only show typing if it's from the other user
+          if (payload.payload?.profileId && payload.payload.profileId !== currentProfileId) {
+            // Add to typing users
+            setTypingUsers((prev) => {
+              const newSet = new Set(prev);
+              newSet.add(matchId);
+              return newSet;
+            });
+
+            // Clear existing timeout for this match
+            const existingTimeout = typingTimeoutsRef.current.get(matchId);
+            if (existingTimeout) {
+              clearTimeout(existingTimeout);
+            }
+
+            // Hide typing indicator after 3 seconds of no typing events
+            const timeout = setTimeout(() => {
+              setTypingUsers((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(matchId);
+                return newSet;
+              });
+              typingTimeoutsRef.current.delete(matchId);
+            }, 3000);
+
+            typingTimeoutsRef.current.set(matchId, timeout);
+          }
+        })
+        .subscribe();
+
+      typingChannelsRef.current.set(matchId, channel);
+    }
+  }, [isPremium, currentProfileId]);
+
+  // Subscribe to typing indicators when conversations change
+  useEffect(() => {
+    if (isPremium && currentProfileId && conversations.length > 0) {
+      const matchIds = conversations.map((c) => c.match_id);
+      subscribeToTypingIndicators(matchIds);
+    }
+
+    return () => {
+      // Cleanup all typing channels
+      for (const channel of typingChannelsRef.current.values()) {
+        channel.unsubscribe();
+      }
+      typingChannelsRef.current.clear();
+
+      // Clear all timeouts
+      for (const timeout of typingTimeoutsRef.current.values()) {
+        clearTimeout(timeout);
+      }
+      typingTimeoutsRef.current.clear();
+    };
+  }, [isPremium, currentProfileId, conversations, subscribeToTypingIndicators]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -681,6 +802,7 @@ export default function Messages() {
 
   const renderConversation = ({ item, index }: { item: Conversation; index: number }) => {
     const hasUnread = item.unread_count > 0;
+    const isTyping = typingUsers.has(item.match_id);
 
     return (
       <MotiView
@@ -728,8 +850,34 @@ export default function Messages() {
               )}
             </View>
 
-            {/* Last Message */}
-            {item.last_message ? (
+            {/* Last Message or Typing Indicator */}
+            {isTyping ? (
+              <View style={styles.messageRow}>
+                <View style={styles.typingIndicator}>
+                  <MotiView
+                    from={{ opacity: 0.4 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ type: 'timing', duration: 400, loop: true }}
+                    style={[styles.typingDot, { backgroundColor: colors.primary }]}
+                  />
+                  <MotiView
+                    from={{ opacity: 0.4 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ type: 'timing', duration: 400, loop: true, delay: 150 }}
+                    style={[styles.typingDot, { backgroundColor: colors.primary }]}
+                  />
+                  <MotiView
+                    from={{ opacity: 0.4 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ type: 'timing', duration: 400, loop: true, delay: 300 }}
+                    style={[styles.typingDot, { backgroundColor: colors.primary }]}
+                  />
+                  <Text style={[styles.typingText, { color: colors.primary }]}>
+                    {t('messages.typing', { defaultValue: 'typing' })}
+                  </Text>
+                </View>
+              </View>
+            ) : item.last_message ? (
               <View style={styles.messageRow}>
                 <Text
                   style={[styles.lastMessage, { color: colors.mutedForeground }, hasUnread && { color: colors.foreground, fontWeight: '600' }]}
@@ -846,23 +994,43 @@ export default function Messages() {
             }
           </Text>
         </View>
-        <TouchableOpacity
-          onPress={() => {
-            setShowArchived(!showArchived);
-            setConversations([]); // Clear to trigger reload
-            setLoading(true);
-          }}
-          style={[styles.archiveButton, { backgroundColor: colors.muted }]}
-        >
-          <MaterialCommunityIcons
-            name={showArchived ? "inbox" : "archive"}
-            size={24}
-            color={colors.primary}
-          />
-          <Text style={[styles.archiveButtonText, { color: colors.primary }]}>
-            {showArchived ? t('messages.activeButton') : t('messages.archiveButton')}
-          </Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {/* Activity Bell */}
+          <TouchableOpacity
+            onPress={() => router.push('/activity')}
+            style={[styles.activityButton, { backgroundColor: isPremium ? '#F5F0FF' : colors.muted }]}
+          >
+            <View style={{ position: 'relative' }}>
+              <MaterialCommunityIcons
+                name="bell-ring-outline"
+                size={22}
+                color="#A08AB7"
+              />
+              {unreadActivityCount > 0 && (
+                <View style={styles.activityBadge}>
+                  <Text style={styles.activityBadgeText}>
+                    {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+          {/* Archive Button */}
+          <TouchableOpacity
+            onPress={() => {
+              setShowArchived(!showArchived);
+              setConversations([]); // Clear to trigger reload
+              setLoading(true);
+            }}
+            style={[styles.archiveButton, { backgroundColor: colors.muted }]}
+          >
+            <MaterialCommunityIcons
+              name={showArchived ? "inbox" : "archive"}
+              size={24}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Conversations List */}
@@ -1029,6 +1197,29 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: '#E4E4E7',
+  },
+  activityButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   archiveButton: {
     flexDirection: 'row',
@@ -1225,6 +1416,23 @@ const styles = StyleSheet.create({
   ctaText: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
+    color: '#A08AB7',
+  },
+  typingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#A08AB7',
+  },
+  typingText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 4,
     color: '#A08AB7',
   },
   upgradeCardContainer: {
