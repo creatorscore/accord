@@ -28,7 +28,7 @@ export interface ReleaseNote {
 // Add new versions at the TOP of this array
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '1.0.9',
+    version: '1.1.0',
     date: 'December 2024',
     headlineKey: 'whatsNew.v109.headline',
     features: [

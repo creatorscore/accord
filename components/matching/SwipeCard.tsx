@@ -8,6 +8,7 @@ import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
+import { useSafeBlur } from '@/hooks/useSafeBlur';
 import { formatDistance, DistanceUnit } from '@/lib/distance-utils';
 import { Image, normalizeImageProps } from '@/components/shared/ConditionalImage';
 
@@ -73,6 +74,12 @@ export default function SwipeCard({
 }: SwipeCardProps) {
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
   const lastActiveText = getLastActiveText(profile.last_active_at, profile.hide_last_active);
+
+  // Safe blur hook - ensures privacy while preventing crashes
+  const { blurRadius, onImageLoad, onImageError, resetBlur } = useSafeBlur({
+    shouldBlur: (profile.photo_blur_enabled || false) && !isAdmin,
+    blurIntensity: 30,
+  });
 
   // Use React Native's built-in Animated API instead of Reanimated
   const pan = useRef(new RNAnimated.ValueXY()).current;
@@ -284,6 +291,11 @@ export default function SwipeCard({
 
   const distance = formatDistance(profile.distance, distanceUnit, profile.hide_distance);
 
+  // Reset blur state when photo changes
+  useEffect(() => {
+    resetBlur();
+  }, [currentPhotoIndex, resetBlur]);
+
   return (
     <RNAnimated.View
       {...panResponder.panHandlers}
@@ -306,11 +318,13 @@ export default function SwipeCard({
               source: { uri: currentPhoto?.url || 'https://via.placeholder.com/400' },
               style: styles.cardImage,
               contentFit: 'cover',
-              blurRadius: profile.photo_blur_enabled && !isAdmin ? 30 : 0,
+              blurRadius: blurRadius, // Safe blur - protects privacy while preventing crashes
               // expo-image specific props for better performance
               cachePolicy: 'memory-disk',
               transition: 200,
               placeholder: { blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' },
+              onLoad: onImageLoad,
+              onError: onImageError,
             })}
           />
 

@@ -16,6 +16,7 @@ import { getPrivateKey, decryptMessage } from '@/lib/encryption';
 import { useScreenProtection } from '@/hooks/useScreenProtection';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
+import { useSafeBlur } from '@/hooks/useSafeBlur';
 
 interface Conversation {
   match_id: string;
@@ -745,64 +746,16 @@ export default function Messages() {
     return t('messages.timeAgo.weeksAgo', { count: Math.floor(seconds / 604800) });
   };
 
-  const renderUpgradeCard = () => {
-    // Only show for free users with at least 2 conversations
-    if (isPremium || conversations.length < 2) return null;
-
-    return (
-      <MotiView
-        from={{ opacity: 0, scale: 0.95, translateY: -10 }}
-        animate={{ opacity: 1, scale: 1, translateY: 0 }}
-        transition={{ type: 'spring', delay: 200 }}
-        style={styles.upgradeCardContainer}
-      >
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => setShowPaywall(true)}
-        >
-          <LinearGradient
-            colors={['#A08AB7', '#CDC2E5']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.upgradeCard}
-          >
-            {/* Header */}
-            <View style={styles.upgradeHeader}>
-              <View style={styles.upgradeTitleRow}>
-                <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
-                <Text style={styles.upgradeTitle}>{t('messages.upgradeCard.title')}</Text>
-              </View>
-              <MaterialCommunityIcons name="close" size={20} color="rgba(255,255,255,0.8)" />
-            </View>
-
-            {/* Features */}
-            <View style={styles.upgradeFeatures}>
-              {[
-                { icon: 'check-all', text: t('messages.upgradeCard.readReceipts') },
-                { icon: 'microphone', text: t('messages.upgradeCard.voiceMessages') },
-                { icon: 'message-text', text: t('messages.upgradeCard.introMessages') },
-              ].map((feature, i) => (
-                <View key={i} style={styles.upgradeFeatureRow}>
-                  <MaterialCommunityIcons name={feature.icon as any} size={18} color="white" />
-                  <Text style={styles.upgradeFeatureText}>{feature.text}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* CTA */}
-            <View style={styles.upgradeCTA}>
-              <Text style={styles.upgradeCTAText}>{t('messages.upgradeCard.upgradeCta')}</Text>
-              <MaterialCommunityIcons name="arrow-right" size={18} color="white" />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      </MotiView>
-    );
-  };
-
-  const renderConversation = ({ item, index }: { item: Conversation; index: number }) => {
+  // Separate ConversationCard component to use useSafeBlur hook
+  const ConversationCard = ({ item, index }: { item: Conversation; index: number }) => {
     const hasUnread = item.unread_count > 0;
     const isTyping = typingUsers.has(item.match_id);
+
+    // Safe blur hook - protects user privacy while preventing crashes
+    const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+      shouldBlur: (item.profile.photo_blur_enabled || false) && !item.profile.is_revealed,
+      blurIntensity: 30,
+    });
 
     return (
       <MotiView
@@ -821,7 +774,9 @@ export default function Messages() {
             <Image
               source={{ uri: item.profile.photo_url || 'https://via.placeholder.com/64' }}
               style={[styles.photo, { backgroundColor: colors.muted }]}
-              blurRadius={item.profile.photo_blur_enabled && !item.profile.is_revealed ? 30 : 0}
+              blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
             />
             {item.profile.is_verified && (
               <View style={[styles.verifiedBadge, { backgroundColor: colors.background }]}>
@@ -918,6 +873,65 @@ export default function Messages() {
         </TouchableOpacity>
       </MotiView>
     );
+  };
+
+  const renderUpgradeCard = () => {
+    // Only show for free users with at least 2 conversations
+    if (isPremium || conversations.length < 2) return null;
+
+    return (
+      <MotiView
+        from={{ opacity: 0, scale: 0.95, translateY: -10 }}
+        animate={{ opacity: 1, scale: 1, translateY: 0 }}
+        transition={{ type: 'spring', delay: 200 }}
+        style={styles.upgradeCardContainer}
+      >
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => setShowPaywall(true)}
+        >
+          <LinearGradient
+            colors={['#A08AB7', '#CDC2E5']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.upgradeCard}
+          >
+            {/* Header */}
+            <View style={styles.upgradeHeader}>
+              <View style={styles.upgradeTitleRow}>
+                <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
+                <Text style={styles.upgradeTitle}>{t('messages.upgradeCard.title')}</Text>
+              </View>
+              <MaterialCommunityIcons name="close" size={20} color="rgba(255,255,255,0.8)" />
+            </View>
+
+            {/* Features */}
+            <View style={styles.upgradeFeatures}>
+              {[
+                { icon: 'check-all', text: t('messages.upgradeCard.readReceipts') },
+                { icon: 'microphone', text: t('messages.upgradeCard.voiceMessages') },
+                { icon: 'message-text', text: t('messages.upgradeCard.introMessages') },
+              ].map((feature, i) => (
+                <View key={i} style={styles.upgradeFeatureRow}>
+                  <MaterialCommunityIcons name={feature.icon as any} size={18} color="white" />
+                  <Text style={styles.upgradeFeatureText}>{feature.text}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* CTA */}
+            <View style={styles.upgradeCTA}>
+              <Text style={styles.upgradeCTAText}>{t('messages.upgradeCard.upgradeCta')}</Text>
+              <MaterialCommunityIcons name="arrow-right" size={18} color="white" />
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </MotiView>
+    );
+  };
+
+  const renderConversation = ({ item, index }: { item: Conversation; index: number }) => {
+    return <ConversationCard item={item} index={index} />;
   };
 
   // Loading state

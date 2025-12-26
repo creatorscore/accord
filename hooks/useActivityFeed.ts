@@ -145,7 +145,8 @@ export function useActivityFeed(profileId: string | null, userId?: string | null
               id,
               display_name,
               photos (url, is_primary),
-              encryption_public_key
+              encryption_public_key,
+              photo_blur_enabled
             )
           `
           )

@@ -16,6 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
+import { useSafeBlur } from '@/hooks/useSafeBlur';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PHOTO_HEIGHT = SCREEN_WIDTH * 1.3;
@@ -59,6 +60,12 @@ export default function ProfilePhotoCarousel({
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
 
+  // Safe blur hook - protects user privacy while preventing crashes
+  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+    shouldBlur: photoBlurEnabled && !isRevealed && !isAdmin,
+    blurIntensity: 30,
+  });
+
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     setCurrentIndex(newIndex);
@@ -84,7 +91,9 @@ export default function ProfilePhotoCarousel({
               source={{ uri: photo.url }}
               style={styles.photo}
               resizeMode="cover"
-              blurRadius={photoBlurEnabled && !isRevealed && !isAdmin ? 30 : 0}
+              blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
             />
 
             {/* Dynamic Watermark over photo */}

@@ -16,6 +16,7 @@ import { isOnline, getLastActiveText } from '@/lib/online-status';
 import { realtimeManager } from '@/lib/realtime-manager';
 import { decryptMessage, getPrivateKey } from '@/lib/encryption';
 import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
+import { useSafeBlur } from '@/hooks/useSafeBlur';
 
 interface Match {
   id: string;
@@ -666,70 +667,19 @@ export default function Matches() {
     return t('matches.timeAgo.weeksAgo', { count: Math.floor(seconds / 604800) });
   };
 
-  const renderLikesCard = () => {
-    if (likesCount === 0 && isPremium) return null; // Don't show if premium user has no likes
-
-    return (
-      <MotiView
-        from={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: 'spring', delay: 100 }}
-        style={styles.likesCardContainer}
-      >
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={handleLikesPress}
-        >
-          <LinearGradient
-            colors={['#A08AB7', '#CDC2E5']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.likesCard}
-          >
-            {/* Icon */}
-            <View style={styles.likesIconContainer}>
-              <MaterialCommunityIcons name="eye" size={32} color="white" />
-            </View>
-
-            {/* Content */}
-            <View style={styles.likesContent}>
-              <Text style={styles.likesTitle}>{t('matches.seeWhoLikesYou')}</Text>
-              {isPremium ? (
-                <Text style={styles.likesSubtitle}>
-                  {likesCount === 0
-                    ? t('matches.noNewLikes')
-                    : t('matches.likesCount', {
-                        count: likesCount,
-                        likes: likesCount === 1 ? t('matches.personHas') : t('matches.peopleHave')
-                      })}
-                </Text>
-              ) : (
-                <View style={styles.likesBlurContainer}>
-                  <BlurView intensity={20} tint="dark" style={styles.likesBlur}>
-                    <MaterialCommunityIcons name="lock" size={16} color="white" />
-                    <Text style={styles.likesBlurText}>
-                      {likesCount > 0 ? t('matches.upgradeTo', { count: likesCount }) : t('matches.upgradeToSee')}
-                    </Text>
-                  </BlurView>
-                  <MaterialCommunityIcons name="crown" size={16} color="#FFD700" style={styles.premiumIcon} />
-                </View>
-              )}
-            </View>
-
-            {/* Arrow */}
-            <MaterialCommunityIcons name="chevron-right" size={28} color="rgba(255,255,255,0.8)" />
-          </LinearGradient>
-        </TouchableOpacity>
-      </MotiView>
-    );
-  };
-
-  const renderMatch = ({ item, index }: { item: Match; index: number }) => {
+  // Separate MatchCard component to use useSafeBlur hook
+  const MatchCard = ({ item, index }: { item: Match; index: number }) => {
     const primaryPhoto = item.profile.photos?.find(p => p.is_primary) || item.profile.photos?.[0];
     const hasUnread = (item.unread_count || 0) > 0;
     const userIsOnline = isOnline(item.profile.last_active_at || null);
     const showOnlineStatus = userIsOnline && !item.profile.hide_last_active;
     const lastActiveText = getLastActiveText(item.profile.last_active_at || null, item.profile.hide_last_active);
+
+    // Safe blur hook - protects user privacy while preventing crashes
+    const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+      shouldBlur: (item.profile.photo_blur_enabled || false) && !item.profile.is_revealed,
+      blurIntensity: 30,
+    });
 
     return (
       <MotiView
@@ -748,7 +698,9 @@ export default function Matches() {
             <Image
               source={{ uri: primaryPhoto?.url || 'https://via.placeholder.com/80' }}
               style={styles.photo}
-              blurRadius={item.profile.photo_blur_enabled && !item.profile.is_revealed ? 30 : 0}
+              blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
             />
             {item.profile.is_verified && (
               <View style={[styles.verifiedBadge, { backgroundColor: colors.card }]}>
@@ -809,6 +761,68 @@ export default function Matches() {
         </TouchableOpacity>
       </MotiView>
     );
+  };
+
+  const renderLikesCard = () => {
+    if (likesCount === 0 && isPremium) return null; // Don't show if premium user has no likes
+
+    return (
+      <MotiView
+        from={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: 'spring', delay: 100 }}
+        style={styles.likesCardContainer}
+      >
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={handleLikesPress}
+        >
+          <LinearGradient
+            colors={['#A08AB7', '#CDC2E5']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.likesCard}
+          >
+            {/* Icon */}
+            <View style={styles.likesIconContainer}>
+              <MaterialCommunityIcons name="eye" size={32} color="white" />
+            </View>
+
+            {/* Content */}
+            <View style={styles.likesContent}>
+              <Text style={styles.likesTitle}>{t('matches.seeWhoLikesYou')}</Text>
+              {isPremium ? (
+                <Text style={styles.likesSubtitle}>
+                  {likesCount === 0
+                    ? t('matches.noNewLikes')
+                    : t('matches.likesCount', {
+                        count: likesCount,
+                        likes: likesCount === 1 ? t('matches.personHas') : t('matches.peopleHave')
+                      })}
+                </Text>
+              ) : (
+                <View style={styles.likesBlurContainer}>
+                  <BlurView intensity={20} tint="dark" style={styles.likesBlur}>
+                    <MaterialCommunityIcons name="lock" size={16} color="white" />
+                    <Text style={styles.likesBlurText}>
+                      {likesCount > 0 ? t('matches.upgradeTo', { count: likesCount }) : t('matches.upgradeToSee')}
+                    </Text>
+                  </BlurView>
+                  <MaterialCommunityIcons name="crown" size={16} color="#FFD700" style={styles.premiumIcon} />
+                </View>
+              )}
+            </View>
+
+            {/* Arrow */}
+            <MaterialCommunityIcons name="chevron-right" size={28} color="rgba(255,255,255,0.8)" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </MotiView>
+    );
+  };
+
+  const renderMatch = ({ item, index }: { item: Match; index: number }) => {
+    return <MatchCard item={item} index={index} />;
   };
 
   // Loading state

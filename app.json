@@ -2,7 +2,7 @@
   "expo": {
     "name": "Accord - Lavender Marriage",
     "slug": "accord",
-    "version": "1.0.9",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.privyreviews.accord",
-      "buildNumber": "54",
+      "buildNumber": "56",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Accord needs access to your photos to upload profile pictures.",
@@ -42,6 +42,7 @@
       "config": {
         "usesNonExemptEncryption": false
       },
+      "googleServicesFile": "./GoogleService-Info.plist",
       "entitlements": {
         "com.apple.developer.applesignin": [
           "Default"
@@ -68,7 +69,7 @@
         "backgroundColor": "#9B87CE"
       },
       "package": "com.privyreviews.accord",
-      "versionCode": 42,
+      "versionCode": 44,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.CAMERA",
@@ -131,6 +132,8 @@
           "iosUrlScheme": "com.googleusercontent.apps.609854216709-81grqvlc66iahvd56749ot511p9agh09"
         }
       ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/analytics",
       "expo-font",
       "expo-web-browser",
       "./plugins/withAndroidManifestFix.js"
