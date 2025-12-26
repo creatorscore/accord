@@ -132,8 +132,6 @@
           "iosUrlScheme": "com.googleusercontent.apps.609854216709-81grqvlc66iahvd56749ot511p9agh09"
         }
       ],
-      "@react-native-firebase/app",
-      "@react-native-firebase/analytics",
       "expo-font",
       "expo-web-browser",
       "./plugins/withAndroidManifestFix.js"
