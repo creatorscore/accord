@@ -117,7 +117,8 @@ export default function PremiumPaywall({
   const { refreshSubscription, syncWithDatabase } = useSubscription();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'quarterly' | 'annual'>('quarterly');
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'quarterly' | 'annual'>('monthly'); // Default to monthly (least commitment)
+  const [isClosing, setIsClosing] = useState(false);
 
   const isPlatinum = variant === 'platinum';
   const features = isPlatinum ? PLATINUM_FEATURES : PREMIUM_FEATURES;
@@ -389,10 +390,20 @@ export default function PremiumPaywall({
         <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.containerFull}>
           <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             {/* Close Button */}
-            <TouchableOpacity style={[styles.closeButton, { top: insets.top + 8 }]} onPress={onClose}>
-              <BlurView intensity={40} tint="dark" style={styles.closeBlur}>
-                <MaterialCommunityIcons name="close" size={24} color="white" />
-              </BlurView>
+            <TouchableOpacity
+              style={[styles.closeButton, { top: insets.top + 8 }]}
+              onPress={() => {
+                setIsClosing(true);
+                // Small delay to allow blur to cleanly unmount
+                setTimeout(onClose, 100);
+              }}
+              disabled={isClosing}
+            >
+              {!isClosing && (
+                <BlurView intensity={40} tint="dark" style={styles.closeBlur}>
+                  <MaterialCommunityIcons name="close" size={24} color="white" />
+                </BlurView>
+              )}
             </TouchableOpacity>
 
             <ScrollView

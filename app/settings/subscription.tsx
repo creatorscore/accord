@@ -18,7 +18,7 @@ export default function SubscriptionManagement() {
   const [redeeming, setRedeeming] = useState(false);
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [loadingOfferings, setLoadingOfferings] = useState(true);
-  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'quarterly' | 'annual'>('quarterly'); // Default to quarterly (best value)
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'quarterly' | 'annual'>('monthly'); // Default to monthly (least commitment)
 
   // ALWAYS use RevenueCat - no development mode bypass
   // This ensures subscriptions work in TestFlight and Production

@@ -254,9 +254,13 @@ export default function AdminReports() {
 
       // Send notifications
       try {
+        // Get email from ban response (Edge Function returns it)
+        const userEmail = banResponse?.banned_email || undefined;
+
         await sendBanNotification(
           banningReport.reported_profile_id,
-          `${banningReport.reason}: ${banningReport.details || 'No additional details'}`
+          `${banningReport.reason}: ${banningReport.details || 'No additional details'}`,
+          userEmail // Pass email for email notification
         );
         await sendReportActionNotification(banningReport.reporter_profile_id, 'banned');
       } catch (notifyError) {

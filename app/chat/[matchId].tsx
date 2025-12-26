@@ -48,6 +48,7 @@ import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { checkMessagingVersionRequirement, getCurrentVersion } from '@/lib/version-check';
 import * as Linking from 'expo-linking';
+import { useSafeBlur } from '@/hooks/useSafeBlur';
 import EmojiPicker from 'rn-emoji-keyboard';
 
 interface MessageReaction {
@@ -145,6 +146,12 @@ export default function Chat() {
   const [matchProfilePhotoBlur, setMatchProfilePhotoBlur] = useState(false);
   const [revealLoading, setRevealLoading] = useState(false);
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
+
+  // Safe blur hook - protects match privacy while preventing crashes
+  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+    shouldBlur: matchProfilePhotoBlur && !otherUserRevealed,
+    blurIntensity: 30,
+  });
 
   // Typing indicator state (Premium feature)
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
@@ -2033,6 +2040,9 @@ export default function Chat() {
           <Image
             source={{ uri: matchProfile?.photo_url || 'https://via.placeholder.com/40' }}
             style={styles.headerAvatar}
+            blurRadius={blurRadius}
+            onLoad={onImageLoad}
+            onError={onImageError}
           />
           <View style={styles.headerInfo}>
             <View style={styles.headerNameRow}>

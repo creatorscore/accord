@@ -769,7 +769,8 @@ export async function sendReportActionNotification(
  */
 export async function sendBanNotification(
   bannedProfileId: string,
-  banReason: string
+  banReason: string,
+  userEmail?: string // Optional email parameter
 ): Promise<void> {
   try {
     // Get banned user's push settings
@@ -779,8 +780,31 @@ export async function sendBanNotification(
       .eq('id', bannedProfileId)
       .single();
 
-    if (error || !profile?.push_enabled) {
+    if (error) {
+      console.error('Error fetching profile for ban notification:', error);
       return;
+    }
+
+    // Send ban email notification if email provided
+    if (userEmail) {
+      try {
+        await supabase.functions.invoke('send-ban-email', {
+          body: {
+            email: userEmail,
+            displayName: profile.display_name,
+            banReason: banReason,
+          },
+        });
+        console.log('✅ Ban email sent to:', userEmail);
+      } catch (emailError) {
+        console.warn('Failed to send ban email (non-critical):', emailError);
+        // Continue with push notification even if email fails
+      }
+    }
+
+    // Send push notifications (if enabled)
+    if (!profile?.push_enabled) {
+      return; // Email sent, but no push notifications
     }
 
     // Get all device tokens for this user (new multi-device system)

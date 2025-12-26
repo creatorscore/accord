@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ActivityItem as ActivityItemType, ActivityType } from '@/hooks/useActivityFeed';
+import { useSafeBlur } from '@/hooks/useSafeBlur';
 
 interface ActivityItemProps {
   activity: ActivityItemType;
@@ -144,6 +145,12 @@ export default function ActivityItem({ activity, onPress, onUnmatch }: ActivityI
   const actorPhoto = activity.actor?.photos?.find((p) => p.is_primary)?.url ||
     activity.actor?.photos?.[0]?.url;
 
+  // Safe blur hook - protects actor privacy while preventing crashes
+  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+    shouldBlur: (activity.actor as any)?.photo_blur_enabled || false,
+    blurIntensity: 20,
+  });
+
   return (
     <TouchableOpacity
       style={[styles.container, !activity.is_read && styles.unread]}
@@ -153,7 +160,13 @@ export default function ActivityItem({ activity, onPress, onUnmatch }: ActivityI
       {/* Avatar or Icon */}
       <View style={[styles.iconContainer, { backgroundColor: config.bgColor }]}>
         {actorPhoto ? (
-          <Image source={{ uri: actorPhoto }} style={styles.avatar} />
+          <Image
+            source={{ uri: actorPhoto }}
+            style={styles.avatar}
+            blurRadius={blurRadius}
+            onLoad={onImageLoad}
+            onError={onImageError}
+          />
         ) : (
           <MaterialCommunityIcons name={config.icon as any} size={24} color={config.color} />
         )}

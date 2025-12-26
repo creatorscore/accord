@@ -72,15 +72,40 @@ export default function TrialExpirationBanner() {
       from={{ opacity: 0, translateY: -20 }}
       animate={{ opacity: 1, translateY: 0 }}
       transition={{ type: 'spring', delay: 300 }}
+      style={{ marginHorizontal: 16, marginVertical: 8 }}
     >
+      {/* Days countdown badge - moved OUTSIDE the gradient to avoid layer cycle */}
+      {daysRemaining > 0 && (
+        <View
+          style={{
+            alignSelf: 'flex-end',
+            backgroundColor: isCritical ? '#FEE2E2' : isUrgent ? '#FEF3C7' : '#DBEAFE',
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            borderRadius: 12,
+            marginBottom: -6,
+            marginRight: 12,
+            zIndex: 10,
+          }}
+        >
+          <Text
+            style={{
+              color: isCritical ? '#991B1B' : isUrgent ? '#92400E' : '#1E40AF',
+              fontSize: 12,
+              fontWeight: 'bold',
+            }}
+          >
+            {daysRemaining} {daysRemaining === 1 ? t('common.day', 'day') : t('common.days', 'days')} {t('common.left', 'left')}
+          </Text>
+        </View>
+      )}
+
       <TouchableOpacity onPress={handlePress} activeOpacity={0.8}>
         <LinearGradient
           colors={getGradientColors()}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={{
-            marginHorizontal: 16,
-            marginVertical: 8,
             borderRadius: 16,
             padding: 16,
           }}
@@ -126,31 +151,6 @@ export default function TrialExpirationBanner() {
               color="rgba(255, 255, 255, 0.8)"
             />
           </View>
-
-          {/* Days countdown badge */}
-          {daysRemaining > 0 && (
-            <View
-              style={{
-                position: 'absolute',
-                top: -8,
-                right: 12,
-                backgroundColor: isCritical ? '#FEE2E2' : isUrgent ? '#FEF3C7' : '#DBEAFE',
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-                borderRadius: 12,
-              }}
-            >
-              <Text
-                style={{
-                  color: isCritical ? '#991B1B' : isUrgent ? '#92400E' : '#1E40AF',
-                  fontSize: 12,
-                  fontWeight: 'bold',
-                }}
-              >
-                {daysRemaining} {daysRemaining === 1 ? t('common.day', 'day') : t('common.days', 'days')} {t('common.left', 'left')}
-              </Text>
-            </View>
-          )}
         </LinearGradient>
       </TouchableOpacity>
     </MotiView>

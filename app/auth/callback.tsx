@@ -14,12 +14,35 @@ export default function AuthCallback() {
   const handleCallback = async () => {
     try {
       // The params will contain the OAuth tokens from the redirect
-      const { access_token, refresh_token, error, error_description } = params;
+      const { access_token, refresh_token, type, error, error_description } = params;
 
       if (error) {
         console.error('OAuth error:', error_description || error);
         router.replace('/(auth)/sign-in');
         return;
+      }
+
+      // Check if this is a password recovery callback
+      if (type === 'recovery' || type === 'magiclink') {
+        console.log('Password recovery callback detected');
+
+        if (access_token && typeof access_token === 'string') {
+          // Set the session with the tokens from the password reset link
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: access_token,
+            refresh_token: (refresh_token as string) || '',
+          });
+
+          if (sessionError) {
+            console.error('Session error:', sessionError);
+            router.replace('/(auth)/sign-in');
+            return;
+          }
+
+          // Redirect to password reset screen
+          router.replace('/(auth)/reset-password');
+          return;
+        }
       }
 
       if (access_token && typeof access_token === 'string') {

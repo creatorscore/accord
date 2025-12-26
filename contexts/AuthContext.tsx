@@ -262,11 +262,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     // Listen for app state changes
-    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       // When app comes to foreground, refresh location
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         console.log('📱 App foregrounded - refreshing location');
-        await refreshLocation();
+        // Fix: Don't await - let it run in background to prevent ANR
+        // GPS calls can take 5-10 seconds and will block Activity launch if awaited
+        refreshLocation().catch(err => console.error('Background location refresh failed:', err));
       }
       appState.current = nextAppState;
     });

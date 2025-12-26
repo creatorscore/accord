@@ -794,7 +794,12 @@ export default function BasicInfo() {
                 mode="date"
                 value={birthDate || maxBirthDate}
                 onChange={(event, selectedDate) => {
-                  setShowDatePicker(false); // Android closes picker on any action
+                  // Fix: Delay closing to prevent "dialog not attached to Activity" error
+                  // This gives Android time to properly dismiss the native dialog
+                  setTimeout(() => {
+                    setShowDatePicker(false);
+                  }, 100);
+
                   if (event.type === 'set' && selectedDate) {
                     setBirthDate(selectedDate);
                   }

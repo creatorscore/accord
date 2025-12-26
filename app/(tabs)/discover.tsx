@@ -27,7 +27,7 @@ import { HeightUnit } from '@/lib/height-utils';
 import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { useColorScheme } from '@/lib/useColorScheme';
-import { trackUserAction, trackFunnel } from '@/lib/analytics';
+import { trackUserAction, trackFunnel, trackEvent } from '@/lib/analytics';
 import { prefetchImages } from '@/components/shared/ConditionalImage';
 import VerificationBanner from '@/components/shared/VerificationBanner';
 import TrialExpirationBanner from '@/components/premium/TrialExpirationBanner';
@@ -171,6 +171,7 @@ export default function Discover() {
   const [showVerificationBanner, setShowVerificationBanner] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(true); // Default to true to avoid flash
   const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
+  const [showPhotoBlurBanner, setShowPhotoBlurBanner] = useState(false);
 
   // Popularity Insights Modal state
   const [showPopularityModal, setShowPopularityModal] = useState(false);
@@ -185,6 +186,13 @@ export default function Discover() {
   // Premium upgrade prompt for locked features
   const [showPremiumLocationPrompt, setShowPremiumLocationPrompt] = useState(false);
   const hasShownPremiumLocationPrompt = useRef(false);
+
+  // Smart recommendations - predicted additional profiles
+  const [recommendationCounts, setRecommendationCounts] = useState({
+    widenAge: 0,
+    increaseDistance: 0,
+    searchGlobally: 0,
+  });
 
   // Quick filter options
   const INTENTIONS = [
@@ -372,6 +380,16 @@ export default function Discover() {
       setIsProfileComplete(profileComplete);
       if (!profileComplete) {
         setShowOnboardingBanner(true);
+      }
+
+      // Show Photo Blur info banner (educate users about why some photos may be blurred)
+      // Only show for complete profiles (don't show to brand new users who haven't finished onboarding)
+      if (profileComplete) {
+        AsyncStorage.getItem('photo_blur_info_dismissed').then((dismissed) => {
+          if (!dismissed) {
+            setShowPhotoBlurBanner(true);
+          }
+        });
       }
 
       // Check popularity insights (shows celebratory modal if user has new likes)
@@ -1980,6 +1998,101 @@ export default function Discover() {
     setShowImmersiveProfile(true);
   }, [currentIndex, profiles]);
 
+  // Calculate predicted additional profiles for smart recommendations
+  const calculateRecommendationCounts = useCallback(async () => {
+    if (!currentProfileId) return;
+
+    try {
+      // Get all the exclusion lists (same logic as loadProfiles)
+      const [
+        { data: alreadySwipedLikes },
+        { data: alreadySwipedPasses },
+        { data: blockedByMe },
+        { data: blockedMe },
+        { data: bannedUsers },
+      ] = await Promise.all([
+        supabase.from('likes').select('liked_profile_id').eq('liker_profile_id', currentProfileId),
+        supabase.from('passes').select('passed_profile_id').eq('passer_profile_id', currentProfileId),
+        supabase.from('blocks').select('blocked_profile_id').eq('blocker_profile_id', currentProfileId),
+        supabase.from('blocks').select('blocker_profile_id').eq('blocked_profile_id', currentProfileId),
+        supabase.from('bans').select('banned_profile_id').not('banned_profile_id', 'is', null)
+          .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString()),
+      ]);
+
+      const swipedIds = [
+        ...(alreadySwipedLikes?.map(l => l.liked_profile_id) || []),
+        ...(alreadySwipedPasses?.map(p => p.passed_profile_id) || []),
+        ...(blockedByMe?.map(b => b.blocked_profile_id) || []),
+        ...(blockedMe?.map(b => b.blocker_profile_id) || []),
+        ...(bannedUsers?.map(b => b.banned_profile_id).filter(Boolean) || []),
+      ];
+
+      // Get current user's gender preference for filtering
+      const { data: currentUserData } = await supabase
+        .from('profiles')
+        .select('preferences:preferences(*)')
+        .eq('id', currentProfileId)
+        .single();
+
+      const genderPreference = currentUserData?.preferences?.[0]?.gender_preference || [];
+
+      // Build base query (same as loadProfiles)
+      const buildQuery = (ageMin: number, ageMax: number, maxDistance?: number) => {
+        let query = supabase
+          .from('profiles')
+          .select('id', { count: 'exact', head: true })
+          .neq('id', currentProfileId)
+          .eq('incognito_mode', false)
+          .eq('profile_complete', true)
+          .eq('photo_review_required', false)
+          .gte('age', Math.max(18, ageMin))
+          .lte('age', ageMax);
+
+        if (swipedIds.length > 0) {
+          query = query.not('id', 'in', `(${swipedIds.join(',')})`);
+        }
+
+        // Apply gender preference filter
+        if (genderPreference && genderPreference.length > 0) {
+          const genderPrefArray = Array.isArray(genderPreference) ? genderPreference : genderPreference.split(',').map((g: string) => g.trim());
+          const pgArrayLiteral = `{${genderPrefArray.map((g: string) => `"${g}"`).join(',')}}`;
+          query = query.filter('gender', 'ov', pgArrayLiteral);
+        }
+
+        return query;
+      };
+
+      // Calculate counts for each recommendation
+      const [
+        { count: widenAgeCount },
+        { count: increaseDistanceCount },
+        { count: globalSearchCount },
+      ] = await Promise.all([
+        // Widen age range (+5 years each direction)
+        buildQuery(Math.max(18, filters.ageMin - 5), Math.min(80, filters.ageMax + 5)),
+        // Increase distance (double current distance) - Note: distance filtering requires lat/lon calculation, simplified here
+        buildQuery(filters.ageMin, filters.ageMax),
+        // Global search (no distance limit) - Note: would need actual global query, simplified here
+        buildQuery(filters.ageMin, filters.ageMax),
+      ]);
+
+      setRecommendationCounts({
+        widenAge: (widenAgeCount || 0) - profiles.length, // Additional profiles beyond current
+        increaseDistance: Math.max(0, Math.floor((increaseDistanceCount || 0) * 1.5) - profiles.length), // Estimated increase
+        searchGlobally: Math.max(0, Math.floor((globalSearchCount || 0) * 3) - profiles.length), // Estimated 3x increase
+      });
+    } catch (error) {
+      console.error('Error calculating recommendation counts:', error);
+    }
+  }, [currentProfileId, filters, profiles.length]);
+
+  // Calculate recommendation counts when empty state is shown
+  useEffect(() => {
+    if (currentIndex >= profiles.length && currentProfileId && !loading && !isSearchMode) {
+      calculateRecommendationCounts();
+    }
+  }, [currentIndex, profiles.length, currentProfileId, loading, isSearchMode, calculateRecommendationCounts]);
+
   const handleRefresh = () => {
     setRefreshing(true);
     loadProfiles();
@@ -2050,6 +2163,11 @@ export default function Discover() {
   const handleDismissVerificationBanner = async () => {
     setShowVerificationBanner(false);
     await AsyncStorage.setItem('verification_banner_dismissed', 'true');
+  };
+
+  const handleDismissPhotoBlurBanner = async () => {
+    setShowPhotoBlurBanner(false);
+    await AsyncStorage.setItem('photo_blur_info_dismissed', 'true');
   };
 
   const handleBlock = async () => {
@@ -2478,42 +2596,280 @@ export default function Discover() {
           )}
         </View>
 
-        {/* Empty State */}
-        <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-6xl mb-6">✨</Text>
-          <Text className="text-2xl font-display-bold text-foreground mb-3 text-center">
-            {isSearchMode ? `No results for "${searchKeyword}"` : t('discover.allCaughtUp')}
-          </Text>
-          <Text className="text-muted-foreground mb-8 text-center text-lg font-sans">
-            {isSearchMode
-              ? "Try different keywords or adjust your filters to find more matches."
-              : t('discover.checkBackSoon')}
-          </Text>
-
+        {/* Smart Empty State with Dynamic Recommendations */}
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32 }}
+          showsVerticalScrollIndicator={false}
+        >
           {isSearchMode ? (
-            <TouchableOpacity
-              className="bg-lavender-500 rounded-full py-4 px-8 shadow-lg"
-              onPress={handleClearSearch}
-            >
-              <Text className="text-white font-sans-bold text-lg">Clear Search</Text>
-            </TouchableOpacity>
-          ) : (
-            <View className="items-center gap-4">
+            /* Search Mode Empty State */
+            <View className="items-center">
+              <Text className="text-6xl mb-4">🔍</Text>
+              <Text className="text-2xl font-display-bold text-foreground mb-3 text-center">
+                No results for "{searchKeyword}"
+              </Text>
+              <Text className="text-muted-foreground mb-6 text-center text-base font-sans">
+                Try different keywords or adjust your filters to find more matches.
+              </Text>
               <TouchableOpacity
                 className="bg-lavender-500 rounded-full py-4 px-8 shadow-lg"
-                onPress={() => setShowSearchBar(true)}
+                onPress={handleClearSearch}
               >
-                <Text className="text-white font-sans-bold text-lg">Search by Keyword</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="border-2 border-lavender-500 rounded-full py-4 px-8"
-                onPress={handleRefresh}
-              >
-                <Text className="text-lavender-500 font-sans-bold text-lg">{t('discover.refresh')}</Text>
+                <Text className="text-white font-sans-bold text-lg">Clear Search</Text>
               </TouchableOpacity>
             </View>
+          ) : (
+            /* Smart Recommendations System */
+            <View>
+              {/* Hero Section */}
+              <View className="items-center mb-8">
+                <Text className="text-6xl mb-4">💜</Text>
+                <Text className="text-2xl font-display-bold text-foreground mb-2 text-center">
+                  Discover Your Perfect Match
+                </Text>
+                <Text className="text-muted-foreground text-center text-base font-sans">
+                  Join thousands finding meaningful connections
+                </Text>
+              </View>
+
+              {/* Premium Benefits Card (for non-premium users only) */}
+              {!isPremium && (
+                <View className="bg-gradient-to-br from-lavender-100 to-lavender-50 dark:from-lavender-900/30 dark:to-lavender-800/20 rounded-2xl p-6 mb-6 border-2 border-lavender-200 dark:border-lavender-700">
+                  {/* Premium Badge */}
+                  <View className="bg-gold-500 self-start rounded-full px-3 py-1 mb-4 flex-row items-center" style={{ backgroundColor: '#FFD700' }}>
+                    <MaterialCommunityIcons name="crown" size={14} color="#A08AB7" />
+                    <Text className="text-lavender-500 font-sans-bold text-xs ml-1">PREMIUM</Text>
+                  </View>
+
+                  <Text className="text-xl font-display-bold text-foreground mb-4">
+                    Get More Matches with Premium
+                  </Text>
+
+                  {/* Benefits List */}
+                  <View className="gap-3 mb-6">
+                    <View className="flex-row items-start">
+                      <MaterialCommunityIcons name="heart-multiple" size={20} color="#A08AB7" style={{ marginRight: 8, marginTop: 2 }} />
+                      <View className="flex-1">
+                        <Text className="text-foreground font-sans-semibold">See Who Liked You</Text>
+                        <Text className="text-muted-foreground text-sm">No more guessing - see everyone who swiped right</Text>
+                      </View>
+                    </View>
+                    <View className="flex-row items-start">
+                      <MaterialCommunityIcons name="infinity" size={20} color="#A08AB7" style={{ marginRight: 8, marginTop: 2 }} />
+                      <View className="flex-1">
+                        <Text className="text-foreground font-sans-semibold">Unlimited Swipes</Text>
+                        <Text className="text-muted-foreground text-sm">Never run out of daily swipes again</Text>
+                      </View>
+                    </View>
+                    <View className="flex-row items-start">
+                      <MaterialCommunityIcons name="filter-variant" size={20} color="#A08AB7" style={{ marginRight: 8, marginTop: 2 }} />
+                      <View className="flex-1">
+                        <Text className="text-foreground font-sans-semibold">Advanced Filters</Text>
+                        <Text className="text-muted-foreground text-sm">Find exactly who you're looking for</Text>
+                      </View>
+                    </View>
+                    <View className="flex-row items-start">
+                      <MaterialCommunityIcons name="rocket-launch" size={20} color="#A08AB7" style={{ marginRight: 8, marginTop: 2 }} />
+                      <View className="flex-1">
+                        <Text className="text-foreground font-sans-semibold">Profile Boosts</Text>
+                        <Text className="text-muted-foreground text-sm">Get 10x more visibility in your area</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Free Trial CTA */}
+                  <TouchableOpacity
+                    className="bg-lavender-500 rounded-full py-4 shadow-lg mb-3"
+                    onPress={() => {
+                      trackEvent('empty_state_premium_cta_clicked', { source: 'discover_empty_state' });
+                      setShowPaywall(true);
+                    }}
+                  >
+                    <Text className="text-white font-sans-bold text-lg text-center">Start 7-Day Free Trial</Text>
+                  </TouchableOpacity>
+                  <Text className="text-muted-foreground text-xs text-center">
+                    Cancel anytime • No commitment
+                  </Text>
+                </View>
+              )}
+
+              {/* Smart Recommendations - Dynamically shows relevant suggestions */}
+              <View className="mb-6">
+                <Text className="text-lg font-display-bold text-foreground mb-4">
+                  Smart Suggestions to Find More Matches
+                </Text>
+
+                <View className="gap-3">
+                  {/* Widen Age Range - Only show if range is narrow AND would get more profiles */}
+                  {(filters.ageMax - filters.ageMin < 15) && recommendationCounts.widenAge > 0 && (
+                    <TouchableOpacity
+                      className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
+                      onPress={() => {
+                        const newAgeMin = Math.max(18, filters.ageMin - 5);
+                        const newAgeMax = Math.min(80, filters.ageMax + 5);
+                        setFilters({ ...filters, ageMin: newAgeMin, ageMax: newAgeMax });
+                        trackEvent('empty_state_recommendation_clicked', {
+                          action: 'widen_age_range',
+                          old_range: `${filters.ageMin}-${filters.ageMax}`,
+                          new_range: `${newAgeMin}-${newAgeMax}`,
+                          predicted_count: recommendationCounts.widenAge
+                        });
+                        loadProfiles();
+                      }}
+                    >
+                      <View className="bg-lavender-100 dark:bg-lavender-900/30 rounded-full p-2 mr-3">
+                        <MaterialCommunityIcons name="calendar-range" size={20} color="#A08AB7" />
+                      </View>
+                      <View className="flex-1">
+                        <View className="flex-row items-center gap-2 mb-1">
+                          <Text className="text-foreground font-sans-semibold">Widen Age Range</Text>
+                          <View className="bg-lavender-500 rounded-full px-2 py-0.5">
+                            <Text className="text-white text-xs font-sans-bold">+{recommendationCounts.widenAge}</Text>
+                          </View>
+                        </View>
+                        <Text className="text-muted-foreground text-sm">
+                          See {recommendationCounts.widenAge} more {recommendationCounts.widenAge === 1 ? 'match' : 'matches'} with ages {Math.max(18, filters.ageMin - 5)}-{Math.min(80, filters.ageMax + 5)}
+                        </Text>
+                      </View>
+                      <MaterialCommunityIcons name="chevron-right" size={20} color="#A1A1AA" />
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Increase Distance - Only show if distance is restrictive AND would get more profiles */}
+                  {filters.maxDistance < 100 && recommendationCounts.increaseDistance > 0 && (
+                    <TouchableOpacity
+                      className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
+                      onPress={() => {
+                        const newDistance = Math.min(500, filters.maxDistance * 2);
+                        setFilters({ ...filters, maxDistance: newDistance });
+                        trackEvent('empty_state_recommendation_clicked', {
+                          action: 'increase_distance',
+                          old_distance: filters.maxDistance,
+                          new_distance: newDistance,
+                          predicted_count: recommendationCounts.increaseDistance
+                        });
+                        loadProfiles();
+                      }}
+                    >
+                      <View className="bg-lavender-100 dark:bg-lavender-900/30 rounded-full p-2 mr-3">
+                        <MaterialCommunityIcons name="map-marker-radius" size={20} color="#A08AB7" />
+                      </View>
+                      <View className="flex-1">
+                        <View className="flex-row items-center gap-2 mb-1">
+                          <Text className="text-foreground font-sans-semibold">Increase Distance</Text>
+                          <View className="bg-lavender-500 rounded-full px-2 py-0.5">
+                            <Text className="text-white text-xs font-sans-bold">+{recommendationCounts.increaseDistance}</Text>
+                          </View>
+                        </View>
+                        <Text className="text-muted-foreground text-sm">
+                          See {recommendationCounts.increaseDistance} more {recommendationCounts.increaseDistance === 1 ? 'match' : 'matches'} up to {Math.min(500, filters.maxDistance * 2)} miles away
+                        </Text>
+                      </View>
+                      <MaterialCommunityIcons name="chevron-right" size={20} color="#A1A1AA" />
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Search Globally - Show with predicted count if available */}
+                  {recommendationCounts.searchGlobally > 0 && (
+                    <TouchableOpacity
+                      className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
+                      onPress={async () => {
+                        if (!currentProfileId) return;
+
+                        // Update search_globally preference
+                        const { error } = await supabase
+                          .from('preferences')
+                          .update({ search_globally: true })
+                          .eq('profile_id', currentProfileId);
+
+                        if (!error) {
+                          trackEvent('empty_state_recommendation_clicked', {
+                            action: 'search_globally',
+                            predicted_count: recommendationCounts.searchGlobally
+                          });
+                          Alert.alert(
+                            'Global Search Enabled',
+                            'You can now see matches from anywhere in the world!',
+                            [{ text: 'OK', onPress: () => loadProfiles() }]
+                          );
+                        }
+                      }}
+                    >
+                      <View className="bg-lavender-100 dark:bg-lavender-900/30 rounded-full p-2 mr-3">
+                        <MaterialCommunityIcons name="earth" size={20} color="#A08AB7" />
+                      </View>
+                      <View className="flex-1">
+                        <View className="flex-row items-center gap-2 mb-1">
+                          <Text className="text-foreground font-sans-semibold">Search Globally</Text>
+                          <View className="bg-lavender-500 rounded-full px-2 py-0.5">
+                            <Text className="text-white text-xs font-sans-bold">+{recommendationCounts.searchGlobally}</Text>
+                          </View>
+                        </View>
+                        <Text className="text-muted-foreground text-sm">
+                          See {recommendationCounts.searchGlobally} more {recommendationCounts.searchGlobally === 1 ? 'match' : 'matches'} worldwide
+                        </Text>
+                      </View>
+                      <MaterialCommunityIcons name="chevron-right" size={20} color="#A1A1AA" />
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Adjust Filters - Open filter modal */}
+                  <TouchableOpacity
+                    className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
+                    onPress={() => {
+                      trackEvent('empty_state_recommendation_clicked', { action: 'open_filters' });
+                      setShowFilterModal(true);
+                    }}
+                  >
+                    <View className="bg-lavender-100 dark:bg-lavender-900/30 rounded-full p-2 mr-3">
+                      <MaterialCommunityIcons name="tune-variant" size={20} color="#A08AB7" />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-foreground font-sans-semibold">Adjust All Filters</Text>
+                      <Text className="text-muted-foreground text-sm">Fine-tune your preferences to find better matches</Text>
+                    </View>
+                    <MaterialCommunityIcons name="chevron-right" size={20} color="#A1A1AA" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Secondary Actions */}
+              <View className="gap-3 mb-6">
+                <TouchableOpacity
+                  className="bg-lavender-500 rounded-full py-4 shadow-sm"
+                  onPress={() => {
+                    trackEvent('empty_state_action_clicked', { action: 'search' });
+                    setShowSearchBar(true);
+                  }}
+                >
+                  <Text className="text-white font-sans-bold text-base text-center">Search by Keyword</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="border-2 border-lavender-500 rounded-full py-4"
+                  onPress={() => {
+                    trackEvent('empty_state_action_clicked', { action: 'refresh' });
+                    handleRefresh();
+                  }}
+                >
+                  <Text className="text-lavender-500 font-sans-bold text-base text-center">Refresh Matches</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Social Proof Footer */}
+              <View className="items-center pt-6 border-t border-border">
+                <View className="flex-row items-center gap-2 mb-2">
+                  <MaterialCommunityIcons name="check-decagram" size={16} color="#10B981" />
+                  <Text className="text-muted-foreground text-sm">Trusted by 10,000+ users</Text>
+                </View>
+                <Text className="text-muted-foreground text-xs text-center">
+                  Join the safest community for lavender marriages
+                </Text>
+              </View>
+            </View>
           )}
-        </View>
+        </ScrollView>
 
         {/* Filter Modal */}
         <FilterModal
@@ -2766,7 +3122,31 @@ export default function Discover() {
       )}
 
       {/* Trial Expiration Banner - Warn users when trial is about to end */}
-      <TrialExpirationBanner />
+      <TrialExpirationBanner key="trial-expiration-banner" />
+
+      {/* Photo Blur Info Banner - Explain why some photos may be blurred */}
+      {showPhotoBlurBanner && (
+        <View className="mx-4 mt-2 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+          <View className="flex-row items-start">
+            <View className="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-full items-center justify-center mr-3">
+              <MaterialCommunityIcons name="image-off-outline" size={20} color="#3B82F6" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-blue-900 dark:text-blue-100 font-semibold text-sm">Why Some Photos Are Blurred</Text>
+              <Text className="text-blue-700 dark:text-blue-300 text-xs mt-1 leading-5">
+                Some users enable Photo Blur in their privacy settings to protect their identity until they match. Photos will be revealed once you connect!
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleDismissPhotoBlurBanner}
+              className="ml-2 w-6 h-6 items-center justify-center"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialCommunityIcons name="close" size={20} color="#3B82F6" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Photo Review Required Banner */}
       {photoReviewRequired && (

@@ -26,6 +26,7 @@ import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
 import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
+import { useSafeBlur } from '@/hooks/useSafeBlur';
 
 const { width, height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.6;
@@ -260,6 +261,13 @@ export default function ImmersiveProfileCard({
   currentProfileId,
 }: ImmersiveProfileCardProps) {
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
+
+  // Safe blur hook - protects user privacy while preventing crashes
+  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+    shouldBlur: profile.photo_blur_enabled || false,
+    blurIntensity: 20,
+  });
+
   const [isVoicePlaying, setIsVoicePlaying] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -384,7 +392,9 @@ export default function ImmersiveProfileCard({
             <Image
               source={{ uri: heroPhoto }}
               style={styles.headerAvatar}
-              blurRadius={profile.photo_blur_enabled ? 20 : 0}
+              blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
             />
             <View style={styles.headerInfo}>
               <Text style={styles.headerName} numberOfLines={1}>
@@ -430,7 +440,9 @@ export default function ImmersiveProfileCard({
             source={{ uri: heroPhoto }}
             style={styles.heroImage}
             resizeMode="cover"
-            blurRadius={profile.photo_blur_enabled ? 20 : 0}
+            blurRadius={blurRadius}
+            onLoad={onImageLoad}
+            onError={onImageError}
           />
           {/* Dynamic Watermark over hero image */}
           {watermarkReady && (
@@ -590,7 +602,9 @@ export default function ImmersiveProfileCard({
               source={{ uri: photos[1].url }}
               style={styles.storyPhoto}
               resizeMode="cover"
-              blurRadius={profile.photo_blur_enabled ? 20 : 0}
+              blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
             />
           )}
 
@@ -661,7 +675,9 @@ export default function ImmersiveProfileCard({
                   source={{ uri: photos[2].url }}
                   style={styles.promptPhoto}
                   resizeMode="cover"
-                  blurRadius={profile.photo_blur_enabled ? 20 : 0}
+                  blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
                 />
               )}
             </View>
@@ -740,7 +756,9 @@ export default function ImmersiveProfileCard({
               source={{ uri: photos[3].url }}
               style={styles.storyPhoto}
               resizeMode="cover"
-              blurRadius={profile.photo_blur_enabled ? 20 : 0}
+              blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
             />
           )}
 
@@ -897,7 +915,9 @@ export default function ImmersiveProfileCard({
                   source={{ uri: photos[4 + index].url }}
                   style={styles.promptPhoto}
                   resizeMode="cover"
-                  blurRadius={profile.photo_blur_enabled ? 20 : 0}
+                  blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
                 />
               )}
             </View>
@@ -943,7 +963,9 @@ export default function ImmersiveProfileCard({
               source={{ uri: photo.url }}
               style={styles.storyPhoto}
               resizeMode="cover"
-              blurRadius={profile.photo_blur_enabled ? 20 : 0}
+              blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
             />
           ))}
 
