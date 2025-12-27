@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.privyreviews.accord",
-      "buildNumber": "57",
+      "buildNumber": "56",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Accord needs access to your photos to upload profile pictures.",
