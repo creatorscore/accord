@@ -134,6 +134,8 @@
       ],
       "expo-font",
       "expo-web-browser",
+      "@react-native-firebase/app",
+      "@react-native-firebase/analytics",
       "./plugins/withAndroidManifestFix.js"
     ],
     "extra": {
