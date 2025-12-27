@@ -1,7 +1,6 @@
 import Purchases, { PurchasesOffering, CustomerInfo, PurchasesPackage } from 'react-native-purchases';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { trackPurchase } from './firebase';
 
 // RevenueCat API Keys from app.json extra config
 const REVENUECAT_API_KEY_IOS = Constants.expoConfig?.extra?.revenueCatAppleApiKey || process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || '';
@@ -113,31 +112,8 @@ export const purchasePackage = async (pkg: PurchasesPackage): Promise<CustomerIn
     });
 
     // Track purchase event in Firebase Analytics for Google Ads conversion tracking
-    try {
-      const tier = getSubscriptionTier(customerInfo);
-      const productId = pkg.product.identifier;
-      const price = pkg.product.price;
-      const currency = pkg.product.currencyCode;
-
-      // Get transaction ID from latest transaction
-      const latestTransaction = customerInfo.latestExpirationDate
-        ? customerInfo.nonSubscriptionTransactions[0]?.transactionIdentifier ||
-          Object.values(customerInfo.entitlements.active)[0]?.originalPurchaseDate ||
-          Date.now().toString()
-        : Date.now().toString();
-
-      if (tier) {
-        await trackPurchase({
-          productId,
-          price,
-          currency,
-          transactionId: latestTransaction,
-          tier,
-        });
-      }
-    } catch (analyticsError) {
-      console.warn('⚠️ Failed to track purchase to Firebase (non-critical):', analyticsError);
-    }
+    // Firebase analytics removed - can be re-added later
+    // TODO: Re-implement purchase tracking when Firebase is properly configured
 
     return customerInfo;
   } catch (error: any) {
