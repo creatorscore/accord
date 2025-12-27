@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView, Pressable } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView, Pressable, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -238,7 +238,26 @@ export default function BasicInfo() {
             'Accord needs precise location to find matches nearby. Please enable location in your device Settings.',
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Open Settings', onPress: () => Location.enableNetworkProviderAsync() },
+              {
+                text: 'Open Settings',
+                onPress: async () => {
+                  try {
+                    // Try to open location settings directly (Android)
+                    if (Platform.OS === 'android') {
+                      await Location.enableNetworkProviderAsync();
+                    } else {
+                      // On iOS, open app settings
+                      await Linking.openSettings();
+                    }
+                  } catch (error) {
+                    // Fallback: open app settings if enableNetworkProviderAsync fails
+                    console.log('Could not open location settings, opening app settings instead');
+                    await Linking.openSettings().catch(err => {
+                      console.error('Error opening settings:', err);
+                    });
+                  }
+                }
+              },
             ]
           );
         }
