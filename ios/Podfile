@@ -69,11 +69,6 @@ target 'AccordLavenderMarriage' do
           config.build_settings['SWIFT_VERSION'] = '5.0'
         end
 
-        # Enable modular headers for Firebase dependencies to fix Swift pod integration
-        if ['GoogleUtilities', 'FirebaseCoreInternal'].include?(target.name)
-          config.build_settings['DEFINES_MODULE'] = 'YES'
-        end
-
         if target.name == 'AccordLavenderMarriage'
           flags = config.build_settings['OTHER_LDFLAGS'] || ['$(inherited)']
           flags = [flags] if flags.is_a?(String)
