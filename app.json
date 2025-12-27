@@ -42,7 +42,6 @@
       "config": {
         "usesNonExemptEncryption": false
       },
-      "googleServicesFile": "./GoogleService-Info.plist",
       "entitlements": {
         "com.apple.developer.applesignin": [
           "Default"
@@ -79,8 +78,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_CONTACTS",
         "android.permission.POST_NOTIFICATIONS"
-      ],
-      "googleServicesFile": "./google-services.json"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -132,8 +130,6 @@
           "iosUrlScheme": "com.googleusercontent.apps.609854216709-81grqvlc66iahvd56749ot511p9agh09"
         }
       ],
-      "@react-native-firebase/app",
-      "@react-native-firebase/analytics",
       "expo-font",
       "expo-web-browser",
       "./plugins/withAndroidManifestFix.js"
