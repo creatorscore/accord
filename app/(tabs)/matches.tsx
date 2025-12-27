@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Modal, Alert, Pressable } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Modal, Alert, Pressable, InteractionManager } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -162,7 +162,8 @@ export default function Matches() {
     try {
       if (!currentProfileId) return;
 
-      // Get all matches for current user
+      // PERFORMANCE: Limit initial matches to prevent ANR on low-end devices
+      // Get all matches for current user (limit to most recent 50 for performance)
       const { data: matchesData, error: matchesError } = await supabase
         .from('matches')
         .select(`
@@ -175,7 +176,8 @@ export default function Matches() {
         `)
         .or(`profile1_id.eq.${currentProfileId},profile2_id.eq.${currentProfileId}`)
         .eq('status', 'active')
-        .order('matched_at', { ascending: false });
+        .order('matched_at', { ascending: false })
+        .limit(50);  // Limit to 50 most recent matches for performance
 
       if (matchesError) throw matchesError;
 
@@ -214,93 +216,137 @@ export default function Matches() {
         return !blockedProfileIds.has(otherProfileId) && !bannedProfileIds.has(otherProfileId);
       });
 
-      // For each match, get the other person's profile and last message
-      const matchesWithProfiles = await Promise.all(
-        filteredMatches.map(async (match) => {
-          const otherProfileId = match.profile1_id === currentProfileId
-            ? match.profile2_id
-            : match.profile1_id;
+      // PERFORMANCE OPTIMIZATION: Batch all queries to prevent ANR on low-end devices
+      // Get all other profile IDs and match IDs
+      const otherProfileIds = filteredMatches.map(match =>
+        match.profile1_id === currentProfileId ? match.profile2_id : match.profile1_id
+      );
+      const matchIds = filteredMatches.map(match => match.id);
 
-          // Get profile
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select(`
-              id,
-              display_name,
-              age,
-              is_verified,
-              last_active_at,
-              hide_last_active,
-              photo_blur_enabled,
-              encryption_public_key,
-              photos (
-                url,
-                is_primary,
-                display_order
-              )
-            `)
-            .eq('id', otherProfileId)
-            .single();
+      if (matchIds.length === 0) {
+        setMatches([]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
 
-          // Get last message (use maybeSingle since there might be no messages yet)
-          const { data: lastMessage } = await supabase
-            .from('messages')
-            .select('encrypted_content, created_at, sender_profile_id, read_at')
-            .eq('match_id', match.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+      // Batch fetch ALL data in parallel (4 queries total instead of 4N)
+      const [profilesResult, messagesResult, unreadCountsResult, revealsResult] = await Promise.all([
+        // Get all profiles at once
+        supabase
+          .from('profiles')
+          .select(`
+            id,
+            display_name,
+            age,
+            is_verified,
+            last_active_at,
+            hide_last_active,
+            photo_blur_enabled,
+            encryption_public_key,
+            photos (
+              url,
+              is_primary,
+              display_order
+            )
+          `)
+          .in('id', otherProfileIds),
+        // Get last message for each match using a single query
+        supabase
+          .from('messages')
+          .select('match_id, encrypted_content, created_at, sender_profile_id, read_at')
+          .in('match_id', matchIds)
+          .order('created_at', { ascending: false }),
+        // Get unread counts for all matches at once
+        supabase
+          .from('messages')
+          .select('match_id', { count: 'exact' })
+          .in('match_id', matchIds)
+          .eq('receiver_profile_id', currentProfileId)
+          .is('read_at', null),
+        // Get photo reveals for all profiles at once
+        supabase
+          .from('photo_reveals')
+          .select('revealer_profile_id')
+          .in('revealer_profile_id', otherProfileIds)
+          .eq('revealed_to_profile_id', currentProfileId),
+      ]);
 
-          // Get unread count
-          const { count: unreadCount } = await supabase
-            .from('messages')
-            .select('id', { count: 'exact', head: true })
-            .eq('match_id', match.id)
-            .eq('receiver_profile_id', currentProfileId)
-            .is('read_at', null);
-
-          // Check if this user has revealed photos to current user
-          const { data: revealData } = await supabase
-            .from('photo_reveals')
-            .select('id')
-            .eq('revealer_profile_id', otherProfileId)
-            .eq('revealed_to_profile_id', currentProfileId)
-            .maybeSingle();
-
-          const isRevealed = !!revealData;
-
-          if (!profile) {
-            return null;
-          }
-
-          return {
-            id: match.id,
-            profile: {
-              id: profile.id,
-              display_name: profile.display_name,
-              age: profile.age,
-              is_verified: profile.is_verified,
-              last_active_at: profile.last_active_at,
-              hide_last_active: profile.hide_last_active,
-              photo_blur_enabled: profile.photo_blur_enabled,
-              encryption_public_key: profile.encryption_public_key,
-              photos: profile?.photos?.sort((a: any, b: any) => a.display_order - b.display_order),
-              is_revealed: isRevealed,
-            },
-            compatibility_score: match.compatibility_score,
-            matched_at: match.matched_at,
-            last_message: lastMessage || undefined,
-            unread_count: unreadCount || 0,
-          };
-        })
+      // Create lookup maps for O(1) access
+      const profilesMap = new Map(
+        (profilesResult.data || []).map(p => [p.id, p])
       );
 
-      // Filter out any null values (profiles that failed to load)
-      const validMatches = matchesWithProfiles.filter(m => m !== null) as Match[];
+      // Get last message per match (first occurrence since sorted desc)
+      const lastMessagesMap = new Map<string, any>();
+      for (const msg of messagesResult.data || []) {
+        if (!lastMessagesMap.has(msg.match_id)) {
+          lastMessagesMap.set(msg.match_id, msg);
+        }
+      }
 
-      // Decrypt message previews
-      const matchesWithDecryptedPreviews = await decryptMessagePreviews(validMatches);
-      setMatches(matchesWithDecryptedPreviews);
+      // Count unread messages per match
+      const unreadCountsMap = new Map<string, number>();
+      for (const msg of unreadCountsResult.data || []) {
+        const current = unreadCountsMap.get(msg.match_id) || 0;
+        unreadCountsMap.set(msg.match_id, current + 1);
+      }
+
+      // Create set of revealed profile IDs
+      const revealedProfileIds = new Set(
+        revealsResult.data?.map(r => r.revealer_profile_id) || []
+      );
+
+      // Build matches array using lookup maps
+      const validMatches = filteredMatches.map((match) => {
+        const otherProfileId = match.profile1_id === currentProfileId
+          ? match.profile2_id
+          : match.profile1_id;
+
+        const profile = profilesMap.get(otherProfileId);
+        if (!profile) return null;
+
+        const lastMessage = lastMessagesMap.get(match.id);
+        const unreadCount = unreadCountsMap.get(match.id) || 0;
+        const isRevealed = revealedProfileIds.has(otherProfileId);
+
+        return {
+          id: match.id,
+          profile: {
+            id: profile.id,
+            display_name: profile.display_name,
+            age: profile.age,
+            is_verified: profile.is_verified,
+            last_active_at: profile.last_active_at,
+            hide_last_active: profile.hide_last_active,
+            photo_blur_enabled: profile.photo_blur_enabled,
+            encryption_public_key: profile.encryption_public_key,
+            photos: profile?.photos?.sort((a: any, b: any) => a.display_order - b.display_order),
+            is_revealed: isRevealed,
+          },
+          compatibility_score: match.compatibility_score,
+          matched_at: match.matched_at,
+          last_message: lastMessage || undefined,
+          unread_count: unreadCount,
+        };
+      }).filter(m => m !== null) as Match[];
+
+      // Show matches immediately without decryption for faster UI
+      setMatches(validMatches);
+      setLoading(false);
+      setRefreshing(false);
+
+      // PERFORMANCE: Defer decryption until after UI is responsive
+      // This prevents ANR on low-end devices by not blocking main thread
+      InteractionManager.runAfterInteractions(async () => {
+        try {
+          const matchesWithDecryptedPreviews = await decryptMessagePreviews(validMatches);
+          setMatches(matchesWithDecryptedPreviews);
+        } catch (error) {
+          console.error('Error decrypting message previews:', error);
+          // Keep showing matches even if decryption fails
+        }
+      });
     } catch (error: any) {
       console.error('Error loading matches:', error);
     } finally {
