@@ -71,12 +71,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 export async function registerForPushNotifications(): Promise<string | null> {
   try {
     // Check if notifications are available
-    if (!Notifications || !Device) {
-      return null;
-    }
-
-    // Only works on physical devices
-    if (!Device.isDevice) {
+    if (!Notifications) {
       return null;
     }
 
