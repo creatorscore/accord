@@ -731,23 +731,74 @@ export default function Discover() {
       // Get potential matches with all fields needed for compatibility
       // When searching globally or in search mode, fetch more profiles
       const shouldFetchMore = isSearchingGlobally || effectiveSearchMode;
-      let query = supabase
-        .from('profiles')
-        .select(`
-          *,
-          photos (
-            url,
-            is_primary,
-            display_order
-          ),
-          preferences:preferences(*)
-        `)
-        .neq('id', currentProfileId)
-        .eq('incognito_mode', false)
-        .eq('profile_complete', true) // Only show profiles that completed onboarding
-        .eq('photo_review_required', false) // Hide profiles flagged for photo review
-        .limit(effectiveSearchMode ? 500 : (shouldFetchMore ? 200 : 20)) // Fetch even more profiles when searching
-        .order('created_at', { ascending: false });
+
+      // For LOCAL search: Use distance-based RPC function to get ALL profiles within distance
+      // For GLOBAL search or SEARCH MODE: Use standard query
+      let data: any[] = [];
+      let error: any = null;
+
+      if (!isSearchingGlobally && !effectiveSearchMode && currentUserData.latitude && currentUserData.longitude) {
+        // LOCAL SEARCH: Use RPC function to get profiles filtered by distance at DATABASE level
+        console.log('🎯 Using distance-based RPC for local search');
+        const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_profiles', {
+          p_user_lat: currentUserData.latitude,
+          p_user_lon: currentUserData.longitude,
+          p_max_distance_miles: filters.maxDistance,
+          p_user_profile_id: currentProfileId,
+          p_min_age: Math.max(18, filters.ageMin),
+          p_max_age: filters.ageMax,
+          p_gender_prefs: currentUserData.preferences?.gender_preference || [],
+          p_result_limit: 500  // Get all nearby profiles
+        });
+
+        if (rpcError) {
+          console.error('RPC error:', rpcError);
+          throw rpcError;
+        }
+
+        // Fetch full profile data with photos and preferences for each nearby profile
+        if (rpcData && rpcData.length > 0) {
+          // Filter out already-swiped profiles from RPC results
+          const nearbyIds = rpcData.map((p: any) => p.id).filter(id => !swipedIds.includes(id));
+
+          if (nearbyIds.length > 0) {
+            const { data: fullProfiles, error: profilesError } = await supabase
+              .from('profiles')
+              .select(`
+                *,
+                photos (
+                  url,
+                  is_primary,
+                  display_order
+                ),
+                preferences:preferences(*)
+              `)
+              .in('id', nearbyIds);
+
+            if (profilesError) throw profilesError;
+            data = fullProfiles || [];
+          }
+        }
+      } else {
+        // GLOBAL SEARCH or SEARCH MODE: Use standard query
+        console.log('🌍 Using standard query for global/search mode');
+        let query = supabase
+          .from('profiles')
+          .select(`
+            *,
+            photos (
+              url,
+              is_primary,
+              display_order
+            ),
+            preferences:preferences(*)
+          `)
+          .neq('id', currentProfileId)
+          .eq('incognito_mode', false)
+          .eq('profile_complete', true)
+          .eq('photo_review_required', false)
+          .limit(effectiveSearchMode ? 500 : 200)
+          .order('created_at', { ascending: false });
 
       // In SEARCH MODE: Only exclude blocked/banned users, NOT swiped profiles
       // This allows users to find profiles they may have already seen
@@ -812,20 +863,24 @@ export default function Discover() {
         }
       }
 
-      // Apply premium filters (only if user is premium AND filters are set AND not in search mode)
-      if (isPremium && !effectiveSearchMode) {
-        // Religion filter
-        if (filters.religion.length > 0) {
-          query = query.in('religion', filters.religion);
+        // Apply premium filters (only if user is premium AND filters are set AND not in search mode)
+        if (isPremium && !effectiveSearchMode) {
+          // Religion filter
+          if (filters.religion.length > 0) {
+            query = query.in('religion', filters.religion);
+          }
+
+          // Political views filter
+          if (filters.politicalViews.length > 0) {
+            query = query.in('political_views', filters.politicalViews);
+          }
         }
 
-        // Political views filter
-        if (filters.politicalViews.length > 0) {
-          query = query.in('political_views', filters.politicalViews);
-        }
+        const { data: queryData, error: queryError } = await query;
+        if (queryError) throw queryError;
+        data = queryData || [];
+        error = queryError;
       }
-
-      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -1068,6 +1123,16 @@ export default function Discover() {
           // 1. STRICT AGE FILTER (no buffer, exact preferences)
           if (profile.age < filters.ageMin || profile.age > filters.ageMax) {
             return false;
+          }
+
+          // 1a. BIDIRECTIONAL AGE FILTER - Check if current user's age is within profile's age preferences
+          // This ensures mutual age compatibility - both users must be within each other's age ranges
+          if (profile.preferences?.age_min !== undefined && profile.preferences?.age_max !== undefined) {
+            const currentUserAge = currentUserData.age;
+            if (currentUserAge < profile.preferences.age_min || currentUserAge > profile.preferences.age_max) {
+              console.log(`❌ Age mismatch: ${profile.display_name} wants ${profile.preferences.age_min}-${profile.preferences.age_max}, but current user is ${currentUserAge}`);
+              return false;
+            }
           }
 
           // 1b. RELATIONSHIP TYPE / INTENTION FILTER (quick filter)
@@ -2633,67 +2698,6 @@ export default function Discover() {
                 </Text>
               </View>
 
-              {/* Premium Benefits Card (for non-premium users only) */}
-              {!isPremium && (
-                <View className="bg-gradient-to-br from-lavender-100 to-lavender-50 dark:from-lavender-900/30 dark:to-lavender-800/20 rounded-2xl p-6 mb-6 border-2 border-lavender-200 dark:border-lavender-700">
-                  {/* Premium Badge */}
-                  <View className="bg-gold-500 self-start rounded-full px-3 py-1 mb-4 flex-row items-center" style={{ backgroundColor: '#FFD700' }}>
-                    <MaterialCommunityIcons name="crown" size={14} color="#A08AB7" />
-                    <Text className="text-lavender-500 font-sans-bold text-xs ml-1">PREMIUM</Text>
-                  </View>
-
-                  <Text className="text-xl font-display-bold text-foreground mb-4">
-                    Get More Matches with Premium
-                  </Text>
-
-                  {/* Benefits List */}
-                  <View className="gap-3 mb-6">
-                    <View className="flex-row items-start">
-                      <MaterialCommunityIcons name="heart-multiple" size={20} color="#A08AB7" style={{ marginRight: 8, marginTop: 2 }} />
-                      <View className="flex-1">
-                        <Text className="text-foreground font-sans-semibold">See Who Liked You</Text>
-                        <Text className="text-muted-foreground text-sm">No more guessing - see everyone who swiped right</Text>
-                      </View>
-                    </View>
-                    <View className="flex-row items-start">
-                      <MaterialCommunityIcons name="infinity" size={20} color="#A08AB7" style={{ marginRight: 8, marginTop: 2 }} />
-                      <View className="flex-1">
-                        <Text className="text-foreground font-sans-semibold">Unlimited Swipes</Text>
-                        <Text className="text-muted-foreground text-sm">Never run out of daily swipes again</Text>
-                      </View>
-                    </View>
-                    <View className="flex-row items-start">
-                      <MaterialCommunityIcons name="filter-variant" size={20} color="#A08AB7" style={{ marginRight: 8, marginTop: 2 }} />
-                      <View className="flex-1">
-                        <Text className="text-foreground font-sans-semibold">Advanced Filters</Text>
-                        <Text className="text-muted-foreground text-sm">Find exactly who you're looking for</Text>
-                      </View>
-                    </View>
-                    <View className="flex-row items-start">
-                      <MaterialCommunityIcons name="rocket-launch" size={20} color="#A08AB7" style={{ marginRight: 8, marginTop: 2 }} />
-                      <View className="flex-1">
-                        <Text className="text-foreground font-sans-semibold">Profile Boosts</Text>
-                        <Text className="text-muted-foreground text-sm">Get 10x more visibility in your area</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Free Trial CTA */}
-                  <TouchableOpacity
-                    className="bg-lavender-500 rounded-full py-4 shadow-lg mb-3"
-                    onPress={() => {
-                      trackEvent('empty_state_premium_cta_clicked', { source: 'discover_empty_state' });
-                      setShowPaywall(true);
-                    }}
-                  >
-                    <Text className="text-white font-sans-bold text-lg text-center">Start 7-Day Free Trial</Text>
-                  </TouchableOpacity>
-                  <Text className="text-muted-foreground text-xs text-center">
-                    Cancel anytime • No commitment
-                  </Text>
-                </View>
-              )}
-
               {/* Smart Recommendations - Dynamically shows relevant suggestions */}
               <View className="mb-6">
                 <Text className="text-lg font-display-bold text-foreground mb-4">
@@ -2856,6 +2860,30 @@ export default function Discover() {
                   <Text className="text-lavender-500 font-sans-bold text-base text-center">Refresh Matches</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Premium Benefits - Subtle, non-intrusive placement */}
+              {!isPremium && (
+                <View className="mb-6 p-4 bg-card/50 dark:bg-card/30 rounded-xl border border-border/50">
+                  <View className="flex-row items-center justify-between mb-3">
+                    <View className="flex-row items-center gap-2">
+                      <MaterialCommunityIcons name="crown-outline" size={18} color="#A08AB7" />
+                      <Text className="text-foreground font-sans-semibold text-sm">Want more matches?</Text>
+                    </View>
+                    <TouchableOpacity
+                      className="bg-lavender-500 rounded-full px-4 py-2"
+                      onPress={() => {
+                        trackEvent('empty_state_premium_cta_clicked', { source: 'discover_empty_state' });
+                        setShowPaywall(true);
+                      }}
+                    >
+                      <Text className="text-white font-sans-semibold text-xs">Try Premium</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text className="text-muted-foreground text-xs leading-relaxed">
+                    See who liked you, get unlimited swipes, and boost your profile visibility. 7-day free trial.
+                  </Text>
+                </View>
+              )}
 
               {/* Social Proof Footer */}
               <View className="items-center pt-6 border-t border-border">
