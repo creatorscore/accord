@@ -68,7 +68,7 @@
         "backgroundColor": "#9B87CE"
       },
       "package": "com.privyreviews.accord",
-      "versionCode": 45,
+      "versionCode": 46,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.CAMERA",
