@@ -55,9 +55,9 @@ credentials.json
 supabase/.branches
 supabase/.temp
 
-# Firebase - these files are safe to commit (they contain config, not secrets)
-# google-services.json - now tracked for EAS Build
-# GoogleService-Info.plist
+# Firebase - ignore these files (causes crashes when Firebase packages aren't installed)
+google-services.json
+GoogleService-Info.plist
 
 # Vim swap files
 *.swp
