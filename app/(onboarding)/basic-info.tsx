@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView, Pressable, Linking } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -12,6 +12,7 @@ import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { useTranslation } from 'react-i18next';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
+import { openAppSettings } from '@/lib/open-settings';
 
 const GENDERS = [
   'Man',
@@ -136,7 +137,7 @@ export default function BasicInfo() {
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [ageCertified, setAgeCertified] = useState(false);
-  // GPS location is now required - no manual mode allowed
+  const [hideLocation, setHideLocation] = useState(false); // Privacy option for high-risk countries
 
   // Check authentication and load existing data on mount
   useEffect(() => {
@@ -147,7 +148,7 @@ export default function BasicInfo() {
   const checkAuth = async () => {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) {
-      Alert.alert('Not Authenticated', 'Please sign in to continue');
+      Alert.alert(t('onboarding.errors.notAuthenticated'), t('onboarding.errors.pleaseSignIn'));
       router.replace('/(auth)/welcome');
     }
   };
@@ -184,7 +185,7 @@ export default function BasicInfo() {
 
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('display_name, birth_date, gender, pronouns, ethnicity, sexual_orientation, location_city, location_state, location_country, latitude, longitude')
+        .select('display_name, birth_date, gender, pronouns, ethnicity, sexual_orientation, location_city, location_state, location_country, latitude, longitude, hide_distance')
         .eq('user_id', currentUser.id)
         .single();
 
@@ -213,6 +214,7 @@ export default function BasicInfo() {
             longitude: profile.longitude
           });
         }
+        if (profile.hide_distance !== undefined) setHideLocation(profile.hide_distance);
       }
     } catch (error) {
       console.error('Error loading existing profile:', error);
@@ -229,34 +231,18 @@ export default function BasicInfo() {
       if (status !== 'granted') {
         if (canAskAgain) {
           Alert.alert(
-            'Permission Denied',
-            'Location access is needed to find matches near you. Please grant location permission.'
+            t('onboarding.errors.permissionDenied'),
+            t('onboarding.errors.needLocationAccess')
           );
         } else {
           Alert.alert(
-            'Location Permission Required',
-            'Accord needs precise location to find matches nearby. Please enable location in your device Settings.',
+            t('onboarding.errors.permissionRequired'),
+            t('onboarding.errors.enableInSettings'),
             [
-              { text: 'Cancel', style: 'cancel' },
+              { text: t('common.cancel'), style: 'cancel' },
               {
-                text: 'Open Settings',
-                onPress: async () => {
-                  try {
-                    // Try to open location settings directly (Android)
-                    if (Platform.OS === 'android') {
-                      await Location.enableNetworkProviderAsync();
-                    } else {
-                      // On iOS, open app settings
-                      await Linking.openSettings();
-                    }
-                  } catch (error) {
-                    // Fallback: open app settings if enableNetworkProviderAsync fails
-                    console.log('Could not open location settings, opening app settings instead');
-                    await Linking.openSettings().catch(err => {
-                      console.error('Error opening settings:', err);
-                    });
-                  }
-                }
+                text: t('onboarding.errors.openSettings'),
+                onPress: () => openAppSettings()
               },
             ]
           );
@@ -264,19 +250,67 @@ export default function BasicInfo() {
         return;
       }
 
-      // Request HIGHEST accuracy for precise GPS coordinates
-      // This is critical for accurate distance calculations in dating apps
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest, // Use highest accuracy (GPS)
-        timeInterval: 5000,
-        distanceInterval: 0,
-      });
+      // Try to get location with multiple fallback strategies
+      // This ensures location works in regions with restricted Google services (e.g., Iran, China)
+      let location;
+
+      try {
+        // First attempt: Try HIGHEST accuracy with longer timeout (GPS + Network)
+        console.log('📍 Attempting high-accuracy location...');
+        location = await Promise.race([
+          Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Highest,
+            maximumAge: 10000, // Accept cached location up to 10 seconds old
+          }),
+          // Timeout after 15 seconds
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout')), 15000)
+          )
+        ]);
+        console.log('✅ High-accuracy location obtained');
+      } catch (highAccuracyError) {
+        console.log('⚠️ High-accuracy failed, trying balanced accuracy...');
+
+        try {
+          // Second attempt: Try BALANCED accuracy (faster, works better in restricted regions)
+          location = await Promise.race([
+            Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+              maximumAge: 10000,
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout')), 10000)
+            )
+          ]);
+          console.log('✅ Balanced-accuracy location obtained');
+        } catch (balancedError) {
+          console.log('⚠️ Balanced accuracy failed, trying low accuracy...');
+
+          // Final attempt: Try LOW accuracy (network-only, fastest)
+          location = await Promise.race([
+            Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Low,
+              maximumAge: 30000, // Accept older cached location
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout')), 8000)
+            )
+          ]);
+          console.log('✅ Low-accuracy location obtained (better than nothing)');
+        }
+      }
 
       console.log('📍 Location accuracy:', location.coords.accuracy, 'meters');
       console.log('📍 Coordinates:', location.coords.latitude, location.coords.longitude);
 
-      // Check if we got accurate coordinates (iOS can return approximate)
-      if (!location.coords || (location.coords.accuracy !== null && location.coords.accuracy > 100)) {
+      // Check if we got valid coordinates
+      if (!location.coords) {
+        throw new Error('No coordinates received');
+      }
+
+      // For iOS: Check if user has "Approximate Location" enabled (accuracy > 100m)
+      // For Android in restricted regions: Accept lower accuracy (up to 1000m)
+      if (Platform.OS === 'ios' && location.coords.accuracy !== null && location.coords.accuracy > 100) {
         Alert.alert(
           'Precise Location Required',
           `Location accuracy is too low (${Math.round(location.coords?.accuracy || 0)} meters). Please enable "Precise Location" for Accord in your iPhone Settings:\n\n1. Open Settings\n2. Scroll to Accord\n3. Tap Location\n4. Enable "Precise Location"\n\nOr use the search feature to find your city instead.`,
@@ -284,8 +318,24 @@ export default function BasicInfo() {
             { text: 'OK', style: 'cancel' }
           ]
         );
-        // DO NOT store inaccurate coordinates - return early
+        // DO NOT store inaccurate coordinates on iOS - return early
         return;
+      }
+
+      // For Android: Accept up to 1km accuracy (important for restricted regions like Iran, China)
+      if (Platform.OS === 'android' && location.coords.accuracy !== null && location.coords.accuracy > 1000) {
+        Alert.alert(
+          'Low Location Accuracy',
+          `Location accuracy is very low (${Math.round(location.coords.accuracy / 1000)} km). This may affect match quality. Try:\n\n1. Move to an area with better GPS signal\n2. Enable "High accuracy" in Location settings\n3. Or manually enter your city`,
+          [
+            { text: 'Use Anyway', onPress: () => {
+              // Continue with low accuracy location
+            }},
+            { text: 'Cancel', style: 'cancel', onPress: () => {
+              return;
+            }}
+          ]
+        );
       }
 
       // Store coordinates only if accuracy is good
@@ -312,9 +362,23 @@ export default function BasicInfo() {
       });
     } catch (error: any) {
       console.error('Location error:', error);
+
+      // Provide helpful error message based on error type
+      let errorMessage = 'Could not get your location. ';
+
+      if (error?.message?.includes('Timeout') || error?.code === 'E_TIMEOUT') {
+        errorMessage += 'Location request timed out. This may happen if:\n\n• You\'re indoors without GPS signal\n• Location services are restricted in your region\n• Your device is in airplane mode\n\nPlease try:\n1. Move outdoors for better GPS signal\n2. Enable "High accuracy" in Location settings\n3. Or manually search for your city below';
+      } else if (error?.code === 'E_LOCATION_SERVICES_DISABLED') {
+        errorMessage += 'Location services are disabled. Please enable them in your device Settings.';
+      } else if (error?.code === 'E_LOCATION_UNAVAILABLE') {
+        errorMessage += 'GPS signal unavailable. Please try moving to an area with better signal, or manually search for your city below.';
+      } else {
+        errorMessage += 'Please check your location settings or manually search for your city below.';
+      }
+
       Alert.alert(
         'Location Error',
-        'Could not get your location. Please check your location settings or enter your location manually.',
+        errorMessage,
         [{ text: 'OK' }]
       );
     } finally {
@@ -497,69 +561,70 @@ export default function BasicInfo() {
   const handleContinue = async () => {
     // Validation
     if (!displayName.trim()) {
-      Alert.alert('Required', 'Please enter your name');
+      Alert.alert(t('onboarding.errors.required'), t('onboarding.errors.enterName'));
       return;
     }
 
     // Check for profanity in display name
     const nameModeration = validateDisplayName(displayName);
     if (!nameModeration.isClean) {
-      Alert.alert('Inappropriate Content', getModerationErrorMessage('display name'));
+      Alert.alert(t('onboarding.errors.inappropriateContent'), getModerationErrorMessage('display name'));
       return;
     }
 
     if (!birthDate) {
-      Alert.alert('Required', 'Please select your birth date');
+      Alert.alert(t('onboarding.errors.required'), t('onboarding.errors.selectBirthDate'));
       return;
     }
 
     const birthDateObj = new Date(birthDate as Date);
     const age = calculateAge(birthDateObj);
     if (age < 18) {
-      Alert.alert('Age Requirement', 'You must be at least 18 years old to use Accord');
+      Alert.alert(t('onboarding.errors.ageRequirement'), t('onboarding.errors.mustBe18'));
       return;
     }
 
     if (age > 100) {
-      Alert.alert('Invalid Birth Date', 'Please enter a valid birth date');
+      Alert.alert(t('onboarding.errors.invalidBirthDate'), t('onboarding.errors.enterValidBirthDate'));
       return;
     }
 
     if (!ageCertified) {
-      Alert.alert('Age Certification Required', 'Please confirm that you are 18 years or older');
+      Alert.alert(t('onboarding.errors.ageCertRequired'), t('onboarding.errors.confirmAge18'));
       return;
     }
 
     if (gender.length === 0) {
-      Alert.alert('Required', 'Please select at least one gender');
+      Alert.alert(t('onboarding.errors.required'), t('onboarding.errors.selectGender'));
       return;
     }
 
     if (!pronouns) {
-      Alert.alert('Required', 'Please select your pronouns');
+      Alert.alert(t('onboarding.errors.required'), t('onboarding.errors.selectPronouns'));
       return;
     }
 
     if (orientation.length === 0) {
-      Alert.alert('Required', 'Please select at least one sexual orientation');
+      Alert.alert(t('onboarding.errors.required'), t('onboarding.errors.selectOrientation'));
       return;
     }
 
-    // GPS location is required - no manual entry allowed
+    // Location validation: GPS is ALWAYS required for matching
+    // Even if user hides exact location, we need it for distance-based filtering
     if (!locationCoords) {
       Alert.alert(
-        'Location Required',
-        'Please use the "Get My Location" button to detect your location. GPS location is required for matching.',
-        [{ text: 'OK', style: 'default' }]
+        t('onboarding.errors.locationRequired'),
+        t('onboarding.errors.useLocationButton'),
+        [{ text: t('common.ok'), style: 'default' }]
       );
       return;
     }
 
     if (!locationCity || !locationState) {
       Alert.alert(
-        'Location Error',
-        'We could not determine your city. Please try getting your location again.',
-        [{ text: 'OK', style: 'default' }]
+        t('onboarding.errors.locationError'),
+        t('onboarding.errors.couldNotDetermineCity'),
+        [{ text: t('common.ok'), style: 'default' }]
       );
       return;
     }
@@ -621,11 +686,12 @@ export default function BasicInfo() {
           pronouns,
           ethnicity: ethnicity && ethnicity.length > 0 ? ethnicity : null, // Always store as array (TEXT[])
           sexual_orientation: orientation, // Always store as array (TEXT[])
-          location_city: locationCity,
+          location_city: locationCity, // Always save location data
           location_state: locationState,
           location_country: locationCountry || null,
           latitude: coords?.latitude || null,
           longitude: coords?.longitude || null,
+          hide_distance: hideLocation, // Privacy flag: if true, don't show exact distance to others
           encryption_public_key: encryptionPublicKey, // Store public key for E2E encryption
           device_id: deviceFingerprint, // Store device fingerprint for ban evasion prevention
           onboarding_step: 1,
@@ -654,7 +720,7 @@ export default function BasicInfo() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-      className="flex-1 bg-cream"
+      className="flex-1 bg-cream dark:bg-gray-900"
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <ScrollView
@@ -667,10 +733,10 @@ export default function BasicInfo() {
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 1 of 8</Text>
-            <Text className="text-sm text-lavender-400 font-bold">12%</Text>
+            <Text className="text-sm text-gray-600 dark:text-gray-300 font-medium">Step 1 of 8</Text>
+            <Text className="text-sm text-lavender-400 dark:text-lavender-300 font-bold">12%</Text>
           </View>
-          <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <View
               className="h-3 bg-lavender-400 rounded-full"
               style={{ width: '12%' }}
@@ -681,10 +747,10 @@ export default function BasicInfo() {
         {/* Header */}
         <View className="mb-8 items-center">
           <Text className="text-5xl mb-4">💜</Text>
-          <Text className="text-4xl font-bold text-charcoal mb-3 text-center">
+          <Text className="text-4xl font-bold text-charcoal dark:text-white mb-3 text-center">
             Let's get to know you
           </Text>
-          <Text className="text-gray-600 text-lg text-center">
+          <Text className="text-gray-600 dark:text-gray-300 text-lg text-center">
             First things first — the basics
           </Text>
         </View>
@@ -693,9 +759,9 @@ export default function BasicInfo() {
         <View className="space-y-6">
           {/* Name */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.displayName')}</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{t('onboarding.displayName')}</Text>
             <TextInput
-              className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+              className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white"
               placeholder={t('onboarding.displayNamePlaceholder')}
               value={displayName}
               onChangeText={setDisplayName}
@@ -705,12 +771,12 @@ export default function BasicInfo() {
 
           {/* Birth Date */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.birthDate')}</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{t('onboarding.birthDate')}</Text>
             <TouchableOpacity
-              className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 flex-row items-center justify-between"
+              className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 flex-row items-center justify-between"
               onPress={() => setShowDatePicker(true)}
             >
-              <Text className={birthDate ? "text-gray-900" : "text-gray-500"}>
+              <Text className={birthDate ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}>
                 {birthDate ? new Date(birthDate as Date).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
@@ -720,7 +786,7 @@ export default function BasicInfo() {
               <MaterialCommunityIcons name="calendar" size={20} color="#9CA3AF" />
             </TouchableOpacity>
             {birthDate && (
-              <Text className="text-xs text-gray-600 mt-1">
+              <Text className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                 Age: {calculateAge(new Date(birthDate as Date))} • {calculateZodiac(new Date(birthDate as Date))}
               </Text>
             )}
@@ -741,10 +807,10 @@ export default function BasicInfo() {
                 )}
               </View>
               <View className="flex-1">
-                <Text className="text-gray-900 font-semibold mb-1">
+                <Text className="text-gray-900 dark:text-white font-semibold mb-1">
                   I certify that I am 18 years of age or older
                 </Text>
-                <Text className="text-xs text-gray-600 leading-5">
+                <Text className="text-xs text-gray-600 dark:text-gray-400 leading-5">
                   By checking this box, you confirm that you meet the minimum age requirement to use Accord and agree to our Terms of Service.
                 </Text>
               </View>
@@ -761,16 +827,16 @@ export default function BasicInfo() {
               onRequestClose={() => setShowDatePicker(false)}
             >
               <View className="flex-1 bg-black/50 justify-end">
-                <View className="bg-white rounded-t-3xl p-6 pb-8">
+                <View className="bg-white dark:bg-gray-800 rounded-t-3xl p-6 pb-8">
                   {/* Header */}
                   <View className="flex-row items-center justify-between mb-4">
-                    <Text className="text-2xl font-bold text-gray-900">Select Birth Date</Text>
+                    <Text className="text-2xl font-bold text-gray-900 dark:text-white">Select Birth Date</Text>
                     <TouchableOpacity onPress={() => setShowDatePicker(false)}>
                       <MaterialCommunityIcons name="close" size={28} color="#6B7280" />
                     </TouchableOpacity>
                   </View>
 
-                  <Text className="text-sm text-gray-500 mb-4">
+                  <Text className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                     You must be at least 18 years old to use Accord
                   </Text>
 
@@ -832,8 +898,8 @@ export default function BasicInfo() {
 
           {/* Gender */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.gender')}</Text>
-            <Text className="text-xs text-gray-500 mb-2">Select all that apply</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{t('onboarding.gender')}</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that apply</Text>
             <View className="flex-row flex-wrap gap-2">
               {GENDERS.map((g) => (
                 <TouchableOpacity
@@ -864,7 +930,7 @@ export default function BasicInfo() {
 
           {/* Pronouns */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.pronouns')}</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{t('onboarding.pronouns')}</Text>
             <View className="flex-row flex-wrap gap-2">
               {PRONOUNS.map((p) => (
                 <TouchableOpacity
@@ -890,8 +956,8 @@ export default function BasicInfo() {
 
           {/* Ethnicity */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.ethnicity')}</Text>
-            <Text className="text-xs text-gray-500 mb-2">{t('onboarding.ethnicityHelp')}</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{t('onboarding.ethnicity')}</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('onboarding.ethnicityHelp')}</Text>
             <View className="flex-row flex-wrap gap-2">
               {ETHNICITIES.map((e) => (
                 <TouchableOpacity
@@ -922,8 +988,8 @@ export default function BasicInfo() {
 
           {/* Sexual Orientation */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.sexualOrientation')}</Text>
-            <Text className="text-xs text-gray-500 mb-2">Select all that apply</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{t('onboarding.sexualOrientation')}</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that apply</Text>
             <View className="flex-row flex-wrap gap-2">
               {ORIENTATIONS.map((o) => (
                 <TouchableOpacity
@@ -955,10 +1021,95 @@ export default function BasicInfo() {
           {/* Location - GPS Only (no manual entry) */}
           <View>
             <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-sm font-medium text-gray-700">{t('onboarding.location')}</Text>
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-200">{t('onboarding.location')}</Text>
             </View>
 
-            {/* GPS Location Detection */}
+            {/* Privacy Toggle: Use Location vs Hide Exact Location */}
+            <View className="mb-4">
+              <View className="flex-row gap-3">
+                {/* Use Precise Location Option */}
+                <TouchableOpacity
+                  className={`flex-1 border-2 rounded-xl p-4 ${
+                    !hideLocation
+                      ? 'bg-lavender-50 border-lavender-500'
+                      : 'bg-white border-gray-300'
+                  }`}
+                  onPress={() => setHideLocation(false)}
+                >
+                  <View className="flex-row items-center mb-2">
+                    <View className={`w-5 h-5 rounded-full border-2 items-center justify-center ${
+                      !hideLocation ? 'border-lavender-500' : 'border-gray-400'
+                    }`}>
+                      {!hideLocation && (
+                        <View className="w-3 h-3 rounded-full bg-lavender-500" />
+                      )}
+                    </View>
+                    <MaterialCommunityIcons
+                      name="crosshairs-gps"
+                      size={20}
+                      color={!hideLocation ? "#A08AB7" : "#9CA3AF"}
+                      style={{ marginLeft: 8 }}
+                    />
+                  </View>
+                  <Text className={`font-semibold mb-1 ${
+                    !hideLocation ? 'text-lavender-700' : 'text-gray-700'
+                  }`}>
+                    {t('onboarding.preciseLocation')}
+                  </Text>
+                  <Text className="text-xs text-gray-500">
+                    {t('onboarding.preciseLocationDesc')}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Hide Exact Location Option */}
+                <TouchableOpacity
+                  className={`flex-1 border-2 rounded-xl p-4 ${
+                    hideLocation
+                      ? 'bg-orange-50 border-orange-500'
+                      : 'bg-white border-gray-300'
+                  }`}
+                  onPress={() => setHideLocation(true)}
+                >
+                  <View className="flex-row items-center mb-2">
+                    <View className={`w-5 h-5 rounded-full border-2 items-center justify-center ${
+                      hideLocation ? 'border-orange-500' : 'border-gray-400'
+                    }`}>
+                      {hideLocation && (
+                        <View className="w-3 h-3 rounded-full bg-orange-500" />
+                      )}
+                    </View>
+                    <MaterialCommunityIcons
+                      name="shield-lock"
+                      size={20}
+                      color={hideLocation ? "#F97316" : "#9CA3AF"}
+                      style={{ marginLeft: 8 }}
+                    />
+                  </View>
+                  <Text className={`font-semibold mb-1 ${
+                    hideLocation ? 'text-orange-700' : 'text-gray-700'
+                  }`}>
+                    {t('onboarding.hideExactLocation')}
+                  </Text>
+                  <Text className="text-xs text-gray-500">
+                    {t('onboarding.hideExactLocationDesc')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Privacy Info for Hide Location */}
+              {hideLocation && (
+                <View className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 mt-3">
+                  <View className="flex-row items-start">
+                    <MaterialCommunityIcons name="information" size={18} color="#F97316" />
+                    <Text className="text-xs text-orange-700 ml-2 flex-1">
+                      {t('onboarding.locationPrivacyInfo')}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* GPS Location Detection - ALWAYS required */}
             <View className="mb-3">
               {/* Get Location Button */}
               {!locationCity && !locationState ? (
@@ -991,11 +1142,11 @@ export default function BasicInfo() {
                       <MaterialCommunityIcons name="map-marker-check" size={24} color="#A08AB7" />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-gray-900 font-semibold text-base">
+                      <Text className="text-gray-900 dark:text-white font-semibold text-base">
                         {locationCity}{locationState ? `, ${locationState}` : ''}
                       </Text>
                       {locationCountry && (
-                        <Text className="text-gray-500 text-sm">{locationCountry}</Text>
+                        <Text className="text-gray-500 dark:text-gray-400 text-sm">{locationCountry}</Text>
                       )}
                     </View>
                     <TouchableOpacity
@@ -1014,11 +1165,14 @@ export default function BasicInfo() {
               )}
 
               {/* Info message */}
-              <View className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mt-3">
+              <View className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl px-4 py-3 mt-3">
                 <View className="flex-row items-start">
                   <MaterialCommunityIcons name="shield-check" size={18} color="#2563EB" />
-                  <Text className="text-xs text-blue-700 ml-2 flex-1">
-                    Your location is detected via GPS to ensure accurate matching with nearby users. You cannot manually change your location.
+                  <Text className="text-xs text-blue-700 dark:text-blue-300 ml-2 flex-1">
+                    {hideLocation
+                      ? t('onboarding.locationUsedForMatching')
+                      : t('onboarding.locationGPSInfo')
+                    }
                   </Text>
                 </View>
               </View>
@@ -1030,11 +1184,11 @@ export default function BasicInfo() {
                 <View className="flex-row items-center">
                   <MaterialCommunityIcons name="map-marker-check" size={20} color="#A08AB7" />
                   <View className="ml-3 flex-1">
-                    <Text className="text-gray-900 font-semibold">
+                    <Text className="text-gray-900 dark:text-white font-semibold">
                       {locationCity}
                       {locationState && `, ${locationState}`}
                     </Text>
-                    <Text className="text-gray-600 text-sm">
+                    <Text className="text-gray-600 dark:text-gray-400 text-sm">
                       {locationCountry}
                     </Text>
                   </View>
@@ -1065,7 +1219,7 @@ export default function BasicInfo() {
         />
 
         {/* Privacy Note */}
-        <Text className="text-sm text-gray-600 text-center mt-6 px-4">
+        <Text className="text-sm text-gray-600 dark:text-gray-400 text-center mt-6 px-4">
           🔒 Your privacy is our priority. Only matched users can see your full profile.
         </Text>
         </View>

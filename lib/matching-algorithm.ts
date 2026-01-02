@@ -316,12 +316,26 @@ function calculateGoalsScore(prefs1: Preferences, prefs2: Preferences): number {
         open: { biological: 12, adoption: 12, foster: 12, 'step-parenting': 12, surrogacy: 12, open: 15 }
       };
 
-      // Find best compatibility score between any pair
+      // FIX #4: Optimize nested loop - check for exact matches first (O(n) instead of O(n²))
+      const set2 = new Set(arr2);
       let bestScore = 0;
+      let foundExactMatch = false;
+
+      // First pass: check for exact matches (O(n))
       for (const a1 of arr1) {
-        for (const a2 of arr2) {
-          const pairScore = arrangementCompatibility[a1]?.[a2] || 8;
-          bestScore = Math.max(bestScore, pairScore);
+        if (set2.has(a1)) {
+          bestScore = Math.max(bestScore, arrangementCompatibility[a1]?.[a1] || 15);
+          foundExactMatch = true;
+        }
+      }
+
+      // Only do nested loop if no exact match found
+      if (!foundExactMatch) {
+        for (const a1 of arr1) {
+          for (const a2 of arr2) {
+            const pairScore = arrangementCompatibility[a1]?.[a2] || 8;
+            bestScore = Math.max(bestScore, pairScore);
+          }
         }
       }
       score += bestScore;
@@ -365,11 +379,24 @@ function calculateLifestyleScore(
       score += Math.round((overlapScore / 100) * 25); // Scale to max 25 points
     } else {
       // No overlap - find best compatibility score between any pair
+      // FIX #4: Optimize nested loop - check for exact matches first
+      const set2 = new Set(arr2);
       let bestScore = 0;
+      let foundExactMatch = false;
+
       for (const h1 of arr1) {
-        for (const h2 of arr2) {
-          const pairScore = housingCompatibility[h1]?.[h2] || 10;
-          bestScore = Math.max(bestScore, pairScore);
+        if (set2.has(h1)) {
+          bestScore = Math.max(bestScore, housingCompatibility[h1]?.[h1] || 25);
+          foundExactMatch = true;
+        }
+      }
+
+      if (!foundExactMatch) {
+        for (const h1 of arr1) {
+          for (const h2 of arr2) {
+            const pairScore = housingCompatibility[h1]?.[h2] || 10;
+            bestScore = Math.max(bestScore, pairScore);
+          }
         }
       }
       score += bestScore;
@@ -395,11 +422,24 @@ function calculateLifestyleScore(
       score += Math.round((overlapScore / 100) * 25); // Scale to max 25 points
     } else {
       // No overlap - find best compatibility score between any pair
+      // FIX #4: Optimize nested loop - check for exact matches first
+      const set2 = new Set(arr2);
       let bestScore = 0;
+      let foundExactMatch = false;
+
       for (const f1 of arr1) {
-        for (const f2 of arr2) {
-          const pairScore = financialCompatibility[f1]?.[f2] || 10;
-          bestScore = Math.max(bestScore, pairScore);
+        if (set2.has(f1)) {
+          bestScore = Math.max(bestScore, financialCompatibility[f1]?.[f1] || 25);
+          foundExactMatch = true;
+        }
+      }
+
+      if (!foundExactMatch) {
+        for (const f1 of arr1) {
+          for (const f2 of arr2) {
+            const pairScore = financialCompatibility[f1]?.[f2] || 10;
+            bestScore = Math.max(bestScore, pairScore);
+          }
         }
       }
       score += bestScore;

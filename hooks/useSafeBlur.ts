@@ -7,7 +7,7 @@
  * Critical for user safety in Accord - users rely on photo blur for privacy.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 interface UseSafeBlurOptions {
   shouldBlur: boolean;
@@ -48,17 +48,32 @@ export function useSafeBlur({
   blurIntensity = 30,
 }: UseSafeBlurOptions): UseSafeBlurReturn {
   const [imageError, setImageError] = useState(false);
+  const isMountedRef = useRef(true);
+
+  // Track component mount status to prevent state updates after unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const onImageLoad = useCallback(() => {
-    setImageError(false);
+    if (isMountedRef.current) {
+      setImageError(false);
+    }
   }, []);
 
   const onImageError = useCallback(() => {
-    setImageError(true);
+    if (isMountedRef.current) {
+      setImageError(true);
+    }
   }, []);
 
   const resetBlur = useCallback(() => {
-    setImageError(false);
+    if (isMountedRef.current) {
+      setImageError(false);
+    }
   }, []);
 
   // Apply blur when:
@@ -69,6 +84,7 @@ export function useSafeBlur({
   // ✅ Blur shows while image is loading
   // ✅ Blur shows after successful load
   // ❌ Blur does NOT show if image failed (prevents SIGSEGV crash)
+  // ❌ State updates prevented after unmount (prevents garbage pointer crash)
   const blurRadius = shouldBlur && !imageError ? blurIntensity : 0;
 
   return {

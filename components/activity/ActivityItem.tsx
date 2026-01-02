@@ -154,11 +154,12 @@ export default function ActivityItem({ activity, onPress, onUnmatch }: ActivityI
   return (
     <TouchableOpacity
       style={[styles.container, !activity.is_read && styles.unread]}
+      className={activity.is_read ? "bg-card" : "bg-card"}
       onPress={handlePress}
       activeOpacity={0.7}
     >
       {/* Avatar or Icon */}
-      <View style={[styles.iconContainer, { backgroundColor: config.bgColor }]}>
+      <View style={styles.iconContainer} className="bg-muted">
         {actorPhoto ? (
           <Image
             source={{ uri: actorPhoto }}
@@ -178,21 +179,22 @@ export default function ActivityItem({ activity, onPress, onUnmatch }: ActivityI
 
       {/* Content */}
       <View style={styles.content}>
-        <Text style={styles.title} numberOfLines={2}>
+        <Text style={styles.title} className="text-foreground" numberOfLines={2}>
           {title}
         </Text>
         {subtitle && (
-          <Text style={styles.subtitle} numberOfLines={1}>
+          <Text style={styles.subtitle} className="text-muted-foreground" numberOfLines={1}>
             {subtitle}
           </Text>
         )}
-        <Text style={styles.time}>{formatTimeAgo(activity.created_at)}</Text>
+        <Text style={styles.time} className="text-muted-foreground">{formatTimeAgo(activity.created_at)}</Text>
       </View>
 
       {/* Unmatch button */}
       {canUnmatch && (
         <TouchableOpacity
           style={styles.unmatchButton}
+          className="bg-yellow-100 dark:bg-yellow-900/30"
           onPress={(e) => {
             e.stopPropagation();
             handleUnmatch();
@@ -219,12 +221,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: 'white',
     borderRadius: 12,
     marginBottom: 8,
   },
   unread: {
-    backgroundColor: '#FAFBFF',
     borderLeftWidth: 3,
     borderLeftColor: '#A08AB7',
   },
@@ -260,18 +260,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#111827',
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 13,
-    color: '#6B7280',
     marginBottom: 4,
     fontStyle: 'italic',
   },
   time: {
     fontSize: 12,
-    color: '#9CA3AF',
   },
   unreadDot: {
     width: 8,
@@ -284,7 +281,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,

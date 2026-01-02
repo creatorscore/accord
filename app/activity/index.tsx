@@ -18,6 +18,7 @@ import { useActivityFeed, ActivityItem as ActivityItemType } from '@/hooks/useAc
 import ActivityItem from '@/components/activity/ActivityItem';
 import UnmatchModal from '@/components/moderation/UnmatchModal';
 import { supabase } from '@/lib/supabase';
+import { useColorScheme } from '@/lib/useColorScheme';
 
 // Interface for unmatch modal state
 interface UnmatchTarget {
@@ -30,6 +31,7 @@ export default function ActivityScreen() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
+  const { colors } = useColorScheme(); // Keep for icon colors only
   const [profileId, setProfileId] = useState<string | null>(null);
   const [unmatchTarget, setUnmatchTarget] = useState<UnmatchTarget | null>(null);
 
@@ -147,18 +149,18 @@ export default function ActivityScreen() {
             headerBackTitle: t('activity.back'),
             headerLeft: () => (
               <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <MaterialCommunityIcons name="arrow-left" size={24} color="#111827" />
+                <MaterialCommunityIcons name="arrow-left" size={24} color={colors.foreground} />
               </TouchableOpacity>
             ),
           }}
         />
-        <SafeAreaView style={styles.container} edges={['bottom']}>
+        <SafeAreaView style={styles.container} className="bg-background" edges={['bottom']}>
           <View style={styles.premiumGate}>
-            <View style={styles.premiumIconContainer}>
+            <View style={styles.premiumIconContainer} className="bg-card">
               <MaterialCommunityIcons name="bell-ring" size={48} color="#A08AB7" />
             </View>
-            <Text style={styles.premiumTitle}>{t('activity.premiumTitle')}</Text>
-            <Text style={styles.premiumDescription}>
+            <Text style={styles.premiumTitle} className="text-foreground">{t('activity.premiumTitle')}</Text>
+            <Text style={styles.premiumDescription} className="text-muted-foreground">
               {t('activity.premiumDescription')}
             </Text>
             <TouchableOpacity
@@ -183,7 +185,7 @@ export default function ActivityScreen() {
           headerBackTitle: t('activity.back'),
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <MaterialCommunityIcons name="arrow-left" size={24} color="#111827" />
+              <MaterialCommunityIcons name="arrow-left" size={24} color={colors.foreground} />
             </TouchableOpacity>
           ),
           headerRight: () =>
@@ -194,25 +196,25 @@ export default function ActivityScreen() {
             ) : null,
         }}
       />
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <SafeAreaView style={styles.container} className="bg-background" edges={['bottom']}>
         {loading && listData.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#A08AB7" />
-            <Text style={styles.loadingText}>{t('activity.loading')}</Text>
+            <Text style={styles.loadingText} className="text-muted-foreground">{t('activity.loading')}</Text>
           </View>
         ) : error ? (
           <View style={styles.errorContainer}>
             <MaterialCommunityIcons name="alert-circle-outline" size={48} color="#EF4444" />
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorText} className="text-muted-foreground">{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={refresh}>
               <Text style={styles.retryButtonText}>{t('activity.tryAgain')}</Text>
             </TouchableOpacity>
           </View>
         ) : listData.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="bell-sleep-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>{t('activity.noActivityYet')}</Text>
-            <Text style={styles.emptyDescription}>
+            <MaterialCommunityIcons name="bell-sleep-outline" size={64} className="text-muted-foreground" />
+            <Text style={styles.emptyTitle} className="text-foreground">{t('activity.noActivityYet')}</Text>
+            <Text style={styles.emptyDescription} className="text-muted-foreground">
               {t('activity.noActivityDescription')}
             </Text>
           </View>
@@ -226,8 +228,8 @@ export default function ActivityScreen() {
               if (item.type === 'header') {
                 return (
                   <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>{item.title}</Text>
-                    <Text style={styles.sectionCount}>{item.count}</Text>
+                    <Text style={styles.sectionTitle} className="text-muted-foreground">{item.title}</Text>
+                    <Text style={styles.sectionCount} className="text-muted-foreground bg-muted">{item.count}</Text>
                   </View>
                 );
               }
@@ -275,7 +277,6 @@ export default function ActivityScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   listContent: {
     padding: 16,
@@ -292,14 +293,11 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   sectionCount: {
     fontSize: 12,
-    color: '#9CA3AF',
-    backgroundColor: '#E5E7EB',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
@@ -313,7 +311,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 15,
-    color: '#6B7280',
   },
   errorContainer: {
     flex: 1,
@@ -324,7 +321,6 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 12,
     fontSize: 15,
-    color: '#6B7280',
     textAlign: 'center',
   },
   retryButton: {
@@ -349,12 +345,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 20,
     fontWeight: '600',
-    color: '#374151',
   },
   emptyDescription: {
     marginTop: 8,
     fontSize: 15,
-    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -386,7 +380,6 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: '#F5F0FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
@@ -394,12 +387,10 @@ const styles = StyleSheet.create({
   premiumTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 12,
   },
   premiumDescription: {
     fontSize: 16,
-    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,

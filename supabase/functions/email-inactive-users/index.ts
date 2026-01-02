@@ -170,7 +170,7 @@ function generateInactiveEmail(
                               <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
                                 <tr>
                                   <td style="border-radius: 50px; background: linear-gradient(135deg, #9B87CE 0%, #A08AB7 100%); box-shadow: 0 4px 15px rgba(155, 135, 206, 0.4);">
-                                    <a href="https://joinaccord.app/discover" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
+                                    <a href="accord://discover" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
                                       ${template.cta}
                                     </a>
                                   </td>
@@ -201,7 +201,7 @@ function generateInactiveEmail(
                         <!-- Footer -->
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 0; line-height: 1.6;">
                           You're receiving this because you haven't visited Accord recently.<br>
-                          <a href="https://joinaccord.app/settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
+                          <a href="accord://settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
                         </p>
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
@@ -230,13 +230,13 @@ ${template.subheadline}
 
 Your journey to finding a meaningful connection doesn't have to pause. Every day on Accord is an opportunity to meet someone who shares your goals and values.
 ${statsText}
-${template.cta}: https://joinaccord.app/discover
+${template.cta}: accord://discover
 
 Reminder: The most successful connections happen when both people are actively engaged. Your perfect match might be waiting right now!
 
 ---
 You're receiving this because you haven't visited Accord recently.
-Manage email preferences: https://joinaccord.app/settings/notifications
+Manage email preferences: accord://settings/notifications
 
 Accord - Safe Connections for Meaningful Partnerships
 joinaccord.app`;

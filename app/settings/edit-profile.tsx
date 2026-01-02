@@ -27,6 +27,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash } from '@/lib/image-optimization';
 import { HeightUnit, cmToInches, inchesToCm } from '@/lib/height-utils';
+import { openAppSettings } from '@/lib/open-settings';
 
 interface Photo {
   id?: string;
@@ -838,13 +839,7 @@ export default function EditProfile() {
               { text: 'Cancel', style: 'cancel' },
               {
                 text: 'Open Settings',
-                onPress: () => {
-                  if (Platform.OS === 'ios') {
-                    Linking.openURL('app-settings:');
-                  } else {
-                    Linking.openSettings();
-                  }
-                },
+                onPress: () => openAppSettings(),
               },
             ]
           );

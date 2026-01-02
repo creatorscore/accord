@@ -43,16 +43,16 @@ export default function LanguageSelection() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView className="flex-1 bg-white dark:bg-gray-900">
       <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Header */}
         <View className="mb-8">
           <View className="items-center mb-6">
             <Text className="text-6xl mb-4">🌍</Text>
-            <Text className="text-4xl font-bold text-gray-900 mb-3 text-center">
+            <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3 text-center">
               Choose Your Language
             </Text>
-            <Text className="text-gray-600 text-lg text-center">
+            <Text className="text-gray-600 dark:text-gray-400 text-lg text-center">
               Accord is available in 12 languages.{'\n'}Select your preferred language to continue.
             </Text>
           </View>
@@ -65,8 +65,8 @@ export default function LanguageSelection() {
               key={language.code}
               className={`px-6 py-4 rounded-xl border-2 flex-row items-center justify-between ${
                 selectedLanguage === language.code
-                  ? 'bg-lavender-50 border-lavender-500'
-                  : 'bg-white border-gray-200'
+                  ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
+                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
               }`}
               onPress={() => setSelectedLanguage(language.code)}
             >
@@ -76,13 +76,13 @@ export default function LanguageSelection() {
                   <Text
                     className={`text-lg font-semibold ${
                       selectedLanguage === language.code
-                        ? 'text-lavender-500'
-                        : 'text-gray-900'
+                        ? 'text-lavender-500 dark:text-lavender-400'
+                        : 'text-gray-900 dark:text-white'
                     }`}
                   >
                     {language.nativeName}
                   </Text>
-                  <Text className="text-sm text-gray-500">{language.name}</Text>
+                  <Text className="text-sm text-gray-500 dark:text-gray-400">{language.name}</Text>
                 </View>
               </View>
               {selectedLanguage === language.code && (
@@ -93,10 +93,10 @@ export default function LanguageSelection() {
         </View>
 
         {/* Info Banner */}
-        <View className="bg-purple-50 rounded-xl p-4 mb-6 flex-row">
+        <View className="bg-purple-50 dark:bg-purple-900/30 rounded-xl p-4 mb-6 flex-row border border-purple-200 dark:border-purple-700">
           <MaterialCommunityIcons name="information" size={24} color="#A08AB7" />
           <View className="flex-1 ml-3">
-            <Text className="text-sm text-gray-700">
+            <Text className="text-sm text-gray-700 dark:text-gray-300">
               <Text className="font-semibold">Global Community: </Text>
               You can change your language anytime in Settings. Connect with users worldwide or search locally.
             </Text>
@@ -128,7 +128,7 @@ export default function LanguageSelection() {
           className="mt-4 py-3 items-center"
           onPress={() => router.push('/(onboarding)/basic-info')}
         >
-          <Text className="text-gray-500 text-base">
+          <Text className="text-gray-500 dark:text-gray-400 text-base">
             Skip (Continue in English)
           </Text>
         </TouchableOpacity>

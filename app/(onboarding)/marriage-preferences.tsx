@@ -261,15 +261,15 @@ export default function MarriagePreferences() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView className="flex-1 bg-white dark:bg-gray-900">
       <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 7 of 8</Text>
+            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 7 of 8</Text>
             <Text className="text-sm text-lavender-500 font-bold">88%</Text>
           </View>
-          <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <View
               className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '88%' }}
@@ -279,10 +279,10 @@ export default function MarriagePreferences() {
 
         {/* Header */}
         <View className="mb-8">
-          <Text className="text-4xl font-bold text-gray-900 mb-3">
+          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
             Marriage Goals 💍
           </Text>
-          <Text className="text-gray-600 text-lg">
+          <Text className="text-gray-600 dark:text-gray-400 text-lg">
             What are you looking for in this partnership?
           </Text>
         </View>
@@ -291,18 +291,18 @@ export default function MarriagePreferences() {
         <View className="space-y-8">
           {/* Primary Reason - Multi-select */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Reasons for seeking a lavender marriage?
             </Text>
-            <Text className="text-xs text-gray-500 mb-2">Select all that apply</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that apply</Text>
             <View className="space-y-2">
               {PRIMARY_REASONS.map((reason) => (
                 <TouchableOpacity
                   key={reason.value}
                   className={`px-4 py-3 rounded-xl border ${
                     primaryReason.includes(reason.value)
-                      ? 'bg-lavender-50 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => togglePrimaryReason(reason.value)}
                 >
@@ -310,7 +310,7 @@ export default function MarriagePreferences() {
                     className={`${
                       primaryReason.includes(reason.value)
                         ? 'text-lavender-500 font-semibold'
-                        : 'text-gray-700'
+                        : 'text-gray-700 dark:text-gray-300'
                     }`}
                   >
                     {reason.label}
@@ -327,7 +327,7 @@ export default function MarriagePreferences() {
 
           {/* Relationship Type */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Preferred relationship dynamic?
             </Text>
             <View className="space-y-2">
@@ -336,8 +336,8 @@ export default function MarriagePreferences() {
                   key={type.value}
                   className={`px-4 py-3 rounded-xl border ${
                     relationshipType === type.value
-                      ? 'bg-lavender-50 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => setRelationshipType(type.value)}
                 >
@@ -345,7 +345,7 @@ export default function MarriagePreferences() {
                     className={`${
                       relationshipType === type.value
                         ? 'text-lavender-500 font-semibold'
-                        : 'text-gray-700'
+                        : 'text-gray-700 dark:text-gray-300'
                     }`}
                   >
                     {type.label}
@@ -357,7 +357,7 @@ export default function MarriagePreferences() {
 
           {/* Children */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Do you want children?
             </Text>
             <View className="flex-row gap-2">
@@ -366,8 +366,8 @@ export default function MarriagePreferences() {
                   key={String(option.value)}
                   className={`flex-1 px-4 py-3 rounded-xl border ${
                     wantsChildren === option.value
-                      ? 'bg-lavender-50 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => setWantsChildren(option.value)}
                 >
@@ -375,7 +375,7 @@ export default function MarriagePreferences() {
                     className={`text-center ${
                       wantsChildren === option.value
                         ? 'text-lavender-500 font-semibold'
-                        : 'text-gray-700'
+                        : 'text-gray-700 dark:text-gray-300'
                     }`}
                   >
                     {option.label}
@@ -387,18 +387,18 @@ export default function MarriagePreferences() {
 
           {/* Housing */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Living arrangement preference?
             </Text>
-            <Text className="text-xs text-gray-500 mb-2">Select all that you're open to</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that you're open to</Text>
             <View className="space-y-2">
               {HOUSING_PREFERENCES.map((pref) => (
                 <TouchableOpacity
                   key={pref.value}
                   className={`px-4 py-3 rounded-xl border ${
                     housingPreference.includes(pref.value)
-                      ? 'bg-lavender-50 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => toggleHousingPreference(pref.value)}
                 >
@@ -406,7 +406,7 @@ export default function MarriagePreferences() {
                     className={`${
                       housingPreference.includes(pref.value)
                         ? 'text-lavender-500 font-semibold'
-                        : 'text-gray-700'
+                        : 'text-gray-700 dark:text-gray-300'
                     }`}
                   >
                     {pref.label}
@@ -423,18 +423,18 @@ export default function MarriagePreferences() {
 
           {/* Financial */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Financial arrangement preference?
             </Text>
-            <Text className="text-xs text-gray-500 mb-2">Select all that you're open to</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that you're open to</Text>
             <View className="space-y-2">
               {FINANCIAL_ARRANGEMENTS.map((arr) => (
                 <TouchableOpacity
                   key={arr.value}
                   className={`px-4 py-3 rounded-xl border ${
                     financialArrangement.includes(arr.value)
-                      ? 'bg-lavender-50 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => toggleFinancialArrangement(arr.value)}
                 >
@@ -442,7 +442,7 @@ export default function MarriagePreferences() {
                     className={`${
                       financialArrangement.includes(arr.value)
                         ? 'text-lavender-500 font-semibold'
-                        : 'text-gray-700'
+                        : 'text-gray-700 dark:text-gray-300'
                     }`}
                   >
                     {arr.label}
@@ -460,18 +460,18 @@ export default function MarriagePreferences() {
           {/* Children Arrangement - only show if wants children */}
           {wantsChildren === true && (
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-3">
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                 How would you like to have children? (optional)
               </Text>
-              <Text className="text-xs text-gray-500 mb-2">Select all that you're open to</Text>
+              <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that you're open to</Text>
               <View className="space-y-2">
                 {CHILDREN_ARRANGEMENTS.map((arr) => (
                   <TouchableOpacity
                     key={arr.value}
                     className={`px-4 py-3 rounded-xl border ${
                       childrenArrangement.includes(arr.value)
-                        ? 'bg-lavender-50 border-lavender-500'
-                        : 'bg-white border-gray-300'
+                        ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
+                        : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                     }`}
                     onPress={() => toggleChildrenArrangement(arr.value)}
                   >
@@ -479,7 +479,7 @@ export default function MarriagePreferences() {
                       className={`${
                         childrenArrangement.includes(arr.value)
                           ? 'text-lavender-500 font-semibold'
-                          : 'text-gray-700'
+                          : 'text-gray-700 dark:text-gray-300'
                       }`}
                     >
                       {arr.label}
@@ -497,13 +497,13 @@ export default function MarriagePreferences() {
 
           {/* Lifestyle Preferences */}
           <View>
-            <Text className="text-lg font-bold text-gray-900 mb-4">
+            <Text className="text-lg font-bold text-gray-900 dark:text-white mb-4">
               Lifestyle Preferences
             </Text>
 
             {/* Smoking */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-3">
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                 Smoking (optional)
               </Text>
               <View className="space-y-2">
@@ -512,8 +512,8 @@ export default function MarriagePreferences() {
                     key={option.value}
                     className={`px-4 py-3 rounded-xl border ${
                       smoking === option.value
-                        ? 'bg-lavender-50 border-lavender-500'
-                        : 'bg-white border-gray-300'
+                        ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
+                        : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                     }`}
                     onPress={() => setSmoking(option.value)}
                   >
@@ -521,7 +521,7 @@ export default function MarriagePreferences() {
                       className={`${
                         smoking === option.value
                           ? 'text-lavender-500 font-semibold'
-                          : 'text-gray-700'
+                          : 'text-gray-700 dark:text-gray-300'
                       }`}
                     >
                       {option.label}
@@ -533,7 +533,7 @@ export default function MarriagePreferences() {
 
             {/* Drinking */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-3">
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                 Drinking (optional)
               </Text>
               <View className="space-y-2">
@@ -542,8 +542,8 @@ export default function MarriagePreferences() {
                     key={option.value}
                     className={`px-4 py-3 rounded-xl border ${
                       drinking === option.value
-                        ? 'bg-lavender-50 border-lavender-500'
-                        : 'bg-white border-gray-300'
+                        ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
+                        : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                     }`}
                     onPress={() => setDrinking(option.value)}
                   >
@@ -551,7 +551,7 @@ export default function MarriagePreferences() {
                       className={`${
                         drinking === option.value
                           ? 'text-lavender-500 font-semibold'
-                          : 'text-gray-700'
+                          : 'text-gray-700 dark:text-gray-300'
                       }`}
                     >
                       {option.label}
@@ -563,7 +563,7 @@ export default function MarriagePreferences() {
 
             {/* Pets */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-3">
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                 Pets (optional)
               </Text>
               <View className="space-y-2">
@@ -572,8 +572,8 @@ export default function MarriagePreferences() {
                     key={option.value}
                     className={`px-4 py-3 rounded-xl border ${
                       pets === option.value
-                        ? 'bg-lavender-50 border-lavender-500'
-                        : 'bg-white border-gray-300'
+                        ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
+                        : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                     }`}
                     onPress={() => setPets(option.value)}
                   >
@@ -581,7 +581,7 @@ export default function MarriagePreferences() {
                       className={`${
                         pets === option.value
                           ? 'text-lavender-500 font-semibold'
-                          : 'text-gray-700'
+                          : 'text-gray-700 dark:text-gray-300'
                       }`}
                     >
                       {option.label}
@@ -594,13 +594,14 @@ export default function MarriagePreferences() {
 
           {/* Must-Haves */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Must-haves in a partner (optional)
             </Text>
             <View className="flex-row items-center gap-2 mb-2">
               <TextInput
-                className="flex-1 border border-gray-300 rounded-lg px-4 py-3"
+                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-gray-900 dark:text-white dark:bg-gray-800"
                 placeholder="e.g., Good communication"
+                placeholderTextColor="#999"
                 value={newMustHave}
                 onChangeText={setNewMustHave}
                 onSubmitEditing={() => {
@@ -624,8 +625,8 @@ export default function MarriagePreferences() {
             </View>
             <View className="flex-row flex-wrap gap-2">
               {mustHaves.map((item, index) => (
-                <View key={index} className="bg-green-100 px-3 py-2 rounded-full flex-row items-center gap-2">
-                  <Text className="text-green-800">{item}</Text>
+                <View key={index} className="bg-green-100 dark:bg-green-900/30 px-3 py-2 rounded-full flex-row items-center gap-2">
+                  <Text className="text-green-800 dark:text-green-300">{item}</Text>
                   <TouchableOpacity onPress={() => setMustHaves(mustHaves.filter((_, i) => i !== index))}>
                     <MaterialCommunityIcons name="close-circle" size={18} color="#166534" />
                   </TouchableOpacity>
@@ -636,13 +637,14 @@ export default function MarriagePreferences() {
 
           {/* Dealbreakers */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Dealbreakers (optional)
             </Text>
             <View className="flex-row items-center gap-2 mb-2">
               <TextInput
-                className="flex-1 border border-gray-300 rounded-lg px-4 py-3"
+                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-gray-900 dark:text-white dark:bg-gray-800"
                 placeholder="e.g., Smoking"
+                placeholderTextColor="#999"
                 value={newDealbreaker}
                 onChangeText={setNewDealbreaker}
                 onSubmitEditing={() => {
@@ -666,8 +668,8 @@ export default function MarriagePreferences() {
             </View>
             <View className="flex-row flex-wrap gap-2">
               {dealbreakers.map((item, index) => (
-                <View key={index} className="bg-red-100 px-3 py-2 rounded-full flex-row items-center gap-2">
-                  <Text className="text-red-800">{item}</Text>
+                <View key={index} className="bg-red-100 dark:bg-red-900/30 px-3 py-2 rounded-full flex-row items-center gap-2">
+                  <Text className="text-red-800 dark:text-red-300">{item}</Text>
                   <TouchableOpacity onPress={() => setDealbreakers(dealbreakers.filter((_, i) => i !== index))}>
                     <MaterialCommunityIcons name="close-circle" size={18} color="#991B1B" />
                   </TouchableOpacity>
@@ -680,17 +682,17 @@ export default function MarriagePreferences() {
         {/* Buttons */}
         <View className="flex-row gap-3 mt-8">
           <TouchableOpacity
-            className="flex-1 py-4 rounded-full border border-gray-300"
+            className="flex-1 py-4 rounded-full border border-gray-300 dark:border-gray-600"
             onPress={() => goToPreviousOnboardingStep('/(onboarding)/marriage-preferences')}
             disabled={loading}
           >
-            <Text className="text-gray-700 text-center font-semibold text-lg">{t('common.back')}</Text>
+            <Text className="text-gray-700 dark:text-gray-300 text-center font-semibold text-lg">{t('common.back')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             className={`flex-1 py-4 rounded-full ${
               loading || primaryReason.length === 0 || !relationshipType || wantsChildren === undefined || housingPreference.length === 0 || financialArrangement.length === 0
-                ? 'bg-gray-400'
+                ? 'bg-gray-400 dark:bg-gray-700'
                 : 'bg-lavender-500'
             }`}
             style={{

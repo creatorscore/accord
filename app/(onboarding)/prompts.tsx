@@ -176,17 +176,17 @@ export default function Prompts() {
 
   return (
     <ScrollView
-      className="flex-1 bg-white"
+      className="flex-1 bg-white dark:bg-gray-900"
       contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 32 }}
     >
       <View className="px-6" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 5 of 7</Text>
+            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 5 of 7</Text>
             <Text className="text-sm text-lavender-500 font-bold">71%</Text>
           </View>
-          <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <View
               className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '71%' }}
@@ -196,10 +196,10 @@ export default function Prompts() {
 
         {/* Header */}
         <View className="mb-8">
-          <Text className="text-4xl font-bold text-gray-900 mb-3">
+          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
             Tell your story 💭
           </Text>
-          <Text className="text-gray-600 text-lg">
+          <Text className="text-gray-600 dark:text-gray-400 text-lg">
             Answer prompts to spark meaningful conversations
           </Text>
         </View>
@@ -209,16 +209,16 @@ export default function Prompts() {
           <View key={index} className="mb-6">
             {!promptAnswer.prompt ? (
               <TouchableOpacity
-                className="bg-purple-100 border-2 border-dashed border-purple-300 rounded-3xl p-6 items-center"
+                className="bg-purple-100 dark:bg-purple-900/30 border-2 border-dashed border-purple-300 dark:border-purple-700 rounded-3xl p-6 items-center"
                 onPress={() => setShowPromptPicker(index)}
               >
                 <MaterialCommunityIcons name="plus-circle" size={40} color="#A08AB7" />
-                <Text className="text-purple-700 font-bold text-lg mt-2">
+                <Text className="text-purple-700 dark:text-purple-300 font-bold text-lg mt-2">
                   Choose a prompt
                 </Text>
               </TouchableOpacity>
             ) : (
-              <View className="bg-white border-2 border-purple-200 rounded-3xl overflow-hidden shadow-sm">
+              <View className="bg-white dark:bg-gray-800 border-2 border-purple-200 dark:border-purple-700 rounded-3xl overflow-hidden shadow-sm">
                 <TouchableOpacity
                   className="bg-lavender-500 px-6 py-4 flex-row justify-between items-center"
                   onPress={() => setShowPromptPicker(index)}
@@ -230,7 +230,7 @@ export default function Prompts() {
                 </TouchableOpacity>
                 <View className="p-6">
                   <TextInput
-                    className="text-gray-900 text-lg min-h-24"
+                    className="text-gray-900 dark:text-white text-lg min-h-24"
                     placeholder="Your answer..."
                     value={promptAnswer.answer}
                     onChangeText={(text) => updateAnswer(index, text)}
@@ -239,7 +239,7 @@ export default function Prompts() {
                     maxLength={200}
                     placeholderTextColor="#9CA3AF"
                   />
-                  <Text className="text-xs text-gray-500 mt-2 text-right">
+                  <Text className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-right">
                     {promptAnswer.answer.length}/200
                   </Text>
                 </View>
@@ -251,9 +251,9 @@ export default function Prompts() {
         {/* Prompt Picker Modal */}
         {showPromptPicker !== null && (
           <View className="absolute inset-0 bg-black/50 items-center justify-center px-6 z-50">
-            <View className="bg-white rounded-3xl p-6 w-full max-h-96">
+            <View className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-h-96">
               <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-xl font-bold text-gray-900">
+                <Text className="text-xl font-bold text-gray-900 dark:text-white">
                   Choose a prompt
                 </Text>
                 <TouchableOpacity onPress={() => setShowPromptPicker(null)}>
@@ -264,11 +264,11 @@ export default function Prompts() {
               <ScrollView className="max-h-80">
                 {/* Write Your Own Option */}
                 <TouchableOpacity
-                  className="py-4 border-b-2 border-purple-300 bg-purple-50 rounded-xl mb-2 px-4 flex-row items-center"
+                  className="py-4 border-b-2 border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/30 rounded-xl mb-2 px-4 flex-row items-center"
                   onPress={handleCustomPrompt}
                 >
                   <MaterialCommunityIcons name="pencil-plus" size={24} color="#A08AB7" />
-                  <Text className="text-purple-700 font-bold text-base ml-3">
+                  <Text className="text-purple-700 dark:text-purple-300 font-bold text-base ml-3">
                     ✨ Write your own prompt
                   </Text>
                 </TouchableOpacity>
@@ -277,10 +277,10 @@ export default function Prompts() {
                 {availablePrompts.map((prompt) => (
                   <TouchableOpacity
                     key={prompt}
-                    className="py-4 border-b border-gray-200"
+                    className="py-4 border-b border-gray-200 dark:border-gray-700"
                     onPress={() => selectPrompt(showPromptPicker, prompt)}
                   >
-                    <Text className="text-gray-700 text-base">{prompt}</Text>
+                    <Text className="text-gray-700 dark:text-gray-300 text-base">{prompt}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -291,9 +291,9 @@ export default function Prompts() {
         {/* Custom Prompt Input Modal */}
         {showCustomPromptInput !== null && (
           <View className="absolute inset-0 bg-black/50 items-center justify-center px-6 z-50">
-            <View className="bg-white rounded-3xl p-6 w-full">
+            <View className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full">
               <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-xl font-bold text-gray-900">
+                <Text className="text-xl font-bold text-gray-900 dark:text-white">
                   Write your own prompt
                 </Text>
                 <TouchableOpacity onPress={() => {
@@ -304,12 +304,12 @@ export default function Prompts() {
                 </TouchableOpacity>
               </View>
 
-              <Text className="text-gray-600 mb-4">
+              <Text className="text-gray-600 dark:text-gray-400 mb-4">
                 Create a unique question that helps showcase your personality! 💫
               </Text>
 
               <TextInput
-                className="bg-gray-100 rounded-2xl p-4 text-gray-900 text-base mb-2 min-h-24"
+                className="bg-gray-100 dark:bg-gray-700 rounded-2xl p-4 text-gray-900 dark:text-white text-base mb-2 min-h-24"
                 placeholder="e.g., What I'm most excited to share with a partner is..."
                 value={customPromptText}
                 onChangeText={setCustomPromptText}
@@ -319,13 +319,13 @@ export default function Prompts() {
                 placeholderTextColor="#9CA3AF"
                 autoFocus
               />
-              <Text className="text-xs text-gray-500 mb-4 text-right">
+              <Text className="text-xs text-gray-500 dark:text-gray-400 mb-4 text-right">
                 {customPromptText.length}/100
               </Text>
 
               <TouchableOpacity
                 className={`py-4 rounded-full ${
-                  customPromptText.trim().length < 10 ? 'bg-gray-300' : 'bg-purple-600'
+                  customPromptText.trim().length < 10 ? 'bg-gray-300 dark:bg-gray-600' : 'bg-purple-600'
                 }`}
                 onPress={saveCustomPrompt}
                 disabled={customPromptText.trim().length < 10}
@@ -335,7 +335,7 @@ export default function Prompts() {
                 </Text>
               </TouchableOpacity>
 
-              <Text className="text-xs text-gray-500 text-center mt-3">
+              <Text className="text-xs text-gray-500 dark:text-gray-400 text-center mt-3">
                 Minimum 10 characters
               </Text>
             </View>
@@ -343,18 +343,18 @@ export default function Prompts() {
         )}
 
         {/* Tips */}
-        <View className="bg-purple-50 border-2 border-purple-200 rounded-3xl p-5 mb-8">
+        <View className="bg-purple-50 dark:bg-purple-900/30 border-2 border-purple-200 dark:border-purple-700 rounded-3xl p-5 mb-8">
           <View className="flex-row items-center mb-3">
             <MaterialCommunityIcons name="lightbulb-on" size={24} color="#A08AB7" />
-            <Text className="text-purple-900 font-bold text-lg ml-2">Pro Tips</Text>
+            <Text className="text-purple-900 dark:text-purple-300 font-bold text-lg ml-2">Pro Tips</Text>
           </View>
-          <Text className="text-purple-800 text-sm mb-2">
+          <Text className="text-purple-800 dark:text-purple-200 text-sm mb-2">
             ✨ Be specific and authentic - generic answers don't stand out
           </Text>
-          <Text className="text-purple-800 text-sm mb-2">
+          <Text className="text-purple-800 dark:text-purple-200 text-sm mb-2">
             💬 Show your personality - humor, vulnerability, and honesty work
           </Text>
-          <Text className="text-purple-800 text-sm">
+          <Text className="text-purple-800 dark:text-purple-200 text-sm">
             🎯 Focus on what matters in a lavender marriage partnership
           </Text>
         </View>
@@ -362,17 +362,17 @@ export default function Prompts() {
         {/* Buttons */}
         <View className="flex-row gap-3">
           <TouchableOpacity
-            className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
+            className="flex-1 py-4 rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
             onPress={() => goToPreviousOnboardingStep('/(onboarding)/prompts')}
             disabled={loading}
           >
-            <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>
+            <Text className="text-gray-700 dark:text-gray-300 text-center font-bold text-lg">Back</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             className={`flex-1 py-4 rounded-full ${
               loading || !selectedPrompts.some((p) => p.prompt && p.answer.trim())
-                ? 'bg-gray-400'
+                ? 'bg-gray-400 dark:bg-gray-600'
                 : 'bg-lavender-500'
             }`}
             style={{

@@ -177,7 +177,7 @@ export default function Interests() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <ScrollView
-        className="flex-1 bg-purple-50"
+        className="flex-1 bg-purple-50 dark:bg-gray-900"
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: 120 }}
       >
@@ -185,10 +185,10 @@ export default function Interests() {
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 5 of 9</Text>
-            <Text className="text-sm text-lavender-500 font-bold">56%</Text>
+            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 5 of 9</Text>
+            <Text className="text-sm text-lavender-500 dark:text-lavender-400 font-bold">56%</Text>
           </View>
-          <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <View
               className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '56%' }}
@@ -198,20 +198,20 @@ export default function Interests() {
 
         {/* Header */}
         <View className="mb-8">
-          <Text className="text-4xl font-bold text-gray-900 mb-3">
+          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
             Show your personality ✨
           </Text>
-          <Text className="text-gray-600 text-lg">
+          <Text className="text-gray-600 dark:text-gray-400 text-lg">
             Help matches see who you really are
           </Text>
         </View>
 
         {/* Hobbies */}
         <View className="mb-8">
-          <Text className="text-lg font-bold text-gray-900 mb-3">
+          <Text className="text-lg font-bold text-gray-900 dark:text-white mb-3">
             What do you love doing? 💫
           </Text>
-          <Text className="text-sm text-gray-600 mb-4">
+          <Text className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             Select 1-10 hobbies • {hobbies.length} selected
           </Text>
           <View className="flex-row flex-wrap gap-2">
@@ -222,13 +222,13 @@ export default function Interests() {
                 className={`px-4 py-3 rounded-full border-2 ${
                   hobbies.includes(hobby)
                     ? 'bg-lavender-500 border-lavender-500'
-                    : 'bg-white border-gray-300'
+                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                 }`}
                 onPress={() => toggleHobby(hobby)}
               >
                 <Text
                   className={`text-sm font-semibold ${
-                    hobbies.includes(hobby) ? 'text-white' : 'text-gray-700'
+                    hobbies.includes(hobby) ? 'text-white' : 'text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   {hobby}
@@ -256,7 +256,7 @@ export default function Interests() {
           <View className="mt-4">
             <View className="flex-row gap-2">
               <TextInput
-                className="flex-1 bg-white border-2 border-gray-300 rounded-full px-4 py-3 text-gray-900"
+                className="flex-1 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full px-4 py-3 text-gray-900 dark:text-white"
                 placeholder="Add your own hobby..."
                 value={customHobby}
                 onChangeText={setCustomHobby}
@@ -267,7 +267,7 @@ export default function Interests() {
               />
               <TouchableOpacity
                 className={`px-6 py-3 rounded-full ${
-                  customHobby.trim() ? 'bg-lavender-500' : 'bg-gray-300'
+                  customHobby.trim() ? 'bg-lavender-500' : 'bg-gray-300 dark:bg-gray-600'
                 }`}
                 onPress={addCustomHobby}
                 disabled={!customHobby.trim()}
@@ -279,17 +279,17 @@ export default function Interests() {
                 />
               </TouchableOpacity>
             </View>
-            <Text className="text-xs text-gray-500 mt-1 ml-4">
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-4">
               Add custom hobbies not listed above
             </Text>
           </View>
         </View>
 
         {/* Favorites Section */}
-        <View className="bg-white rounded-3xl p-6 shadow-sm border border-purple-100 mb-8">
+        <View className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-purple-100 dark:border-purple-900/30 mb-8">
           <View className="flex-row items-center mb-6">
             <MaterialCommunityIcons name="heart-multiple" size={28} color="#A08AB7" />
-            <Text className="text-2xl font-bold text-gray-900 ml-2">
+            <Text className="text-2xl font-bold text-gray-900 dark:text-white ml-2">
               Your Favorites
             </Text>
           </View>
@@ -297,82 +297,82 @@ export default function Interests() {
           {/* Movies */}
           <View className="mb-6">
             <View className="flex-row items-center mb-2">
-              <Text className="text-lg font-semibold text-gray-900">🎬 Movies</Text>
-              <Text className="text-xs text-gray-500 ml-2">(optional)</Text>
+              <Text className="text-lg font-semibold text-gray-900 dark:text-white">🎬 Movies</Text>
+              <Text className="text-xs text-gray-500 dark:text-gray-400 ml-2">(optional)</Text>
             </View>
             <TextInput
-              className="bg-purple-50 border-2 border-purple-200 rounded-2xl px-4 py-3 text-gray-900"
+              className="bg-purple-50 dark:bg-purple-900/30 border-2 border-purple-200 dark:border-purple-700 rounded-2xl px-4 py-3 text-gray-900 dark:text-white"
               placeholder="e.g., Moonlight, Carol, The Half of It"
               value={favoriteMovies}
               onChangeText={setFavoriteMovies}
               placeholderTextColor="#9CA3AF"
             />
-            <Text className="text-xs text-gray-500 mt-1">Separate with commas</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate with commas</Text>
           </View>
 
           {/* Music */}
           <View className="mb-6">
             <View className="flex-row items-center mb-2">
-              <Text className="text-lg font-semibold text-gray-900">🎵 Music Artists</Text>
-              <Text className="text-xs text-gray-500 ml-2">(optional)</Text>
+              <Text className="text-lg font-semibold text-gray-900 dark:text-white">🎵 Music Artists</Text>
+              <Text className="text-xs text-gray-500 dark:text-gray-400 ml-2">(optional)</Text>
             </View>
             <TextInput
-              className="bg-pink-50 border-2 border-pink-200 rounded-2xl px-4 py-3 text-gray-900"
+              className="bg-pink-50 dark:bg-pink-900/30 border-2 border-pink-200 dark:border-pink-700 rounded-2xl px-4 py-3 text-gray-900 dark:text-white"
               placeholder="e.g., Hayley Kiyoko, Troye Sivan, Chappell Roan"
               value={favoriteMusic}
               onChangeText={setFavoriteMusic}
               placeholderTextColor="#9CA3AF"
             />
-            <Text className="text-xs text-gray-500 mt-1">Separate with commas</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate with commas</Text>
           </View>
 
           {/* Books */}
           <View className="mb-6">
             <View className="flex-row items-center mb-2">
-              <Text className="text-lg font-semibold text-gray-900">📚 Books</Text>
-              <Text className="text-xs text-gray-500 ml-2">(optional)</Text>
+              <Text className="text-lg font-semibold text-gray-900 dark:text-white">📚 Books</Text>
+              <Text className="text-xs text-gray-500 dark:text-gray-400 ml-2">(optional)</Text>
             </View>
             <TextInput
-              className="bg-blue-50 border-2 border-blue-200 rounded-2xl px-4 py-3 text-gray-900"
+              className="bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-200 dark:border-blue-700 rounded-2xl px-4 py-3 text-gray-900 dark:text-white"
               placeholder="e.g., Red White & Royal Blue, Stone Butch Blues"
               value={favoriteBooks}
               onChangeText={setFavoriteBooks}
               placeholderTextColor="#9CA3AF"
             />
-            <Text className="text-xs text-gray-500 mt-1">Separate with commas</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate with commas</Text>
           </View>
 
           {/* TV Shows */}
           <View>
             <View className="flex-row items-center mb-2">
-              <Text className="text-lg font-semibold text-gray-900">📺 TV Shows</Text>
-              <Text className="text-xs text-gray-500 ml-2">(optional)</Text>
+              <Text className="text-lg font-semibold text-gray-900 dark:text-white">📺 TV Shows</Text>
+              <Text className="text-xs text-gray-500 dark:text-gray-400 ml-2">(optional)</Text>
             </View>
             <TextInput
-              className="bg-green-50 border-2 border-green-200 rounded-2xl px-4 py-3 text-gray-900"
+              className="bg-green-50 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-700 rounded-2xl px-4 py-3 text-gray-900 dark:text-white"
               placeholder="e.g., Heartstopper, Pose, The L Word"
               value={favoriteTvShows}
               onChangeText={setFavoriteTvShows}
               placeholderTextColor="#9CA3AF"
             />
-            <Text className="text-xs text-gray-500 mt-1">Separate with commas</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate with commas</Text>
           </View>
         </View>
 
         {/* Buttons */}
         <View className="flex-row gap-3">
           <TouchableOpacity
-            className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
+            className="flex-1 py-4 rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
             onPress={() => goToPreviousOnboardingStep('/(onboarding)/interests')}
             disabled={loading}
           >
-            <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>
+            <Text className="text-gray-700 dark:text-gray-300 text-center font-bold text-lg">Back</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             className={`flex-1 py-4 rounded-full ${
               loading || hobbies.length === 0
-                ? 'bg-gray-400'
+                ? 'bg-gray-400 dark:bg-gray-600'
                 : 'bg-lavender-500'
             }`}
             style={{
