@@ -337,6 +337,19 @@ export function useUnreadActivityCount(profileId: string | null): number {
           setCount((prev) => prev + 1);
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'activity_feed',
+          filter: `profile_id=eq.${profileId}`,
+        },
+        () => {
+          // Refetch count when activities are updated (e.g., marked as read)
+          fetchCount();
+        }
+      )
       .subscribe();
 
     return () => {

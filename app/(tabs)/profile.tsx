@@ -717,6 +717,20 @@ export default function Profile() {
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={24} color="#10B981" />
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#FEF3C7', borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}
+                onPress={() => router.push('/(onboarding)/basic-info')}
+              >
+                <View style={styles.menuItemLeft}>
+                  <MaterialCommunityIcons name="clipboard-list" size={24} color="#F59E0B" />
+                  <View>
+                    <Text style={[styles.menuItemText, { color: '#92400E', fontWeight: '700' }]}>Preview Onboarding</Text>
+                    <Text style={[styles.adminSubtext, { color: '#92400E' }]}>View all onboarding screens</Text>
+                  </View>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
+              </TouchableOpacity>
             </View>
           )}
 
@@ -746,7 +760,7 @@ export default function Profile() {
           </TouchableOpacity>
 
           {/* App Info */}
-          <Text style={[styles.appVersion, { color: colors.mutedForeground }]}>{t('profile.appVersion')}</Text>
+          <Text style={[styles.appVersion, { color: colors.mutedForeground }]}>Accord v1.1.2 (Build 48)</Text>
 
           {/* Spacing */}
           <View style={{ height: 40 }} />
@@ -878,7 +892,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#A08AB7',
     backgroundColor: 'white',
-    marginBottom: 20,
+    marginBottom: 32,
   },
   previewProfileText: {
     fontSize: 16,

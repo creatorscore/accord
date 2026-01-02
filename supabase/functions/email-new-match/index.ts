@@ -100,7 +100,7 @@ function generateMatchEmail(recipientName: string, matchName: string): { html: s
                               <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
                                 <tr>
                                   <td style="border-radius: 50px; background: linear-gradient(135deg, #9B87CE 0%, #A08AB7 100%); box-shadow: 0 4px 15px rgba(155, 135, 206, 0.4);">
-                                    <a href="https://joinaccord.app/matches" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
+                                    <a href="accord://matches" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
                                       Start a Conversation
                                     </a>
                                   </td>
@@ -131,7 +131,7 @@ function generateMatchEmail(recipientName: string, matchName: string): { html: s
                         <!-- Footer -->
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 0; line-height: 1.6;">
                           You're receiving this because you matched with someone on Accord.<br>
-                          <a href="https://joinaccord.app/settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
+                          <a href="accord://settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
                         </p>
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
@@ -160,13 +160,13 @@ Great news! You and ${matchName} have matched on Accord. This could be the begin
 
 Don't keep them waiting - start a conversation now!
 
-Open Accord: https://joinaccord.app/matches
+Open Accord: accord://matches
 
 Tip: The first message matters! Ask about something specific from their profile to show you're genuinely interested.
 
 ---
 You're receiving this because you matched with someone on Accord.
-Manage email preferences: https://joinaccord.app/settings/notifications
+Manage email preferences: accord://settings/notifications
 
 Accord - Safe Connections for Meaningful Partnerships
 joinaccord.app`;

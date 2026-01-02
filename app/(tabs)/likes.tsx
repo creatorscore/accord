@@ -129,6 +129,16 @@ export default function Likes() {
         matches?.flatMap(m => [m.profile1_id, m.profile2_id]) || []
       );
 
+      // Filter out users we've passed on
+      const { data: passes } = await supabase
+        .from('passes')
+        .select('passed_profile_id')
+        .eq('passer_profile_id', currentProfileId);
+
+      const passedProfileIds = new Set(
+        passes?.map(p => p.passed_profile_id) || []
+      );
+
       // SAFETY: Filter out blocked users (bidirectional)
       const { data: blockedByMe } = await supabase
         .from('blocks')
@@ -159,6 +169,7 @@ export default function Likes() {
       const formattedLikes: LikeProfile[] = (likesData || [])
         .filter(like =>
           !matchedProfileIds.has(like.liker_profile_id) &&
+          !passedProfileIds.has(like.liker_profile_id) &&
           !blockedProfileIds.has(like.liker_profile_id) &&
           !bannedProfileIds.has(like.liker_profile_id)
         )
@@ -325,11 +336,25 @@ export default function Likes() {
   };
 
   const handlePass = async (likeId: string) => {
+    if (!currentProfileId) return;
+
+    // Find the like to get the profile ID
+    const like = likes.find(l => l.id === likeId);
+    if (!like) return;
+
     // Optimistically remove from UI
     setLikes(prev => prev.filter(l => l.id !== likeId));
 
     try {
-      // Delete the like (they passed on someone who liked them)
+      // Create a pass record (so we remember this dismissal)
+      await supabase
+        .from('passes')
+        .insert({
+          passer_profile_id: currentProfileId,
+          passed_profile_id: like.profile_id,
+        });
+
+      // Delete the like (cleanup)
       await supabase
         .from('likes')
         .delete()

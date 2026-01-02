@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { updateUserLocation } from '@/lib/geolocation';
+import { openAppSettings } from '@/lib/open-settings';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import PhotoVerificationCard from '@/components/security/PhotoVerificationCard';
 
@@ -145,7 +146,7 @@ export default function PrivacySettings() {
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Open Settings',
-              onPress: () => Linking.openURL('app-settings:')
+              onPress: () => openAppSettings()
             }
           ]
         );
@@ -332,23 +333,33 @@ export default function PrivacySettings() {
 
         <SettingRow
           icon="map-marker-off-outline"
-          title="Hide Distance"
-          description='Show "nearby" instead of exact distance'
+          title="Hide Exact Distance"
+          description="Show city/country only, hide precise distance from others"
           value={settings.hide_distance}
           onValueChange={(value) => updateSetting('hide_distance', value)}
         />
+
+        {/* Privacy Info when distance is hidden */}
+        {settings.hide_distance && (
+          <View style={styles.warningCard}>
+            <MaterialCommunityIcons name="information" size={20} color="#F97316" />
+            <Text style={styles.warningText}>
+              Others will see your city/country but not your exact distance. You can still filter matches by distance.
+            </Text>
+          </View>
+        )}
       </View>
 
-      {/* Location Settings */}
+      {/* Location Settings - always show */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Location</Text>
 
         <MotiView
-          from={{ opacity: 0, translateY: 10 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 300 }}
-          style={styles.locationCard}
-        >
+            from={{ opacity: 0, translateY: 10 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 300 }}
+            style={styles.locationCard}
+          >
           <View style={styles.locationHeader}>
             <View style={styles.settingIcon}>
               <MaterialCommunityIcons name="map-marker" size={24} color="#A08AB7" />
@@ -686,5 +697,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  warningCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+    borderRadius: 12,
+    padding: 12,
+    marginHorizontal: 20,
+    marginTop: 8,
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#9A3412',
+    lineHeight: 18,
   },
 });

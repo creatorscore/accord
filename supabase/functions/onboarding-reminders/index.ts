@@ -179,7 +179,7 @@ function generateOnboardingEmail(
                               <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
                                 <tr>
                                   <td style="border-radius: 50px; background: linear-gradient(135deg, #9B87CE 0%, #A08AB7 100%); box-shadow: 0 4px 15px rgba(155, 135, 206, 0.4);">
-                                    <a href="https://joinaccord.app/onboarding" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
+                                    <a href="accord://onboarding" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
                                       Complete My Profile
                                     </a>
                                   </td>
@@ -211,7 +211,7 @@ function generateOnboardingEmail(
                         <!-- Footer -->
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 0; line-height: 1.6;">
                           You're receiving this because you started signing up for Accord.<br>
-                          <a href="https://joinaccord.app/settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
+                          <a href="accord://settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
                         </p>
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
@@ -244,14 +244,14 @@ Progress: ${progressPercent}% complete - ${stepsRemaining} ${stepsRemaining === 
 
 Next step: Add ${stepName}
 
-Complete My Profile: https://joinaccord.app/onboarding
+Complete My Profile: accord://onboarding
 
 Why complete your profile?
 Complete profiles get 5x more matches and are shown to more people in discovery.
 
 ---
 You're receiving this because you started signing up for Accord.
-Manage email preferences: https://joinaccord.app/settings/notifications
+Manage email preferences: accord://settings/notifications
 
 Accord - Safe Connections for Meaningful Partnerships
 joinaccord.app`;

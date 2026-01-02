@@ -194,17 +194,17 @@ export default function Personality() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-cream">
+    <ScrollView className="flex-1 bg-cream dark:bg-gray-900">
       <View className="px-6 pb-4" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 4 of 9</Text>
-            <Text className="text-sm text-lavender-400 font-bold">44%</Text>
+            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 4 of 9</Text>
+            <Text className="text-sm text-lavender-400 dark:text-lavender-300 font-bold">44%</Text>
           </View>
-          <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <View
-              className="h-3 bg-lavender-400 rounded-full"
+              className="h-3 bg-lavender-400 dark:bg-lavender-500 rounded-full"
               style={{ width: '44%' }}
             />
           </View>
@@ -213,10 +213,10 @@ export default function Personality() {
         {/* Header */}
         <View className="mb-8 items-center">
           <Text className="text-5xl mb-4">✨</Text>
-          <Text className="text-4xl font-bold text-charcoal mb-3 text-center">
+          <Text className="text-4xl font-bold text-charcoal dark:text-white mb-3 text-center">
             Let's get personal
           </Text>
-          <Text className="text-gray-600 text-lg text-center">
+          <Text className="text-gray-600 dark:text-gray-400 text-lg text-center">
             Share more about your personality and what makes you unique
           </Text>
         </View>
@@ -225,8 +225,8 @@ export default function Personality() {
         <View className="space-y-6">
           {/* Zodiac Sign */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">
-              Zodiac Sign <Text className="text-gray-400">(optional)</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Zodiac Sign <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
             </Text>
             <View className="flex-row flex-wrap gap-2">
               {ZODIAC_SIGNS.map((sign) => (
@@ -234,14 +234,14 @@ export default function Personality() {
                   key={sign}
                   className={`px-4 py-2 rounded-full border ${
                     zodiacSign === sign
-                      ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => setZodiacSign(sign)}
                 >
                   <Text
                     className={`${
-                      zodiacSign === sign ? 'text-white' : 'text-gray-700'
+                      zodiacSign === sign ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
                     } font-medium`}
                   >
                     {sign}
@@ -253,8 +253,8 @@ export default function Personality() {
 
           {/* Height */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">
-              Height <Text className="text-gray-400">(optional)</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Height <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
             </Text>
 
             {/* Height Unit Toggle */}
@@ -262,14 +262,14 @@ export default function Personality() {
               <TouchableOpacity
                 className={`flex-1 py-3 rounded-xl border ${
                   heightUnit === 'imperial'
-                    ? 'bg-lavender-500 border-lavender-500'
-                    : 'bg-white border-gray-300'
+                    ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
+                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                 }`}
                 onPress={() => setHeightUnit('imperial')}
               >
                 <Text
                   className={`text-center font-medium ${
-                    heightUnit === 'imperial' ? 'text-white' : 'text-gray-700'
+                    heightUnit === 'imperial' ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   Feet / Inches
@@ -278,14 +278,14 @@ export default function Personality() {
               <TouchableOpacity
                 className={`flex-1 py-3 rounded-xl border ${
                   heightUnit === 'metric'
-                    ? 'bg-lavender-500 border-lavender-500'
-                    : 'bg-white border-gray-300'
+                    ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
+                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                 }`}
                 onPress={() => setHeightUnit('metric')}
               >
                 <Text
                   className={`text-center font-medium ${
-                    heightUnit === 'metric' ? 'text-white' : 'text-gray-700'
+                    heightUnit === 'metric' ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   Centimeters
@@ -298,49 +298,52 @@ export default function Personality() {
               <View className="flex-row gap-3 items-center">
                 <View className="flex-1">
                   <TextInput
-                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+                    className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white"
                     placeholder="Feet (e.g., 5)"
+                    placeholderTextColor="#9CA3AF"
                     value={heightFeet}
                     onChangeText={setHeightFeet}
                     keyboardType="number-pad"
                     maxLength={1}
                   />
                 </View>
-                <Text className="text-gray-500 font-bold">ft</Text>
+                <Text className="text-gray-500 dark:text-gray-400 font-bold">ft</Text>
                 <View className="flex-1">
                   <TextInput
-                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+                    className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white"
                     placeholder="Inches (e.g., 10)"
+                    placeholderTextColor="#9CA3AF"
                     value={heightInches}
                     onChangeText={setHeightInches}
                     keyboardType="number-pad"
                     maxLength={2}
                   />
                 </View>
-                <Text className="text-gray-500 font-bold">in</Text>
+                <Text className="text-gray-500 dark:text-gray-400 font-bold">in</Text>
               </View>
             ) : (
               /* Height Input - Metric (cm) */
               <View className="flex-row gap-3 items-center">
                 <View className="flex-1">
                   <TextInput
-                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
+                    className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white"
                     placeholder="Height in cm (e.g., 175)"
+                    placeholderTextColor="#9CA3AF"
                     value={heightCm}
                     onChangeText={setHeightCm}
                     keyboardType="number-pad"
                     maxLength={3}
                   />
                 </View>
-                <Text className="text-gray-500 font-bold">cm</Text>
+                <Text className="text-gray-500 dark:text-gray-400 font-bold">cm</Text>
               </View>
             )}
           </View>
 
           {/* MBTI/Personality Type */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">
-              Personality Type (MBTI) <Text className="text-gray-400">(optional)</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Personality Type (MBTI) <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
             </Text>
             <View className="flex-row flex-wrap gap-2">
               {MBTI_TYPES.map((type) => (
@@ -348,14 +351,14 @@ export default function Personality() {
                   key={type}
                   className={`px-4 py-2 rounded-full border ${
                     personalityType === type
-                      ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => setPersonalityType(type)}
                 >
                   <Text
                     className={`${
-                      personalityType === type ? 'text-white' : 'text-gray-700'
+                      personalityType === type ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
                     } font-medium`}
                   >
                     {type}
@@ -367,24 +370,24 @@ export default function Personality() {
 
           {/* Love Language */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">
-              Love Language <Text className="text-gray-400">(optional)</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Love Language <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
             </Text>
-            <Text className="text-xs text-gray-500 mb-2">Select all that apply - most people have 2-3</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that apply - most people have 2-3</Text>
             <View className="flex-row flex-wrap gap-2">
               {LOVE_LANGUAGES.map((language) => (
                 <TouchableOpacity
                   key={language}
                   className={`px-4 py-2 rounded-full border ${
                     loveLanguage.includes(language)
-                      ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => toggleLoveLanguage(language)}
                 >
                   <Text
                     className={`${
-                      loveLanguage.includes(language) ? 'text-white' : 'text-gray-700'
+                      loveLanguage.includes(language) ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
                     } font-medium text-sm`}
                   >
                     {language}
@@ -393,7 +396,7 @@ export default function Personality() {
               ))}
             </View>
             {loveLanguage.length > 0 && (
-              <Text className="text-xs text-lavender-500 mt-2">
+              <Text className="text-xs text-lavender-500 dark:text-lavender-300 mt-2">
                 Selected: {loveLanguage.join(', ')}
               </Text>
             )}
@@ -401,8 +404,8 @@ export default function Personality() {
 
           {/* Languages Spoken */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">
-              Languages You Speak <Text className="text-gray-400">(optional, select all that apply)</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Languages You Speak <Text className="text-gray-400 dark:text-gray-500">(optional, select all that apply)</Text>
             </Text>
             <View className="flex-row flex-wrap gap-2">
               {COMMON_LANGUAGES.map((language) => (
@@ -410,14 +413,14 @@ export default function Personality() {
                   key={language}
                   className={`px-4 py-2 rounded-full border ${
                     selectedLanguages.includes(language)
-                      ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => toggleLanguage(language)}
                 >
                   <Text
                     className={`${
-                      selectedLanguages.includes(language) ? 'text-white' : 'text-gray-700'
+                      selectedLanguages.includes(language) ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
                     } font-medium text-sm`}
                   >
                     {language}
@@ -429,8 +432,8 @@ export default function Personality() {
 
           {/* Religion */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">
-              Religion <Text className="text-gray-400">(optional)</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Religion <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
             </Text>
             <View className="flex-row flex-wrap gap-2">
               {RELIGIONS.map((rel) => (
@@ -438,14 +441,14 @@ export default function Personality() {
                   key={rel}
                   className={`px-4 py-2 rounded-full border ${
                     religion === rel
-                      ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => setReligion(rel)}
                 >
                   <Text
                     className={`${
-                      religion === rel ? 'text-white' : 'text-gray-700'
+                      religion === rel ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
                     } font-medium text-sm`}
                   >
                     {rel}
@@ -457,8 +460,8 @@ export default function Personality() {
 
           {/* Political Views */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">
-              Political Views <Text className="text-gray-400">(optional)</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Political Views <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
             </Text>
             <View className="flex-row flex-wrap gap-2">
               {POLITICAL_VIEWS.map((view) => (
@@ -466,14 +469,14 @@ export default function Personality() {
                   key={view}
                   className={`px-4 py-2 rounded-full border ${
                     politicalViews === view
-                      ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => setPoliticalViews(view)}
                 >
                   <Text
                     className={`${
-                      politicalViews === view ? 'text-white' : 'text-gray-700'
+                      politicalViews === view ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
                     } font-medium text-sm`}
                   >
                     {view}
@@ -488,11 +491,11 @@ export default function Personality() {
         {/* Continue Button */}
         <View className="flex-row gap-3 mt-8">
           <TouchableOpacity
-            className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
+            className="flex-1 py-4 rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
             onPress={() => goToPreviousOnboardingStep('/(onboarding)/personality')}
             disabled={loading}
           >
-            <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>
+            <Text className="text-gray-700 dark:text-gray-300 text-center font-bold text-lg">Back</Text>
           </TouchableOpacity>
 
           <View className="flex-1">
@@ -505,7 +508,7 @@ export default function Personality() {
         </View>
 
         {/* Note */}
-        <Text className="text-sm text-gray-600 text-center mt-6 px-4">
+        <Text className="text-sm text-gray-600 dark:text-gray-400 text-center mt-6 px-4">
           All fields are optional, but filling them out helps you find better matches!
         </Text>
       </View>

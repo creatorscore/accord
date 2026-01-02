@@ -286,15 +286,15 @@ export default function Photos() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-purple-50">
+    <ScrollView className="flex-1 bg-purple-50 dark:bg-gray-900">
       <View className="px-6" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64, paddingBottom: insets.bottom + 16 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 2 of 8</Text>
+            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 2 of 8</Text>
             <Text className="text-sm text-lavender-500 font-bold">25%</Text>
           </View>
-          <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <View
               className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '25%' }}
@@ -304,10 +304,10 @@ export default function Photos() {
 
         {/* Header */}
         <View className="mb-8">
-          <Text className="text-4xl font-bold text-gray-900 mb-3">
+          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
             Show yourself 📸
           </Text>
-          <Text className="text-gray-600 text-lg">
+          <Text className="text-gray-600 dark:text-gray-300 text-lg">
             Upload 2-6 photos. Your first photo will be your profile picture.
           </Text>
         </View>
@@ -318,7 +318,7 @@ export default function Photos() {
             <View key={index} className="relative">
               <Image
                 source={{ uri: photo.uri }}
-                className="w-28 h-36 rounded-2xl bg-gray-200"
+                className="w-28 h-36 rounded-2xl bg-gray-200 dark:bg-gray-700"
               />
               <TouchableOpacity
                 className="absolute top-2 right-2 bg-black/50 rounded-full p-1"
@@ -337,37 +337,37 @@ export default function Photos() {
           {/* Add Photo Button */}
           {photos.length < 6 && (
             <TouchableOpacity
-              className="w-28 h-36 rounded-2xl border-2 border-dashed border-gray-300 items-center justify-center bg-gray-50"
+              className="w-28 h-36 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 items-center justify-center bg-gray-50 dark:bg-gray-800"
               onPress={pickImage}
             >
               <MaterialCommunityIcons name="plus" size={32} color="#9CA3AF" />
-              <Text className="text-gray-500 text-xs mt-1">Add Photo</Text>
+              <Text className="text-gray-500 dark:text-gray-400 text-xs mt-1">Add Photo</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* Tips */}
-        <View className="bg-blue-50 border-2 border-blue-200 rounded-3xl p-5 mb-6">
+        <View className="bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-200 dark:border-blue-700 rounded-3xl p-5 mb-6">
           <View className="flex-row items-center mb-3">
             <Text className="text-3xl mr-2">📷</Text>
-            <Text className="text-blue-900 font-bold text-lg">Photo Tips</Text>
+            <Text className="text-blue-900 dark:text-blue-100 font-bold text-lg">Photo Tips</Text>
           </View>
-          <Text className="text-blue-800 text-sm mb-2">✨ Use clear, recent photos</Text>
-          <Text className="text-blue-800 text-sm mb-2">😊 Show your face clearly</Text>
-          <Text className="text-blue-800 text-sm mb-2">🎨 Include variety (close-up, full body, activity)</Text>
-          <Text className="text-blue-800 text-sm">👥 Avoid group photos as your first photo</Text>
+          <Text className="text-blue-800 dark:text-blue-200 text-sm mb-2">✨ Use clear, recent photos</Text>
+          <Text className="text-blue-800 dark:text-blue-200 text-sm mb-2">😊 Show your face clearly</Text>
+          <Text className="text-blue-800 dark:text-blue-200 text-sm mb-2">🎨 Include variety (close-up, full body, activity)</Text>
+          <Text className="text-blue-800 dark:text-blue-200 text-sm">👥 Avoid group photos as your first photo</Text>
         </View>
 
         {/* Privacy Option - Photo Blur */}
-        <View className="bg-purple-50 border-2 border-purple-200 rounded-3xl p-5 mb-8">
+        <View className="bg-purple-50 dark:bg-purple-900/30 border-2 border-purple-200 dark:border-purple-700 rounded-3xl p-5 mb-8">
           <View className="flex-row items-center justify-between">
             <View className="flex-1 mr-4">
               <View className="flex-row items-center mb-2">
                 <Text className="text-2xl mr-2">🔒</Text>
-                <Text className="text-purple-900 font-bold text-lg">Privacy Mode</Text>
+                <Text className="text-purple-900 dark:text-purple-100 font-bold text-lg">{t('onboarding.photos.privacyMode')}</Text>
               </View>
-              <Text className="text-purple-800 text-sm">
-                Blur your photos until you match with someone. They'll only see clear photos after you both like each other.
+              <Text className="text-purple-800 dark:text-purple-200 text-sm">
+                {t('onboarding.photos.privacyModeDesc')}
               </Text>
             </View>
             <Switch
@@ -385,17 +385,17 @@ export default function Photos() {
         {/* Buttons */}
         <View className="flex-row gap-3">
           <TouchableOpacity
-            className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
+            className="flex-1 py-4 rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
             onPress={() => goToPreviousOnboardingStep('/(onboarding)/photos')}
             disabled={uploading}
           >
-            <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>
+            <Text className="text-gray-700 dark:text-gray-300 text-center font-bold text-lg">Back</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             className={`flex-1 py-4 rounded-full ${
               uploading || photos.length < 2
-                ? 'bg-gray-400'
+                ? 'bg-gray-400 dark:bg-gray-600'
                 : 'bg-lavender-500'
             }`}
             style={{
@@ -414,7 +414,7 @@ export default function Photos() {
         </View>
 
         {/* Photo Counter */}
-        <Text className="text-center text-gray-500 text-sm mt-4">
+        <Text className="text-center text-gray-500 dark:text-gray-400 text-sm mt-4">
           {photos.length} of 6 photos {photos.length < 2 && '(minimum 2)'}
         </Text>
       </View>

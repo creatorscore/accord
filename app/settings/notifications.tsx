@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform, Linking, Switch } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform, Switch } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { registerForPushNotifications, savePushToken } from '@/lib/notifications';
+import { openAppSettings } from '@/lib/open-settings';
 import * as Notifications from 'expo-notifications';
 
 interface NotificationPreferences {
@@ -181,13 +182,7 @@ export default function NotificationSettings() {
             { text: t('common.cancel'), style: 'cancel' },
             {
               text: t('notificationSettings.alerts.openSettings'),
-              onPress: () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Linking.openSettings();
-                }
-              },
+              onPress: () => openAppSettings(),
             },
           ]
         );

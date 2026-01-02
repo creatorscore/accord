@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Keyboard, ScrollView, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Keyboard, ScrollView, Dimensions, InteractionManager } from 'react-native';
 import { MotiView } from 'moti';
 import Slider from '@react-native-community/slider';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -187,12 +187,17 @@ export default function Discover() {
   const [showPremiumLocationPrompt, setShowPremiumLocationPrompt] = useState(false);
   const hasShownPremiumLocationPrompt = useRef(false);
 
-  // Smart recommendations - predicted additional profiles
-  const [recommendationCounts, setRecommendationCounts] = useState({
-    widenAge: 0,
-    increaseDistance: 0,
-    searchGlobally: 0,
-  });
+  // Smart recommendations - dynamic array from database
+  const [smartRecommendations, setSmartRecommendations] = useState<Array<{
+    type: 'age' | 'distance' | 'gender' | 'global';
+    count: number;
+    description: string;
+    increment?: number;
+    newDistance?: number;
+    newAgeMin?: number;
+    newAgeMax?: number;
+    addedGender?: string;
+  }>>([]);
 
   // Quick filter options
   const INTENTIONS = [
@@ -615,6 +620,21 @@ export default function Discover() {
     return true;
   };
 
+  // FIX #2: Helper function to calculate distance once (eliminates duplicate calculations)
+  const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 3959; // Earth's radius in miles
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c);
+  }, []);
+
   const loadProfiles = async (searchModeOverride?: boolean, searchKeywordOverride?: string) => {
     // Use override values if provided, otherwise fall back to state
     // This fixes the React state timing issue where state updates are async
@@ -633,7 +653,7 @@ export default function Discover() {
       // 2. Haven't been PASSED on yet (but INCLUDE people who liked you!)
       // 3. Match basic preferences
 
-      // Run all exclusion queries in PARALLEL for better performance
+      // Run all exclusion queries + current user data + boosted profiles in PARALLEL for better performance
       const [
         { data: alreadySwipedLikes },
         { data: alreadySwipedPasses },
@@ -642,6 +662,8 @@ export default function Discover() {
         { data: blockedMe },
         { data: contactBlocks },
         { data: bannedUsers },
+        { data: currentUserDataRaw, error: currentUserError },
+        { data: boostedProfiles },
       ] = await Promise.all([
         // Get people you already LIKED (we'll exclude these)
         supabase
@@ -679,7 +701,24 @@ export default function Discover() {
           .select('banned_profile_id')
           .not('banned_profile_id', 'is', null)
           .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString()),
+        // Current user's full profile and preferences (for compatibility calculation)
+        supabase
+          .from('profiles')
+          .select(`
+            *,
+            preferences:preferences(*)
+          `)
+          .eq('id', currentProfileId)
+          .single(),
+        // Boosted profiles (for prioritization in results)
+        supabase
+          .from('boosts')
+          .select('profile_id')
+          .eq('is_active', true)
+          .gt('expires_at', new Date().toISOString()),
       ]);
+
+      if (currentUserError) throw currentUserError;
 
       const peopleWhoLikedMeIds = new Set(peopleWhoLikedMe?.map(l => l.liker_profile_id) || []);
 
@@ -692,6 +731,8 @@ export default function Discover() {
 
       const bannedProfileIds = bannedUsers?.map(b => b.banned_profile_id).filter(Boolean) || [];
 
+      const boostedProfileIds = new Set(boostedProfiles?.map(b => b.profile_id) || []);
+
       // Only exclude: already liked, already passed, blocked users, AND BANNED USERS
       // DO NOT exclude people who liked you!
       const swipedIds = [
@@ -700,18 +741,6 @@ export default function Discover() {
         ...blockedIds,
         ...bannedProfileIds
       ];
-
-      // Get current user's full profile and preferences for compatibility calculation
-      const { data: currentUserDataRaw, error: currentUserError } = await supabase
-        .from('profiles')
-        .select(`
-          *,
-          preferences:preferences(*)
-        `)
-        .eq('id', currentProfileId)
-        .single();
-
-      if (currentUserError) throw currentUserError;
 
       // Extract preferences as single object (Supabase returns array for joined queries)
       const currentUserData = {
@@ -740,6 +769,7 @@ export default function Discover() {
       if (!isSearchingGlobally && !effectiveSearchMode && currentUserData.latitude && currentUserData.longitude) {
         // LOCAL SEARCH: Use RPC function to get profiles filtered by distance at DATABASE level
         console.log('🎯 Using distance-based RPC for local search');
+        // FIX #3: Limit initial load to 50 profiles to prevent ANR on low-end devices
         const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_profiles', {
           p_user_lat: currentUserData.latitude,
           p_user_lon: currentUserData.longitude,
@@ -748,7 +778,7 @@ export default function Discover() {
           p_min_age: Math.max(18, filters.ageMin),
           p_max_age: filters.ageMax,
           p_gender_prefs: currentUserData.preferences?.gender_preference || [],
-          p_result_limit: 500  // Get all nearby profiles
+          p_result_limit: 50  // FIX #3: Reduced from 500 to 50 for better performance
         });
 
         if (rpcError) {
@@ -759,7 +789,7 @@ export default function Discover() {
         // Fetch full profile data with photos and preferences for each nearby profile
         if (rpcData && rpcData.length > 0) {
           // Filter out already-swiped profiles from RPC results
-          const nearbyIds = rpcData.map((p: any) => p.id).filter(id => !swipedIds.includes(id));
+          const nearbyIds = rpcData.map((p: any) => p.id).filter((id: string) => !swipedIds.includes(id));
 
           if (nearbyIds.length > 0) {
             const { data: fullProfiles, error: profilesError } = await supabase
@@ -884,16 +914,6 @@ export default function Discover() {
 
       if (error) throw error;
 
-
-      // Check for boosted profiles
-      const { data: boostedProfiles } = await supabase
-        .from('boosts')
-        .select('profile_id')
-        .eq('is_active', true)
-        .gt('expires_at', new Date().toISOString());
-
-      const boostedProfileIds = new Set(boostedProfiles?.map(b => b.profile_id) || []);
-
       // Filter out contact-blocked profiles (by phone number hash)
       // This happens BEFORE transformation to avoid unnecessary processing
       let filteredData = data || [];
@@ -922,9 +942,11 @@ export default function Discover() {
       // This protects users who don't want to be seen by people in specific countries
       const userCountry = currentUserData.location_country || 'US';
 
+      // Only query country blocks if we have filtered data
       if (userCountry && filteredData.length > 0) {
-        // Get profile IDs that have blocked the viewer's country
         const profileIds = filteredData.map((p: any) => p.id);
+
+        // Batch query for country blocks
         const { data: countryBlockedProfiles } = await supabase
           .from('country_blocks')
           .select('profile_id')
@@ -965,20 +987,10 @@ export default function Discover() {
             console.error('Error calculating compatibility:', err);
           }
 
-          // Calculate real distance using Haversine formula
+          // FIX #2: Calculate real distance using helper function (eliminates duplicate calculations)
           let distance = null;
           if (currentUserData.latitude && currentUserData.longitude && profile.latitude && profile.longitude) {
-            const R = 3959; // Earth's radius in miles
-            const dLat = ((profile.latitude - currentUserData.latitude) * Math.PI) / 180;
-            const dLon = ((profile.longitude - currentUserData.longitude) * Math.PI) / 180;
-            const a =
-              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos((currentUserData.latitude * Math.PI) / 180) *
-                Math.cos((profile.latitude * Math.PI) / 180) *
-                Math.sin(dLon / 2) *
-                Math.sin(dLon / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            distance = Math.round(R * c);
+            distance = calculateDistance(currentUserData.latitude, currentUserData.longitude, profile.latitude, profile.longitude);
           }
 
           return {
@@ -1121,18 +1133,10 @@ export default function Discover() {
           // ====================================================================
 
           // 1. STRICT AGE FILTER (no buffer, exact preferences)
+          // ONE-SIDED: Only check if profile fits current user's age preferences
+          // Do NOT check if current user fits profile's age preferences (removed for small userbase)
           if (profile.age < filters.ageMin || profile.age > filters.ageMax) {
             return false;
-          }
-
-          // 1a. BIDIRECTIONAL AGE FILTER - Check if current user's age is within profile's age preferences
-          // This ensures mutual age compatibility - both users must be within each other's age ranges
-          if (profile.preferences?.age_min !== undefined && profile.preferences?.age_max !== undefined) {
-            const currentUserAge = currentUserData.age;
-            if (currentUserAge < profile.preferences.age_min || currentUserAge > profile.preferences.age_max) {
-              console.log(`❌ Age mismatch: ${profile.display_name} wants ${profile.preferences.age_min}-${profile.preferences.age_max}, but current user is ${currentUserAge}`);
-              return false;
-            }
           }
 
           // 1b. RELATIONSHIP TYPE / INTENTION FILTER (quick filter)
@@ -1152,8 +1156,9 @@ export default function Discover() {
             }
           }
 
-          // 2. BIDIRECTIONAL GENDER PREFERENCE (both directions must match)
-          // A. Check if current user wants this profile's gender
+          // 2. ONE-SIDED GENDER PREFERENCE (current user's preference only)
+          // Only check if current user wants this profile's gender
+          // Do NOT check if profile wants current user's gender (removed for small userbase)
           if (currentUserData.preferences?.gender_preference &&
               currentUserData.preferences.gender_preference.length > 0) {
             // Convert to array if string (handles legacy data)
@@ -1166,25 +1171,6 @@ export default function Discover() {
               userGenderPrefArray.includes(g)
             );
             if (!userWantsThisGender) {
-              return false;
-            }
-          }
-
-          // B. Check if profile wants current user's gender
-          if (profile.preferences?.gender_preference &&
-              profile.preferences.gender_preference.length > 0) {
-            // Convert to array if string (handles legacy data)
-            const profileGenderPrefArray = Array.isArray(profile.preferences.gender_preference)
-              ? profile.preferences.gender_preference
-              : profile.preferences.gender_preference.split(',').map((g: string) => g.trim());
-
-            const currentUserGenderArray = Array.isArray(currentUserData.gender)
-              ? currentUserData.gender
-              : [currentUserData.gender];
-            const profileWantsMyGender = currentUserGenderArray.some((g: string) =>
-              profileGenderPrefArray.includes(g)
-            );
-            if (!profileWantsMyGender) {
               return false;
             }
           }
@@ -2063,100 +2049,74 @@ export default function Discover() {
     setShowImmersiveProfile(true);
   }, [currentIndex, profiles]);
 
-  // Calculate predicted additional profiles for smart recommendations
-  const calculateRecommendationCounts = useCallback(async () => {
+  // Calculate smart recommendations using database function
+  const calculateSmartRecommendations = useCallback(async () => {
     if (!currentProfileId) return;
 
     try {
-      // Get all the exclusion lists (same logic as loadProfiles)
-      const [
-        { data: alreadySwipedLikes },
-        { data: alreadySwipedPasses },
-        { data: blockedByMe },
-        { data: blockedMe },
-        { data: bannedUsers },
-      ] = await Promise.all([
-        supabase.from('likes').select('liked_profile_id').eq('liker_profile_id', currentProfileId),
-        supabase.from('passes').select('passed_profile_id').eq('passer_profile_id', currentProfileId),
-        supabase.from('blocks').select('blocked_profile_id').eq('blocker_profile_id', currentProfileId),
-        supabase.from('blocks').select('blocker_profile_id').eq('blocked_profile_id', currentProfileId),
-        supabase.from('bans').select('banned_profile_id').not('banned_profile_id', 'is', null)
-          .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString()),
-      ]);
-
-      const swipedIds = [
-        ...(alreadySwipedLikes?.map(l => l.liked_profile_id) || []),
-        ...(alreadySwipedPasses?.map(p => p.passed_profile_id) || []),
-        ...(blockedByMe?.map(b => b.blocked_profile_id) || []),
-        ...(blockedMe?.map(b => b.blocker_profile_id) || []),
-        ...(bannedUsers?.map(b => b.banned_profile_id).filter(Boolean) || []),
-      ];
-
-      // Get current user's gender preference for filtering
-      const { data: currentUserData } = await supabase
+      // Get current user's location and preferences
+      const { data: userData } = await supabase
         .from('profiles')
-        .select('preferences:preferences(*)')
+        .select('latitude, longitude')
         .eq('id', currentProfileId)
         .single();
 
-      const genderPreference = currentUserData?.preferences?.[0]?.gender_preference || [];
+      if (!userData || !userData.latitude || !userData.longitude) {
+        console.warn('User location not available for smart recommendations');
+        return;
+      }
 
-      // Build base query (same as loadProfiles)
-      const buildQuery = (ageMin: number, ageMax: number, maxDistance?: number) => {
-        let query = supabase
-          .from('profiles')
-          .select('id', { count: 'exact', head: true })
-          .neq('id', currentProfileId)
-          .eq('incognito_mode', false)
-          .eq('profile_complete', true)
-          .eq('photo_review_required', false)
-          .gte('age', Math.max(18, ageMin))
-          .lte('age', ageMax);
+      // Get user's gender preferences separately
+      const { data: prefsData } = await supabase
+        .from('preferences')
+        .select('gender_preference')
+        .eq('profile_id', currentProfileId)
+        .single();
 
-        if (swipedIds.length > 0) {
-          query = query.not('id', 'in', `(${swipedIds.join(',')})`);
-        }
+      // Normalize gender preferences to ensure it's a proper array
+      let genderPrefs = prefsData?.gender_preference;
+      console.log('📊 Raw gender_preference from DB:', JSON.stringify(genderPrefs));
 
-        // Apply gender preference filter
-        if (genderPreference && genderPreference.length > 0) {
-          const genderPrefArray = Array.isArray(genderPreference) ? genderPreference : genderPreference.split(',').map((g: string) => g.trim());
-          const pgArrayLiteral = `{${genderPrefArray.map((g: string) => `"${g}"`).join(',')}}`;
-          query = query.filter('gender', 'ov', pgArrayLiteral);
-        }
+      if (!genderPrefs || genderPrefs === '' || (Array.isArray(genderPrefs) && genderPrefs.length === 0)) {
+        genderPrefs = null; // Pass null instead of empty array/string
+      } else if (!Array.isArray(genderPrefs)) {
+        // If it's a string, try to parse it as an array
+        genderPrefs = typeof genderPrefs === 'string' ? [genderPrefs] : null;
+      }
 
-        return query;
-      };
+      console.log('🎯 Normalized gender_prefs for RPC:', JSON.stringify(genderPrefs));
 
-      // Calculate counts for each recommendation
-      const [
-        { count: widenAgeCount },
-        { count: increaseDistanceCount },
-        { count: globalSearchCount },
-      ] = await Promise.all([
-        // Widen age range (+5 years each direction)
-        buildQuery(Math.max(18, filters.ageMin - 5), Math.min(80, filters.ageMax + 5)),
-        // Increase distance (double current distance) - Note: distance filtering requires lat/lon calculation, simplified here
-        buildQuery(filters.ageMin, filters.ageMax),
-        // Global search (no distance limit) - Note: would need actual global query, simplified here
-        buildQuery(filters.ageMin, filters.ageMax),
-      ]);
-
-      setRecommendationCounts({
-        widenAge: (widenAgeCount || 0) - profiles.length, // Additional profiles beyond current
-        increaseDistance: Math.max(0, Math.floor((increaseDistanceCount || 0) * 1.5) - profiles.length), // Estimated increase
-        searchGlobally: Math.max(0, Math.floor((globalSearchCount || 0) * 3) - profiles.length), // Estimated 3x increase
+      // Call database RPC function for accurate recommendations
+      const { data, error } = await supabase.rpc('get_smart_recommendations', {
+        p_user_profile_id: currentProfileId,
+        p_user_lat: userData.latitude,
+        p_user_lon: userData.longitude,
+        p_current_max_distance_miles: filters.maxDistance,
+        p_current_min_age: filters.ageMin,
+        p_current_max_age: filters.ageMax,
+        p_current_gender_prefs: genderPrefs
       });
-    } catch (error) {
-      console.error('Error calculating recommendation counts:', error);
-    }
-  }, [currentProfileId, filters, profiles.length]);
 
-  // Calculate recommendation counts when empty state is shown
+      if (error) {
+        console.error('Error fetching smart recommendations:', error);
+        return;
+      }
+
+      // Set recommendations from database response
+      if (data && data.recommendations) {
+        setSmartRecommendations(data.recommendations);
+      }
+    } catch (error) {
+      console.error('Error calculating smart recommendations:', error);
+    }
+  }, [currentProfileId, filters]);
+
+  // Calculate smart recommendations when empty state is shown
   useEffect(() => {
     if (currentIndex >= profiles.length && currentProfileId && !loading && !isSearchMode) {
-      calculateRecommendationCounts();
+      calculateSmartRecommendations();
     }
-  }, [currentIndex, profiles.length, currentProfileId, loading, isSearchMode, calculateRecommendationCounts]);
+  }, [currentIndex, profiles.length, currentProfileId, loading, isSearchMode, calculateSmartRecommendations]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -2689,12 +2649,12 @@ export default function Discover() {
             <View>
               {/* Hero Section */}
               <View className="items-center mb-8">
-                <Text className="text-6xl mb-4">💜</Text>
+                <Text className="text-6xl mb-4">✨</Text>
                 <Text className="text-2xl font-display-bold text-foreground mb-2 text-center">
-                  Discover Your Perfect Match
+                  You've Seen All Available Matches!
                 </Text>
-                <Text className="text-muted-foreground text-center text-base font-sans">
-                  Join thousands finding meaningful connections
+                <Text className="text-muted-foreground text-center text-base font-sans leading-6">
+                  Don't worry—we're actively looking for more perfect matches for you. Meanwhile, here are some ways to discover even more connections!
                 </Text>
               </View>
 
@@ -2705,92 +2665,95 @@ export default function Discover() {
                 </Text>
 
                 <View className="gap-3">
-                  {/* Widen Age Range - Only show if range is narrow AND would get more profiles */}
-                  {(filters.ageMax - filters.ageMin < 15) && recommendationCounts.widenAge > 0 && (
-                    <TouchableOpacity
-                      className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
-                      onPress={() => {
-                        const newAgeMin = Math.max(18, filters.ageMin - 5);
-                        const newAgeMax = Math.min(80, filters.ageMax + 5);
-                        setFilters({ ...filters, ageMin: newAgeMin, ageMax: newAgeMax });
-                        trackEvent('empty_state_recommendation_clicked', {
-                          action: 'widen_age_range',
-                          old_range: `${filters.ageMin}-${filters.ageMax}`,
-                          new_range: `${newAgeMin}-${newAgeMax}`,
-                          predicted_count: recommendationCounts.widenAge
+                  {/* Dynamic Smart Recommendations from Database */}
+                  {smartRecommendations.map((rec, index) => {
+                    const getIcon = () => {
+                      switch (rec.type) {
+                        case 'distance': return 'map-marker-radius';
+                        case 'age': return 'calendar-range';
+                        case 'gender': return 'gender-transgender';
+                        case 'global': return 'earth';
+                        default: return 'star';
+                      }
+                    };
+
+                    const getTitle = () => {
+                      const count = rec.count || 0;
+                      const countText = count >= 1000 ? `${Math.floor(count / 1000)}k+` : `${count}`;
+
+                      switch (rec.type) {
+                        case 'distance':
+                          return `Increase distance by ${rec.increment} miles`;
+                        case 'age':
+                          return `Expand age range by ${rec.increment} years`;
+                        case 'gender':
+                          return `Add ${rec.addedGender} to your preferences`;
+                        case 'global':
+                          return 'Search globally';
+                        default:
+                          return 'Expand your search';
+                      }
+                    };
+
+                    const getCountLabel = () => {
+                      const count = rec.count || 0;
+                      if (count >= 1000) {
+                        return `${(count / 1000).toFixed(1)}k+ matches`;
+                      } else if (count > 0) {
+                        return `${count} ${count === 1 ? 'match' : 'matches'}`;
+                      }
+                      return '';
+                    };
+
+                    const handlePress = async () => {
+                      if (rec.type === 'distance' && rec.newDistance) {
+                        setFilters({ ...filters, maxDistance: rec.newDistance });
+                        trackEvent('smart_recommendation_clicked', {
+                          type: 'distance',
+                          increment: rec.increment,
+                          count: rec.count
                         });
                         loadProfiles();
-                      }}
-                    >
-                      <View className="bg-lavender-100 dark:bg-lavender-900/30 rounded-full p-2 mr-3">
-                        <MaterialCommunityIcons name="calendar-range" size={20} color="#A08AB7" />
-                      </View>
-                      <View className="flex-1">
-                        <View className="flex-row items-center gap-2 mb-1">
-                          <Text className="text-foreground font-sans-semibold">Widen Age Range</Text>
-                          <View className="bg-lavender-500 rounded-full px-2 py-0.5">
-                            <Text className="text-white text-xs font-sans-bold">+{recommendationCounts.widenAge}</Text>
-                          </View>
-                        </View>
-                        <Text className="text-muted-foreground text-sm">
-                          See {recommendationCounts.widenAge} more {recommendationCounts.widenAge === 1 ? 'match' : 'matches'} with ages {Math.max(18, filters.ageMin - 5)}-{Math.min(80, filters.ageMax + 5)}
-                        </Text>
-                      </View>
-                      <MaterialCommunityIcons name="chevron-right" size={20} color="#A1A1AA" />
-                    </TouchableOpacity>
-                  )}
-
-                  {/* Increase Distance - Only show if distance is restrictive AND would get more profiles */}
-                  {filters.maxDistance < 100 && recommendationCounts.increaseDistance > 0 && (
-                    <TouchableOpacity
-                      className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
-                      onPress={() => {
-                        const newDistance = Math.min(500, filters.maxDistance * 2);
-                        setFilters({ ...filters, maxDistance: newDistance });
-                        trackEvent('empty_state_recommendation_clicked', {
-                          action: 'increase_distance',
-                          old_distance: filters.maxDistance,
-                          new_distance: newDistance,
-                          predicted_count: recommendationCounts.increaseDistance
+                      } else if (rec.type === 'age' && rec.newAgeMin && rec.newAgeMax) {
+                        setFilters({ ...filters, ageMin: rec.newAgeMin, ageMax: rec.newAgeMax });
+                        trackEvent('smart_recommendation_clicked', {
+                          type: 'age',
+                          increment: rec.increment,
+                          count: rec.count
                         });
                         loadProfiles();
-                      }}
-                    >
-                      <View className="bg-lavender-100 dark:bg-lavender-900/30 rounded-full p-2 mr-3">
-                        <MaterialCommunityIcons name="map-marker-radius" size={20} color="#A08AB7" />
-                      </View>
-                      <View className="flex-1">
-                        <View className="flex-row items-center gap-2 mb-1">
-                          <Text className="text-foreground font-sans-semibold">Increase Distance</Text>
-                          <View className="bg-lavender-500 rounded-full px-2 py-0.5">
-                            <Text className="text-white text-xs font-sans-bold">+{recommendationCounts.increaseDistance}</Text>
-                          </View>
-                        </View>
-                        <Text className="text-muted-foreground text-sm">
-                          See {recommendationCounts.increaseDistance} more {recommendationCounts.increaseDistance === 1 ? 'match' : 'matches'} up to {Math.min(500, filters.maxDistance * 2)} miles away
-                        </Text>
-                      </View>
-                      <MaterialCommunityIcons name="chevron-right" size={20} color="#A1A1AA" />
-                    </TouchableOpacity>
-                  )}
+                      } else if (rec.type === 'gender' && rec.addedGender) {
+                        // Add gender to preferences
+                        const { data: currentPrefs } = await supabase
+                          .from('preferences')
+                          .select('gender_preference')
+                          .eq('profile_id', currentProfileId)
+                          .single();
 
-                  {/* Search Globally - Show with predicted count if available */}
-                  {recommendationCounts.searchGlobally > 0 && (
-                    <TouchableOpacity
-                      className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
-                      onPress={async () => {
-                        if (!currentProfileId) return;
+                        const currentGenderPrefs = currentPrefs?.gender_preference || [];
+                        const newGenderPrefs = [...currentGenderPrefs, rec.addedGender];
 
-                        // Update search_globally preference
+                        await supabase
+                          .from('preferences')
+                          .update({ gender_preference: newGenderPrefs })
+                          .eq('profile_id', currentProfileId);
+
+                        trackEvent('smart_recommendation_clicked', {
+                          type: 'gender',
+                          addedGender: rec.addedGender,
+                          count: rec.count
+                        });
+                        loadProfiles();
+                      } else if (rec.type === 'global') {
                         const { error } = await supabase
                           .from('preferences')
                           .update({ search_globally: true })
                           .eq('profile_id', currentProfileId);
 
                         if (!error) {
-                          trackEvent('empty_state_recommendation_clicked', {
-                            action: 'search_globally',
-                            predicted_count: recommendationCounts.searchGlobally
+                          trackEvent('smart_recommendation_clicked', {
+                            type: 'global',
+                            count: rec.count
                           });
                           Alert.alert(
                             'Global Search Enabled',
@@ -2798,27 +2761,39 @@ export default function Discover() {
                             [{ text: 'OK', onPress: () => loadProfiles() }]
                           );
                         }
-                      }}
-                    >
-                      <View className="bg-lavender-100 dark:bg-lavender-900/30 rounded-full p-2 mr-3">
-                        <MaterialCommunityIcons name="earth" size={20} color="#A08AB7" />
-                      </View>
-                      <View className="flex-1">
-                        <View className="flex-row items-center gap-2 mb-1">
-                          <Text className="text-foreground font-sans-semibold">Search Globally</Text>
-                          <View className="bg-lavender-500 rounded-full px-2 py-0.5">
-                            <Text className="text-white text-xs font-sans-bold">+{recommendationCounts.searchGlobally}</Text>
+                      }
+                    };
+
+                    return (
+                      <TouchableOpacity
+                        key={`recommendation-${index}`}
+                        className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
+                        onPress={handlePress}
+                      >
+                        <View className="bg-lavender-100 dark:bg-lavender-900/30 rounded-full p-3 mr-3">
+                          <MaterialCommunityIcons name={getIcon()} size={24} color="#A08AB7" />
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-foreground font-sans-semibold text-base mb-1">
+                            {getTitle()}
+                          </Text>
+                          <View className="flex-row items-center gap-2">
+                            <View className="bg-lavender-500 rounded-full px-2.5 py-1">
+                              <Text className="text-white text-xs font-sans-bold">{getCountLabel()}</Text>
+                            </View>
+                            {rec.description && (
+                              <Text className="text-muted-foreground text-sm flex-1" numberOfLines={1}>
+                                {rec.description}
+                              </Text>
+                            )}
                           </View>
                         </View>
-                        <Text className="text-muted-foreground text-sm">
-                          See {recommendationCounts.searchGlobally} more {recommendationCounts.searchGlobally === 1 ? 'match' : 'matches'} worldwide
-                        </Text>
-                      </View>
-                      <MaterialCommunityIcons name="chevron-right" size={20} color="#A1A1AA" />
-                    </TouchableOpacity>
-                  )}
+                        <MaterialCommunityIcons name="chevron-right" size={24} color="#A1A1AA" />
+                      </TouchableOpacity>
+                    );
+                  })}
 
-                  {/* Adjust Filters - Open filter modal */}
+                  {/* Always show: Adjust All Filters option */}
                   <TouchableOpacity
                     className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
                     onPress={() => {
@@ -3379,6 +3354,23 @@ export default function Discover() {
       {/* ADMIN ONLY: Debug buttons to test Popularity Modal */}
       {isAdmin && (
         <View className="absolute bottom-32 left-4 z-50 gap-2">
+          <TouchableOpacity
+            onPress={() => {
+              // Force empty state to show Smart Suggestions
+              setCurrentIndex(profiles.length);
+              // Set mock recommendations for preview
+              setSmartRecommendations([
+                { type: 'distance', count: 15, increment: 20, newDistance: filters.maxDistance + 20, description: '15 more matches within ' + (filters.maxDistance + 20) + ' miles' },
+                { type: 'distance', count: 32, increment: 50, newDistance: filters.maxDistance + 50, description: '32 more matches within ' + (filters.maxDistance + 50) + ' miles' },
+                { type: 'age', count: 12, increment: 5, newAgeMin: Math.max(18, filters.ageMin - 5), newAgeMax: Math.min(80, filters.ageMax + 5), description: '12 more matches ages ' + Math.max(18, filters.ageMin - 5) + '-' + Math.min(80, filters.ageMax + 5) },
+                { type: 'gender', count: 8, addedGender: 'Non-binary', description: '8 Non-binary matches' },
+                { type: 'global', count: 45, description: '45 matches worldwide' }
+              ]);
+            }}
+            className="bg-blue-500 px-3 py-2 rounded-lg opacity-80"
+          >
+            <Text className="text-white text-xs font-medium">Smart Suggestions</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => {
               setPopularityData({ newLikesCount: 1, totalLikes: 5, percentileRank: 50, streak: 1 });

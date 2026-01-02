@@ -96,7 +96,7 @@ function generateUnreadMessagesEmail(
                               <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
                                 <tr>
                                   <td style="border-radius: 50px; background: linear-gradient(135deg, #9B87CE 0%, #A08AB7 100%); box-shadow: 0 4px 15px rgba(155, 135, 206, 0.4);">
-                                    <a href="https://joinaccord.app/messages" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
+                                    <a href="accord://messages" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
                                       Read Your Messages
                                     </a>
                                   </td>
@@ -127,7 +127,7 @@ function generateUnreadMessagesEmail(
                         <!-- Footer -->
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 0; line-height: 1.6;">
                           You're receiving this because you have unread messages on Accord.<br>
-                          <a href="https://joinaccord.app/settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
+                          <a href="accord://settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
                         </p>
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
@@ -155,13 +155,13 @@ You Have Unread Messages! 💬
 You have ${unreadCount} unread message${unreadCount > 1 ? 's' : ''} waiting for you from ${senderList}${andMore}.
 
 Don't leave them hanging! Open Accord to read your messages:
-https://joinaccord.app/messages
+accord://messages
 
 Did you know? Responding within 24 hours increases your chances of building a meaningful connection by 3x!
 
 ---
 You're receiving this because you have unread messages on Accord.
-Manage email preferences: https://joinaccord.app/settings/notifications
+Manage email preferences: accord://settings/notifications
 
 Accord - Safe Connections for Meaningful Partnerships
 joinaccord.app`;

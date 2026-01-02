@@ -7,6 +7,7 @@ import { Waveform, type IWaveformRef, PlayerState, RecorderState } from '@/compo
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
+import { openAppSettings } from '@/lib/open-settings';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 
@@ -117,13 +118,7 @@ export default function VoiceIntro() {
               { text: 'Cancel', style: 'cancel' },
               {
                 text: 'Open Settings',
-                onPress: () => {
-                  if (Platform.OS === 'ios') {
-                    Linking.openURL('app-settings:');
-                  } else {
-                    Linking.openSettings();
-                  }
-                },
+                onPress: () => openAppSettings(),
               },
             ]
           );
@@ -277,17 +272,17 @@ export default function VoiceIntro() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-pink-50">
+    <ScrollView className="flex-1 bg-pink-50 dark:bg-gray-900">
       <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 6 of 7</Text>
-            <Text className="text-sm text-lavender-500 font-bold">86%</Text>
+            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 6 of 7</Text>
+            <Text className="text-sm text-lavender-500 dark:text-lavender-400 font-bold">86%</Text>
           </View>
-          <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <View
-              className="h-3 bg-lavender-500 rounded-full"
+              className="h-3 bg-lavender-500 dark:bg-lavender-400 rounded-full"
               style={{ width: '86%' }}
             />
           </View>
@@ -296,17 +291,17 @@ export default function VoiceIntro() {
         {/* Header */}
         <View className="mb-8 items-center">
           <Text className="text-5xl mb-4">🎙️</Text>
-          <Text className="text-4xl font-bold text-gray-900 mb-3 text-center">
+          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3 text-center">
             Add your voice
           </Text>
-          <Text className="text-gray-600 text-lg text-center">
+          <Text className="text-gray-600 dark:text-gray-400 text-lg text-center">
             Record a 30-second introduction to stand out
           </Text>
         </View>
 
         {/* Prompt Selection */}
         <View className="mb-6">
-          <Text className="text-lg font-bold text-gray-900 mb-3">
+          <Text className="text-lg font-bold text-gray-900 dark:text-white mb-3">
             Choose a prompt to answer:
           </Text>
           <View className="flex-row flex-wrap gap-2">
@@ -319,15 +314,15 @@ export default function VoiceIntro() {
                 }}
                 className={`px-4 py-2 rounded-full border-2 ${
                   selectedPrompt === prompt && !showCustomInput
-                    ? 'bg-lavender-500 border-lavender-500'
-                    : 'bg-white border-gray-200'
+                    ? 'bg-lavender-500 dark:bg-lavender-500 border-lavender-500 dark:border-lavender-500'
+                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600'
                 }`}
               >
                 <Text
                   className={`text-sm ${
                     selectedPrompt === prompt && !showCustomInput
-                      ? 'text-white font-semibold'
-                      : 'text-gray-700'
+                      ? 'text-white dark:text-white font-semibold'
+                      : 'text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   {prompt}
@@ -341,13 +336,13 @@ export default function VoiceIntro() {
               }}
               className={`px-4 py-2 rounded-full border-2 ${
                 showCustomInput
-                  ? 'bg-lavender-500 border-lavender-500'
-                  : 'bg-white border-gray-200'
+                  ? 'bg-lavender-500 dark:bg-lavender-500 border-lavender-500 dark:border-lavender-500'
+                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600'
               }`}
             >
               <Text
                 className={`text-sm ${
-                  showCustomInput ? 'text-white font-semibold' : 'text-gray-700'
+                  showCustomInput ? 'text-white dark:text-white font-semibold' : 'text-gray-700 dark:text-gray-300'
                 }`}
               >
                 ✨ Write my own
@@ -359,14 +354,14 @@ export default function VoiceIntro() {
           {showCustomInput && (
             <View className="mt-4">
               <TextInput
-                className="bg-white border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-900"
+                className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white"
                 placeholder="Type your own prompt..."
                 placeholderTextColor="#9CA3AF"
                 value={customPrompt}
                 onChangeText={setCustomPrompt}
                 maxLength={100}
               />
-              <Text className="text-gray-500 text-xs mt-1 text-right">
+              <Text className="text-gray-500 dark:text-gray-400 text-xs mt-1 text-right">
                 {customPrompt.length}/100
               </Text>
             </View>
@@ -374,12 +369,12 @@ export default function VoiceIntro() {
         </View>
 
         {/* Recording Interface */}
-        <View className="bg-white rounded-3xl p-8 border border-gray-200 mb-8">
+        <View className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-600 mb-8">
           {!recordingUri ? (
             <View className="items-center">
               {/* Selected Prompt Display */}
               {(selectedPrompt || customPrompt) && (
-                <Text className="text-lg font-semibold text-gray-900 mb-6 text-center">
+                <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-6 text-center">
                   "{showCustomInput ? customPrompt : selectedPrompt}"
                 </Text>
               )}
@@ -403,8 +398,8 @@ export default function VoiceIntro() {
               <TouchableOpacity
                 className={`w-32 h-32 rounded-full items-center justify-center ${
                   isRecording
-                    ? 'bg-red-500'
-                    : 'bg-lavender-500'
+                    ? 'bg-red-500 dark:bg-red-600'
+                    : 'bg-lavender-500 dark:bg-lavender-500'
                 }`}
                 onPress={isRecording ? stopRecording : startRecording}
                 disabled={loading}
@@ -417,11 +412,11 @@ export default function VoiceIntro() {
               </TouchableOpacity>
 
               {/* Timer */}
-              <Text className="text-3xl font-bold text-gray-900 mt-6">
+              <Text className="text-3xl font-bold text-gray-900 dark:text-white mt-6">
                 {recordingDuration}s / 30s
               </Text>
 
-              <Text className="text-gray-600 mt-4 text-center">
+              <Text className="text-gray-600 dark:text-gray-400 mt-4 text-center">
                 {isRecording
                   ? 'Recording... Tap to stop'
                   : 'Tap the microphone to start recording'}
@@ -472,32 +467,32 @@ export default function VoiceIntro() {
 
               {/* Delete Button */}
               <TouchableOpacity
-                className="flex-row items-center gap-2 mt-4 py-3 px-6 rounded-full bg-red-50 border border-red-200"
+                className="flex-row items-center gap-2 mt-4 py-3 px-6 rounded-full bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700"
                 onPress={deleteRecording}
               >
                 <MaterialCommunityIcons name="delete" size={20} color="#EF4444" />
-                <Text className="text-red-500 font-semibold">Delete & Re-record</Text>
+                <Text className="text-red-500 dark:text-red-400 font-semibold">Delete & Re-record</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
 
         {/* Tips */}
-        <View className="bg-pink-50 border-2 border-pink-200 rounded-3xl p-5 mb-8">
+        <View className="bg-pink-50 dark:bg-pink-900/30 border-2 border-pink-200 dark:border-pink-700 rounded-3xl p-5 mb-8">
           <View className="flex-row items-center mb-3">
             <MaterialCommunityIcons name="lightbulb-on" size={24} color="#CDC2E5" />
-            <Text className="text-pink-900 font-bold text-lg ml-2">Recording Tips</Text>
+            <Text className="text-pink-900 dark:text-pink-300 font-bold text-lg ml-2">Recording Tips</Text>
           </View>
-          <Text className="text-pink-800 text-sm mb-2">
+          <Text className="text-pink-800 dark:text-pink-300 text-sm mb-2">
             🎤 Find a quiet space with minimal background noise
           </Text>
-          <Text className="text-pink-800 text-sm mb-2">
+          <Text className="text-pink-800 dark:text-pink-300 text-sm mb-2">
             💬 Introduce yourself, share what you're looking for
           </Text>
-          <Text className="text-pink-800 text-sm mb-2">
+          <Text className="text-pink-800 dark:text-pink-300 text-sm mb-2">
             ✨ Be authentic - your voice shows personality!
           </Text>
-          <Text className="text-pink-800 text-sm">
+          <Text className="text-pink-800 dark:text-pink-300 text-sm">
             🌈 Profiles with voice intros get 3x more matches
           </Text>
         </View>
@@ -505,23 +500,23 @@ export default function VoiceIntro() {
         {/* Buttons */}
         <View className="flex-row gap-3">
           <TouchableOpacity
-            className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
+            className="flex-1 py-4 rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
             onPress={() => goToPreviousOnboardingStep('/(onboarding)/voice-intro')}
             disabled={loading || isRecording}
           >
-            <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>
+            <Text className="text-gray-700 dark:text-gray-300 text-center font-bold text-lg">Back</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             className={`flex-1 py-4 rounded-full ${
               loading || isRecording
-                ? 'bg-gray-400'
-                : 'bg-lavender-500'
+                ? 'bg-gray-400 dark:bg-gray-600'
+                : 'bg-lavender-500 dark:bg-lavender-500'
             }`}
             onPress={handleContinue}
             disabled={loading || isRecording}
           >
-            <Text className="text-white text-center font-bold text-lg">
+            <Text className="text-white dark:text-white text-center font-bold text-lg">
               {loading ? 'Saving...' : recordingUri ? 'Continue' : 'Skip for now'}
             </Text>
           </TouchableOpacity>
@@ -583,4 +578,10 @@ const styles = StyleSheet.create({
     color: '#71717A',
     minWidth: 36,
   },
-});
+})
+
+// Note: StyleSheet colors are static and cannot dynamically respond to dark mode.
+// For dynamic dark mode support on inline styles, consider using:
+// - useColorScheme() from 'react-native' to detect theme
+// - useAppState() or similar hooks to update colors dynamically
+// - Or migrate these to TailwindCSS classes where possible

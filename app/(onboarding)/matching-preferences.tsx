@@ -233,15 +233,15 @@ export default function MatchingPreferences() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView className="flex-1 bg-white dark:bg-gray-900">
       <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 8 of 8</Text>
+            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 8 of 8</Text>
             <Text className="text-sm text-lavender-500 font-bold">100%</Text>
           </View>
-          <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <View
               className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '100%' }}
@@ -251,10 +251,10 @@ export default function MatchingPreferences() {
 
         {/* Header */}
         <View className="mb-8">
-          <Text className="text-4xl font-bold text-gray-900 mb-3">
+          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
             Find your match 🔍
           </Text>
-          <Text className="text-gray-600 text-lg">
+          <Text className="text-gray-600 dark:text-gray-400 text-lg">
             Set your preferences to find compatible partners
           </Text>
         </View>
@@ -263,12 +263,12 @@ export default function MatchingPreferences() {
         <View className="space-y-8">
           {/* Age Range */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Age Range: {ageMin} - {ageMax}
             </Text>
             <View className="space-y-4">
               <View>
-                <Text className="text-xs text-gray-600 mb-2">Minimum Age: {ageMin}</Text>
+                <Text className="text-xs text-gray-600 dark:text-gray-400 mb-2">Minimum Age: {ageMin}</Text>
                 <Slider
                   minimumValue={18}
                   maximumValue={80}
@@ -280,7 +280,7 @@ export default function MatchingPreferences() {
                 />
               </View>
               <View>
-                <Text className="text-xs text-gray-600 mb-2">Maximum Age: {ageMax}</Text>
+                <Text className="text-xs text-gray-600 dark:text-gray-400 mb-2">Maximum Age: {ageMax}</Text>
                 <Slider
                   minimumValue={18}
                   maximumValue={80}
@@ -296,7 +296,7 @@ export default function MatchingPreferences() {
 
           {/* Distance Unit Toggle */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Distance Unit
             </Text>
             <View className="flex-row gap-2">
@@ -304,13 +304,13 @@ export default function MatchingPreferences() {
                 className={`flex-1 py-3 rounded-xl border ${
                   distanceUnit === 'miles'
                     ? 'bg-lavender-500 border-lavender-500'
-                    : 'bg-white border-gray-300'
+                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                 }`}
                 onPress={() => setDistanceUnit('miles')}
               >
                 <Text
                   className={`text-center font-medium ${
-                    distanceUnit === 'miles' ? 'text-white' : 'text-gray-700'
+                    distanceUnit === 'miles' ? 'text-white' : 'text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   Miles
@@ -320,13 +320,13 @@ export default function MatchingPreferences() {
                 className={`flex-1 py-3 rounded-xl border ${
                   distanceUnit === 'km'
                     ? 'bg-lavender-500 border-lavender-500'
-                    : 'bg-white border-gray-300'
+                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                 }`}
                 onPress={() => setDistanceUnit('km')}
               >
                 <Text
                   className={`text-center font-medium ${
-                    distanceUnit === 'km' ? 'text-white' : 'text-gray-700'
+                    distanceUnit === 'km' ? 'text-white' : 'text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   Kilometers
@@ -337,7 +337,7 @@ export default function MatchingPreferences() {
 
           {/* Distance */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Maximum Distance: {formatDistanceSlider(maxDistance, distanceUnit)}
             </Text>
             <Slider
@@ -354,15 +354,15 @@ export default function MatchingPreferences() {
           {/* Willing to Relocate */}
           <View>
             <TouchableOpacity
-              className="flex-row items-center justify-between px-4 py-3 bg-gray-50 rounded-xl"
+              className="flex-row items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800 rounded-xl"
               onPress={() => setWillingToRelocate(!willingToRelocate)}
             >
-              <Text className="text-gray-700 font-medium">
+              <Text className="text-gray-700 dark:text-gray-300 font-medium">
                 Willing to relocate for the right match
               </Text>
               <View
                 className={`w-12 h-7 rounded-full ${
-                  willingToRelocate ? 'bg-lavender-500' : 'bg-gray-300'
+                  willingToRelocate ? 'bg-lavender-500' : 'bg-gray-300 dark:bg-gray-600'
                 }`}
               >
                 <View
@@ -376,7 +376,7 @@ export default function MatchingPreferences() {
 
           {/* Gender Preference */}
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Interested in (select all that apply)
             </Text>
             <View className="flex-row flex-wrap gap-2">
@@ -386,7 +386,7 @@ export default function MatchingPreferences() {
                   className={`px-4 py-2 rounded-full border ${
                     genderPreference.includes(gender)
                       ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white border-gray-300'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   }`}
                   onPress={() => toggleGenderPreference(gender)}
                 >
@@ -394,7 +394,7 @@ export default function MatchingPreferences() {
                     className={`${
                       genderPreference.includes(gender)
                         ? 'text-white'
-                        : 'text-gray-700'
+                        : 'text-gray-700 dark:text-gray-300'
                     } font-medium`}
                   >
                     {gender}
@@ -407,11 +407,11 @@ export default function MatchingPreferences() {
           {/* Notification Permission */}
           <View className="mt-6">
             <View className={`border-2 rounded-2xl p-5 ${
-              (notificationsEnabled || contextNotificationsEnabled) ? 'bg-lavender-50 border-lavender-500' : 'bg-gray-50 border-gray-300'
+              (notificationsEnabled || contextNotificationsEnabled) ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500' : 'bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600'
             }`}>
               <View className="flex-row items-center mb-3">
                 <Text className="text-2xl mr-2">🔔</Text>
-                <Text className="text-xl font-bold text-gray-900 flex-1">
+                <Text className="text-xl font-bold text-gray-900 dark:text-white flex-1">
                   Stay in the Loop
                 </Text>
                 {(notificationsEnabled || contextNotificationsEnabled) && (
@@ -420,7 +420,7 @@ export default function MatchingPreferences() {
                   </View>
                 )}
               </View>
-              <Text className="text-gray-700 mb-4 leading-6">
+              <Text className="text-gray-700 dark:text-gray-300 mb-4 leading-6">
                 Get instant alerts when you match, receive messages, or someone likes your profile. Don't miss your perfect match!
               </Text>
               {!(notificationsEnabled || contextNotificationsEnabled) ? (
@@ -434,7 +434,7 @@ export default function MatchingPreferences() {
                 </TouchableOpacity>
               ) : (
                 <View className="flex-row items-center justify-center py-2">
-                  <Text className="text-lavender-700 font-semibold">✓ You're all set!</Text>
+                  <Text className="text-lavender-700 dark:text-lavender-400 font-semibold">✓ You're all set!</Text>
                 </View>
               )}
             </View>
@@ -442,9 +442,9 @@ export default function MatchingPreferences() {
         </View>
 
         {/* Success Message */}
-        <View className="bg-green-50 border border-green-200 rounded-2xl p-4 my-8">
-          <Text className="text-green-900 font-semibold mb-2">Almost There!</Text>
-          <Text className="text-green-800 text-sm">
+        <View className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-2xl p-4 my-8">
+          <Text className="text-green-900 dark:text-green-300 font-semibold mb-2">Almost There!</Text>
+          <Text className="text-green-800 dark:text-green-400 text-sm">
             You're all set to start finding compatible partners. You can always update your
             preferences later in Settings.
           </Text>
@@ -453,16 +453,16 @@ export default function MatchingPreferences() {
         {/* Buttons */}
         <View className="flex-row gap-3">
           <TouchableOpacity
-            className="flex-1 py-4 rounded-full border border-gray-300"
+            className="flex-1 py-4 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
             onPress={() => goToPreviousOnboardingStep('/(onboarding)/matching-preferences')}
             disabled={loading}
           >
-            <Text className="text-gray-700 text-center font-semibold text-lg">Back</Text>
+            <Text className="text-gray-700 dark:text-gray-300 text-center font-semibold text-lg">Back</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             className={`flex-1 py-4 rounded-full ${
-              loading || genderPreference.length === 0 ? 'bg-gray-400' : 'bg-lavender-500'
+              loading || genderPreference.length === 0 ? 'bg-gray-400 dark:bg-gray-600' : 'bg-lavender-500'
             }`}
             style={{
               borderRadius: 9999,

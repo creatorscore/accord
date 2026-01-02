@@ -175,15 +175,15 @@ export default function About() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <ScrollView className="flex-1 bg-blue-50" keyboardShouldPersistTaps="handled">
+      <ScrollView className="flex-1 bg-blue-50 dark:bg-gray-900" keyboardShouldPersistTaps="handled">
         <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
         {/* Progress */}
         <View className="mb-8">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 3 of 9</Text>
+            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 3 of 9</Text>
             <Text className="text-sm text-lavender-500 font-bold">33%</Text>
           </View>
-          <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <View
               className="h-3 bg-lavender-500 rounded-full"
               style={{ width: '33%' }}
@@ -193,10 +193,10 @@ export default function About() {
 
         {/* Header */}
         <View className="mb-8">
-          <Text className="text-4xl font-bold text-gray-900 mb-3">
+          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
             About you ✍️
           </Text>
-          <Text className="text-gray-600 text-lg">
+          <Text className="text-gray-600 dark:text-gray-400 text-lg">
             Share what makes you unique
           </Text>
         </View>
@@ -206,11 +206,11 @@ export default function About() {
           {/* Bio */}
           <View>
             <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-lg font-bold text-gray-900">About Me</Text>
-              <Text className="text-sm text-gray-500 font-semibold">{bio.length}/500</Text>
+              <Text className="text-lg font-bold text-gray-900 dark:text-white">About Me</Text>
+              <Text className="text-sm text-gray-500 dark:text-gray-400 font-semibold">{bio.length}/500</Text>
             </View>
             <TextInput
-              className="bg-white border-2 border-blue-200 rounded-2xl px-5 py-4 text-gray-900 min-h-36 text-base"
+              className="bg-white dark:bg-gray-800 border-2 border-blue-200 dark:border-blue-700 rounded-2xl px-5 py-4 text-gray-900 dark:text-white min-h-36 text-base"
               placeholder="Write a bit about yourself, your interests, what makes you unique..."
               value={bio}
               onChangeText={(text) => setBio(text.slice(0, 500))}
@@ -218,18 +218,18 @@ export default function About() {
               textAlignVertical="top"
               placeholderTextColor="#9CA3AF"
             />
-            <Text className="text-sm text-blue-600 mt-2 font-medium">
+            <Text className="text-sm text-blue-600 dark:text-blue-400 mt-2 font-medium">
               ✨ Minimum 50 characters. Be genuine and specific!
             </Text>
           </View>
 
           {/* Occupation */}
           <View>
-            <Text className="text-lg font-bold text-gray-900 mb-3">
-              💼 Occupation <Text className="text-gray-400 text-sm">(optional)</Text>
+            <Text className="text-lg font-bold text-gray-900 dark:text-white mb-3">
+              💼 Occupation <Text className="text-gray-400 dark:text-gray-500 text-sm">(optional)</Text>
             </Text>
             <TextInput
-              className="bg-white border-2 border-purple-200 rounded-xl px-5 py-4 text-gray-900 text-base"
+              className="bg-white dark:bg-gray-800 border-2 border-purple-200 dark:border-purple-700 rounded-xl px-5 py-4 text-gray-900 dark:text-white text-base"
               placeholder="e.g., Software Engineer, Teacher, Student"
               value={occupation}
               onChangeText={setOccupation}
@@ -240,11 +240,11 @@ export default function About() {
 
           {/* Education */}
           <View>
-            <Text className="text-lg font-bold text-gray-900 mb-3">
-              🎓 Education <Text className="text-gray-400 text-sm">(optional)</Text>
+            <Text className="text-lg font-bold text-gray-900 dark:text-white mb-3">
+              🎓 Education <Text className="text-gray-400 dark:text-gray-500 text-sm">(optional)</Text>
             </Text>
             <TextInput
-              className="bg-white border-2 border-pink-200 rounded-xl px-5 py-4 text-gray-900 text-base"
+              className="bg-white dark:bg-gray-800 border-2 border-pink-200 dark:border-pink-700 rounded-xl px-5 py-4 text-gray-900 dark:text-white text-base"
               placeholder="e.g., Bachelor's at UCLA, High School"
               value={education}
               onChangeText={setEducation}
@@ -255,21 +255,21 @@ export default function About() {
         </View>
 
         {/* Tips */}
-        <View className="bg-purple-50 border-2 border-purple-200 rounded-3xl p-5 my-8">
+        <View className="bg-purple-50 dark:bg-purple-900/30 border-2 border-purple-200 dark:border-purple-700 rounded-3xl p-5 my-8">
           <View className="flex-row items-center mb-3">
             <Text className="text-3xl mr-2">💡</Text>
-            <Text className="text-purple-900 font-bold text-lg">Bio Tips</Text>
+            <Text className="text-purple-900 dark:text-purple-200 font-bold text-lg">Bio Tips</Text>
           </View>
-          <Text className="text-purple-800 text-sm mb-2">
+          <Text className="text-purple-800 dark:text-purple-300 text-sm mb-2">
             ✨ Be authentic about your reasons for seeking a lavender marriage
           </Text>
-          <Text className="text-purple-800 text-sm mb-2">
+          <Text className="text-purple-800 dark:text-purple-300 text-sm mb-2">
             💬 Share your hobbies, interests, and lifestyle
           </Text>
-          <Text className="text-purple-800 text-sm mb-2">
+          <Text className="text-purple-800 dark:text-purple-300 text-sm mb-2">
             🎯 Mention what you're looking for in a partner
           </Text>
-          <Text className="text-purple-800 text-sm">
+          <Text className="text-purple-800 dark:text-purple-300 text-sm">
             🌈 Keep it positive and genuine
           </Text>
         </View>
@@ -277,17 +277,17 @@ export default function About() {
         {/* Buttons */}
         <View className="flex-row gap-3">
           <TouchableOpacity
-            className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
+            className="flex-1 py-4 rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
             onPress={handleBack}
             disabled={loading}
           >
-            <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>
+            <Text className="text-gray-700 dark:text-gray-300 text-center font-bold text-lg">Back</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             className={`flex-1 py-4 rounded-full ${
               loading || bio.length < 50
-                ? 'bg-gray-400'
+                ? 'bg-gray-400 dark:bg-gray-600'
                 : 'bg-lavender-500'
             }`}
             style={{
