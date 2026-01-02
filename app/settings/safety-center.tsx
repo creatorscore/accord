@@ -301,11 +301,19 @@ export default function SafetyCenter() {
           <TouchableOpacity
             style={styles.actionCard}
             onPress={async () => {
-              const mailtoUrl = 'mailto:hello@joinaccord.app?subject=Safety Concern';
-              const canOpen = await Linking.canOpenURL(mailtoUrl);
-              if (canOpen) {
-                Linking.openURL(mailtoUrl);
-              } else {
+              try {
+                const mailtoUrl = 'mailto:hello@joinaccord.app?subject=Safety Concern';
+                const canOpen = await Linking.canOpenURL(mailtoUrl);
+                if (canOpen) {
+                  await Linking.openURL(mailtoUrl);
+                } else {
+                  Alert.alert(
+                    t('safetyCenter.actions.contactSupport'),
+                    t('safetyCenter.alerts.emailUs'),
+                    [{ text: t('common.ok') }]
+                  );
+                }
+              } catch (error) {
                 Alert.alert(
                   t('safetyCenter.actions.contactSupport'),
                   t('safetyCenter.alerts.emailUs'),
