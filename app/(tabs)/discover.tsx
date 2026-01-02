@@ -621,7 +621,8 @@ export default function Discover() {
   };
 
   // FIX #2: Helper function to calculate distance once (eliminates duplicate calculations)
-  const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  // NOTE: Using regular function instead of useCallback for pure math operations (better Hermes compatibility)
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 3959; // Earth's radius in miles
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
     const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -633,7 +634,7 @@ export default function Discover() {
         Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return Math.round(R * c);
-  }, []);
+  };
 
   const loadProfiles = async (searchModeOverride?: boolean, searchKeywordOverride?: string) => {
     // Use override values if provided, otherwise fall back to state
