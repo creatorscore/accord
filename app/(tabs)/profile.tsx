@@ -636,11 +636,19 @@ export default function Profile() {
             <TouchableOpacity
               style={[styles.menuItem, { backgroundColor: colors.card }]}
               onPress={async () => {
-                const mailtoUrl = 'mailto:hello@joinaccord.app?subject=Support Request&body=Hi Accord Team,\n\n';
-                const canOpen = await Linking.canOpenURL(mailtoUrl);
-                if (canOpen) {
-                  Linking.openURL(mailtoUrl);
-                } else {
+                try {
+                  const mailtoUrl = 'mailto:hello@joinaccord.app?subject=Support Request&body=Hi Accord Team,\n\n';
+                  const canOpen = await Linking.canOpenURL(mailtoUrl);
+                  if (canOpen) {
+                    await Linking.openURL(mailtoUrl);
+                  } else {
+                    Alert.alert(
+                      'Contact Support',
+                      'Email us at hello@joinaccord.app',
+                      [{ text: 'OK' }]
+                    );
+                  }
+                } catch (error) {
                   Alert.alert(
                     'Contact Support',
                     'Email us at hello@joinaccord.app',
