@@ -1010,6 +1010,7 @@ export default function ProfileView() {
         preferences={preferences || undefined}
         heightUnit={(currentProfile?.height_unit as 'imperial' | 'metric') || 'imperial'}
         hideActions={true}
+        hideCompatibilityScore={true}
         isAdmin={isAdmin}
         renderAdditionalContent={renderWhyWeMatch}
       />
