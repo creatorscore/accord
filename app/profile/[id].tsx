@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Dimensions, StatusBar, StyleSheet } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,14 +9,10 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { calculateCompatibilityScore, getCompatibilityBreakdown } from '@/lib/matching-algorithm';
+import { calculateDistance } from '@/lib/geolocation';
 import { formatHeight, HeightUnit } from '@/lib/height-utils';
-import ProfilePhotoCarousel from '@/components/profile/ProfilePhotoCarousel';
-import ProfileStoryCard from '@/components/profile/ProfileStoryCard';
-import ProfileInteractiveSection from '@/components/profile/ProfileInteractiveSection';
-import ProfileQuickFacts from '@/components/profile/ProfileQuickFacts';
-import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
+import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
-import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import { useColorScheme } from '@/lib/useColorScheme';
 
@@ -535,7 +531,12 @@ export default function ProfileView() {
           (a.display_order || 0) - (b.display_order || 0)
         ),
         compatibility_score: 0, // Will be calculated below
-        distance: Math.floor(Math.random() * 50) + 1,
+        distance: calculateDistance(
+          currentProfile?.latitude ?? null,
+          currentProfile?.longitude ?? null,
+          profileData.latitude ?? null,
+          profileData.longitude ?? null
+        ),
         // Use real data from database (no more mocking)
         height_inches: profileData.height_inches,
         height_cm: profileData.height_inches ? profileData.height_inches * 2.54 : undefined,
@@ -848,21 +849,167 @@ export default function ProfileView() {
     });
   }
 
+  // Render "Why We Match" section
+  const renderWhyWeMatch = () => {
+    if (!compatibilityBreakdown || compatibilityBreakdown.overall < 0) return null;
+
+    return (
+      <MotiView
+        from={{ opacity: 0, translateY: 20 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'timing', duration: 500 }}
+        style={{
+          backgroundColor: colors.card,
+          borderRadius: 20,
+          padding: 20,
+          marginBottom: 16,
+          marginHorizontal: 16,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
+          elevation: 3,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+          <MaterialCommunityIcons name="heart-multiple" size={24} color="#A08AB7" />
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.foreground, marginLeft: 12 }}>
+            Why We Match
+          </Text>
+        </View>
+
+        {/* Detailed Compatibility Breakdown */}
+        <View style={{ marginTop: 16 }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 16 }}>
+            What Makes You Compatible
+          </Text>
+
+          {/* Location Analysis */}
+          <View style={{ marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <MaterialCommunityIcons name="map-marker" size={20} color="#10B981" />
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
+                Location & Distance
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#10B981', marginLeft: 'auto' }}>
+                {Math.round(compatibilityBreakdown.location)}%
+              </Text>
+            </View>
+            <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
+              {compatibilityBreakdown.location >= 80
+                ? `You're both ${profile.distance ? `only ${profile.distance} miles apart` : 'in the same area'}, making it easy to meet up and build a connection. ${preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate ? 'Plus, you\'re both open to relocating if needed.' : ''}`
+                : compatibilityBreakdown.location >= 60
+                ? `You're ${profile.distance ? `${profile.distance} miles apart` : 'at a moderate distance'}. ${preferences?.willing_to_relocate && currentPreferences?.willing_to_relocate ? 'Fortunately, you\'re both willing to relocate, which opens up possibilities.' : preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate ? 'One of you is open to relocating, which could work well.' : 'The distance is manageable with some planning.'}`
+                : preferences?.search_globally || currentPreferences?.search_globally || preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate
+                ? `While you're ${profile.distance ? `${profile.distance} miles apart` : 'at a distance'}, you're both open to ${preferences?.search_globally || currentPreferences?.search_globally ? 'matching globally' : 'relocating'}, showing flexibility in making a connection work.`
+                : `You're ${profile.distance ? `${profile.distance} miles apart` : 'at a distance'}. Consider discussing how distance might work for your arrangement.`}
+            </Text>
+          </View>
+
+          {/* Goals Analysis */}
+          <View style={{ marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <MaterialCommunityIcons name="target" size={20} color="#3B82F6" />
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
+                Marriage Goals & Vision
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#3B82F6', marginLeft: 'auto' }}>
+                {Math.round(compatibilityBreakdown.goals)}%
+              </Text>
+            </View>
+            <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
+              {compatibilityBreakdown.goals >= 80
+                ? `You're highly aligned on marriage goals! ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both seek this arrangement primarily for ${formatLabel(preferences?.primary_reason || '')}.` : ''} ${preferences?.relationship_type === currentPreferences?.relationship_type ? `You both envision a ${formatLabel(preferences?.relationship_type || '')} partnership.` : ''} ${preferences?.wants_children === currentPreferences?.wants_children ? (preferences?.wants_children ? 'You both want children' : 'You both prefer not to have children') + ', making family planning straightforward.' : ''}`
+                : compatibilityBreakdown.goals >= 60
+                ? `You share common ground on key goals. ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both primarily seek ${formatLabel(preferences?.primary_reason || '')}.` : 'Your primary reasons differ but may complement each other.'} ${preferences?.relationship_type && currentPreferences?.relationship_type ? `Your relationship style preferences (${formatLabel(preferences?.relationship_type)} vs ${formatLabel(currentPreferences?.relationship_type)}) could work with open communication.` : ''}`
+                : `Your marriage goals differ in some areas. ${preferences?.wants_children !== currentPreferences?.wants_children ? 'You have different views on children, which is important to discuss.' : ''} ${preferences?.relationship_type !== currentPreferences?.relationship_type ? `You envision different relationship styles (${formatLabel(preferences?.relationship_type || '')} vs ${formatLabel(currentPreferences?.relationship_type || '')}), but compromise may be possible.` : ''} Open and honest conversation about expectations will be key.`}
+            </Text>
+          </View>
+
+          {/* Lifestyle Analysis */}
+          <View style={{ marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <MaterialCommunityIcons name="coffee" size={20} color="#F59E0B" />
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
+                Lifestyle & Values
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#F59E0B', marginLeft: 'auto' }}>
+                {Math.round(compatibilityBreakdown.lifestyle)}%
+              </Text>
+            </View>
+            <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
+              {compatibilityBreakdown.lifestyle >= 80
+                ? `Your day-to-day lifestyles are very compatible! ${preferences?.lifestyle_preferences?.smoking === currentPreferences?.lifestyle_preferences?.smoking ? 'You share the same views on smoking.' : ''} ${preferences?.lifestyle_preferences?.drinking === currentPreferences?.lifestyle_preferences?.drinking ? 'You have aligned drinking preferences.' : ''} ${preferences?.lifestyle_preferences?.pets === currentPreferences?.lifestyle_preferences?.pets ? 'You feel the same way about pets.' : ''} ${arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? `You both prefer ${formatArrayWithLabels(preferences?.housing_preference)} living arrangements.` : ''}`
+                : compatibilityBreakdown.lifestyle >= 60
+                ? `Your lifestyles are moderately compatible. ${preferences?.lifestyle_preferences?.smoking !== currentPreferences?.lifestyle_preferences?.smoking ? 'You differ on smoking preferences, which may need discussion.' : ''} ${!arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? 'Your ideal living arrangements differ but could potentially be negotiated.' : ''} ${preferences?.financial_arrangement || currentPreferences?.financial_arrangement ? 'Discussing financial expectations will help align your lifestyles.' : ''}`
+                : `Your lifestyle preferences show some differences. ${preferences?.lifestyle_preferences?.pets !== currentPreferences?.lifestyle_preferences?.pets && (preferences?.lifestyle_preferences?.pets === 'allergic' || currentPreferences?.lifestyle_preferences?.pets === 'allergic') ? 'Pet allergies may be a challenge to work around.' : ''} ${!arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? `You have different housing preferences (${formatArrayWithLabels(preferences?.housing_preference)} vs ${formatArrayWithLabels(currentPreferences?.housing_preference)}).` : ''} These differences are worth exploring in depth.`}
+            </Text>
+          </View>
+
+          {/* Personality Analysis */}
+          <View style={{ marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <MaterialCommunityIcons name="heart" size={20} color="#A08AB7" />
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
+                Personality & Interests
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#A08AB7', marginLeft: 'auto' }}>
+                {Math.round(compatibilityBreakdown.personality)}%
+              </Text>
+            </View>
+            <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
+              {compatibilityBreakdown.personality >= 75
+                ? `You share great chemistry! ${profile.personality_type === currentProfile?.personality_type ? `You're both ${profile.personality_type} personalities.` : profile.personality_type && currentProfile?.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} personalities complement each other well.` : ''} ${profile.love_language && currentProfile?.love_language ? `${formatArrayOrString(profile.love_language) === formatArrayOrString(currentProfile.love_language) ? `You both value ${formatArrayOrString(profile.love_language)}.` : 'Your different love languages can create balance.'}` : ''} You likely have engaging conversations and shared interests.`
+                : compatibilityBreakdown.personality >= 60
+                ? `You have some personality compatibility. ${profile.hobbies && currentProfile?.hobbies ? 'You share some hobbies and interests.' : ''} ${profile.personality_type && currentProfile?.personality_type && profile.personality_type !== currentProfile.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} types can balance each other out.` : ''} Getting to know each other's communication styles will strengthen your connection.`
+                : `Your personalities are quite different, which isn't necessarily bad! ${profile.personality_type && currentProfile?.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} types approach things differently.` : ''} Opposites can complement each other well if you appreciate each other's unique traits and communication styles.`}
+            </Text>
+          </View>
+
+          {/* Demographics Analysis */}
+          <View style={{ marginBottom: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <MaterialCommunityIcons name="account-group" size={20} color="#EC4899" />
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
+                Background & Values
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#EC4899', marginLeft: 'auto' }}>
+                {Math.round(compatibilityBreakdown.demographics)}%
+              </Text>
+            </View>
+            <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
+              {compatibilityBreakdown.demographics >= 75
+                ? `You share similar backgrounds and values. ${profile.religion === currentProfile?.religion ? `You both identify as ${profile.religion}.` : ''} ${profile.political_views === currentProfile?.political_views ? `You align politically as ${profile.political_views}.` : ''} ${profile.education === currentProfile?.education ? 'You have similar educational backgrounds.' : ''} This common ground provides a strong foundation for understanding each other's perspectives.`
+                : compatibilityBreakdown.demographics >= 60
+                ? `You have some shared background elements. ${profile.religion !== currentProfile?.religion ? 'You have different religious backgrounds, which can bring diverse perspectives.' : ''} ${profile.political_views !== currentProfile?.political_views ? 'Your political views differ, but mutual respect is what matters most.' : ''} Your differences can be enriching if approached with open minds.`
+                : `You come from different backgrounds, which can offer valuable perspectives. ${profile.religion && currentProfile?.religion && profile.religion !== currentProfile.religion ? `Your ${profile.religion} and ${currentProfile.religion} backgrounds may require extra communication about values.` : ''} ${profile.political_views && currentProfile?.political_views && profile.political_views !== currentProfile.political_views ? 'Your differing political views are worth discussing to ensure mutual respect.' : ''} Diversity can strengthen a partnership when handled thoughtfully.`}
+            </Text>
+          </View>
+        </View>
+      </MotiView>
+    );
+  };
+
+  // Transform profile for DiscoveryProfileView
+  const transformedProfile = {
+    ...profile,
+    languages_spoken: profile.languages || [],
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar barStyle={isDarkColorScheme ? "light-content" : "dark-content"} />
 
       {/* Back Button */}
       <TouchableOpacity
-        style={{ backgroundColor: isDarkColorScheme ? 'rgba(30,30,32,0.9)' : 'rgba(255,255,255,0.9)' }}
-        className="absolute top-12 left-4 z-10 rounded-full p-2 shadow-lg"
+        style={[styles.floatingButton, { top: insets.top + 8, left: 16, backgroundColor: isDarkColorScheme ? 'rgba(30,30,32,0.9)' : 'rgba(255,255,255,0.9)' }]}
         onPress={() => router.back()}
       >
         <MaterialCommunityIcons name="arrow-left" size={24} color={colors.foreground} />
       </TouchableOpacity>
 
       {/* Report/Block Menu */}
-      <View style={{ backgroundColor: isDarkColorScheme ? 'rgba(30,30,32,0.9)' : 'rgba(255,255,255,0.9)' }} className="absolute top-12 right-4 z-10 rounded-full shadow-lg">
+      <View style={[styles.floatingButton, { top: insets.top + 8, right: 16, backgroundColor: isDarkColorScheme ? 'rgba(30,30,32,0.9)' : 'rgba(255,255,255,0.9)' }]}>
         <ModerationMenu
           profileId={id}
           profileName={profile.display_name}
@@ -873,795 +1020,14 @@ export default function ProfileView() {
         />
       </View>
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {/* Enhanced Photo Carousel */}
-        <ProfilePhotoCarousel
-          profileId={id}
-          photos={photos}
-          name={profile.display_name}
-          age={profile.age}
-          isVerified={profile.is_verified}
-          photoVerified={profile.photo_verified}
-          distance={profile.distance}
-          compatibilityScore={profile.compatibility_score}
-          photoBlurEnabled={profile.photo_blur_enabled}
-          isRevealed={otherUserRevealed}
-          isAdmin={isAdmin}
-        />
-
-        {/* Location Intent Badges */}
-        {preferences && (preferences.search_globally || (preferences.preferred_cities && preferences.preferred_cities.length > 0)) && (
-          <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
-            <MotiView
-              from={{ opacity: 0, translateY: 20 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'spring', delay: 100 }}
-            >
-              {preferences.search_globally && (
-                <View style={{
-                  backgroundColor: '#EDE9FE',
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 16,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  marginBottom: 8,
-                  borderWidth: 1,
-                  borderColor: '#C4B5FD',
-                }}>
-                  <MaterialCommunityIcons name="earth" size={20} color="#A08AB7" />
-                  <Text style={{
-                    color: '#A08AB7',
-                    fontWeight: '600',
-                    fontSize: 14,
-                  }}>Open to matching anywhere</Text>
-                </View>
-              )}
-
-              {preferences.preferred_cities && preferences.preferred_cities.length > 0 && (
-                <View style={{
-                  backgroundColor: '#DBEAFE',
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 16,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  borderWidth: 1,
-                  borderColor: '#BFDBFE',
-                }}>
-                  <MaterialCommunityIcons name="map-marker-multiple" size={20} color="#2563EB" />
-                  <Text style={{
-                    color: '#2563EB',
-                    fontWeight: '600',
-                    fontSize: 14,
-                    flex: 1,
-                  }}>Looking in: {preferences.preferred_cities.join(', ')}</Text>
-                </View>
-              )}
-            </MotiView>
-          </View>
-        )}
-
-        {/* Quick Facts Carousel */}
-        {quickFacts.length > 0 && (
-          <ProfileQuickFacts facts={quickFacts} />
-        )}
-
-        {/* Voice Introduction */}
-        {profile.voice_intro_url && (
-          <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
-            <ProfileVoiceNote
-              voiceUrl={profile.voice_intro_url}
-              duration={profile.voice_intro_duration}
-              profileName={profile.display_name}
-            />
-          </View>
-        )}
-
-        {/* Profile Content */}
-        <View className="px-5 pb-32">
-          {/* Story Introduction */}
-          {profile.bio && (
-            <ProfileStoryCard
-              title="My Story"
-              icon="book-open-variant"
-              content={profile.bio}
-              gradient={['#A08AB7', '#CDC2E5']}
-              delay={100}
-            />
-          )}
-
-          {/* About Section - Comprehensive */}
-          <ProfileInteractiveSection
-            title="About Me"
-            expandable={false}
-            items={[
-              ...(profile.occupation ? [{
-                icon: 'briefcase',
-                label: 'Career',
-                value: profile.occupation,
-                detail: 'Building my future'
-              }] : []),
-              ...(profile.education ? [{
-                icon: 'school',
-                label: 'Education',
-                value: profile.education,
-              }] : []),
-              ...(profile.location_city ? [{
-                icon: 'map-marker',
-                label: 'Location',
-                value: `${profile.location_city}${profile.location_state ? `, ${profile.location_state}` : ''}`,
-              }] : []),
-              ...(profile.gender ? [{
-                icon: 'gender-transgender',
-                label: 'Gender',
-                value: formatArrayOrString(profile.gender),
-              }] : []),
-              ...(profile.sexual_orientation ? [{
-                icon: 'heart',
-                label: 'Orientation',
-                value: formatArrayOrString(profile.sexual_orientation),
-              }] : []),
-              ...(profile.ethnicity ? [{
-                icon: 'account-group',
-                label: 'Ethnicity',
-                value: formatArrayOrString(profile.ethnicity),
-              }] : []),
-              ...(profile.languages?.length ? [{
-                icon: 'translate',
-                label: 'Languages',
-                value: profile.languages.join(', '),
-              }] : []),
-              ...(profile.religion ? [{
-                icon: 'hands-pray',
-                label: 'Religion',
-                value: profile.religion,
-              }] : []),
-              ...(profile.political_views ? [{
-                icon: 'vote',
-                label: 'Political Views',
-                value: profile.political_views,
-              }] : []),
-            ]}
-          />
-
-          {/* Prompt Answers as Story Cards */}
-          {profile.prompt_answers && profile.prompt_answers.length > 0 && (
-            <View>
-              {profile.prompt_answers.map((pa, index) => (
-                <ProfileStoryCard
-                  key={index}
-                  title={pa.prompt}
-                  icon="comment-quote"
-                  content={pa.answer}
-                  gradient={
-                    index % 3 === 0 ? ['#10B981', '#34D399'] :
-                    index % 3 === 1 ? ['#F59E0B', '#FBBF24'] :
-                    ['#3B82F6', '#60A5FA']
-                  }
-                  delay={200 + index * 100}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* Marriage Goals - Interactive Section */}
-          {preferences && (
-            <ProfileInteractiveSection
-              title="Partnership Vision"
-              items={[
-                ...((preferences.primary_reasons?.length || preferences.primary_reason) ? [{
-                  emoji: '🎯',
-                  label: preferences.primary_reasons && preferences.primary_reasons.length > 1 ? 'Primary Goals' : 'Primary Goal',
-                  value: preferences.primary_reasons && preferences.primary_reasons.length > 0
-                    ? preferences.primary_reasons.map(r => formatLabel(r)).join(', ')
-                    : formatLabel(preferences.primary_reason || ''),
-                  detail: 'What brings us together'
-                }] : []),
-                ...(preferences.relationship_type ? [{
-                  emoji: '💑',
-                  label: 'Relationship Style',
-                  value: formatLabel(preferences.relationship_type),
-                }] : []),
-                ...(preferences.wants_children !== undefined ? [{
-                  emoji: '👶',
-                  label: 'Children',
-                  value: preferences.wants_children === true ? 'Yes, definitely' :
-                         preferences.wants_children === false ? 'No children' : 'Open to discussion',
-                  detail: preferences.children_arrangement ? formatArrayWithLabels(preferences.children_arrangement) : undefined
-                }] : []),
-                ...(preferences.housing_preference ? [{
-                  emoji: '🏠',
-                  label: 'Living Arrangement',
-                  value: formatArrayWithLabels(preferences.housing_preference),
-                }] : []),
-                ...(preferences.financial_arrangement ? [{
-                  emoji: '💰',
-                  label: 'Finances',
-                  value: formatArrayWithLabels(preferences.financial_arrangement),
-                }] : []),
-                ...(preferences.willing_to_relocate ? [{
-                  emoji: '✈️',
-                  label: 'Relocation',
-                  value: 'Open to relocating',
-                }] : []),
-                ...(preferences.public_relationship ? [{
-                  emoji: '👨‍👩‍👧',
-                  label: 'Public Appearance',
-                  value: 'Comfortable appearing as a couple',
-                }] : []),
-              ]}
-            />
-          )}
-
-          {/* Must-Haves */}
-          {preferences?.must_haves && preferences.must_haves.length > 0 && (
-            <View style={{ marginBottom: 20, backgroundColor: '#F0FDF4', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#86EFAC' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontSize: 24, marginRight: 8 }}>✅</Text>
-                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#166534' }}>Must-Haves</Text>
-              </View>
-              <Text style={{ fontSize: 14, color: '#16A34A', marginBottom: 12, fontStyle: 'italic' }}>
-                Important qualities they're looking for
-              </Text>
-              {preferences.must_haves.map((item, index) => (
-                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <Text style={{ fontSize: 16, color: '#15803D', marginRight: 8 }}>•</Text>
-                  <Text style={{ fontSize: 15, color: '#15803D', flex: 1, lineHeight: 22 }}>{item}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Dealbreakers */}
-          {preferences?.dealbreakers && preferences.dealbreakers.length > 0 && (
-            <View style={{ marginBottom: 20, backgroundColor: '#FEF2F2', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#FCA5A5' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontSize: 24, marginRight: 8 }}>🚫</Text>
-                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#991B1B' }}>Dealbreakers</Text>
-              </View>
-              <Text style={{ fontSize: 14, color: '#DC2626', marginBottom: 12, fontStyle: 'italic' }}>
-                Important boundaries to be aware of
-              </Text>
-              {preferences.dealbreakers.map((item, index) => (
-                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <Text style={{ fontSize: 16, color: '#B91C1C', marginRight: 8 }}>•</Text>
-                  <Text style={{ fontSize: 15, color: '#B91C1C', flex: 1, lineHeight: 22 }}>{item}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Hobbies Section */}
-          {profile.hobbies && profile.hobbies.length > 0 && (
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{
-                fontSize: 20,
-                fontWeight: 'bold',
-                color: '#111827',
-                marginBottom: 12,
-                paddingHorizontal: 4
-              }}>Hobbies</Text>
-              <View style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                gap: 8,
-              }}>
-                {profile.hobbies.map((hobby, index) => (
-                  <MotiView
-                    key={index}
-                    from={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ type: 'spring', delay: index * 50 }}
-                    style={{
-                      backgroundColor: index % 3 === 0 ? '#DCFCE7' :
-                                       index % 3 === 1 ? '#FFEDD5' : '#E0E7FF',
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 20,
-                    }}
-                  >
-                    <Text style={{
-                      color: index % 3 === 0 ? '#16A34A' :
-                             index % 3 === 1 ? '#EA580C' : '#6366F1',
-                      fontWeight: '600',
-                      fontSize: 14,
-                    }}>{hobby}</Text>
-                  </MotiView>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Interests Section - Movies, Music, Books, TV Shows */}
-          {profile.interests && typeof profile.interests === 'object' && (
-            <>
-              {/* Movies */}
-              {profile.interests.movies && profile.interests.movies.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>🎬 Favorite Movies</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                  }}>
-                    {profile.interests.movies.map((movie, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#EDE9FE',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                        }}
-                      >
-                        <Text style={{
-                          color: '#A08AB7',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>{movie}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Music */}
-              {profile.interests.music && profile.interests.music.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>🎵 Favorite Music</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                  }}>
-                    {profile.interests.music.map((music, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#FEF3C7',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                        }}
-                      >
-                        <Text style={{
-                          color: '#F59E0B',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>{music}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Books */}
-              {profile.interests.books && profile.interests.books.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>📚 Favorite Books</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                  }}>
-                    {profile.interests.books.map((book, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#DBEAFE',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                        }}
-                      >
-                        <Text style={{
-                          color: '#3B82F6',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>{book}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* TV Shows */}
-              {profile.interests.tv_shows && profile.interests.tv_shows.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>📺 Favorite TV Shows</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                  }}>
-                    {profile.interests.tv_shows.map((show, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#D1FAE5',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                        }}
-                      >
-                        <Text style={{
-                          color: '#059669',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>{show}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </View>
-              )}
-            </>
-          )}
-
-          {/* Lifestyle - Interactive Section */}
-          {preferences?.lifestyle_preferences && (
-            preferences.lifestyle_preferences.smoking ||
-            preferences.lifestyle_preferences.drinking ||
-            preferences.lifestyle_preferences.pets
-          ) && (
-            <ProfileInteractiveSection
-              title="Lifestyle & Values"
-              items={[
-                ...(preferences.lifestyle_preferences.smoking ? [{
-                  emoji: '🚬',
-                  label: 'Smoking',
-                  value: formatLabel(preferences.lifestyle_preferences.smoking),
-                }] : []),
-                ...(preferences.lifestyle_preferences.drinking ? [{
-                  emoji: '🍷',
-                  label: 'Drinking',
-                  value: formatLabel(preferences.lifestyle_preferences.drinking),
-                }] : []),
-                ...(preferences.lifestyle_preferences.pets ? [{
-                  emoji: '🐾',
-                  label: 'Pets',
-                  value: formatLabel(preferences.lifestyle_preferences.pets),
-                }] : []),
-              ]}
-            />
-          )}
-
-          {/* Matching Preferences Section */}
-          {preferences && (
-            <ProfileInteractiveSection
-              title="Looking For"
-              items={[
-                ...(preferences.age_min && preferences.age_max ? [{
-                  emoji: '🎯',
-                  label: 'Age Range',
-                  value: `${preferences.age_min}-${preferences.age_max} years old`,
-                }] : []),
-                ...(preferences.gender_preference && preferences.gender_preference.length > 0 ? [{
-                  emoji: '💜',
-                  label: 'Gender Preference',
-                  value: preferences.gender_preference.join(', '),
-                }] : []),
-                ...(preferences.max_distance_miles ? [{
-                  emoji: '📍',
-                  label: 'Distance',
-                  value: `Within ${preferences.max_distance_miles} miles`,
-                }] : []),
-              ]}
-            />
-          )}
-
-          {/* Dealbreakers & Must-Haves */}
-          {preferences && ((preferences.dealbreakers?.length ?? 0) > 0 || (preferences.must_haves?.length ?? 0) > 0) && (
-            <View style={{ marginBottom: 16 }}>
-              {preferences.dealbreakers && preferences.dealbreakers.length > 0 && (
-                <>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>Dealbreakers</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                    marginBottom: 16,
-                  }}>
-                    {preferences.dealbreakers.map((dealbreaker, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#FEE2E2',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                          borderWidth: 1,
-                          borderColor: '#FCA5A5',
-                        }}
-                      >
-                        <Text style={{
-                          color: '#DC2626',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>❌ {dealbreaker}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </>
-              )}
-
-              {preferences.must_haves && preferences.must_haves.length > 0 && (
-                <>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>Must-Haves</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                  }}>
-                    {preferences.must_haves.map((mustHave, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#D1FAE5',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                          borderWidth: 1,
-                          borderColor: '#6EE7B7',
-                        }}
-                      >
-                        <Text style={{
-                          color: '#059669',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>✓ {mustHave}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </>
-              )}
-            </View>
-          )}
-
-          {/* Compatibility Breakdown */}
-          {compatibilityBreakdown && compatibilityBreakdown.overall >= 0 && (
-            <MotiView
-              from={{ opacity: 0, translateY: 20 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'timing', duration: 500 }}
-              style={{
-                backgroundColor: colors.card,
-                borderRadius: 20,
-                padding: 20,
-                marginBottom: 16,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.08,
-                shadowRadius: 8,
-                elevation: 3,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                <MaterialCommunityIcons name="heart-multiple" size={24} color="#A08AB7" />
-                <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.foreground, marginLeft: 12 }}>
-                  Why We Match
-                </Text>
-              </View>
-
-              {/* Overall Score */}
-              <View style={{ alignItems: 'center', marginBottom: 20, paddingVertical: 16, backgroundColor: '#F3E8FF', borderRadius: 12 }}>
-                <Text style={{ fontSize: 48, fontWeight: 'bold', color: '#A08AB7' }}>
-                  {Math.round(compatibilityBreakdown.overall)}%
-                </Text>
-                <Text style={{ fontSize: 16, color: '#6B7280', marginTop: 4 }}>
-                  Overall Compatibility
-                </Text>
-              </View>
-
-              {/* Breakdown Bars */}
-              <View style={{ gap: 16 }}>
-                <CompatibilityBar
-                  label="Location & Distance"
-                  score={compatibilityBreakdown.location}
-                  icon="map-marker"
-                  color="#10B981"
-                />
-                <CompatibilityBar
-                  label="Marriage Goals & Vision"
-                  score={compatibilityBreakdown.goals}
-                  icon="target"
-                  color="#3B82F6"
-                />
-                <CompatibilityBar
-                  label="Lifestyle & Values"
-                  score={compatibilityBreakdown.lifestyle}
-                  icon="coffee"
-                  color="#F59E0B"
-                />
-                <CompatibilityBar
-                  label="Personality & Interests"
-                  score={compatibilityBreakdown.personality}
-                  icon="heart"
-                  color="#A08AB7"
-                />
-                <CompatibilityBar
-                  label="Demographics & Background"
-                  score={compatibilityBreakdown.demographics}
-                  icon="account-group"
-                  color="#EC4899"
-                />
-              </View>
-
-              {/* Detailed Text Breakdown */}
-              <View style={{ marginTop: 24, paddingTop: 24, borderTopWidth: 1, borderTopColor: '#E5E7EB' }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 16 }}>
-                  What Makes You Compatible
-                </Text>
-
-                {/* Location Analysis */}
-                <View style={{ marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="map-marker" size={20} color="#10B981" />
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                      Location & Distance
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#10B981', marginLeft: 'auto' }}>
-                      {Math.round(compatibilityBreakdown.location)}%
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-                    {compatibilityBreakdown.location >= 80
-                      ? `You're both ${profile.distance ? `only ${profile.distance} miles apart` : 'in the same area'}, making it easy to meet up and build a connection. ${preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate ? 'Plus, you\'re both open to relocating if needed.' : ''}`
-                      : compatibilityBreakdown.location >= 60
-                      ? `You're ${profile.distance ? `${profile.distance} miles apart` : 'at a moderate distance'}. ${preferences?.willing_to_relocate && currentPreferences?.willing_to_relocate ? 'Fortunately, you\'re both willing to relocate, which opens up possibilities.' : preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate ? 'One of you is open to relocating, which could work well.' : 'The distance is manageable with some planning.'}`
-                      : preferences?.search_globally || currentPreferences?.search_globally || preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate
-                      ? `While you're ${profile.distance ? `${profile.distance} miles apart` : 'at a distance'}, you're both open to ${preferences?.search_globally || currentPreferences?.search_globally ? 'matching globally' : 'relocating'}, showing flexibility in making a connection work.`
-                      : `You're ${profile.distance ? `${profile.distance} miles apart` : 'at a distance'}. Consider discussing how distance might work for your arrangement.`}
-                  </Text>
-                </View>
-
-                {/* Goals Analysis */}
-                <View style={{ marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="target" size={20} color="#3B82F6" />
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                      Marriage Goals & Vision
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#3B82F6', marginLeft: 'auto' }}>
-                      {Math.round(compatibilityBreakdown.goals)}%
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-                    {compatibilityBreakdown.goals >= 80
-                      ? `You're highly aligned on marriage goals! ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both seek this arrangement primarily for ${formatLabel(preferences?.primary_reason || '')}.` : ''} ${preferences?.relationship_type === currentPreferences?.relationship_type ? `You both envision a ${formatLabel(preferences?.relationship_type || '')} partnership.` : ''} ${preferences?.wants_children === currentPreferences?.wants_children ? (preferences?.wants_children ? 'You both want children' : 'You both prefer not to have children') + ', making family planning straightforward.' : ''}`
-                      : compatibilityBreakdown.goals >= 60
-                      ? `You share common ground on key goals. ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both primarily seek ${formatLabel(preferences?.primary_reason || '')}.` : 'Your primary reasons differ but may complement each other.'} ${preferences?.relationship_type && currentPreferences?.relationship_type ? `Your relationship style preferences (${formatLabel(preferences?.relationship_type)} vs ${formatLabel(currentPreferences?.relationship_type)}) could work with open communication.` : ''}`
-                      : `Your marriage goals differ in some areas. ${preferences?.wants_children !== currentPreferences?.wants_children ? 'You have different views on children, which is important to discuss.' : ''} ${preferences?.relationship_type !== currentPreferences?.relationship_type ? `You envision different relationship styles (${formatLabel(preferences?.relationship_type || '')} vs ${formatLabel(currentPreferences?.relationship_type || '')}), but compromise may be possible.` : ''} Open and honest conversation about expectations will be key.`}
-                  </Text>
-                </View>
-
-                {/* Lifestyle Analysis */}
-                <View style={{ marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="coffee" size={20} color="#F59E0B" />
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                      Lifestyle & Values
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#F59E0B', marginLeft: 'auto' }}>
-                      {Math.round(compatibilityBreakdown.lifestyle)}%
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-                    {compatibilityBreakdown.lifestyle >= 80
-                      ? `Your day-to-day lifestyles are very compatible! ${preferences?.lifestyle_preferences?.smoking === currentPreferences?.lifestyle_preferences?.smoking ? 'You share the same views on smoking.' : ''} ${preferences?.lifestyle_preferences?.drinking === currentPreferences?.lifestyle_preferences?.drinking ? 'You have aligned drinking preferences.' : ''} ${preferences?.lifestyle_preferences?.pets === currentPreferences?.lifestyle_preferences?.pets ? 'You feel the same way about pets.' : ''} ${arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? `You both prefer ${formatArrayWithLabels(preferences?.housing_preference)} living arrangements.` : ''}`
-                      : compatibilityBreakdown.lifestyle >= 60
-                      ? `Your lifestyles are moderately compatible. ${preferences?.lifestyle_preferences?.smoking !== currentPreferences?.lifestyle_preferences?.smoking ? 'You differ on smoking preferences, which may need discussion.' : ''} ${!arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? 'Your ideal living arrangements differ but could potentially be negotiated.' : ''} ${preferences?.financial_arrangement || currentPreferences?.financial_arrangement ? 'Discussing financial expectations will help align your lifestyles.' : ''}`
-                      : `Your lifestyle preferences show some differences. ${preferences?.lifestyle_preferences?.pets !== currentPreferences?.lifestyle_preferences?.pets && (preferences?.lifestyle_preferences?.pets === 'allergic' || currentPreferences?.lifestyle_preferences?.pets === 'allergic') ? 'Pet allergies may be a challenge to work around.' : ''} ${!arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? `You have different housing preferences (${formatArrayWithLabels(preferences?.housing_preference)} vs ${formatArrayWithLabels(currentPreferences?.housing_preference)}).` : ''} These differences are worth exploring in depth.`}
-                  </Text>
-                </View>
-
-                {/* Personality Analysis */}
-                <View style={{ marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="heart" size={20} color="#A08AB7" />
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                      Personality & Interests
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#A08AB7', marginLeft: 'auto' }}>
-                      {Math.round(compatibilityBreakdown.personality)}%
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-                    {compatibilityBreakdown.personality >= 75
-                      ? `You share great chemistry! ${profile.personality_type === currentProfile?.personality_type ? `You're both ${profile.personality_type} personalities.` : profile.personality_type && currentProfile?.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} personalities complement each other well.` : ''} ${profile.love_language && currentProfile?.love_language ? `${formatArrayOrString(profile.love_language) === formatArrayOrString(currentProfile.love_language) ? `You both value ${formatArrayOrString(profile.love_language)}.` : 'Your different love languages can create balance.'}` : ''} You likely have engaging conversations and shared interests.`
-                      : compatibilityBreakdown.personality >= 60
-                      ? `You have some personality compatibility. ${profile.hobbies && currentProfile?.hobbies ? 'You share some hobbies and interests.' : ''} ${profile.personality_type && currentProfile?.personality_type && profile.personality_type !== currentProfile.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} types can balance each other out.` : ''} Getting to know each other's communication styles will strengthen your connection.`
-                      : `Your personalities are quite different, which isn't necessarily bad! ${profile.personality_type && currentProfile?.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} types approach things differently.` : ''} Opposites can complement each other well if you appreciate each other's unique traits and communication styles.`}
-                  </Text>
-                </View>
-
-                {/* Demographics Analysis */}
-                <View style={{ marginBottom: 0 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="account-group" size={20} color="#EC4899" />
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                      Background & Values
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#EC4899', marginLeft: 'auto' }}>
-                      {Math.round(compatibilityBreakdown.demographics)}%
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-                    {compatibilityBreakdown.demographics >= 75
-                      ? `You share similar backgrounds and values. ${profile.religion === currentProfile?.religion ? `You both identify as ${profile.religion}.` : ''} ${profile.political_views === currentProfile?.political_views ? `You align politically as ${profile.political_views}.` : ''} ${profile.education === currentProfile?.education ? 'You have similar educational backgrounds.' : ''} This common ground provides a strong foundation for understanding each other's perspectives.`
-                      : compatibilityBreakdown.demographics >= 60
-                      ? `You have some shared background elements. ${profile.religion !== currentProfile?.religion ? 'You have different religious backgrounds, which can bring diverse perspectives.' : ''} ${profile.political_views !== currentProfile?.political_views ? 'Your political views differ, but mutual respect is what matters most.' : ''} Your differences can be enriching if approached with open minds.`
-                      : `You come from different backgrounds, which can offer valuable perspectives. ${profile.religion && currentProfile?.religion && profile.religion !== currentProfile.religion ? `Your ${profile.religion} and ${currentProfile.religion} backgrounds may require extra communication about values.` : ''} ${profile.political_views && currentProfile?.political_views && profile.political_views !== currentProfile.political_views ? 'Your differing political views are worth discussing to ensure mutual respect.' : ''} Diversity can strengthen a partnership when handled thoughtfully.`}
-                  </Text>
-                </View>
-              </View>
-            </MotiView>
-          )}
-
-          {/* Reviews Section */}
-          <ProfileReviewDisplay
-            profileId={id}
-            isMatched={isMatched}
-            compact={false}
-          />
-        </View>
-      </ScrollView>
+      <DiscoveryProfileView
+        profile={transformedProfile as any}
+        preferences={preferences || undefined}
+        heightUnit={(currentProfile?.height_unit as 'imperial' | 'metric') || 'imperial'}
+        hideActions={true}
+        isAdmin={isAdmin}
+        renderAdditionalContent={renderWhyWeMatch}
+      />
 
       {/* Fixed Action Buttons with Animations */}
       {!isMatched ? (
@@ -1818,3 +1184,20 @@ export default function ProfileView() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  floatingButton: {
+    position: 'absolute',
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+});
