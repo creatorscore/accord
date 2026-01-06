@@ -891,9 +891,6 @@ export default function ProfileView() {
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
                 Location & Distance
               </Text>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#10B981', marginLeft: 'auto' }}>
-                {Math.round(compatibilityBreakdown.location)}%
-              </Text>
             </View>
             <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
               {compatibilityBreakdown.location >= 80
@@ -913,9 +910,6 @@ export default function ProfileView() {
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
                 Marriage Goals & Vision
               </Text>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#3B82F6', marginLeft: 'auto' }}>
-                {Math.round(compatibilityBreakdown.goals)}%
-              </Text>
             </View>
             <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
               {compatibilityBreakdown.goals >= 80
@@ -932,9 +926,6 @@ export default function ProfileView() {
               <MaterialCommunityIcons name="coffee" size={20} color="#F59E0B" />
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
                 Lifestyle & Values
-              </Text>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#F59E0B', marginLeft: 'auto' }}>
-                {Math.round(compatibilityBreakdown.lifestyle)}%
               </Text>
             </View>
             <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
@@ -953,9 +944,6 @@ export default function ProfileView() {
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
                 Personality & Interests
               </Text>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#A08AB7', marginLeft: 'auto' }}>
-                {Math.round(compatibilityBreakdown.personality)}%
-              </Text>
             </View>
             <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
               {compatibilityBreakdown.personality >= 75
@@ -972,9 +960,6 @@ export default function ProfileView() {
               <MaterialCommunityIcons name="account-group" size={20} color="#EC4899" />
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
                 Background & Values
-              </Text>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#EC4899', marginLeft: 'auto' }}>
-                {Math.round(compatibilityBreakdown.demographics)}%
               </Text>
             </View>
             <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
