@@ -63,3 +63,4 @@ GoogleService-Info.plist
 *.swo
 *~
 android/
+!android/app/google-services.json
