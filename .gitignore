@@ -56,7 +56,6 @@ supabase/.branches
 supabase/.temp
 
 # Firebase - ignore these files (causes crashes when Firebase packages aren't installed)
-google-services.json
 GoogleService-Info.plist
 
 # Vim swap files
