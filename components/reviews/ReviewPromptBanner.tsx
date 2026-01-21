@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import { useTranslation } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 
 interface ReviewPrompt {
@@ -26,14 +27,59 @@ export default function ReviewPromptBanner({ onReviewPress }: ReviewPromptBanner
   const { t } = useTranslation();
   const [pendingReviews, setPendingReviews] = useState<ReviewPrompt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
     fetchPendingReviews();
+    loadMinimizedState();
+    loadDismissedState();
 
     // Refresh every minute
     const interval = setInterval(fetchPendingReviews, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const loadMinimizedState = async () => {
+    try {
+      const state = await AsyncStorage.getItem('review_banner_minimized');
+      if (state !== null) {
+        setIsMinimized(state === 'true');
+      }
+    } catch (error) {
+      console.error('Error loading minimized state:', error);
+    }
+  };
+
+  const loadDismissedState = async () => {
+    try {
+      const state = await AsyncStorage.getItem('review_banner_dismissed');
+      if (state !== null) {
+        setIsDismissed(state === 'true');
+      }
+    } catch (error) {
+      console.error('Error loading dismissed state:', error);
+    }
+  };
+
+  const toggleMinimized = async () => {
+    const newState = !isMinimized;
+    setIsMinimized(newState);
+    try {
+      await AsyncStorage.setItem('review_banner_minimized', newState.toString());
+    } catch (error) {
+      console.error('Error saving minimized state:', error);
+    }
+  };
+
+  const dismissBanner = async () => {
+    setIsDismissed(true);
+    try {
+      await AsyncStorage.setItem('review_banner_dismissed', 'true');
+    } catch (error) {
+      console.error('Error saving dismissed state:', error);
+    }
+  };
 
   const fetchPendingReviews = async () => {
     try {
@@ -108,7 +154,7 @@ export default function ReviewPromptBanner({ onReviewPress }: ReviewPromptBanner
     }
   };
 
-  if (loading || pendingReviews.length === 0) {
+  if (loading || pendingReviews.length === 0 || isDismissed) {
     return null;
   }
 
@@ -123,36 +169,85 @@ export default function ReviewPromptBanner({ onReviewPress }: ReviewPromptBanner
       transition={{ type: 'spring', delay: 300 }}
       style={styles.container}
     >
-      <TouchableOpacity
-        style={styles.banner}
-        onPress={() => onReviewPress(prompt)}
-        activeOpacity={0.9}
-      >
+      <View style={styles.banner}>
         <LinearGradient colors={['#A08AB7', '#A08AB7']} style={styles.gradient}>
-          {/* Icon */}
-          <View style={styles.iconContainer}>
-            <MaterialCommunityIcons name="star-circle" size={40} color="#FFF" />
-          </View>
+          {isMinimized ? (
+            // Minimized View - Compact
+            <>
+              <TouchableOpacity
+                style={styles.minimizedContent}
+                onPress={() => onReviewPress(prompt)}
+                activeOpacity={0.9}
+              >
+                <MaterialCommunityIcons name="star-circle" size={24} color="#FFF" />
+                <Text style={styles.minimizedText} numberOfLines={1}>
+                  {pendingReviews.length} pending review{pendingReviews.length > 1 ? 's' : ''}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={dismissBanner}
+                style={styles.closeButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialCommunityIcons name="close" size={18} color="#FFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={toggleMinimized}
+                style={styles.expandButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialCommunityIcons name="chevron-down" size={20} color="#FFF" />
+              </TouchableOpacity>
+            </>
+          ) : (
+            // Expanded View - Full Banner
+            <>
+              <TouchableOpacity
+                style={styles.expandedContent}
+                onPress={() => onReviewPress(prompt)}
+                activeOpacity={0.9}
+              >
+                {/* Icon */}
+                <View style={styles.iconContainer}>
+                  <MaterialCommunityIcons name="star-circle" size={40} color="#FFF" />
+                </View>
 
-          {/* Content */}
-          <View style={styles.content}>
-            <Text style={styles.title}>
-              {t('reviews.reviewPromptTitle', { name: prompt.reviewee_name })}
-            </Text>
-            <Text style={styles.subtitle}>
-              {t('reviews.reviewPromptSubtitle', { time: timeRemaining })}
-            </Text>
-            {pendingReviews.length > 1 && (
-              <Text style={styles.badge}>
-                +{pendingReviews.length - 1} {t('reviews.moreReviews')}
-              </Text>
-            )}
-          </View>
+                {/* Content */}
+                <View style={styles.content}>
+                  <Text style={styles.title}>
+                    {t('reviews.reviewPromptTitle', { name: prompt.reviewee_name })}
+                  </Text>
+                  <Text style={styles.subtitle}>
+                    {t('reviews.reviewPromptSubtitle', { time: timeRemaining })}
+                  </Text>
+                  {pendingReviews.length > 1 && (
+                    <Text style={styles.badge}>
+                      +{pendingReviews.length - 1} {t('reviews.moreReviews')}
+                    </Text>
+                  )}
+                </View>
 
-          {/* Arrow */}
-          <MaterialCommunityIcons name="chevron-right" size={28} color="#FFF" />
+                {/* Arrow */}
+                <MaterialCommunityIcons name="chevron-right" size={28} color="#FFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={dismissBanner}
+                style={styles.closeButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialCommunityIcons name="close" size={18} color="#FFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={toggleMinimized}
+                style={styles.collapseButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialCommunityIcons name="chevron-up" size={20} color="#FFF" />
+              </TouchableOpacity>
+            </>
+          )}
         </LinearGradient>
-      </TouchableOpacity>
+      </View>
     </MotiView>
   );
 }
@@ -174,8 +269,41 @@ const styles = StyleSheet.create({
   gradient: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  minimizedContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 10,
+    flex: 1,
+  },
+  minimizedText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+    flex: 1,
+  },
+  expandButton: {
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  expandedContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 16,
     gap: 12,
+    flex: 1,
+  },
+  collapseButton: {
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButton: {
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   iconContainer: {
     width: 56,

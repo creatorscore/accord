@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Modal, Alert, Pressable, InteractionManager } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Modal, Alert, Pressable, InteractionManager, useWindowDimensions, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,6 +34,8 @@ interface Match {
   };
   compatibility_score?: number;
   matched_at: string;
+  expires_at?: string | null;
+  first_message_sent_at?: string | null;
   last_message?: {
     encrypted_content: string;
     created_at: string;
@@ -53,6 +55,9 @@ export default function Matches() {
   const { isPremium } = useSubscription();
   const { colors, isDarkColorScheme } = useColorScheme();
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const unreadActivityCount = useUnreadActivityCount(currentProfileId);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -172,7 +177,9 @@ export default function Matches() {
           profile2_id,
           compatibility_score,
           matched_at,
-          status
+          status,
+          expires_at,
+          first_message_sent_at
         `)
         .or(`profile1_id.eq.${currentProfileId},profile2_id.eq.${currentProfileId}`)
         .eq('status', 'active')
@@ -326,13 +333,29 @@ export default function Matches() {
           },
           compatibility_score: match.compatibility_score,
           matched_at: match.matched_at,
+          expires_at: match.expires_at,
+          first_message_sent_at: match.first_message_sent_at,
           last_message: lastMessage || undefined,
           unread_count: unreadCount,
         };
       }).filter(m => m !== null) as Match[];
 
+      // Filter out expired matches
+      const now = new Date();
+      const activeMatches = validMatches.filter(match => {
+        // Keep matches that have no expiration set (old matches before feature)
+        if (!match.expires_at) return true;
+
+        // Keep matches where first message was sent (no longer expires)
+        if (match.first_message_sent_at) return true;
+
+        // Filter out expired matches
+        const expiresAt = new Date(match.expires_at);
+        return expiresAt > now;
+      });
+
       // Show matches immediately without decryption for faster UI
-      setMatches(validMatches);
+      setMatches(activeMatches);
       setLoading(false);
       setRefreshing(false);
 
@@ -340,7 +363,7 @@ export default function Matches() {
       // This prevents ANR on low-end devices by not blocking main thread
       InteractionManager.runAfterInteractions(async () => {
         try {
-          const matchesWithDecryptedPreviews = await decryptMessagePreviews(validMatches);
+          const matchesWithDecryptedPreviews = await decryptMessagePreviews(activeMatches);
           setMatches(matchesWithDecryptedPreviews);
         } catch (error) {
           console.error('Error decrypting message previews:', error);
@@ -375,6 +398,16 @@ export default function Matches() {
         matchesData?.flatMap(m => [m.profile1_id, m.profile2_id]) || []
       );
 
+      // Filter out users we've passed on
+      const { data: passes } = await supabase
+        .from('passes')
+        .select('passed_profile_id')
+        .eq('passer_profile_id', currentProfileId);
+
+      const passedProfileIds = new Set(
+        passes?.map(p => p.passed_profile_id) || []
+      );
+
       // SAFETY: Filter out blocked users from like count
       const { data: blockedByMe } = await supabase
         .from('blocks')
@@ -394,6 +427,7 @@ export default function Matches() {
       const unmatchedLikesCount = likesData?.filter(
         like =>
           !matchedProfileIds.has(like.liker_profile_id) &&
+          !passedProfileIds.has(like.liker_profile_id) &&
           !blockedProfileIds.has(like.liker_profile_id)
       ).length || 0;
 
@@ -713,6 +747,50 @@ export default function Matches() {
     return t('matches.timeAgo.weeksAgo', { count: Math.floor(seconds / 604800) });
   };
 
+  const getExpirationInfo = (match: Match): { text: string; isUrgent: boolean; isExpired: boolean } | null => {
+    // If first message sent, match doesn't expire
+    if (match.first_message_sent_at) return null;
+
+    // If no expiration set (old matches before feature), don't show timer
+    if (!match.expires_at) return null;
+
+    const now = new Date();
+    const expiresAt = new Date(match.expires_at);
+    const timeLeft = expiresAt.getTime() - now.getTime();
+
+    // Already expired
+    if (timeLeft <= 0) {
+      return { text: 'Expired', isUrgent: true, isExpired: true };
+    }
+
+    const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
+    const daysLeft = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+
+    // Less than 24 hours = urgent
+    const isUrgent = hoursLeft < 24;
+
+    if (daysLeft >= 1) {
+      return {
+        text: `Expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`,
+        isUrgent,
+        isExpired: false
+      };
+    } else if (hoursLeft >= 1) {
+      return {
+        text: `Expires in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`,
+        isUrgent,
+        isExpired: false
+      };
+    } else {
+      const minutesLeft = Math.floor(timeLeft / (1000 * 60));
+      return {
+        text: `Expires in ${Math.max(1, minutesLeft)} ${minutesLeft === 1 ? 'minute' : 'minutes'}`,
+        isUrgent: true,
+        isExpired: false
+      };
+    }
+  };
+
   // Separate MatchCard component to use useSafeBlur hook
   const MatchCard = ({ item, index }: { item: Match; index: number }) => {
     const primaryPhoto = item.profile.photos?.find(p => p.is_primary) || item.profile.photos?.[0];
@@ -720,6 +798,7 @@ export default function Matches() {
     const userIsOnline = isOnline(item.profile.last_active_at || null);
     const showOnlineStatus = userIsOnline && !item.profile.hide_last_active;
     const lastActiveText = getLastActiveText(item.profile.last_active_at || null, item.profile.hide_last_active);
+    const expirationInfo = getExpirationInfo(item);
 
     // Safe blur hook - protects user privacy while preventing crashes
     const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
@@ -780,8 +859,22 @@ export default function Matches() {
               </View>
             )}
 
+            {/* Expiration Timer */}
+            {expirationInfo && (
+              <View style={[styles.expirationBadge, expirationInfo.isUrgent && styles.expirationUrgent]}>
+                <MaterialCommunityIcons
+                  name={expirationInfo.isExpired ? "timer-off" : "timer-sand"}
+                  size={12}
+                  color={expirationInfo.isUrgent ? "#EF4444" : "#F59E0B"}
+                />
+                <Text style={[styles.expirationText, expirationInfo.isUrgent && styles.expirationTextUrgent]}>
+                  {expirationInfo.text}
+                </Text>
+              </View>
+            )}
+
             {/* Online Status */}
-            {lastActiveText && (
+            {lastActiveText && !expirationInfo && (
               <Text style={styles.onlineStatusText}>{lastActiveText}</Text>
             )}
 
@@ -805,6 +898,60 @@ export default function Matches() {
           {/* Chevron */}
           <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
         </TouchableOpacity>
+      </MotiView>
+    );
+  };
+
+  const getExpiringMatchesCount = (): { urgent: number; soon: number } => {
+    const now = new Date();
+    const urgentThreshold = 24 * 60 * 60 * 1000; // 24 hours in ms
+    const soonThreshold = 3 * 24 * 60 * 60 * 1000; // 3 days in ms
+
+    let urgent = 0;
+    let soon = 0;
+
+    matches.forEach(match => {
+      if (match.first_message_sent_at || !match.expires_at) return;
+
+      const expiresAt = new Date(match.expires_at);
+      const timeLeft = expiresAt.getTime() - now.getTime();
+
+      if (timeLeft > 0 && timeLeft <= urgentThreshold) {
+        urgent++;
+      } else if (timeLeft > urgentThreshold && timeLeft <= soonThreshold) {
+        soon++;
+      }
+    });
+
+    return { urgent, soon };
+  };
+
+  const renderExpirationWarning = () => {
+    const { urgent, soon } = getExpiringMatchesCount();
+
+    if (urgent === 0 && soon === 0) return null;
+
+    const isUrgent = urgent > 0;
+    const count = urgent > 0 ? urgent : soon;
+    const timeframe = urgent > 0 ? '24 hours' : '3 days';
+
+    return (
+      <MotiView
+        from={{ opacity: 0, translateY: -20 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'spring', delay: 50 }}
+        style={styles.warningContainer}
+      >
+        <View style={[styles.warningBanner, isUrgent && styles.warningUrgent]}>
+          <MaterialCommunityIcons
+            name="alert-circle"
+            size={20}
+            color={isUrgent ? "#EF4444" : "#F59E0B"}
+          />
+          <Text style={[styles.warningText, isUrgent && styles.warningTextUrgent]}>
+            {count} {count === 1 ? 'match expires' : 'matches expire'} in {timeframe}. Send a message to keep the connection!
+          </Text>
+        </View>
       </MotiView>
     );
   };
@@ -973,7 +1120,7 @@ export default function Matches() {
 
   // Matches list
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingRight: rightSafeArea }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View>
@@ -1007,7 +1154,12 @@ export default function Matches() {
         data={matches}
         renderItem={renderMatch}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderLikesCard}
+        ListHeaderComponent={() => (
+          <>
+            {renderExpirationWarning()}
+            {renderLikesCard()}
+          </>
+        )}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
@@ -1018,6 +1170,12 @@ export default function Matches() {
           />
         }
         showsVerticalScrollIndicator={false}
+        // ANR FIX: Optimize FlatList rendering performance
+        initialNumToRender={8}
+        maxToRenderPerBatch={5}
+        updateCellsBatchingPeriod={50}
+        windowSize={10}
+        removeClippedSubviews={true}
       />
 
       {/* Action Sheet Modal */}
@@ -1183,7 +1341,35 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+    paddingBottom: 100, // Extra padding for tab bar in edge-to-edge mode
     gap: 12,
+  },
+  warningContainer: {
+    marginBottom: 12,
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  warningUrgent: {
+    backgroundColor: '#FEE2E2',
+    borderLeftColor: '#EF4444',
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#92400E',
+    lineHeight: 18,
+  },
+  warningTextUrgent: {
+    color: '#991B1B',
   },
   matchCard: {
     flexDirection: 'row',
@@ -1282,6 +1468,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#10B981',
     fontWeight: '500',
+  },
+  expirationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#FEF3C7',
+    alignSelf: 'flex-start',
+  },
+  expirationUrgent: {
+    backgroundColor: '#FEE2E2',
+  },
+  expirationText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#F59E0B',
+  },
+  expirationTextUrgent: {
+    color: '#EF4444',
   },
   lastMessage: {
     fontSize: 14,

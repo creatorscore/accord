@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet, Keyboard } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,13 +11,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SignIn() {
-  const { t } = useTranslation();
+  const translationHook = useTranslation();
+  const t = translationHook?.t || ((key: string) => key); // Fallback if i18n not ready
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
   const { signIn, signOut } = useAuth();
+
+  // Ref to prevent multiple simultaneous sign-in attempts (synchronous check for slow devices)
+  const isSigningIn = useRef(false);
 
   useEffect(() => {
     checkAppleAuth();
@@ -192,6 +196,12 @@ export default function SignIn() {
   };
 
   const handleGoogleSignIn = async () => {
+    // Synchronous check to prevent ANR from multiple rapid taps on slow devices
+    if (isSigningIn.current) {
+      console.log('Sign-in already in progress, ignoring tap');
+      return;
+    }
+    isSigningIn.current = true;
     setLoading(true);
     try {
       const result = await signInWithGoogle();
@@ -241,11 +251,18 @@ export default function SignIn() {
         Alert.alert(t('common.error'), errorMessage);
       }
     } finally {
+      isSigningIn.current = false;
       setLoading(false);
     }
   };
 
   const handleAppleSignIn = async () => {
+    // Synchronous check to prevent ANR from multiple rapid taps on slow devices
+    if (isSigningIn.current) {
+      console.log('Sign-in already in progress, ignoring tap');
+      return;
+    }
+    isSigningIn.current = true;
     setLoading(true);
     try {
       const result = await signInWithApple();
@@ -291,6 +308,7 @@ export default function SignIn() {
 
       Alert.alert(t('common.error'), errorMessage);
     } finally {
+      isSigningIn.current = false;
       setLoading(false);
     }
   };

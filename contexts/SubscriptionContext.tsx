@@ -1,5 +1,4 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { InteractionManager } from 'react-native';
 import { CustomerInfo } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import {
@@ -18,6 +17,7 @@ import {
   type SubscriptionTier,
 } from '@/lib/revenue-cat';
 import { useAuth } from './AuthContext';
+import { useProfileData } from './ProfileDataContext';
 import { supabase } from '@/lib/supabase';
 
 interface SubscriptionContextType {
@@ -42,88 +42,24 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 
 export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  // PERFORMANCE: Use centralized profile data instead of making duplicate queries
+  const { profile, profileId } = useProfileData();
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [dbPremiumStatus, setDbPremiumStatus] = useState(false);
-  const [dbPlatinumStatus, setDbPlatinumStatus] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
 
   // ALWAYS use RevenueCat - no development mode bypass
   // This ensures subscriptions work in TestFlight and Production
   const isDatabaseOnlyMode = false;
 
-  // Load premium status from database (for both dev and production as fallback)
-  // Use InteractionManager to defer database query until after navigation animations complete
-  useEffect(() => {
-    if (__DEV__) {
-      console.log('🔄 SubscriptionContext: useEffect triggered', {
-        hasUser: !!user,
-        userId: user?.id,
-        appEnv: process.env.EXPO_PUBLIC_APP_ENV,
-        isDatabaseOnlyMode
-      });
-    }
-    if (user) {
-      if (__DEV__) {
-        console.log('📞 Calling loadDatabasePremiumStatus...');
-      }
-      // Defer database query to avoid blocking main thread during navigation
-      InteractionManager.runAfterInteractions(() => {
-        loadDatabasePremiumStatus();
-      });
-    }
-  }, [user]);
-
-  const loadDatabasePremiumStatus = async () => {
-    if (__DEV__) {
-      console.log('🔍 Loading premium status from database for user:', user?.id);
-    }
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('is_premium, is_platinum, is_admin')
-        .eq('user_id', user?.id)
-        .maybeSingle();
-
-      if (__DEV__) {
-        console.log('📊 Database query result:', { data, error });
-      }
-
-      // If profile doesn't exist yet (user is in onboarding), silently return
-      if (error) {
-        if (__DEV__) {
-          console.log('Error loading premium status:', error.message);
-        }
-        setDbPremiumStatus(false);
-        setDbPlatinumStatus(false);
-        return;
-      }
-
-      if (!data) {
-        if (__DEV__) {
-          console.log('Profile not found yet - user likely in onboarding. Premium status will be loaded after profile creation.');
-        }
-        setDbPremiumStatus(false);
-        setDbPlatinumStatus(false);
-        return;
-      }
-
-      const premium = data?.is_premium || false;
-      const platinum = data?.is_platinum || false;
-      const admin = data?.is_admin || false;
-
-      if (__DEV__) {
-        console.log('✅ Setting premium status:', { premium, platinum, admin });
-      }
-      setDbPremiumStatus(premium);
-      setDbPlatinumStatus(platinum);
-      setIsAdmin(admin);
-    } catch (error) {
-      console.error('❌ Error loading premium status from database:', error);
-    }
-  };
+  // PERFORMANCE: Get premium status from shared ProfileDataContext
+  // This eliminates a duplicate database query at startup
+  const dbPremiumStatus = profile?.is_premium || false;
+  const dbPlatinumStatus = profile?.is_platinum || false;
+  const isAdmin = profile?.is_admin || false;
 
   // Initialize RevenueCat when user logs in
+  // PERFORMANCE: Defer RevenueCat initialization to improve cold-start time
+  // RevenueCat SDK init can add 200-400ms on low-RAM devices
   useEffect(() => {
     if (user) {
       // Skip RevenueCat in database-only development mode
@@ -133,13 +69,20 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return;
       }
 
-      try {
-        initializeRevenueCat(user.id);
-        loadSubscriptionStatus();
-      } catch (error) {
-        console.error('Failed to initialize RevenueCat:', error);
-        setIsLoading(false);
-      }
+      // PERFORMANCE: Defer RevenueCat initialization until after first render
+      // This prevents blocking the main thread during cold start
+      // The database premium status is used as fallback until RC loads
+      const timeoutId = setTimeout(() => {
+        try {
+          initializeRevenueCat(user.id);
+          loadSubscriptionStatus();
+        } catch (error) {
+          console.error('Failed to initialize RevenueCat:', error);
+          setIsLoading(false);
+        }
+      }, 500); // 500ms delay to let UI render first
+
+      return () => clearTimeout(timeoutId);
     } else {
       setCustomerInfo(null);
       setIsLoading(false);
@@ -179,21 +122,13 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       // After loading RevenueCat status, sync with database to ensure consistency
       // This catches cases where webhook might have failed
-      if (info && user) {
+      if (info && user && profileId) {
         const rcPremium = hasPremium(info);
         const rcPlatinum = hasPlatinum(info);
 
-        // Check admin status directly from database to avoid race condition
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('is_admin')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        const userIsAdmin = profileData?.is_admin || false;
-
+        // PERFORMANCE: Use isAdmin from shared ProfileDataContext instead of querying again
         // Skip sync for admin accounts - they always keep their database premium status
-        if (userIsAdmin) {
+        if (isAdmin) {
           console.log('👑 Skipping RevenueCat sync for admin account');
         }
         // If RevenueCat says no subscription but database says yes, fix it (non-admins only)
@@ -216,11 +151,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const refreshSubscription = useCallback(async () => {
     await loadSubscriptionStatus();
-    // Also refresh database status in dev mode
-    if (isDatabaseOnlyMode) {
-      await loadDatabasePremiumStatus();
-    }
-  }, [isDatabaseOnlyMode]);
+  }, []);
 
   /**
    * Sync RevenueCat subscription status to database
@@ -230,21 +161,15 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
    *                            If provided, uses this instead of context state
    */
   const syncWithDatabase = useCallback(async (freshCustomerInfo?: CustomerInfo) => {
-    if (!user) return;
+    // PERFORMANCE: Use profileId from shared ProfileDataContext instead of querying
+    if (!user || !profileId) {
+      if (!profileId) {
+        console.log('Profile not found for sync - user might be in onboarding');
+      }
+      return;
+    }
 
     try {
-      // Get current profile (use maybeSingle since profile might not exist yet)
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (!profile) {
-        console.log('Profile not found for sync - user might be in onboarding');
-        return;
-      }
-
       // Use fresh CustomerInfo if provided (from purchase), otherwise use context state
       // This ensures we sync the LATEST subscription status, not stale context state
       const premium = freshCustomerInfo ? hasPremium(freshCustomerInfo) : isPremium;
@@ -253,7 +178,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (__DEV__) {
         console.log('🔄 Syncing subscription to database:', {
-          profileId: profile.id,
+          profileId,
           isPremium: premium,
           isPlatinum: platinum,
           tier,
@@ -268,17 +193,13 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           is_premium: premium,
           is_platinum: platinum,
         })
-        .eq('id', profile.id);
-
-      // Immediately update local database status for instant UI update
-      setDbPremiumStatus(premium);
-      setDbPlatinumStatus(platinum);
+        .eq('id', profileId);
 
       // Update subscriptions table if active subscription
       if (tier) {
         await supabase.from('subscriptions').upsert(
           {
-            profile_id: profile.id,
+            profile_id: profileId,
             tier,
             status: 'active',
             auto_renew: true,
@@ -293,7 +214,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (error) {
       console.error('❌ Error syncing subscription to database:', error);
     }
-  }, [user, customerInfo, dbPremiumStatus, dbPlatinumStatus, isDatabaseOnlyMode]);
+  }, [user, profileId, customerInfo, isDatabaseOnlyMode]);
 
   // In database-only mode (dev), use database status exclusively
   // In production, RevenueCat is the SOURCE OF TRUTH

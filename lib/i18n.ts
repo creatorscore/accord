@@ -51,31 +51,54 @@ const resources = {
 // RTL languages
 export const RTL_LANGUAGES = ['ar', 'he', 'fa', 'ur'];
 
+// Track if i18n is initialized
+let isInitialized = false;
+
+// Detect device locale synchronously (fast operation)
+const deviceLocale = Localization.getLocales()[0]?.languageCode || 'en';
+
+// Initialize i18n SYNCHRONOUSLY with device locale (no async/await blocking)
+// This prevents the 1-2 second startup delay on low-RAM devices
+i18n
+  .use(initReactI18next)
+  .init({
+    resources,
+    lng: deviceLocale, // Use device locale immediately, don't wait for AsyncStorage
+    fallbackLng: 'en',
+    compatibilityJSON: 'v3',
+    interpolation: {
+      escapeValue: false, // React already escapes
+    },
+    react: {
+      useSuspense: false,
+    },
+  } as any);
+
+isInitialized = true;
+
+/**
+ * Load saved language preference AFTER app renders
+ * Call this in the background - don't await it during startup
+ */
+const loadSavedLanguage = async () => {
+  try {
+    const savedLanguage = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
+    if (savedLanguage && savedLanguage !== i18n.language) {
+      await i18n.changeLanguage(savedLanguage);
+    }
+  } catch (error) {
+    console.error('Error loading saved language:', error);
+  }
+};
+
+/**
+ * @deprecated Use loadSavedLanguage() in background instead
+ * Kept for backward compatibility - now returns immediately
+ */
 const initI18n = async () => {
-  // Try to get saved language preference
-  const savedLanguage = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
-
-  // Detect device locale
-  const deviceLocale = Localization.getLocales()[0]?.languageCode || 'en';
-
-  // Use saved language or device locale, fallback to English
-  const initialLanguage = savedLanguage || deviceLocale || 'en';
-
-  i18n
-    .use(initReactI18next)
-    .init({
-      resources,
-      lng: initialLanguage,
-      fallbackLng: 'en',
-      compatibilityJSON: 'v3',
-      interpolation: {
-        escapeValue: false, // React already escapes
-      },
-      react: {
-        useSuspense: false,
-      },
-    } as any);
-
+  // i18n is already initialized synchronously above
+  // Just load saved language preference in background
+  loadSavedLanguage().catch(console.error);
   return i18n;
 };
 
@@ -89,5 +112,7 @@ export const getCurrentLanguage = () => i18n.language;
 
 export const isRTL = () => RTL_LANGUAGES.includes(i18n.language);
 
-export { initI18n };
+export const isI18nReady = () => isInitialized;
+
+export { initI18n, loadSavedLanguage };
 export default i18n;

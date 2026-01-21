@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Alert, Switch, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Image, ScrollView, Alert, Switch, Platform, InteractionManager, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash } from '@/lib/image-optimization';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
+import { useTranslation } from 'react-i18next';
 
 interface Photo {
   uri: string;
@@ -19,12 +20,14 @@ interface Photo {
 export default function Photos() {
   const router = useRouter();
   const { user } = useAuth();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [photoBlurEnabled, setPhotoBlurEnabled] = useState(false);
+  const [processingImage, setProcessingImage] = useState(false);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -105,59 +108,76 @@ export default function Photos() {
       if (!result.canceled && result.assets[0]) {
         const selectedUri = result.assets[0].uri;
 
-        // Validate image before processing
-        const validation = await validateImage(selectedUri);
-        if (!validation.isValid) {
-          Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
-          return;
-        }
+        // ANR FIX: Set processing state to show loading indicator
+        setProcessingImage(true);
 
-        // Optimize image with better compression and memory management
-        const { optimized } = await optimizeImage(selectedUri, {
-          generateThumbnail: true, // Generate thumbnail for faster loading
-        });
+        // ANR FIX: Defer heavy image processing until after UI interactions complete
+        InteractionManager.runAfterInteractions(async () => {
+          try {
+            // Validate image before processing
+            const validation = await validateImage(selectedUri);
+            if (!validation.isValid) {
+              setProcessingImage(false);
+              Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
+              return;
+            }
 
-        console.log(`Optimized image: ${(optimized.size! / 1024).toFixed(0)}KB (${optimized.width}x${optimized.height})`);
+            // Optimize image with better compression and memory management
+            const { optimized } = await optimizeImage(selectedUri, {
+              generateThumbnail: true, // Generate thumbnail for faster loading
+            });
 
-        // Generate hash for duplicate detection
-        const contentHash = await generateImageHash(optimized.uri);
-        console.log(`Generated content hash: ${contentHash.substring(0, 16)}...`);
+            console.log(`Optimized image: ${(optimized.size! / 1024).toFixed(0)}KB (${optimized.width}x${optimized.height})`);
 
-        // Check for duplicate in current selection (local check)
-        const isDuplicateLocal = photos.some(p => p.contentHash === contentHash);
-        if (isDuplicateLocal) {
-          Alert.alert(
-            'Photo Already Added',
-            'This photo is already in your profile. Try selecting a different photo to show more sides of yourself!'
-          );
-          return;
-        }
+            // Generate hash for duplicate detection
+            const contentHash = await generateImageHash(optimized.uri);
+            console.log(`Generated content hash: ${contentHash.substring(0, 16)}...`);
 
-        // Check for duplicate in database (already uploaded photos)
-        if (profileId) {
-          const { data: existingPhoto } = await supabase
-            .from('photos')
-            .select('id')
-            .eq('profile_id', profileId)
-            .eq('content_hash', contentHash)
-            .maybeSingle();
+            // Check for duplicate in current selection (local check)
+            const isDuplicateLocal = photos.some(p => p.contentHash === contentHash);
+            if (isDuplicateLocal) {
+              setProcessingImage(false);
+              Alert.alert(
+                'Photo Already Added',
+                'This photo is already in your profile. Try selecting a different photo to show more sides of yourself!'
+              );
+              return;
+            }
 
-          if (existingPhoto) {
-            Alert.alert(
-              'Photo Already Added',
-              'This photo is already in your profile. Try selecting a different photo to show more sides of yourself!'
-            );
-            return;
+            // Check for duplicate in database (already uploaded photos)
+            if (profileId) {
+              const { data: existingPhoto } = await supabase
+                .from('photos')
+                .select('id')
+                .eq('profile_id', profileId)
+                .eq('content_hash', contentHash)
+                .maybeSingle();
+
+              if (existingPhoto) {
+                setProcessingImage(false);
+                Alert.alert(
+                  'Photo Already Added',
+                  'This photo is already in your profile. Try selecting a different photo to show more sides of yourself!'
+                );
+                return;
+              }
+            }
+
+            // Update state if component is still mounted
+            if (isMounted.current) {
+              setPhotos(prev => [...prev, { uri: optimized.uri, contentHash }]);
+              setProcessingImage(false);
+            }
+          } catch (error: any) {
+            console.error('Error processing image:', error);
+            setProcessingImage(false);
+            Alert.alert('Error', 'Failed to process photo. Please try again.');
           }
-        }
-
-        // Update state if component is still mounted
-        if (isMounted.current) {
-          setPhotos(prev => [...prev, { uri: optimized.uri, contentHash }]);
-        }
+        });
       }
     } catch (error: any) {
       console.error('Error picking image:', error);
+      setProcessingImage(false);
       Alert.alert('Error', 'Failed to select photo. Please try again.');
     }
   }, [photos, profileId]);
@@ -167,8 +187,8 @@ export default function Photos() {
   };
 
   const handleContinue = async () => {
-    if (photos.length < 2) {
-      Alert.alert('More Photos Needed', 'Please add at least 2 photos to continue');
+    if (photos.length < 4) {
+      Alert.alert('More Photos Needed', 'Please add at least 4 photos to continue');
       return;
     }
 
@@ -221,7 +241,7 @@ export default function Photos() {
 
             // Save to photos table with content hash for duplicate detection
             // Use upsert-like behavior: check first, then insert, and handle constraint errors gracefully
-            const { error: dbError } = await supabase
+            const { data: photoData, error: dbError } = await supabase
               .from('photos')
               .insert({
                 profile_id: profileId,
@@ -230,7 +250,10 @@ export default function Photos() {
                 display_order: photos.length - newPhotos.length + i,
                 is_primary: photos.length - newPhotos.length + i === 0,
                 content_hash: photo.contentHash,
-              });
+                moderation_status: 'pending', // Start as pending until moderation completes
+              })
+              .select('id')
+              .single();
 
             if (dbError) {
               // If it's a duplicate constraint error, just skip - photo already exists
@@ -242,6 +265,45 @@ export default function Photos() {
               }
             } else {
               console.log(`✅ Photo ${i + 1} saved to database`);
+
+              // Run NSFW moderation check in background (don't block upload)
+              // This uses AWS Rekognition to detect explicit content
+              try {
+                const moderationResponse = await fetch(
+                  `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/moderate-photo`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+                    },
+                    body: JSON.stringify({
+                      photo_url: publicUrl,
+                      photo_id: photoData?.id,
+                      profile_id: profileId,
+                    }),
+                  }
+                );
+
+                const moderationResult = await moderationResponse.json();
+                console.log(`🔍 Moderation result for photo ${i + 1}:`, moderationResult);
+
+                // If photo was rejected for explicit content, alert user and remove photo
+                if (moderationResult.approved === false && moderationResult.reason === 'explicit_content') {
+                  // Delete the photo from storage and database
+                  await supabase.storage.from('profile-photos').remove([fileName]);
+                  await supabase.from('photos').delete().eq('id', photoData?.id);
+
+                  throw new Error('This photo contains inappropriate content and cannot be uploaded. Please choose a different photo.');
+                }
+              } catch (moderationError: any) {
+                // If it's our explicit content error, re-throw it
+                if (moderationError.message?.includes('inappropriate content')) {
+                  throw moderationError;
+                }
+                // Otherwise log but don't block - moderation can be retried
+                console.error('Moderation check failed (non-blocking):', moderationError);
+              }
             }
 
             // Update progress
@@ -339,9 +401,19 @@ export default function Photos() {
             <TouchableOpacity
               className="w-28 h-36 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 items-center justify-center bg-gray-50 dark:bg-gray-800"
               onPress={pickImage}
+              disabled={processingImage}
             >
-              <MaterialCommunityIcons name="plus" size={32} color="#9CA3AF" />
-              <Text className="text-gray-500 dark:text-gray-400 text-xs mt-1">Add Photo</Text>
+              {processingImage ? (
+                <>
+                  <ActivityIndicator size="large" color="#A08AB7" />
+                  <Text className="text-gray-500 dark:text-gray-400 text-xs mt-2">Processing...</Text>
+                </>
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="plus" size={32} color="#9CA3AF" />
+                  <Text className="text-gray-500 dark:text-gray-400 text-xs mt-1">Add Photo</Text>
+                </>
+              )}
             </TouchableOpacity>
           )}
         </View>
@@ -394,7 +466,7 @@ export default function Photos() {
 
           <TouchableOpacity
             className={`flex-1 py-4 rounded-full ${
-              uploading || photos.length < 2
+              uploading || photos.length < 4
                 ? 'bg-gray-400 dark:bg-gray-600'
                 : 'bg-lavender-500'
             }`}
@@ -405,7 +477,7 @@ export default function Photos() {
               paddingVertical: 16,
             }}
             onPress={handleContinue}
-            disabled={uploading || photos.length < 2}
+            disabled={uploading || photos.length < 4}
           >
             <Text className="text-white text-center font-bold text-lg">
               {uploading ? `Uploading... ${uploadProgress}%` : 'Continue'}
@@ -415,7 +487,7 @@ export default function Photos() {
 
         {/* Photo Counter */}
         <Text className="text-center text-gray-500 dark:text-gray-400 text-sm mt-4">
-          {photos.length} of 6 photos {photos.length < 2 && '(minimum 2)'}
+          {photos.length} of 6 photos {photos.length < 4 && '(minimum 4)'}
         </Text>
       </View>
     </ScrollView>

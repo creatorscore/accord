@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, InteractionManager } from 'react-native';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
@@ -72,6 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   // CRITICAL SAFETY: Check if user is banned
+  // PERFORMANCE: Defer to avoid blocking cold start
   useEffect(() => {
     const checkBanStatus = async () => {
       if (!user) return;
@@ -109,12 +110,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
-    checkBanStatus();
+    // PERFORMANCE: Defer ban check until after initial render
+    if (user) {
+      InteractionManager.runAfterInteractions(() => {
+        checkBanStatus();
+      });
+    }
   }, [user]);
 
   // Initialize encryption keys for authenticated users
   // Uses deterministic key derivation so the same user gets identical keys on iOS/Android
   // CRITICAL: This ensures cross-platform messaging works correctly
+  // PERFORMANCE: Deferred to avoid blocking cold start
   useEffect(() => {
     const setupEncryption = async () => {
       if (!user) return;
@@ -163,11 +170,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
-    setupEncryption();
+    // PERFORMANCE: Defer encryption setup until after initial render
+    if (user) {
+      InteractionManager.runAfterInteractions(() => {
+        setupEncryption();
+      });
+    }
   }, [user]);
 
   // Automatic location refresh when app comes to foreground
   // This ensures users always show their true/live GPS location
+  // PERFORMANCE: Deferred to avoid blocking cold start on low-RAM devices
   useEffect(() => {
     const refreshLocation = async () => {
       if (!user) return;
@@ -188,13 +201,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
-        // Get current GPS location with high accuracy
+        // PERFORMANCE: Use Balanced accuracy instead of High for faster GPS lock
+        // High accuracy can take 5-10+ seconds on poor signal; Balanced is usually <2s
         const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
+          accuracy: Location.Accuracy.Balanced,
         });
 
-        // Validate accuracy - reject if too inaccurate (> 100 meters)
-        if (location.coords.accuracy && location.coords.accuracy > 100) {
+        // Validate accuracy - reject if too inaccurate (> 500 meters for balanced)
+        if (location.coords.accuracy && location.coords.accuracy > 500) {
           console.log('📍 Location too inaccurate, skipping refresh');
           return;
         }
@@ -226,12 +240,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
-        // Check if location has changed significantly (> 100 meters)
+        // Check if location has changed significantly (> 500 meters for balanced accuracy)
         if (profile.latitude && profile.longitude) {
           const latDiff = Math.abs(profile.latitude - location.coords.latitude);
           const lonDiff = Math.abs(profile.longitude - location.coords.longitude);
-          // Roughly 0.001 degrees = ~111 meters
-          if (latDiff < 0.001 && lonDiff < 0.001) {
+          // Roughly 0.005 degrees = ~500 meters
+          if (latDiff < 0.005 && lonDiff < 0.005) {
             console.log('📍 Location unchanged, skipping update');
             lastLocationUpdate.current = now;
             return;
@@ -273,9 +287,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       appState.current = nextAppState;
     });
 
-    // Also refresh on initial mount if user is logged in
+    // PERFORMANCE: Defer initial location refresh until AFTER first render
+    // This prevents GPS calls from blocking cold start on low-RAM devices
+    // GPS can take 5-10 seconds and was causing 87% slow cold-start rate
     if (user) {
-      refreshLocation();
+      InteractionManager.runAfterInteractions(() => {
+        // Additional delay to ensure UI is fully rendered first
+        setTimeout(() => {
+          refreshLocation().catch(err => console.error('Initial location refresh failed:', err));
+        }, 3000); // 3 second delay after interactions complete
+      });
     }
 
     return () => {

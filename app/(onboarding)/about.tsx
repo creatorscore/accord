@@ -14,6 +14,7 @@ export default function About() {
   const [bio, setBio] = useState('');
   const [occupation, setOccupation] = useState('');
   const [education, setEducation] = useState('');
+  const [hometown, setHometown] = useState('');
   const [loading, setLoading] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
 
@@ -25,7 +26,7 @@ export default function About() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, bio, occupation, education')
+        .select('id, bio, occupation, education, hometown')
         .eq('user_id', user?.id)
         .single();
 
@@ -38,6 +39,7 @@ export default function About() {
         setBio(data.bio || '');
         setOccupation(data.occupation || '');
         setEducation(data.education || '');
+        setHometown(data.hometown || '');
       }
     } catch (error: any) {
       // Silent fail
@@ -45,7 +47,7 @@ export default function About() {
   };
 
   // Save draft data (without validation) when navigating away
-  const saveDraft = async (currentBio: string, currentOccupation: string, currentEducation: string) => {
+  const saveDraft = async (currentBio: string, currentOccupation: string, currentEducation: string, currentHometown: string) => {
     try {
       let activeProfileId = profileId;
       if (!activeProfileId && user?.id) {
@@ -65,6 +67,7 @@ export default function About() {
           bio: currentBio.trim() || null,
           occupation: currentOccupation.trim() || null,
           education: currentEducation.trim() || null,
+          hometown: currentHometown.trim() || null,
         })
         .eq('id', activeProfileId);
     } catch (error) {
@@ -74,7 +77,7 @@ export default function About() {
 
   const handleBack = async () => {
     // Pass current values directly to avoid closure issues
-    await saveDraft(bio, occupation, education);
+    await saveDraft(bio, occupation, education, hometown);
     goToPreviousOnboardingStep('/(onboarding)/about');
   };
 
@@ -126,6 +129,19 @@ export default function About() {
       }
     }
 
+    // Check hometown if provided
+    if (hometown.trim()) {
+      const hometownValidation = validateContent(hometown, {
+        checkProfanity: true,
+        checkContactInfo: false,
+        fieldName: 'hometown',
+      });
+      if (!hometownValidation.isValid) {
+        Alert.alert('Inappropriate Content', hometownValidation.error);
+        return;
+      }
+    }
+
     try {
       setLoading(true);
 
@@ -155,6 +171,7 @@ export default function About() {
           bio: bio.trim(),
           occupation: occupation.trim() || null,
           education: education.trim() || null,
+          hometown: hometown.trim() || null,
           onboarding_step: 3,
         })
         .eq('id', activeProfileId);
@@ -248,6 +265,21 @@ export default function About() {
               placeholder="e.g., Bachelor's at UCLA, High School"
               value={education}
               onChangeText={setEducation}
+              maxLength={100}
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          {/* Hometown */}
+          <View>
+            <Text className="text-lg font-bold text-gray-900 dark:text-white mb-3">
+              🏠 Hometown <Text className="text-gray-400 dark:text-gray-500 text-sm">(optional)</Text>
+            </Text>
+            <TextInput
+              className="bg-white dark:bg-gray-800 border-2 border-amber-200 dark:border-amber-700 rounded-xl px-5 py-4 text-gray-900 dark:text-white text-base"
+              placeholder="e.g., Los Angeles, CA"
+              value={hometown}
+              onChangeText={setHometown}
               maxLength={100}
               placeholderTextColor="#9CA3AF"
             />

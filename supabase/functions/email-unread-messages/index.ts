@@ -83,25 +83,33 @@ function generateUnreadMessagesEmail(
 
                         <p style="font-size: 16px; margin: 0 0 25px 0; color: #555; line-height: 1.6;">
                           You have <strong style="color: #9B87CE;">${unreadCount} unread message${unreadCount > 1 ? 's' : ''}</strong>
-                          waiting for you from ${senderList}${andMore}.
+                          waiting for you from:
                         </p>
 
-                        <!-- CTA Box -->
+                        <!-- Message Preview Box -->
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                           <tr>
-                            <td style="background: linear-gradient(135deg, #F3E8FF 0%, #EDE9FE 100%); border-radius: 12px; padding: 25px; text-align: center;">
-                              <p style="font-size: 15px; color: #6B21A8; margin: 0 0 15px 0; font-weight: 500; line-height: 1.4;">
-                                Don't leave them hanging!
+                            <td style="background: linear-gradient(135deg, #F3E8FF 0%, #EDE9FE 100%); border-radius: 12px; padding: 25px;">
+                              ${senderNames.map(name => `
+                                <div style="background: white; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                  <p style="font-size: 15px; color: #6B21A8; margin: 0; font-weight: 600;">
+                                    💬 ${name}
+                                  </p>
+                                  <p style="font-size: 13px; color: #666; margin: 5px 0 0 0;">
+                                    sent you a message
+                                  </p>
+                                </div>
+                              `).join('')}
+                              ${senderNames.length > 3 ? `
+                                <div style="text-align: center; padding: 10px;">
+                                  <p style="font-size: 14px; color: #6B21A8; margin: 0; font-weight: 500;">
+                                    and ${senderNames.length - 3} more...
+                                  </p>
+                                </div>
+                              ` : ''}
+                              <p style="font-size: 15px; color: #6B21A8; margin: 15px 0 0 0; font-weight: 500; text-align: center; line-height: 1.4;">
+                                Open the Accord app on your phone to reply!
                               </p>
-                              <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
-                                <tr>
-                                  <td style="border-radius: 50px; background: linear-gradient(135deg, #9B87CE 0%, #A08AB7 100%); box-shadow: 0 4px 15px rgba(155, 135, 206, 0.4);">
-                                    <a href="accord://messages" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
-                                      Read Your Messages
-                                    </a>
-                                  </td>
-                                </tr>
-                              </table>
                             </td>
                           </tr>
                         </table>
@@ -127,7 +135,7 @@ function generateUnreadMessagesEmail(
                         <!-- Footer -->
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 0; line-height: 1.6;">
                           You're receiving this because you have unread messages on Accord.<br>
-                          <a href="accord://settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
+                          To manage email preferences, open the Accord app and go to Settings &gt; Notifications
                         </p>
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
@@ -152,16 +160,17 @@ function generateUnreadMessagesEmail(
 
 You Have Unread Messages! 💬
 
-You have ${unreadCount} unread message${unreadCount > 1 ? 's' : ''} waiting for you from ${senderList}${andMore}.
+You have ${unreadCount} unread message${unreadCount > 1 ? 's' : ''} waiting for you from:
 
-Don't leave them hanging! Open Accord to read your messages:
-accord://messages
+${senderNames.slice(0, 5).map(name => `💬 ${name} sent you a message`).join('\n')}${senderNames.length > 5 ? `\n...and ${senderNames.length - 5} more` : ''}
+
+Open the Accord app on your phone to reply!
 
 Did you know? Responding within 24 hours increases your chances of building a meaningful connection by 3x!
 
 ---
 You're receiving this because you have unread messages on Accord.
-Manage email preferences: accord://settings/notifications
+To manage email preferences, open the Accord app and go to Settings > Notifications
 
 Accord - Safe Connections for Meaningful Partnerships
 joinaccord.app`;

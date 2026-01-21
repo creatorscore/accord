@@ -1,19 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useColorScheme } from '@/lib/useColorScheme';
-import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
 
 export default function ProfilePreview() {
   const { user } = useAuth();
   const { colors } = useColorScheme();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const [profile, setProfile] = useState<any | null>(null);
   const [preferences, setPreferences] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [cardVisible, setCardVisible] = useState(true);
 
   const profileDataParam = params.profileData as string | undefined;
   const isRealtimeParam = params.isRealtime as string | undefined;
@@ -101,16 +103,40 @@ export default function ProfilePreview() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <ImmersiveProfileCard
+    <View style={styles.container}>
+      {/* Back Button */}
+      <TouchableOpacity
+        style={[styles.backButton, { top: insets.top + 8 }]}
+        onPress={() => router.back()}
+      >
+        <MaterialCommunityIcons name="arrow-left" size={24} color="#000000" />
+      </TouchableOpacity>
+
+      <DiscoveryProfileView
         profile={profile}
         preferences={preferences}
-        visible={cardVisible}
-        onClose={() => router.back()}
-        isMatched={true}
-        heightUnit={profile?.height_unit || 'imperial'}
-        // No swipe actions or send message button for profile preview
+        heightUnit={(profile?.height_unit as 'imperial' | 'metric') || 'imperial'}
+        hideActions={true}
+        isOwnProfile={true}
       />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  backButton: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

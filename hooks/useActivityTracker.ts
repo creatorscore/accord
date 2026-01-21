@@ -1,47 +1,48 @@
-import { useEffect, useRef } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { useEffect, useRef, useCallback } from 'react';
+import { AppState, AppStateStatus, InteractionManager } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useProfileData } from '@/contexts/ProfileDataContext';
 
 /**
  * Hook to track user activity and update last_active_at
  * Updates every 60 seconds when app is in foreground
+ * PERFORMANCE: Uses shared ProfileDataContext to avoid duplicate queries
  */
 export const useActivityTracker = () => {
   const { user } = useAuth();
+  // PERFORMANCE: Use shared profile ID from ProfileDataContext
+  const { profileId } = useProfileData();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
-  const updateLastActive = async () => {
-    if (!user?.id) return;
+  const updateLastActive = useCallback(async () => {
+    // PERFORMANCE: Use profileId from context instead of querying
+    if (!profileId) return;
 
     try {
-      // Get current profile ID
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!profile) return;
-
       // Update last_active_at
       await supabase
         .from('profiles')
         .update({ last_active_at: new Date().toISOString() })
-        .eq('id', profile.id);
+        .eq('id', profileId);
 
       console.log('📍 Updated last_active_at');
     } catch (error) {
       console.error('Error updating last_active_at:', error);
     }
-  };
+  }, [profileId]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !profileId) return;
 
-    // Update immediately on mount
-    updateLastActive();
+    // PERFORMANCE: Defer initial update until after first render
+    InteractionManager.runAfterInteractions(() => {
+      // Additional delay to avoid impacting startup performance
+      setTimeout(() => {
+        updateLastActive();
+      }, 5000); // 5 second delay after interactions complete
+    });
 
     // Set up interval to update every 60 seconds
     intervalRef.current = setInterval(() => {
@@ -67,5 +68,5 @@ export const useActivityTracker = () => {
       }
       subscription.remove();
     };
-  }, [user]);
+  }, [user, profileId, updateLastActive]);
 };

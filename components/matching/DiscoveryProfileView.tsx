@@ -124,9 +124,14 @@ interface DiscoveryProfileViewProps {
   canRewind?: boolean;
   isAdmin?: boolean;
   superLikesRemaining?: number;
+  likesRemaining?: number; // Daily likes remaining for free users (X/5)
+  dailyLikeLimit?: number; // Daily like limit (default 5 for free users)
+  isPremium?: boolean; // Whether user has premium (unlimited likes)
   hideActions?: boolean; // Hide all action buttons (for preview mode)
   hideCompatibilityScore?: boolean; // Hide compatibility score section (for match profile view)
   renderAdditionalContent?: () => React.ReactNode; // Custom content to render after profile
+  isPhotoRevealed?: boolean; // Whether profile owner has revealed photos to viewer (for matched users)
+  isOwnProfile?: boolean; // Whether viewer is viewing their own profile (never blur own photos)
 }
 
 // Helper functions
@@ -217,7 +222,7 @@ const LikeButton = ({ onPress, size = 48 }: { onPress: () => void; size?: number
   return (
     <TouchableOpacity onPress={handlePress} activeOpacity={0.9}>
       <Animated.View style={[styles.likeButton, { width: size, height: size, borderRadius: size / 2, transform: [{ scale: scaleAnim }] }]}>
-        <MaterialCommunityIcons name="heart-outline" size={size * 0.5} color="#1F2937" />
+        <MaterialCommunityIcons name="heart-outline" size={size * 0.6} color="#1F2937" style={{ fontWeight: 'bold' }} />
       </Animated.View>
     </TouchableOpacity>
   );
@@ -234,6 +239,7 @@ const PhotoCard = ({
   profileId,
   viewerUserId,
   showLikeButton = true,
+  photoIndex = 0,
 }: {
   uri: string;
   onLike: () => void;
@@ -244,6 +250,7 @@ const PhotoCard = ({
   profileId: string;
   viewerUserId: string | null;
   showLikeButton?: boolean;
+  photoIndex?: number;
 }) => (
   <View style={styles.photoCard}>
     <Image
@@ -256,6 +263,7 @@ const PhotoCard = ({
     />
     {watermarkReady && viewerUserId && (
       <DynamicWatermark
+        key={`watermark-${profileId}-${photoIndex}`}
         userId={profileId}
         viewerUserId={viewerUserId}
         visible={true}
@@ -355,9 +363,9 @@ const VitalsSection = ({
   if (preferences?.pets) pills.push({ icon: 'paw-outline', value: formatLabel(preferences.pets) });
   // Children
   if (preferences?.wants_children === true) {
-    pills.push({ icon: 'baby-carriage-outline', value: 'Wants children' });
+    pills.push({ icon: 'baby-face-outline', value: 'Wants children' });
   } else if (preferences?.wants_children === false) {
-    pills.push({ icon: 'baby-carriage-off', value: "Doesn't want children" });
+    pills.push({ icon: 'cancel', value: "Doesn't want children" });
   }
 
   // Build rows for vertical list (using outline icons for clean Hinge look)
@@ -447,16 +455,21 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
   canRewind = false,
   isAdmin = false,
   superLikesRemaining = 0,
+  likesRemaining = 0,
+  dailyLikeLimit = 5,
+  isPremium = false,
   hideActions = false,
   hideCompatibilityScore = false,
   renderAdditionalContent,
+  isPhotoRevealed = false,
+  isOwnProfile = false,
 }, ref) => {
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
 
   const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
-    shouldBlur: (profile.photo_blur_enabled || false) && !isAdmin,
+    shouldBlur: (profile.photo_blur_enabled || false) && !isAdmin && !isPhotoRevealed && !isOwnProfile,
     blurIntensity: 50,
   });
 
@@ -577,7 +590,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 100, paddingTop: insets.top + 8 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 100, paddingTop: insets.top }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Header - Scrolls with content */}
@@ -601,13 +614,13 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                 >
                   <MaterialCommunityIcons
                     name="undo-variant"
-                    size={24}
+                    size={20}
                     color={canRewind ? '#6B7280' : '#D1D5DB'}
                   />
                 </TouchableOpacity>
               )}
               <TouchableOpacity onPress={() => setShowActionSheet(true)} style={styles.headerButton}>
-                <MaterialCommunityIcons name="dots-horizontal" size={24} color="#6B7280" />
+                <MaterialCommunityIcons name="dots-horizontal" size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
           </View>
@@ -638,6 +651,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             profileId={profile.id}
             viewerUserId={viewerUserId}
             showLikeButton={!hideActions}
+            photoIndex={0}
           />
         )}
 
@@ -668,11 +682,6 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                 {isVoicePlaying || playbackProgress > 0 ? formatTime(playbackProgress * playbackDuration) : formatTime(playbackDuration)}
               </Text>
             </View>
-            {!hideActions && (
-              <View style={styles.voiceLikeContainer}>
-                <LikeButton onPress={() => handleLikeContent('voice_intro')} size={44} />
-              </View>
-            )}
           </View>
         )}
 
@@ -714,6 +723,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             profileId={profile.id}
             viewerUserId={viewerUserId}
             showLikeButton={!hideActions}
+            photoIndex={1}
           />
         )}
 
@@ -739,6 +749,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             profileId={profile.id}
             viewerUserId={viewerUserId}
             showLikeButton={!hideActions}
+            photoIndex={2}
           />
         )}
 
@@ -1018,6 +1029,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             profileId={profile.id}
             viewerUserId={viewerUserId}
             showLikeButton={!hideActions}
+            photoIndex={index + 3}
           />
         ))}
 
@@ -1052,7 +1064,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
       {!hideActions && (
         <View style={[styles.floatingPassContainer, { bottom: insets.bottom + 20 }]}>
           <TouchableOpacity onPress={handlePass} style={styles.floatingPassButton} activeOpacity={0.9}>
-            <MaterialCommunityIcons name="close" size={32} color="#000000" />
+            <MaterialCommunityIcons name="close" size={34} color="#000000" />
           </TouchableOpacity>
         </View>
       )}
@@ -1116,6 +1128,9 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                   <MaterialCommunityIcons name="heart" size={32} color="#A08AB7" />
                 </View>
                 <Text style={styles.likeChoiceLabel}>Like</Text>
+                {!isPremium && (
+                  <Text style={styles.likeChoiceCount}>{likesRemaining}/{dailyLikeLimit} today</Text>
+                )}
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.likeChoiceButton, superLikesRemaining === 0 && styles.likeChoiceButtonDisabled]}
@@ -1156,8 +1171,10 @@ const styles = StyleSheet.create({
   // Profile header - scrolls with content, seamless with first photo
   profileHeaderInline: {
     backgroundColor: '#FFFFFF',
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingTop: 0,
+    paddingBottom: 2,
+    paddingHorizontal: 16,
+    marginHorizontal: -16,
     marginBottom: -4,
   },
   headerTopRow: {
@@ -1183,28 +1200,28 @@ const styles = StyleSheet.create({
   subInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 2,
   },
   pronounsText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#000000',
   },
   divider: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#D1D5DB',
     marginHorizontal: 8,
   },
   activeText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#3E1444',
   },
   activeNow: {
     color: '#3E1444',
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',

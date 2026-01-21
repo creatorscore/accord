@@ -99,15 +99,19 @@ export default function Prompts() {
   const saveCustomPrompt = () => {
     if (showCustomPromptInput === null || !customPromptText.trim()) return;
 
-    // Validate custom prompt
+    // Validate custom prompt for profanity and gibberish
     const validation = validateContent(customPromptText, {
       checkProfanity: true,
       checkContactInfo: false,
+      checkGibberish: true,
       fieldName: 'custom prompt',
     });
 
     if (!validation.isValid) {
-      Alert.alert('Inappropriate Content', validation.error);
+      Alert.alert(
+        validation.moderationResult?.isGibberish ? 'Invalid Prompt' : 'Inappropriate Content',
+        validation.error
+      );
       return;
     }
 
@@ -132,15 +136,19 @@ export default function Prompts() {
       return;
     }
 
-    // Check all prompt answers for profanity and contact info
+    // Check all prompt answers for profanity, contact info, and gibberish
     for (let i = 0; i < filledPrompts.length; i++) {
       const validation = validateContent(filledPrompts[i].answer, {
         checkProfanity: true,
         checkContactInfo: true,
+        checkGibberish: true,
         fieldName: 'prompt answer',
       });
       if (!validation.isValid) {
-        Alert.alert('Inappropriate Content', validation.error);
+        Alert.alert(
+          validation.moderationResult?.isGibberish ? 'Invalid Response' : 'Inappropriate Content',
+          validation.error
+        );
         return;
       }
     }

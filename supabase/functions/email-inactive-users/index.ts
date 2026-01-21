@@ -167,15 +167,17 @@ function generateInactiveEmail(
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                           <tr>
                             <td style="background: linear-gradient(135deg, #F3E8FF 0%, #EDE9FE 100%); border-radius: 12px; padding: 25px; text-align: center;">
-                              <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
-                                <tr>
-                                  <td style="border-radius: 50px; background: linear-gradient(135deg, #9B87CE 0%, #A08AB7 100%); box-shadow: 0 4px 15px rgba(155, 135, 206, 0.4);">
-                                    <a href="accord://discover" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
-                                      ${template.cta}
-                                    </a>
-                                  </td>
-                                </tr>
-                              </table>
+                              <div style="background: white; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <p style="font-size: 18px; color: #6B21A8; margin: 0 0 5px 0; font-weight: 700;">
+                                  ${template.emoji} ${template.headline}
+                                </p>
+                                <p style="font-size: 14px; color: #666; margin: 0;">
+                                  ${template.subheadline}
+                                </p>
+                              </div>
+                              <p style="font-size: 15px; color: #6B21A8; margin: 0; font-weight: 500; line-height: 1.4;">
+                                Open the Accord app on your phone to continue your journey!
+                              </p>
                             </td>
                           </tr>
                         </table>
@@ -201,7 +203,7 @@ function generateInactiveEmail(
                         <!-- Footer -->
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 0; line-height: 1.6;">
                           You're receiving this because you haven't visited Accord recently.<br>
-                          <a href="accord://settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
+                          To manage email preferences, open the Accord app and go to Settings &gt; Notifications
                         </p>
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
@@ -230,13 +232,16 @@ ${template.subheadline}
 
 Your journey to finding a meaningful connection doesn't have to pause. Every day on Accord is an opportunity to meet someone who shares your goals and values.
 ${statsText}
-${template.cta}: accord://discover
+${template.emoji} ${template.headline}
+${template.subheadline}
+
+Open the Accord app on your phone to continue your journey!
 
 Reminder: The most successful connections happen when both people are actively engaged. Your perfect match might be waiting right now!
 
 ---
 You're receiving this because you haven't visited Accord recently.
-Manage email preferences: accord://settings/notifications
+To manage email preferences, open the Accord app and go to Settings > Notifications
 
 Accord - Safe Connections for Meaningful Partnerships
 joinaccord.app`;

@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   StyleSheet,
@@ -15,6 +14,7 @@ import {
   RefreshControl,
   Modal,
   InteractionManager,
+  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -105,6 +105,8 @@ export default function Chat() {
   const { refreshUnreadCount } = useNotifications();
   const flatListRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   const { colors, isDarkColorScheme } = useColorScheme();
 
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
@@ -170,6 +172,9 @@ export default function Chat() {
   const [showFullEmojiPicker, setShowFullEmojiPicker] = useState(false);
   const REACTION_EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥'];
 
+  // Timestamp display state - which message is showing full timestamp
+  const [expandedTimestampId, setExpandedTimestampId] = useState<string | null>(null);
+
   // Android layout fix - force re-layout after initial mount
   const [androidLayoutReady, setAndroidLayoutReady] = useState(Platform.OS !== 'android');
 
@@ -205,23 +210,19 @@ export default function Chat() {
     loadCurrentProfile();
     setupAudio();
 
-    // Track keyboard visibility and height (for Android manual handling)
+    // Track keyboard visibility and height (for manual handling on both platforms)
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       (e) => {
         setKeyboardVisible(true);
-        if (Platform.OS === 'android') {
-          setKeyboardHeight(e.endCoordinates.height);
-        }
+        setKeyboardHeight(e.endCoordinates.height);
       }
     );
     const keyboardDidHideListener = Keyboard.addListener(
       'keyboardDidHide',
       () => {
         setKeyboardVisible(false);
-        if (Platform.OS === 'android') {
-          setKeyboardHeight(0);
-        }
+        setKeyboardHeight(0);
       }
     );
 
@@ -966,6 +967,12 @@ export default function Chat() {
       // Track first message in funnel if this is the first message
       if (messages.length === 0) {
         trackFunnel.firstMessageSent();
+
+        // Prevent match expiration by setting first_message_sent_at
+        await supabase
+          .from('matches')
+          .update({ first_message_sent_at: new Date().toISOString() })
+          .eq('id', matchId);
       }
 
       console.log('Message sent successfully!');
@@ -1301,6 +1308,14 @@ export default function Chat() {
 
       if (messageError) throw messageError;
 
+      // Prevent match expiration if this is the first message
+      if (messages.length === 0) {
+        await supabase
+          .from('matches')
+          .update({ first_message_sent_at: new Date().toISOString() })
+          .eq('id', matchId);
+      }
+
       // Send push notification
       try {
         await sendMessageNotification(
@@ -1528,8 +1543,22 @@ export default function Chat() {
     const isMine = message.sender_profile_id === currentProfileId;
 
     if (isMine) {
-      // For own messages, show delete option
+      // For own messages, show delete option (premium only)
       setSelectedMessage(message);
+      if (!isPremium) {
+        Alert.alert(
+          'Premium Feature',
+          'Delete messages you\'ve sent! Upgrade to Premium to unlock message deletion.',
+          [
+            { text: 'Maybe Later', style: 'cancel' },
+            {
+              text: 'Upgrade',
+              onPress: () => setShowPaywall(true),
+            },
+          ]
+        );
+        return;
+      }
       Alert.alert(
         t('chat.messageOptions'),
         'What would you like to do?',
@@ -1727,6 +1756,23 @@ export default function Chat() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  const getFullTimestamp = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const handleMessagePress = (messageId: string) => {
+    // Toggle full timestamp display
+    setExpandedTimestampId(prev => prev === messageId ? null : messageId);
+  };
+
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     if (!item) {
       console.error('NULL ITEM in renderMessage');
@@ -1734,12 +1780,23 @@ export default function Chat() {
     }
 
     const isMine = item.sender_profile_id === currentProfileId;
+    const isTimestampExpanded = expandedTimestampId === item.id;
+
     return (
       <TouchableOpacity
         activeOpacity={0.9}
+        onPress={() => handleMessagePress(item.id)}
         onLongPress={() => handleMessageLongPress(item)}
         delayLongPress={400}
       >
+        {/* Expanded timestamp shown above the message */}
+        {isTimestampExpanded && (
+          <View style={[styles.expandedTimestampContainer, isMine && styles.expandedTimestampContainerMine]}>
+            <Text style={styles.expandedTimestampText}>
+              {getFullTimestamp(item.created_at)}
+            </Text>
+          </View>
+        )}
         <MotiView
           from={{ opacity: 0, translateY: 10 }}
           animate={{ opacity: 1, translateY: 0 }}
@@ -2011,13 +2068,12 @@ export default function Chat() {
     );
   }
 
+  // In landscape mode on Android, navigation bar is on the right side
+  // Use right inset to prevent message bubbles from being cut off
+  const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
+
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      enabled={Platform.OS === 'ios'}
-    >
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Dynamic Watermark Overlay for chat */}
       {watermarkReady && matchProfile && (
         <DynamicWatermark
@@ -2170,7 +2226,8 @@ export default function Chat() {
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.messagesList, { paddingBottom: 100 }]}
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.messagesList, { paddingBottom: 16, paddingRight: rightSafeArea }]}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
         showsVerticalScrollIndicator={false}
@@ -2224,8 +2281,9 @@ export default function Chat() {
         <View
           key={`recording-${androidLayoutReady}`}
           style={[styles.recordingContainer, {
-            paddingBottom: Math.max(insets.bottom, 12),
-            marginBottom: Platform.OS === 'android' ? keyboardHeight : 0,
+            marginBottom: keyboardHeight > 0 ? keyboardHeight + 40 : insets.bottom,
+            // In landscape, add right padding for navigation bar
+            paddingRight: rightSafeArea > 0 ? rightSafeArea + 12 : 12,
             backgroundColor: isDarkColorScheme ? '#3D1F1F' : '#FEF2F2',
             borderTopColor: isDarkColorScheme ? '#5C2C2C' : '#FEE2E2'
           }]}>
@@ -2262,10 +2320,10 @@ export default function Chat() {
         <View
           key={`input-${androidLayoutReady}`}
           style={[styles.inputContainer, {
-            // Safe area insets for home indicator/navigation bar
-            // On Android, add keyboard height as margin when keyboard is visible
-            paddingBottom: Math.max(insets.bottom, 12),
-            marginBottom: Platform.OS === 'android' ? keyboardHeight : 0,
+            // Add 40px buffer above keyboard, or use bottom inset when keyboard is hidden
+            marginBottom: keyboardHeight > 0 ? keyboardHeight + 40 : insets.bottom,
+            // In landscape, add right padding for navigation bar
+            paddingRight: rightSafeArea > 0 ? rightSafeArea + 12 : 12,
             backgroundColor: colors.card,
             borderTopColor: colors.border
           }]}>
@@ -2514,7 +2572,7 @@ export default function Chat() {
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -2522,6 +2580,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  expandedTimestampContainer: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 4,
+    marginLeft: 12,
+  },
+  expandedTimestampContainerMine: {
+    alignSelf: 'flex-end',
+    marginLeft: 0,
+    marginRight: 12,
+  },
+  expandedTimestampText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
   },
   loadingContainer: {
     flex: 1,
@@ -2625,7 +2702,8 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   messagesList: {
-    padding: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 16,
     gap: 8,
   },
   messageRow: {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, RefreshControl, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, RefreshControl, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 import { supabase } from '@/lib/supabase';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import MatchModal from '@/components/matching/MatchModal';
@@ -33,7 +34,11 @@ export default function Likes() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
+  const { refreshUnreadLikeCount } = useNotifications();
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const unreadActivityCount = useUnreadActivityCount(currentProfileId);
   const [likes, setLikes] = useState<LikeProfile[]>([]);
@@ -327,6 +332,9 @@ export default function Likes() {
       });
       setMatchId(matchData?.id || null);
       setShowMatchModal(true);
+
+      // Refresh the notification badge count
+      refreshUnreadLikeCount();
     } catch (error: any) {
       console.error('Error creating match:', error);
       // Restore the like back to UI on error
@@ -359,6 +367,9 @@ export default function Likes() {
         .from('likes')
         .delete()
         .eq('id', likeId);
+
+      // Refresh the notification badge count
+      refreshUnreadLikeCount();
     } catch (error) {
       console.error('Error passing:', error);
       // Reload likes to restore state
@@ -478,7 +489,7 @@ export default function Likes() {
 
   // Premium users see actual likes
   return (
-    <View className="flex-1 bg-background">
+    <View className="flex-1 bg-background" style={{ paddingRight: rightSafeArea }}>
       {/* Header */}
       <View className="bg-background dark:bg-background px-6 pb-6 border-b border-border flex-row justify-between items-end" style={{ paddingTop: insets.top + 16 }}>
         <View>
@@ -524,7 +535,7 @@ export default function Likes() {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#A08AB7" />
           }
         >
-          <View className="flex-row flex-wrap gap-3 pb-6">
+          <View className="flex-row flex-wrap gap-3 pb-24">
             {likes.map((like) => (
               <View key={like.id} className="w-[47%]">
                 <TouchableOpacity
