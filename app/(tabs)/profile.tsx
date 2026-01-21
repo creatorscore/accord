@@ -10,7 +10,10 @@ import {
   StatusBar,
   Linking,
   Modal,
+  useWindowDimensions,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,7 +26,7 @@ import { useColorScheme } from '@/lib/useColorScheme';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
 import ProfilePhotoCarousel from '@/components/profile/ProfilePhotoCarousel';
-import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
+import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
 
 interface ProfileData {
   id: string;
@@ -61,6 +64,10 @@ export default function Profile() {
   const { user, signOut } = useAuth();
   const { isPremium, isPlatinum, subscriptionTier, isLoading: subscriptionLoading } = useSubscription();
   const { colors, isDarkColorScheme } = useColorScheme();
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const unreadActivityCount = useUnreadActivityCount(profile?.id || null);
   const [loading, setLoading] = useState(true);
@@ -241,10 +248,10 @@ export default function Profile() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingRight: rightSafeArea }]}>
       <StatusBar barStyle={isDarkColorScheme ? "light-content" : "dark-content"} />
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Enhanced Photo Carousel */}
         {profile?.photos && profile.photos.length > 0 ? (
           <ProfilePhotoCarousel
@@ -727,6 +734,20 @@ export default function Profile() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#FEE2E2', borderLeftWidth: 4, borderLeftColor: '#EF4444' }]}
+                onPress={() => router.push('/admin/photo-reviews')}
+              >
+                <View style={styles.menuItemLeft}>
+                  <MaterialCommunityIcons name="image-search" size={24} color="#EF4444" />
+                  <View>
+                    <Text style={[styles.menuItemText, { color: '#991B1B', fontWeight: '700' }]}>Photo Reviews</Text>
+                    <Text style={[styles.adminSubtext, { color: '#991B1B' }]}>Review flagged user photos</Text>
+                  </View>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={[styles.menuItem, { backgroundColor: '#FEF3C7', borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}
                 onPress={() => router.push('/(onboarding)/basic-info')}
               >
@@ -800,19 +821,27 @@ export default function Profile() {
         onRequestClose={() => setShowPreview(false)}
       >
         {profile && (
-          <ImmersiveProfileCard
-            profile={{
-              ...profile,
-              compatibility_score: undefined, // Don't show compatibility for own profile
-              distance: undefined,
-            } as any}
-            preferences={preferences}
-            onClose={() => setShowPreview(false)}
-            visible={showPreview}
-            isMatched={true} // Hide swipe actions for self-preview
-            heightUnit={(profile?.height_unit as 'imperial' | 'metric') || 'imperial'}
-            onSendMessage={undefined} // No message button for self-preview
-          />
+          <View style={styles.previewContainer}>
+            {/* Close Button */}
+            <TouchableOpacity
+              style={[styles.previewCloseButton, { top: insets.top + 8 }]}
+              onPress={() => setShowPreview(false)}
+            >
+              <MaterialCommunityIcons name="close" size={24} color="#000000" />
+            </TouchableOpacity>
+
+            <DiscoveryProfileView
+              profile={{
+                ...profile,
+                compatibility_score: undefined, // Don't show compatibility for own profile
+                distance: undefined,
+              } as any}
+              preferences={preferences}
+              heightUnit={(profile?.height_unit as 'imperial' | 'metric') || 'imperial'}
+              hideActions={true}
+              isOwnProfile={true}
+            />
+          </View>
         )}
       </Modal>
     </View>
@@ -1136,5 +1165,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9CA3AF',
     textAlign: 'center',
+  },
+  previewContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  previewCloseButton: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

@@ -50,7 +50,7 @@ export default function Toast({
 
   useEffect(() => {
     if (visible) {
-      translateY.value = withSpring(0, { damping: 15, stiffness: 150 });
+      translateY.value = withTiming(0, { duration: 250 });
       opacity.value = withTiming(1, { duration: 200 });
 
       // Auto-dismiss

@@ -61,10 +61,7 @@ export default function ProfileInteractiveSection({
             exit={{ opacity: 0, height: 0 }}
             transition={{ type: 'timing', duration: 300, delay: index * 50 }}
           >
-            <TouchableOpacity
-              style={styles.item}
-              activeOpacity={0.7}
-            >
+            <View style={styles.item}>
               <View style={styles.itemLeft}>
                 {item.icon && (
                   <View style={styles.iconContainer}>
@@ -86,12 +83,7 @@ export default function ProfileInteractiveSection({
                   )}
                 </View>
               </View>
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={20}
-                color="#D1D5DB"
-              />
-            </TouchableOpacity>
+            </View>
           </MotiView>
         ))}
       </AnimatePresence>

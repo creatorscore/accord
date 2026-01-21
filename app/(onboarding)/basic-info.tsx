@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView, Pressable } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView, Pressable, InteractionManager } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { openAppSettings } from '@/lib/open-settings';
+import { searchCities, CityResult } from '@/lib/city-search';
 
 const GENDERS = [
   'Man',
@@ -37,7 +38,7 @@ const ORIENTATIONS = [
   'Lesbian',
   'Gay',
   'Bisexual',
-  'Straight',
+  'Straight', // Note: Hidden for men-only users (filtered in getAvailableOrientations)
   'Queer',
   'Asexual',
   'Pansexual',
@@ -78,6 +79,30 @@ const ETHNICITIES = [
   'Other',
   'Prefer not to say',
 ];
+
+// Genders where "Straight" orientation is hidden (cis straight men not allowed on platform)
+// Trans men CAN be straight - only cis men cannot
+const CIS_MEN_GENDERS = ['Man'];
+
+// Genders where "Lesbian" orientation doesn't apply (men, including trans men)
+const MEN_GENDERS = ['Man', 'Trans Man'];
+
+// Helper function to get available orientations based on gender
+function getAvailableOrientations(selectedGender: string): string[] {
+  let filtered = ORIENTATIONS;
+
+  // Hide "Straight" for cis men only (straight cis men not allowed on platform)
+  if (CIS_MEN_GENDERS.includes(selectedGender)) {
+    filtered = filtered.filter(o => o !== 'Straight');
+  }
+
+  // Hide "Lesbian" for all men (cis and trans) - lesbian means women attracted to women
+  if (MEN_GENDERS.includes(selectedGender)) {
+    filtered = filtered.filter(o => o !== 'Lesbian');
+  }
+
+  return filtered;
+}
 
 // Helper function to calculate age from birth date
 function calculateAge(birthDate: Date): number {
@@ -122,7 +147,7 @@ export default function BasicInfo() {
   const [birthDate, setBirthDate] = useState<Date | undefined>(undefined);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const [gender, setGender] = useState<string[]>([]);
+  const [gender, setGender] = useState<string>('');
   const [pronouns, setPronouns] = useState('');
   const [ethnicity, setEthnicity] = useState<string[]>([]);
   const [orientation, setOrientation] = useState<string[]>([]);
@@ -132,12 +157,13 @@ export default function BasicInfo() {
   const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationSearch, setLocationSearch] = useState('');
   const [searchingLocation, setSearchingLocation] = useState(false);
-  const [locationSuggestions, setLocationSuggestions] = useState<Array<{ city: string; state: string; country: string; latitude: number; longitude: number }>>([]);
+  const [locationSuggestions, setLocationSuggestions] = useState<CityResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [ageCertified, setAgeCertified] = useState(false);
   const [hideLocation, setHideLocation] = useState(false); // Privacy option for high-risk countries
+  const [showManualEntry, setShowManualEntry] = useState(false); // Fallback for GPS issues
 
   // Check authentication and load existing data on mount
   useEffect(() => {
@@ -153,12 +179,25 @@ export default function BasicInfo() {
     }
   };
 
-  // Toggle functions for multi-select fields
-  const toggleGender = (g: string) => {
-    if (gender.includes(g)) {
-      setGender(gender.filter(item => item !== g));
-    } else {
-      setGender([...gender, g]);
+  // Select gender (single choice only)
+  const selectGender = (g: string) => {
+    setGender(g);
+
+    // Remove invalid orientations based on gender selection
+    let newOrientation = orientation;
+
+    // Remove "Straight" if cis man (straight cis men not allowed on platform)
+    if (CIS_MEN_GENDERS.includes(g) && newOrientation.includes('Straight')) {
+      newOrientation = newOrientation.filter(o => o !== 'Straight');
+    }
+
+    // Remove "Lesbian" if any male gender (lesbian means women attracted to women)
+    if (MEN_GENDERS.includes(g) && newOrientation.includes('Lesbian')) {
+      newOrientation = newOrientation.filter(o => o !== 'Lesbian');
+    }
+
+    if (newOrientation !== orientation) {
+      setOrientation(newOrientation);
     }
   };
 
@@ -201,7 +240,7 @@ export default function BasicInfo() {
         if (profile.birth_date) {
           setBirthDate(new Date(profile.birth_date));
         }
-        if (profile.gender) setGender(Array.isArray(profile.gender) ? profile.gender : [profile.gender]);
+        if (profile.gender) setGender(Array.isArray(profile.gender) ? profile.gender[0] : profile.gender);
         if (profile.pronouns) setPronouns(profile.pronouns);
         if (profile.ethnicity) setEthnicity(Array.isArray(profile.ethnicity) ? profile.ethnicity : [profile.ethnicity]);
         if (profile.sexual_orientation) setOrientation(Array.isArray(profile.sexual_orientation) ? profile.sexual_orientation : [profile.sexual_orientation]);
@@ -250,53 +289,84 @@ export default function BasicInfo() {
         return;
       }
 
+      // Defer heavy location work to prevent ANR on low-end Android devices
+      // This allows the UI to remain responsive while we get location
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => resolve());
+      });
+
       // Try to get location with multiple fallback strategies
       // This ensures location works in regions with restricted Google services (e.g., Iran, China)
-      let location;
+      // OPTIMIZED: Reduced timeouts to prevent ANR on low-end devices
+      let location: Location.LocationObject | null = null;
 
       try {
-        // First attempt: Try HIGHEST accuracy with longer timeout (GPS + Network)
-        console.log('📍 Attempting high-accuracy location...');
-        location = await Promise.race([
-          Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Highest,
-            maximumAge: 10000, // Accept cached location up to 10 seconds old
-          }),
-          // Timeout after 15 seconds
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout')), 15000)
-          )
-        ]);
-        console.log('✅ High-accuracy location obtained');
-      } catch (highAccuracyError) {
-        console.log('⚠️ High-accuracy failed, trying balanced accuracy...');
+        // First: Try getLastKnownPositionAsync (instant, no GPS needed)
+        // This often has a recent location cached and won't block
+        console.log('📍 Checking for cached location...');
+        const lastKnown = await Location.getLastKnownPositionAsync({
+          maxAge: 60000, // Accept location up to 1 minute old
+          requiredAccuracy: 1000, // Accept up to 1km accuracy
+        });
+
+        if (lastKnown && lastKnown.coords) {
+          console.log('✅ Using cached location (instant)');
+          location = lastKnown;
+        }
+      } catch (cachedError) {
+        console.log('⚠️ No cached location available');
+      }
+
+      // If no cached location, try getting fresh location with reduced timeouts
+      if (!location) {
+        // Yield to main thread before heavy GPS work
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         try {
-          // Second attempt: Try BALANCED accuracy (faster, works better in restricted regions)
+          // Second attempt: Try BALANCED accuracy first (faster than HIGHEST, good enough)
+          console.log('📍 Attempting balanced-accuracy location...');
           location = await Promise.race([
             Location.getCurrentPositionAsync({
               accuracy: Location.Accuracy.Balanced,
-              maximumAge: 10000,
             }),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Timeout')), 10000)
+            // Reduced timeout: 5 seconds instead of 15
+            new Promise<Location.LocationObject>((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout')), 5000)
             )
           ]);
           console.log('✅ Balanced-accuracy location obtained');
         } catch (balancedError) {
           console.log('⚠️ Balanced accuracy failed, trying low accuracy...');
 
-          // Final attempt: Try LOW accuracy (network-only, fastest)
-          location = await Promise.race([
-            Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Low,
-              maximumAge: 30000, // Accept older cached location
-            }),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Timeout')), 8000)
-            )
-          ]);
-          console.log('✅ Low-accuracy location obtained (better than nothing)');
+          // Yield to main thread between attempts
+          await new Promise(resolve => setTimeout(resolve, 50));
+
+          try {
+            // Third attempt: Try LOW accuracy (network-only, fastest)
+            location = await Promise.race([
+              Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Low,
+              }),
+              // Reduced timeout: 3 seconds
+              new Promise<Location.LocationObject>((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout')), 3000)
+              )
+            ]);
+            console.log('✅ Low-accuracy location obtained');
+          } catch (lowError) {
+            console.log('⚠️ Low accuracy failed, final attempt with lowest...');
+
+            // Final attempt: Lowest accuracy, shortest timeout
+            location = await Promise.race([
+              Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Lowest,
+              }),
+              new Promise<Location.LocationObject>((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout')), 2000)
+              )
+            ]);
+            console.log('✅ Lowest-accuracy location obtained');
+          }
         }
       }
 
@@ -344,19 +414,53 @@ export default function BasicInfo() {
         longitude: location.coords.longitude,
       });
 
-      // Reverse geocode to get city/state
-      const [address] = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
+      // Yield to main thread before geocoding to prevent ANR
+      await new Promise(resolve => setTimeout(resolve, 50));
 
-      if (address.city) setLocationCity(address.city);
-      if (address.region) setLocationState(address.region);
-      if (address.country) setLocationCountry(address.country);
+      // Reverse geocode to get city/state (with timeout to prevent blocking)
+      const geocodeResult = await Promise.race([
+        Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        }),
+        // Timeout after 5 seconds
+        new Promise<Location.LocationGeocodedAddress[]>((_, reject) =>
+          setTimeout(() => reject(new Error('Geocode timeout')), 5000)
+        )
+      ]);
+      const [address] = geocodeResult;
+
+      // Extract city - try multiple fields as different countries use different conventions
+      let city = address.city || address.district || address.subregion || address.name || '';
+      let state = address.region || address.subregion || '';
+      const country = address.country || '';
+
+      // Handle countries with constituent countries/regions (UK, Spain, etc.)
+      // These places have regions that are more like "states" than cities
+      const constituentRegions = [
+        'Wales', 'Scotland', 'England', 'Northern Ireland', // UK
+        'Catalonia', 'Andalusia', 'Galicia', 'Basque Country', // Spain
+        'Bavaria', 'Saxony', 'Hesse', // Germany
+        'Lombardy', 'Tuscany', 'Sicily', 'Veneto', // Italy
+        'Queensland', 'Victoria', 'New South Wales', // Australia
+        'Ontario', 'Quebec', 'British Columbia', 'Alberta', // Canada
+      ];
+
+      // If city is a constituent region, use district/subregion as city instead
+      if (constituentRegions.some(r => city.toLowerCase() === r.toLowerCase())) {
+        const originalCity = city;
+        city = address.district || address.subregion || address.name || '';
+        // Use the constituent region as the state
+        state = originalCity;
+      }
+
+      if (city) setLocationCity(city);
+      if (state) setLocationState(state);
+      if (country) setLocationCountry(country);
 
       console.log('✅ Location captured:', {
-        city: address.city,
-        state: address.region,
+        city: city,
+        state: state,
         accuracy: location.coords.accuracy,
         coords: `${location.coords.latitude}, ${location.coords.longitude}`
       });
@@ -388,28 +492,12 @@ export default function BasicInfo() {
 
   // Debounce timer ref
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
 
-  // Request location permission on Android when user wants to search
-  const requestLocationPermissionForSearch = async () => {
-    if (Platform.OS === 'android' && !locationPermissionGranted) {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        setLocationPermissionGranted(true);
-        return true;
-      } else {
-        Alert.alert(
-          'Permission Required',
-          'Location permission is needed to search for cities on Android. You can also use "Get My Location" button instead.',
-          [{ text: 'OK' }]
-        );
-        return false;
-      }
-    }
-    return true; // iOS doesn't need permission for geocoding
-  };
-
-  const handleLocationSearch = async (searchText: string) => {
+  /**
+   * Handle city search using offline database
+   * Works in ALL countries without needing GPS or Google services
+   */
+  const handleLocationSearch = (searchText: string) => {
     setLocationSearch(searchText);
 
     // Clear previous suggestions if search is too short
@@ -424,121 +512,28 @@ export default function BasicInfo() {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Debounce search by 400ms (faster for better UX)
-    searchTimeoutRef.current = setTimeout(async () => {
+    // Debounce search by 150ms (fast since it's offline)
+    searchTimeoutRef.current = setTimeout(() => {
+      setSearchingLocation(true);
+
       try {
-        setSearchingLocation(true);
+        // Use offline city database - works everywhere, no permissions needed!
+        const results = searchCities(searchText, 15);
 
-        // Android requires location permission for geocoding - check if already granted
-        if (Platform.OS === 'android' && !locationPermissionGranted) {
-          const hasPermission = await requestLocationPermissionForSearch();
-          if (!hasPermission) {
-            setSearchingLocation(false);
-            return;
-          }
-        }
-
-        // Use expo-location geocoding to find the location
-        const results = await Location.geocodeAsync(searchText);
-
-        if (results.length > 0) {
-          // Get address details for each result (limit to first 5)
-          const suggestions = await Promise.all(
-            results.slice(0, 5).map(async (result) => {
-              try {
-                const [address] = await Location.reverseGeocodeAsync({
-                  latitude: result.latitude,
-                  longitude: result.longitude,
-                });
-
-                // Extract city - try multiple fields as different countries use different conventions
-                let city = address.city || address.district || address.subregion || address.name || '';
-                let state = address.region || address.subregion || '';
-                const country = address.country || '';
-
-                // Handle countries with constituent countries/regions (UK, Spain, etc.)
-                // These places have regions that are more like "states" than cities
-                const constituentRegions = [
-                  'Wales', 'Scotland', 'England', 'Northern Ireland', // UK
-                  'Catalonia', 'Andalusia', 'Galicia', 'Basque Country', // Spain
-                  'Bavaria', 'Saxony', 'Hesse', // Germany
-                  'Lombardy', 'Tuscany', 'Sicily', 'Veneto', // Italy
-                  'Queensland', 'Victoria', 'New South Wales', // Australia
-                  'Ontario', 'Quebec', 'British Columbia', 'Alberta', // Canada
-                ];
-
-                // If city is a constituent region, use district/subregion as city instead
-                if (constituentRegions.some(r => city.toLowerCase() === r.toLowerCase())) {
-                  const originalCity = city;
-                  city = address.district || address.subregion || address.name || '';
-                  // If we still don't have a city, use the search term's first part
-                  if (!city) {
-                    city = searchText.split(',')[0].trim();
-                  }
-                  // Use the constituent region as the state
-                  state = originalCity;
-                }
-
-                // If city is still empty, try to extract from name or use search term
-                if (!city && address.name) {
-                  city = address.name;
-                }
-
-                // For countries without states/regions (small countries), leave state empty
-                // but ensure we have at least the country
-                if (!state && city) {
-                  // Some small countries don't have regions - that's okay
-                  state = '';
-                }
-
-                return {
-                  city: city,
-                  state: state,
-                  country: country,
-                  latitude: result.latitude,
-                  longitude: result.longitude,
-                };
-              } catch (error) {
-                console.log('Reverse geocode failed:', error);
-                return null;
-              }
-            })
-          );
-
-          // Filter out null results and results without a city
-          const validSuggestions = suggestions.filter(
-            (s): s is { city: string; state: string; country: string; latitude: number; longitude: number } =>
-              s !== null && s.city !== ''
-          );
-
-          // Deduplicate by city+state+country combination
-          const uniqueSuggestions = validSuggestions.filter((s, index, self) =>
-            index === self.findIndex((t) =>
-              t.city.toLowerCase() === s.city.toLowerCase() &&
-              t.state.toLowerCase() === s.state.toLowerCase() &&
-              t.country.toLowerCase() === s.country.toLowerCase()
-            )
-          );
-
-          console.log('📍 Location suggestions:', uniqueSuggestions.length, 'results for:', searchText);
-          setLocationSuggestions(uniqueSuggestions);
-          setShowSuggestions(uniqueSuggestions.length > 0);
-        } else {
-          console.log('📍 No geocode results for:', searchText);
-          setLocationSuggestions([]);
-          setShowSuggestions(false);
-        }
+        console.log('📍 City search:', results.length, 'results for:', searchText);
+        setLocationSuggestions(results);
+        setShowSuggestions(results.length > 0);
       } catch (error: any) {
-        console.error('Location search error:', error);
+        console.error('City search error:', error);
         setLocationSuggestions([]);
         setShowSuggestions(false);
       } finally {
         setSearchingLocation(false);
       }
-    }, 400);
+    }, 150);
   };
 
-  const selectLocation = (suggestion: { city: string; state: string; country: string; latitude: number; longitude: number }) => {
+  const selectLocation = (suggestion: CityResult) => {
     setLocationCity(suggestion.city);
     setLocationState(suggestion.state);
     setLocationCountry(suggestion.country);
@@ -594,7 +589,7 @@ export default function BasicInfo() {
       return;
     }
 
-    if (gender.length === 0) {
+    if (!gender) {
       Alert.alert(t('onboarding.errors.required'), t('onboarding.errors.selectGender'));
       return;
     }
@@ -682,7 +677,7 @@ export default function BasicInfo() {
           birth_date: birthDateObj.toISOString().split('T')[0], // Store as YYYY-MM-DD
           age, // Calculated age
           zodiac_sign, // Calculated zodiac
-          gender: gender, // Always store as array (TEXT[])
+          gender: gender ? [gender] : [], // Store as single-element array (DB expects TEXT[])
           pronouns,
           ethnicity: ethnicity && ethnicity.length > 0 ? ethnicity : null, // Always store as array (TEXT[])
           sexual_orientation: orientation, // Always store as array (TEXT[])
@@ -795,12 +790,12 @@ export default function BasicInfo() {
           {/* Age Certification Checkbox */}
           {birthDate && (
             <TouchableOpacity
-              className="flex-row items-start bg-purple-50 border-2 border-purple-200 rounded-xl p-4"
+              className="flex-row items-start bg-purple-50 dark:bg-purple-900/30 border-2 border-purple-200 dark:border-purple-700 rounded-xl p-4"
               onPress={() => setAgeCertified(!ageCertified)}
               activeOpacity={0.7}
             >
               <View className={`w-6 h-6 rounded-md border-2 mr-3 items-center justify-center ${
-                ageCertified ? 'bg-lavender-500 border-lavender-500' : 'bg-white border-gray-300'
+                ageCertified ? 'bg-lavender-500 border-lavender-500' : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-500'
               }`}>
                 {ageCertified && (
                   <MaterialCommunityIcons name="check" size={16} color="white" />
@@ -899,21 +894,21 @@ export default function BasicInfo() {
           {/* Gender */}
           <View>
             <Text className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{t('onboarding.gender')}</Text>
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that apply</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select one</Text>
             <View className="flex-row flex-wrap gap-2">
               {GENDERS.map((g) => (
                 <TouchableOpacity
                   key={g}
                   className={`px-4 py-2 rounded-full border ${
-                    gender.includes(g)
+                    gender === g
                       ? 'bg-lavender-500 border-lavender-500'
                       : 'bg-white border-gray-300'
                   }`}
-                  onPress={() => toggleGender(g)}
+                  onPress={() => selectGender(g)}
                 >
                   <Text
                     className={`${
-                      gender.includes(g) ? 'text-white' : 'text-gray-700'
+                      gender === g ? 'text-white' : 'text-gray-700'
                     } font-medium`}
                   >
                     {g}
@@ -921,9 +916,9 @@ export default function BasicInfo() {
                 </TouchableOpacity>
               ))}
             </View>
-            {gender.length > 0 && (
+            {gender && (
               <Text className="text-xs text-lavender-500 mt-2">
-                Selected: {gender.join(', ')}
+                Selected: {gender}
               </Text>
             )}
           </View>
@@ -991,7 +986,7 @@ export default function BasicInfo() {
             <Text className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{t('onboarding.sexualOrientation')}</Text>
             <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that apply</Text>
             <View className="flex-row flex-wrap gap-2">
-              {ORIENTATIONS.map((o) => (
+              {getAvailableOrientations(gender).map((o) => (
                 <TouchableOpacity
                   key={o}
                   className={`px-4 py-2 rounded-full border ${
@@ -1018,7 +1013,7 @@ export default function BasicInfo() {
             )}
           </View>
 
-          {/* Location - GPS Only (no manual entry) */}
+          {/* Location - GPS with manual fallback */}
           <View>
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-sm font-medium text-gray-700 dark:text-gray-200">{t('onboarding.location')}</Text>
@@ -1109,31 +1104,105 @@ export default function BasicInfo() {
               )}
             </View>
 
-            {/* GPS Location Detection - ALWAYS required */}
+            {/* GPS Location Detection - with manual fallback */}
             <View className="mb-3">
               {/* Get Location Button */}
               {!locationCity && !locationState ? (
-                <TouchableOpacity
-                  className={`bg-lavender-500 rounded-xl py-4 flex-row items-center justify-center ${gettingLocation ? 'opacity-70' : ''}`}
-                  onPress={handleGetLocation}
-                  disabled={gettingLocation}
-                >
-                  {gettingLocation ? (
-                    <>
-                      <MaterialCommunityIcons name="loading" size={24} color="white" />
-                      <Text className="text-white font-semibold text-base ml-2">
-                        {t('onboarding.gettingLocation')}
+                <>
+                  <TouchableOpacity
+                    className={`bg-lavender-500 rounded-xl py-4 flex-row items-center justify-center ${gettingLocation ? 'opacity-70' : ''}`}
+                    onPress={handleGetLocation}
+                    disabled={gettingLocation}
+                  >
+                    {gettingLocation ? (
+                      <>
+                        <MaterialCommunityIcons name="loading" size={24} color="white" />
+                        <Text className="text-white font-semibold text-base ml-2">
+                          {t('onboarding.gettingLocation')}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="crosshairs-gps" size={24} color="white" />
+                        <Text className="text-white font-semibold text-base ml-2">
+                          {t('onboarding.useMyLocation')}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Manual entry toggle - shows when GPS button is visible */}
+                  <TouchableOpacity
+                    className={`mt-3 py-3 px-4 rounded-xl border-2 flex-row items-center justify-center ${
+                      showManualEntry
+                        ? 'bg-gray-100 border-gray-300'
+                        : 'bg-white border-lavender-300'
+                    }`}
+                    onPress={() => setShowManualEntry(!showManualEntry)}
+                  >
+                    <MaterialCommunityIcons
+                      name={showManualEntry ? "chevron-up" : "magnify"}
+                      size={20}
+                      color={showManualEntry ? "#6B7280" : "#A08AB7"}
+                    />
+                    <Text className={`ml-2 font-medium ${
+                      showManualEntry ? 'text-gray-600' : 'text-lavender-600'
+                    }`}>
+                      {showManualEntry ? 'Hide manual entry' : "Search for your city instead"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Manual city search input */}
+                  {showManualEntry && (
+                    <View className="mt-3">
+                      <View className="relative">
+                        <View className="flex-row items-center bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3">
+                          <MaterialCommunityIcons name="magnify" size={20} color="#9CA3AF" />
+                          <TextInput
+                            className="flex-1 ml-2 text-gray-900 dark:text-white"
+                            placeholder="Search for your city..."
+                            placeholderTextColor="#9CA3AF"
+                            value={locationSearch}
+                            onChangeText={handleLocationSearch}
+                            autoCapitalize="words"
+                          />
+                          {searchingLocation && (
+                            <MaterialCommunityIcons name="loading" size={20} color="#A08AB7" />
+                          )}
+                        </View>
+
+                        {/* Location suggestions dropdown */}
+                        {showSuggestions && locationSuggestions.length > 0 && (
+                          <View className="absolute top-full left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl mt-1 shadow-lg z-50">
+                            {locationSuggestions.map((suggestion, index) => (
+                              <TouchableOpacity
+                                key={`${suggestion.city}-${suggestion.state}-${index}`}
+                                className={`px-4 py-3 flex-row items-center ${
+                                  index < locationSuggestions.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : ''
+                                }`}
+                                onPress={() => selectLocation(suggestion)}
+                              >
+                                <MaterialCommunityIcons name="map-marker" size={18} color="#A08AB7" />
+                                <View className="ml-2 flex-1">
+                                  <Text className="text-gray-900 dark:text-white font-medium">
+                                    {suggestion.city}{suggestion.state ? `, ${suggestion.state}` : ''}
+                                  </Text>
+                                  <Text className="text-gray-500 dark:text-gray-400 text-xs">
+                                    {suggestion.country}
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+
+                      <Text className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+                        Search 150,000+ cities worldwide
                       </Text>
-                    </>
-                  ) : (
-                    <>
-                      <MaterialCommunityIcons name="crosshairs-gps" size={24} color="white" />
-                      <Text className="text-white font-semibold text-base ml-2">
-                        {t('onboarding.useMyLocation')}
-                      </Text>
-                    </>
+                    </View>
                   )}
-                </TouchableOpacity>
+                </>
               ) : (
                 /* Show detected location with option to refresh */
                 <View className="bg-lavender-50 border border-lavender-200 rounded-xl px-4 py-4">
@@ -1151,13 +1220,20 @@ export default function BasicInfo() {
                     </View>
                     <TouchableOpacity
                       className="ml-2 p-2"
-                      onPress={handleGetLocation}
-                      disabled={gettingLocation}
+                      onPress={() => {
+                        // Clear location and show options again
+                        setLocationCity('');
+                        setLocationState('');
+                        setLocationCountry('');
+                        setLocationCoords(null);
+                        setLocationSearch('');
+                        setShowManualEntry(false);
+                      }}
                     >
                       <MaterialCommunityIcons
-                        name={gettingLocation ? "loading" : "refresh"}
+                        name="close-circle"
                         size={22}
-                        color="#A08AB7"
+                        color="#9CA3AF"
                       />
                     </TouchableOpacity>
                   </View>

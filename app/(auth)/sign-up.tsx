@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet, Keyboard } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,7 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SignUp() {
-  const { t } = useTranslation();
+  const translationHook = useTranslation();
+  const t = translationHook?.t || ((key: string) => key); // Fallback if i18n not ready
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,6 +24,9 @@ export default function SignUp() {
   const [otpCode, setOtpCode] = useState('');
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const { signUp, signIn } = useAuth();
+
+  // Ref to prevent multiple simultaneous sign-in attempts (synchronous check for slow devices)
+  const isSigningIn = useRef(false);
 
   useEffect(() => {
     checkAppleAuth();
@@ -181,6 +185,12 @@ export default function SignUp() {
   };
 
   const handleGoogleSignUp = async () => {
+    // Synchronous check to prevent ANR from multiple rapid taps on slow devices
+    if (isSigningIn.current) {
+      console.log('Sign-in already in progress, ignoring tap');
+      return;
+    }
+    isSigningIn.current = true;
     setLoading(true);
     try {
       const result = await signInWithGoogle();
@@ -205,11 +215,18 @@ export default function SignUp() {
       }
       console.error('Google sign-up error:', error);
     } finally {
+      isSigningIn.current = false;
       setLoading(false);
     }
   };
 
   const handleAppleSignUp = async () => {
+    // Synchronous check to prevent ANR from multiple rapid taps on slow devices
+    if (isSigningIn.current) {
+      console.log('Sign-in already in progress, ignoring tap');
+      return;
+    }
+    isSigningIn.current = true;
     setLoading(true);
     try {
       const result = await signInWithApple();
@@ -228,6 +245,7 @@ export default function SignUp() {
     } catch (error: any) {
       Alert.alert(t('common.error'), error.message || 'Failed to sign up with Apple');
     } finally {
+      isSigningIn.current = false;
       setLoading(false);
     }
   };

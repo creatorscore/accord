@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Keyboard, ScrollView, Dimensions, InteractionManager } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Keyboard, ScrollView, Dimensions, InteractionManager, useWindowDimensions, Platform, Animated, AppState } from 'react-native';
 import { MotiView } from 'moti';
 import Slider from '@react-native-community/slider';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,7 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { useScreenProtection } from '@/hooks/useScreenProtection';
-import SwipeCard from '@/components/matching/SwipeCard';
+import DiscoveryProfileView, { DiscoveryProfileViewRef } from '@/components/matching/DiscoveryProfileView';
 import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
 import MatchModal from '@/components/matching/MatchModal';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
@@ -78,8 +78,8 @@ interface Profile {
   preferences?: any;
 }
 
-// Daily swipe limit for free users
-const DAILY_SWIPE_LIMIT = 15;
+// Daily like limit for free users (unlimited browsing/passing, limited likes)
+const DAILY_LIKE_LIMIT = 5;
 
 // Helper function to hash phone numbers for contact blocking
 const hashPhoneNumber = async (phoneNumber: string): Promise<string> => {
@@ -102,6 +102,9 @@ export default function Discover() {
   const { isPremium, isPlatinum } = useSubscription();
   const { colors } = useColorScheme();
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [currentUserPhoto, setCurrentUserPhoto] = useState<string | null>(null);
   const [currentUserGender, setCurrentUserGender] = useState<string | null>(null);
@@ -115,7 +118,7 @@ export default function Discover() {
   const [showImmersiveProfile, setShowImmersiveProfile] = useState(false);
   const [currentProfilePreferences, setCurrentProfilePreferences] = useState<any>(null);
   const [showPaywall, setShowPaywall] = useState(false);
-  const [swipeCount, setSwipeCount] = useState(0);
+  const [likeCount, setLikeCount] = useState(0); // Daily likes used (5/day for free users)
   const [superLikesRemaining, setSuperLikesRemaining] = useState(5);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
@@ -187,6 +190,47 @@ export default function Discover() {
   const [showPremiumLocationPrompt, setShowPremiumLocationPrompt] = useState(false);
   const hasShownPremiumLocationPrompt = useRef(false);
 
+  // Hinge-style discovery refs and animation
+  const discoveryProfileRef = useRef<DiscoveryProfileViewRef>(null);
+  const profileOpacity = useRef(new Animated.Value(1)).current;
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const isInitialFocus = useRef(true); // Track if this is the first time screen is focused
+  const hasAdvancedOnFocus = useRef(false); // Prevent multiple advances per focus
+
+  // Store latest values in refs for focus effect (avoids stale closure)
+  const profilesRef = useRef(profiles);
+  const currentIndexRef = useRef(currentIndex);
+  useEffect(() => {
+    profilesRef.current = profiles;
+    currentIndexRef.current = currentIndex;
+  }, [profiles, currentIndex]);
+
+  // Transition to next profile with fade animation
+  const transitionToNextProfile = useCallback(() => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+
+    // Fade out current profile
+    Animated.timing(profileOpacity, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      // Update index
+      setCurrentIndex(prev => prev + 1);
+      // Reset scroll position
+      discoveryProfileRef.current?.scrollToTop();
+      // Fade in next profile
+      Animated.timing(profileOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        setIsTransitioning(false);
+      });
+    });
+  }, [isTransitioning, profileOpacity]);
+
   // Smart recommendations - dynamic array from database
   const [smartRecommendations, setSmartRecommendations] = useState<Array<{
     type: 'age' | 'distance' | 'gender' | 'global';
@@ -214,7 +258,7 @@ export default function Discover() {
 
   useEffect(() => {
     loadCurrentProfile();
-    loadSwipeCount();
+    loadLikeCount();
     // Request tracking permission on first app use
     initializeTracking();
   }, []);
@@ -225,22 +269,109 @@ export default function Discover() {
     }
   }, [currentProfileId]);
 
+  // Initial load when profile ID is available
+  // NOTE: Do NOT include filters in dependency - filter changes are handled explicitly
+  // by the code that changes them (smart recommendations, filter modal, etc.)
   useEffect(() => {
-    if (currentProfileId && filters) {
-      loadProfiles();
+    if (currentProfileId) {
+      // Defer heavy profile loading until after animations complete
+      InteractionManager.runAfterInteractions(() => {
+        loadProfiles();
+      });
     }
-  }, [currentProfileId, filters]);
+  }, [currentProfileId]);
 
   // Reload profiles every time the screen comes into focus
   // This ensures fresh data when user returns from editing preferences or other screens
+  // NOTE: Do NOT include filters in dependency - filter changes are handled explicitly
   useFocusEffect(
     useCallback(() => {
-      if (currentProfileId && filters) {
+      if (currentProfileId) {
         console.log('🔄 Discovery screen focused - reloading profiles');
-        loadProfiles();
+        // Defer heavy profile loading until after animations complete
+        InteractionManager.runAfterInteractions(() => {
+          loadProfiles();
+        });
       }
-    }, [currentProfileId, filters])
+    }, [currentProfileId])
   );
+
+  // Hinge-style refresh: Show new profile when user returns to discovery screen
+  // This prevents analysis paralysis and creates healthy FOMO
+  useFocusEffect(
+    useCallback(() => {
+      // Skip on initial focus (when user first enters the screen)
+      if (isInitialFocus.current) {
+        isInitialFocus.current = false;
+        return;
+      }
+
+      // Only advance once per focus event
+      if (hasAdvancedOnFocus.current) {
+        return;
+      }
+
+      // Only advance if there are more profiles to show (use refs for latest values)
+      const currentProfiles = profilesRef.current;
+      const currentIdx = currentIndexRef.current;
+
+      if (currentProfiles.length > 0 && currentIdx < currentProfiles.length - 1) {
+        console.log('🔄 Discovery screen refocused - advancing to next profile');
+        hasAdvancedOnFocus.current = true;
+
+        // Small delay to ensure screen transition is complete
+        setTimeout(() => {
+          setCurrentIndex(prev => prev + 1);
+        }, 300);
+      }
+
+      // Reset flag when screen loses focus
+      return () => {
+        hasAdvancedOnFocus.current = false;
+      };
+    }, [])
+  );
+
+  // Handle app foregrounding (when user returns from background)
+  // This complements useFocusEffect which only handles in-app navigation
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        // App came to foreground
+        // Skip on initial mount
+        if (isInitialFocus.current) {
+          return;
+        }
+
+        // Only advance once per app foreground event
+        if (hasAdvancedOnFocus.current) {
+          return;
+        }
+
+        // Only advance if there are more profiles to show
+        const currentProfiles = profilesRef.current;
+        const currentIdx = currentIndexRef.current;
+
+        if (currentProfiles.length > 0 && currentIdx < currentProfiles.length - 1) {
+          console.log('📱 App foregrounded - advancing to next profile');
+          hasAdvancedOnFocus.current = true;
+
+          // Small delay to ensure app transition is complete
+          setTimeout(() => {
+            setCurrentIndex(prev => prev + 1);
+            // Reset flag after advance
+            setTimeout(() => {
+              hasAdvancedOnFocus.current = false;
+            }, 500);
+          }, 300);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   // Refresh photo verification status when screen comes into focus
   // This ensures the banner disappears after user completes verification
@@ -284,6 +415,17 @@ export default function Discover() {
       if (imagesToPrefetch.length > 0) {
         prefetchImages(imagesToPrefetch);
       }
+    }
+  }, [currentIndex, profiles]);
+
+  // Load preferences for current profile (Hinge-style: profile shown inline)
+  useEffect(() => {
+    if (profiles.length > 0 && currentIndex < profiles.length) {
+      const targetProfile = profiles[currentIndex];
+      const prefs = (targetProfile as any).preferences;
+      setCurrentProfilePreferences(prefs);
+      // Track profile view
+      trackUserAction.profileViewed(targetProfile.id);
     }
   }, [currentIndex, profiles]);
 
@@ -352,7 +494,10 @@ export default function Discover() {
         pets: [],
         primaryReason: [],
         relationshipType: [],
-        wantsChildren: null,
+        // Load children preference from matching preferences if set
+        wantsChildren: userPreferences.wants_children === true ? 'yes'
+          : userPreferences.wants_children === false ? 'no'
+          : null,
       } : filters;
 
       // Load distance unit preference (default to 'miles' for backward compatibility)
@@ -412,38 +557,38 @@ export default function Discover() {
     }
   };
 
-  const loadSwipeCount = async () => {
+  const loadLikeCount = async () => {
     try {
       const today = new Date().toDateString();
-      const storedData = await AsyncStorage.getItem('swipe_data');
+      const storedData = await AsyncStorage.getItem('like_data');
 
       if (storedData) {
-        const { date, count } = JSON.parse(storedData);
+        const { date, count} = JSON.parse(storedData);
         // Reset count if it's a new day
         if (date === today) {
-          setSwipeCount(count);
+          setLikeCount(count);
         } else {
-          setSwipeCount(0);
-          await AsyncStorage.setItem('swipe_data', JSON.stringify({ date: today, count: 0 }));
+          setLikeCount(0);
+          await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: 0 }));
         }
       } else {
-        setSwipeCount(0);
-        await AsyncStorage.setItem('swipe_data', JSON.stringify({ date: today, count: 0 }));
+        setLikeCount(0);
+        await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: 0 }));
       }
     } catch (error) {
-      console.error('Error loading swipe count:', error);
+      console.error('Error loading like count:', error);
     }
   };
 
-  const incrementSwipeCount = async () => {
-    const newCount = swipeCount + 1;
-    setSwipeCount(newCount);
+  const incrementLikeCount = async () => {
+    const newCount = likeCount + 1;
+    setLikeCount(newCount);
 
     try {
       const today = new Date().toDateString();
-      await AsyncStorage.setItem('swipe_data', JSON.stringify({ date: today, count: newCount }));
+      await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: newCount }));
     } catch (error) {
-      console.error('Error saving swipe count:', error);
+      console.error('Error saving like count:', error);
     }
   };
 
@@ -595,22 +740,22 @@ export default function Discover() {
     }
   };
 
-  const checkSwipeLimit = (): boolean => {
-    // Premium users have unlimited swipes
+  const checkLikeLimit = (): boolean => {
+    // Premium users have unlimited likes
     if (isPremium) return true;
 
-    // Free users have daily limit (same for everyone)
-    if (swipeCount >= DAILY_SWIPE_LIMIT) {
+    // Free users have daily like limit (5 likes/day, unlimited browsing)
+    if (likeCount >= DAILY_LIKE_LIMIT) {
       setShowPaywall(true);
 
-      // Record when user hit swipe limit (for refresh notification)
+      // Record when user hit like limit (for refresh notification)
       if (currentProfileId) {
         supabase
           .from('notification_preferences')
           .update({ last_swipe_limit_hit_at: new Date().toISOString() })
           .eq('profile_id', currentProfileId)
           .then(({ error }) => {
-            if (error) console.warn('Failed to record swipe limit hit:', error);
+            if (error) console.warn('Failed to record like limit hit:', error);
           });
       }
 
@@ -635,11 +780,12 @@ export default function Discover() {
     return Math.round(R * c);
   }, []);
 
-  const loadProfiles = async (searchModeOverride?: boolean, searchKeywordOverride?: string) => {
+  const loadProfiles = async (searchModeOverride?: boolean, searchKeywordOverride?: string, filtersOverride?: Partial<FilterOptions>) => {
     // Use override values if provided, otherwise fall back to state
     // This fixes the React state timing issue where state updates are async
     const effectiveSearchMode = searchModeOverride !== undefined ? searchModeOverride : isSearchMode;
     const effectiveSearchKeyword = searchKeywordOverride !== undefined ? searchKeywordOverride : searchKeyword;
+    const effectiveFilters = filtersOverride ? { ...filters, ...filtersOverride } : filters;
 
     try {
       setLoading(true);
@@ -769,14 +915,15 @@ export default function Discover() {
       if (!isSearchingGlobally && !effectiveSearchMode && currentUserData.latitude && currentUserData.longitude) {
         // LOCAL SEARCH: Use RPC function to get profiles filtered by distance at DATABASE level
         console.log('🎯 Using distance-based RPC for local search');
+        console.log('📏 Effective filters:', { maxDistance: effectiveFilters.maxDistance, ageMin: effectiveFilters.ageMin, ageMax: effectiveFilters.ageMax });
         // FIX #3: Limit initial load to 50 profiles to prevent ANR on low-end devices
         const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_profiles', {
           p_user_lat: currentUserData.latitude,
           p_user_lon: currentUserData.longitude,
-          p_max_distance_miles: filters.maxDistance,
+          p_max_distance_miles: effectiveFilters.maxDistance,
           p_user_profile_id: currentProfileId,
-          p_min_age: Math.max(18, filters.ageMin),
-          p_max_age: filters.ageMax,
+          p_min_age: Math.max(18, effectiveFilters.ageMin),
+          p_max_age: effectiveFilters.ageMax,
           p_gender_prefs: currentUserData.preferences?.gender_preference || [],
           p_result_limit: 50  // FIX #3: Reduced from 500 to 50 for better performance
         });
@@ -787,9 +934,13 @@ export default function Discover() {
         }
 
         // Fetch full profile data with photos and preferences for each nearby profile
+        console.log('📊 RPC returned profiles:', rpcData?.length || 0);
         if (rpcData && rpcData.length > 0) {
+          console.log('📋 RPC profile IDs:', rpcData.map((p: any) => p.id));
+          console.log('🚫 Swiped IDs count:', swipedIds.length);
           // Filter out already-swiped profiles from RPC results
           const nearbyIds = rpcData.map((p: any) => p.id).filter((id: string) => !swipedIds.includes(id));
+          console.log('✅ Nearby IDs after filtering swiped:', nearbyIds.length, nearbyIds);
 
           if (nearbyIds.length > 0) {
             const { data: fullProfiles, error: profilesError } = await supabase
@@ -803,11 +954,21 @@ export default function Discover() {
                 ),
                 preferences:preferences(*)
               `)
-              .in('id', nearbyIds);
+              .in('id', nearbyIds)
+              .eq('is_active', true) // CRITICAL: Double-check banned users are filtered
+              .or('policy_restricted.is.null,policy_restricted.eq.false'); // Filter policy restricted
 
-            if (profilesError) throw profilesError;
+            if (profilesError) {
+              console.error('❌ Full profile fetch error:', profilesError);
+              throw profilesError;
+            }
+            console.log('📦 Full profiles fetched:', fullProfiles?.length || 0);
             data = fullProfiles || [];
+          } else {
+            console.log('⚠️ No nearby IDs after filtering - all profiles already swiped');
           }
+        } else {
+          console.log('⚠️ RPC returned no data or empty array');
         }
       } else {
         // GLOBAL SEARCH or SEARCH MODE: Use standard query
@@ -824,6 +985,8 @@ export default function Discover() {
             preferences:preferences(*)
           `)
           .neq('id', currentProfileId)
+          .eq('is_active', true) // CRITICAL: Filter out banned/deactivated users
+          .or('policy_restricted.is.null,policy_restricted.eq.false') // Filter policy restricted users
           .eq('incognito_mode', false)
           .eq('profile_complete', true)
           .eq('photo_review_required', false)
@@ -870,11 +1033,11 @@ export default function Discover() {
         }
         // Apply strict age filters (no buffer - respect user preferences exactly)
         // Safety: Always enforce minimum age of 18
-        console.log('🔍 Applying age filter:', Math.max(18, filters.ageMin), '-', filters.ageMax);
+        console.log('🔍 Applying age filter:', Math.max(18, effectiveFilters.ageMin), '-', effectiveFilters.ageMax);
         console.log('📋 Current user age:', currentUserData.age);
         query = query
-          .gte('age', Math.max(18, filters.ageMin))
-          .lte('age', filters.ageMax);
+          .gte('age', Math.max(18, effectiveFilters.ageMin))
+          .lte('age', effectiveFilters.ageMax);
 
         // Apply gender preference filter (hard filter for all users)
         // Users can multi-select genders, so this should be a hard requirement
@@ -918,24 +1081,32 @@ export default function Discover() {
       // This happens BEFORE transformation to avoid unnecessary processing
       let filteredData = data || [];
 
+      // Contact blocking using server-side function for privacy
+      // This securely checks phone numbers without exposing them to the client
       if (blockedPhoneHashes.size > 0) {
-        // Hash each profile's phone number and filter out matches
-        const filterPromises = filteredData.map(async (profile: any) => {
-          if (profile.phone_number) {
-            try {
-              const phoneHash = await hashPhoneNumber(profile.phone_number);
-              if (blockedPhoneHashes.has(phoneHash)) {
-                return null; // Mark for removal
-              }
-            } catch (err) {
-              console.error('Error hashing phone number:', err);
+        try {
+          // Call server-side function that has access to auth.users.phone
+          const { data: contactBlockedProfileIds, error: rpcError } = await supabase
+            .rpc('get_contact_blocked_profile_ids', {
+              requesting_profile_id: currentProfileId
+            });
+
+          if (rpcError) {
+            console.error('Error fetching contact-blocked profiles:', rpcError);
+          } else if (contactBlockedProfileIds && contactBlockedProfileIds.length > 0) {
+            const blockedProfileIdSet = new Set(contactBlockedProfileIds);
+            const beforeCount = filteredData.length;
+            filteredData = filteredData.filter((p: any) => !blockedProfileIdSet.has(p.id));
+            const blockedCount = beforeCount - filteredData.length;
+
+            if (blockedCount > 0) {
+              console.log(`Filtered out ${blockedCount} contact-blocked profiles`);
             }
           }
-          return profile;
-        });
-
-        const filterResults = await Promise.all(filterPromises);
-        filteredData = filterResults.filter(p => p !== null);
+        } catch (error) {
+          console.error('Contact blocking error:', error);
+          // Don't fail the entire discovery flow if contact blocking fails
+        }
       }
 
       // SAFETY: Filter out profiles that have blocked viewer's country
@@ -946,46 +1117,64 @@ export default function Discover() {
       if (userCountry && filteredData.length > 0) {
         const profileIds = filteredData.map((p: any) => p.id);
 
-        // Batch query for country blocks
+        // Batch query for country blocks - check both country code AND country name
+        // This handles cases where location_country might be stored as 'Jamaica' or 'JM'
         const { data: countryBlockedProfiles } = await supabase
           .from('country_blocks')
           .select('profile_id')
-          .eq('country_code', userCountry)
+          .or(`country_code.eq.${userCountry},country_name.ilike.${userCountry}`)
           .in('profile_id', profileIds);
 
         if (countryBlockedProfiles && countryBlockedProfiles.length > 0) {
           const countryBlockedIds = new Set(countryBlockedProfiles.map(cb => cb.profile_id));
+          const filteredCount = filteredData.filter((p: any) => countryBlockedIds.has(p.id)).length;
+          if (filteredCount > 0) {
+            console.log(`Hiding ${filteredCount} profiles from users in ${userCountry} who blocked this country`);
+          }
           filteredData = filteredData.filter((p: any) => !countryBlockedIds.has(p.id));
         }
       }
 
-      // Transform and calculate real compatibility scores
+      // SAFETY: Filter out profiles FROM countries that the viewer has blocked
+      // This protects viewers from seeing profiles from countries they don't want to see
+      const { data: viewerBlockedCountries } = await supabase
+        .from('country_blocks')
+        .select('country_code, country_name')
+        .eq('profile_id', currentProfileId);
+
+      if (viewerBlockedCountries && viewerBlockedCountries.length > 0) {
+        // Create sets for both country codes AND country names for flexible matching
+        const blockedCountryCodes = new Set(viewerBlockedCountries.map(cb => cb.country_code));
+        const blockedCountryNames = new Set(viewerBlockedCountries.map(cb => cb.country_name.toLowerCase()));
+
+        // Filter out profiles from blocked countries
+        filteredData = filteredData.filter((p: any) => {
+          // Check if profile's location_country matches either the code or name
+          if (p.location_country) {
+            const profileCountry = p.location_country.toLowerCase();
+
+            // Check against country codes (e.g., 'JM')
+            if (blockedCountryCodes.has(p.location_country)) {
+              console.log(`Filtering out profile ${p.display_name} from blocked country code ${p.location_country}`);
+              return false;
+            }
+
+            // Check against country names (e.g., 'Jamaica')
+            if (blockedCountryNames.has(profileCountry)) {
+              console.log(`Filtering out profile ${p.display_name} from blocked country ${p.location_country}`);
+              return false;
+            }
+          }
+          return true;
+        });
+      }
+
+      // ANR FIX: Transform profiles first with default scores, calculate compatibility after UI renders
       const transformedProfiles: Profile[] = filteredData
         .map((profile: any) => {
-          // Calculate real compatibility score and breakdown using the algorithm
-          let compatibilityScore = 75; // Default if can't calculate
+          // Start with default compatibility score for fast initial render
+          let compatibilityScore = 75;
           let compatibilityBreakdown = undefined;
-
-          try {
-            if (currentUserData.preferences && profile.preferences) {
-              compatibilityScore = calculateCompatibilityScore(
-                currentUserData,
-                profile,
-                currentUserData.preferences,
-                profile.preferences
-              );
-
-              // Also calculate detailed breakdown for display
-              compatibilityBreakdown = getCompatibilityBreakdown(
-                currentUserData,
-                profile,
-                currentUserData.preferences,
-                profile.preferences
-              );
-            }
-          } catch (err) {
-            console.error('Error calculating compatibility:', err);
-          }
 
           // FIX #2: Calculate real distance using helper function (eliminates duplicate calculations)
           let distance = null;
@@ -1135,7 +1324,7 @@ export default function Discover() {
           // 1. STRICT AGE FILTER (no buffer, exact preferences)
           // ONE-SIDED: Only check if profile fits current user's age preferences
           // Do NOT check if current user fits profile's age preferences (removed for small userbase)
-          if (profile.age < filters.ageMin || profile.age > filters.ageMax) {
+          if (profile.age < effectiveFilters.ageMin || profile.age > effectiveFilters.ageMax) {
             return false;
           }
 
@@ -1239,26 +1428,22 @@ export default function Discover() {
               realTimeDistance = Math.round(R * c);
             }
 
-            if (realTimeDistance !== null && realTimeDistance > filters.maxDistance) {
+            if (realTimeDistance !== null && realTimeDistance > effectiveFilters.maxDistance) {
               return false;
             }
           }
 
-          // 5. CHILDREN COMPATIBILITY (hard dealbreaker if both have strong opinions)
-          if (currentUserData.preferences?.wants_children !== undefined &&
-              currentUserData.preferences?.wants_children !== null &&
-              profile.preferences?.wants_children !== undefined &&
-              profile.preferences?.wants_children !== null) {
-
-            const userWants = currentUserData.preferences.wants_children;
-            const profileWants = profile.preferences.wants_children;
-
-            // Hard incompatibility: one wants (true), one doesn't want (false)
-            if ((userWants === true && profileWants === false) ||
-                (userWants === false && profileWants === true)) {
-              return false;
-            }
-          }
+          // 5. CHILDREN COMPATIBILITY - REMOVED AS BLOCKING FILTER
+          // Note: Children preferences are important for compatibility scoring, but should NOT
+          // be a hard dealbreaker in a lavender marriage app. Lavender marriages often involve
+          // negotiated arrangements where children decisions can be discussed and agreed upon.
+          //
+          // Example: Someone who wants children might match with someone who doesn't, because:
+          // - They might use surrogacy/adoption independently
+          // - The arrangement might involve co-parenting with outside partners
+          // - Preferences might change through conversation
+          //
+          // FILTER REMOVED - Compatibility score handles this preference instead of blocking.
 
           // 6. RELATIONSHIP TYPE COMPATIBILITY - REMOVED AS BLOCKING FILTER
           // Note: Relationship type preference (platonic, romantic, open) is important for
@@ -1451,8 +1636,9 @@ export default function Discover() {
             }
           }
 
-          // Wants children filter
-          if (isPremium && filters.wantsChildren !== null && profile.preferences?.wants_children !== undefined) {
+          // Wants children filter - available to ALL users (not just premium)
+          // This is a fundamental life compatibility factor that shouldn't be paywalled
+          if (filters.wantsChildren !== null && profile.preferences?.wants_children !== undefined) {
             const wantsChildrenMap: { [key: string]: boolean | null } = {
               'yes': true,
               'no': false,
@@ -1518,6 +1704,58 @@ export default function Discover() {
       setProfiles(sortedProfiles);
       setCurrentIndex(0);
 
+      // ANR FIX: Calculate compatibility scores after animations complete
+      // InteractionManager.runAfterInteractions waits for all animations/transitions to finish
+      // This prevents blocking the UI thread and avoids ANR on Android
+      InteractionManager.runAfterInteractions(() => {
+        if (currentUserData.preferences && sortedProfiles.length > 0) {
+          // Process in batches to avoid blocking main thread
+          const BATCH_SIZE = 5;
+          let currentBatch = 0;
+          const totalBatches = Math.ceil(sortedProfiles.length / BATCH_SIZE);
+          let updatedProfiles = [...sortedProfiles];
+
+          const processBatch = () => {
+            const start = currentBatch * BATCH_SIZE;
+            const end = Math.min(start + BATCH_SIZE, sortedProfiles.length);
+
+            for (let i = start; i < end; i++) {
+              const profile = sortedProfiles[i];
+              try {
+                if (profile.preferences) {
+                  const compatibilityScore = calculateCompatibilityScore(
+                    currentUserData,
+                    profile,
+                    currentUserData.preferences,
+                    profile.preferences
+                  );
+                  const compatibilityBreakdown = getCompatibilityBreakdown(
+                    currentUserData,
+                    profile,
+                    currentUserData.preferences,
+                    profile.preferences
+                  );
+                  updatedProfiles[i] = { ...profile, compatibility_score: compatibilityScore, compatibilityBreakdown };
+                }
+              } catch (err) {
+                console.error('Error calculating compatibility for profile:', profile.id, err);
+              }
+            }
+
+            currentBatch++;
+            if (currentBatch < totalBatches) {
+              // Process next batch on next frame to keep UI responsive
+              requestAnimationFrame(processBatch);
+            } else {
+              // All batches done, update state once
+              setProfiles(updatedProfiles);
+            }
+          };
+
+          processBatch();
+        }
+      });
+
       // Prefetch images for the first few profiles for instant loading
       const imagesToPrefetch = sortedProfiles
         .slice(0, 5) // Prefetch first 5 profiles
@@ -1554,9 +1792,7 @@ export default function Discover() {
       return false;
     }
 
-    // Check swipe limit
-    if (!checkSwipeLimit()) return false;
-
+    // Passing (swiping left) is unlimited for all users
     const targetProfile = profiles[currentIndex];
 
     try {
@@ -1586,9 +1822,6 @@ export default function Discover() {
       trackUserAction.swipedLeft(targetProfile.id);
       trackFunnel.profileCardSwiped();
 
-      // Increment swipe count
-      await incrementSwipeCount();
-
       // Track last swipe for rewind
       setLastSwipe({
         profile: targetProfile,
@@ -1604,7 +1837,7 @@ export default function Discover() {
       console.error('❌ Error recording pass:', error);
       return false;
     }
-  }, [currentProfileId, currentIndex, profiles, swipeCount, isPremium, isProfileComplete]);
+  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete]);
 
   const handleSwipeRight = useCallback(async (): Promise<boolean> => {
     if (!currentProfileId || currentIndex >= profiles.length) {
@@ -1624,8 +1857,8 @@ export default function Discover() {
       return false;
     }
 
-    // Check swipe limit
-    if (!checkSwipeLimit()) return false;
+    // Check like limit (free users: 5 likes/day, premium: unlimited)
+    if (!checkLikeLimit()) return false;
 
     const targetProfile = profiles[currentIndex];
     console.log('❤️ Liking:', targetProfile.display_name);
@@ -1640,12 +1873,106 @@ export default function Discover() {
         .maybeSingle();
 
       if (existingLike) {
-        console.log('ℹ️ Already liked this profile, skipping insert');
-        // Already liked - just move to next card
-        Alert.alert(
-          'Already Liked',
-          `You've already liked ${targetProfile.display_name}. Check your matches to see if they liked you back!`
-        );
+        console.log('ℹ️ Already liked this profile - checking if we can create/recreate match');
+
+        // Check if the OTHER person has also liked you (mutual like check)
+        const { data: mutualLike } = await supabase
+          .from('likes')
+          .select('id')
+          .eq('liker_profile_id', targetProfile.id)
+          .eq('liked_profile_id', currentProfileId)
+          .maybeSingle();
+
+        if (mutualLike) {
+          // Check if there's already an ACTIVE match
+          const profile1Id = currentProfileId < targetProfile.id ? currentProfileId : targetProfile.id;
+          const profile2Id = currentProfileId < targetProfile.id ? targetProfile.id : currentProfileId;
+
+          const { data: existingMatch } = await supabase
+            .from('matches')
+            .select('id, status')
+            .eq('profile1_id', profile1Id)
+            .eq('profile2_id', profile2Id)
+            .maybeSingle();
+
+          if (existingMatch?.status === 'active') {
+            // Already matched and active
+            Alert.alert(
+              'Already Matched!',
+              `You're already matched with ${targetProfile.display_name}. Check your matches tab!`
+            );
+            const newIndex = currentIndex + 1;
+            setCurrentIndex(newIndex);
+            return true;
+          }
+
+          // Either no match exists, or it was unmatched - create/recreate the match!
+          console.log('💑 Mutual likes found! Creating/recreating match...');
+
+          if (existingMatch && existingMatch.status === 'unmatched') {
+            // Update the existing unmatched record to active
+            const { data: reactivatedMatch, error: updateError } = await supabase
+              .from('matches')
+              .update({
+                status: 'active',
+                matched_at: new Date().toISOString(),
+                expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                unmatched_by: null,
+                unmatched_at: null,
+                unmatch_reason: null,
+                first_message_sent_at: null, // Reset expiration timer
+              })
+              .eq('id', existingMatch.id)
+              .select('id')
+              .single();
+
+            if (updateError) {
+              console.error('❌ Error reactivating match:', updateError);
+            } else {
+              console.log('✅ Match reactivated:', reactivatedMatch?.id);
+              trackUserAction.matched(reactivatedMatch?.id || '');
+              trackFunnel.matchReceived();
+
+              setMatchId(reactivatedMatch?.id || null);
+              setMatchedProfile(targetProfile);
+              setShowMatchModal(true);
+              return true;
+            }
+          } else {
+            // Create new match
+            const { data: newMatch, error: matchError } = await supabase
+              .from('matches')
+              .insert({
+                profile1_id: profile1Id,
+                profile2_id: profile2Id,
+                initiated_by: currentProfileId,
+                compatibility_score: targetProfile.compatibility_score,
+                status: 'active',
+              })
+              .select('id')
+              .single();
+
+            if (matchError) {
+              console.error('❌ Match error:', matchError);
+            } else {
+              console.log('✅ Match created:', newMatch?.id);
+              trackUserAction.matched(newMatch?.id || '');
+              trackFunnel.matchReceived();
+
+              setMatchId(newMatch?.id || null);
+              setMatchedProfile(targetProfile);
+              setShowMatchModal(true);
+              return true;
+            }
+          }
+        } else {
+          // No mutual like yet - just show info
+          Alert.alert(
+            'Already Liked',
+            `You've already liked ${targetProfile.display_name}. You'll match if they like you back!`
+          );
+        }
+
         const newIndex = currentIndex + 1;
         setCurrentIndex(newIndex);
         return true;
@@ -1663,8 +1990,8 @@ export default function Discover() {
       trackUserAction.swipedRight(targetProfile.id);
       trackFunnel.profileLiked();
 
-      // Increment swipe count
-      await incrementSwipeCount();
+      // Increment like count (free users limited to 5/day)
+      await incrementLikeCount();
 
       // Check if the OTHER person has also liked you (mutual like check)
       const { data: mutualLike } = await supabase
@@ -1747,7 +2074,7 @@ export default function Discover() {
       console.error('❌ Error recording like:', error);
       return false;
     }
-  }, [currentProfileId, currentIndex, profiles, swipeCount, isPremium, isProfileComplete]);
+  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete]);
 
   const handleSwipeUp = useCallback(async (): Promise<boolean> => {
     if (!currentProfileId || currentIndex >= profiles.length) return false;
@@ -2014,16 +2341,19 @@ export default function Discover() {
         }
       }
 
-      // Decrement swipe count if not premium
-      if (!isPremium && swipeCount > 0) {
-        const newCount = swipeCount - 1;
-        setSwipeCount(newCount);
+      // Decrement like count if not premium and action was a like (passes are unlimited)
+      if (!isPremium && lastSwipe.action === 'like' && likeCount > 0) {
+        const newCount = likeCount - 1;
+        setLikeCount(newCount);
         const today = new Date().toDateString();
-        await AsyncStorage.setItem('swipe_data', JSON.stringify({ date: today, count: newCount }));
+        await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: newCount }));
       }
 
       // Go back to the previous profile
       setCurrentIndex(lastSwipe.index);
+
+      // Reset scroll position to top
+      discoveryProfileRef.current?.scrollToTop();
 
       // Clear last swipe
       setLastSwipe(null);
@@ -2033,7 +2363,7 @@ export default function Discover() {
       console.error('❌ Error rewinding:', error);
       Alert.alert(t('common.error'), 'Failed to undo swipe. Please try again.');
     }
-  }, [lastSwipe, currentProfileId, isPremium, swipeCount]);
+  }, [lastSwipe, currentProfileId, isPremium, likeCount]);
 
   const handleProfilePress = useCallback(async () => {
     if (currentIndex >= profiles.length) return;
@@ -2054,24 +2384,27 @@ export default function Discover() {
     if (!currentProfileId) return;
 
     try {
-      // Get current user's location and preferences
-      const { data: userData } = await supabase
-        .from('profiles')
-        .select('latitude, longitude')
-        .eq('id', currentProfileId)
-        .single();
+      // Get current user's location and preferences IN PARALLEL for better performance
+      const [
+        { data: userData },
+        { data: prefsData }
+      ] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('latitude, longitude')
+          .eq('id', currentProfileId)
+          .single(),
+        supabase
+          .from('preferences')
+          .select('gender_preference')
+          .eq('profile_id', currentProfileId)
+          .single()
+      ]);
 
       if (!userData || !userData.latitude || !userData.longitude) {
         console.warn('User location not available for smart recommendations');
         return;
       }
-
-      // Get user's gender preferences separately
-      const { data: prefsData } = await supabase
-        .from('preferences')
-        .select('gender_preference')
-        .eq('profile_id', currentProfileId)
-        .single();
 
       // Normalize gender preferences to ensure it's a proper array
       let genderPrefs = prefsData?.gender_preference;
@@ -2491,12 +2824,6 @@ export default function Discover() {
               >
                 <MaterialCommunityIcons name="magnify" size={20} color={colors.foreground} />
               </TouchableOpacity>
-              <TouchableOpacity
-                className="bg-muted rounded-full p-2.5"
-                onPress={handleRefresh}
-              >
-                <MaterialCommunityIcons name="refresh" size={20} color={colors.foreground} />
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -2624,7 +2951,7 @@ export default function Discover() {
         {/* Smart Empty State with Dynamic Recommendations */}
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
           {isSearchMode ? (
@@ -2706,51 +3033,96 @@ export default function Discover() {
                     };
 
                     const handlePress = async () => {
-                      if (rec.type === 'distance' && rec.newDistance) {
-                        setFilters({ ...filters, maxDistance: rec.newDistance });
-                        trackEvent('smart_recommendation_clicked', {
-                          type: 'distance',
-                          increment: rec.increment,
-                          count: rec.count
-                        });
-                        loadProfiles();
-                      } else if (rec.type === 'age' && rec.newAgeMin && rec.newAgeMax) {
-                        setFilters({ ...filters, ageMin: rec.newAgeMin, ageMax: rec.newAgeMax });
-                        trackEvent('smart_recommendation_clicked', {
-                          type: 'age',
-                          increment: rec.increment,
-                          count: rec.count
-                        });
-                        loadProfiles();
-                      } else if (rec.type === 'gender' && rec.addedGender) {
-                        // Add gender to preferences
-                        const { data: currentPrefs } = await supabase
-                          .from('preferences')
-                          .select('gender_preference')
-                          .eq('profile_id', currentProfileId)
-                          .single();
+                      console.log('🎯 Smart recommendation pressed:', rec.type, rec);
+                      try {
+                        if (rec.type === 'distance' && rec.newDistance) {
+                          console.log('📏 Distance recommendation - newDistance:', rec.newDistance);
+                          // Update state for UI and pass directly to loadProfiles to avoid React timing issue
+                          setFilters({ ...filters, maxDistance: rec.newDistance });
+                          setCurrentIndex(0); // Reset to show new profiles from beginning
+                          trackEvent('smart_recommendation_clicked', {
+                            type: 'distance',
+                            increment: rec.increment,
+                            count: rec.count
+                          });
+                          // Pass new filter value directly to avoid stale state
+                          loadProfiles(undefined, undefined, { maxDistance: rec.newDistance });
+                        } else if (rec.type === 'age' && rec.newAgeMin && rec.newAgeMax) {
+                          console.log('📅 Age recommendation - newAgeMin:', rec.newAgeMin, 'newAgeMax:', rec.newAgeMax);
+                          // Update state for UI and pass directly to loadProfiles to avoid React timing issue
+                          setFilters({ ...filters, ageMin: rec.newAgeMin, ageMax: rec.newAgeMax });
+                          setCurrentIndex(0); // Reset to show new profiles from beginning
+                          trackEvent('smart_recommendation_clicked', {
+                            type: 'age',
+                            increment: rec.increment,
+                            count: rec.count
+                          });
+                          // Pass new filter values directly to avoid stale state
+                          loadProfiles(undefined, undefined, { ageMin: rec.newAgeMin, ageMax: rec.newAgeMax });
+                        } else if (rec.type === 'gender' && rec.addedGender) {
+                          // Add gender to preferences - use maybeSingle() to handle missing preferences row
+                          const { data: currentPrefs, error: fetchError } = await supabase
+                            .from('preferences')
+                            .select('gender_preference')
+                            .eq('profile_id', currentProfileId)
+                            .maybeSingle();
 
-                        const currentGenderPrefs = currentPrefs?.gender_preference || [];
-                        const newGenderPrefs = [...currentGenderPrefs, rec.addedGender];
+                          if (fetchError) {
+                            console.error('[Discovery] Error fetching preferences:', fetchError);
+                            Alert.alert(t('common.error'), 'Failed to update filter. Please try again.');
+                            return;
+                          }
 
-                        await supabase
-                          .from('preferences')
-                          .update({ gender_preference: newGenderPrefs })
-                          .eq('profile_id', currentProfileId);
+                          const currentGenderPrefs = currentPrefs?.gender_preference || [];
+                          const newGenderPrefs = [...currentGenderPrefs, rec.addedGender];
 
-                        trackEvent('smart_recommendation_clicked', {
-                          type: 'gender',
-                          addedGender: rec.addedGender,
-                          count: rec.count
-                        });
-                        loadProfiles();
-                      } else if (rec.type === 'global') {
-                        const { error } = await supabase
-                          .from('preferences')
-                          .update({ search_globally: true })
-                          .eq('profile_id', currentProfileId);
+                          // Use upsert to handle both existing and missing preferences rows
+                          const { error: updateError } = await supabase
+                            .from('preferences')
+                            .upsert({
+                              profile_id: currentProfileId,
+                              gender_preference: newGenderPrefs,
+                              // Required fields for new rows
+                              primary_reason: 'other',
+                              relationship_type: 'open'
+                            }, {
+                              onConflict: 'profile_id',
+                              ignoreDuplicates: false
+                            });
 
-                        if (!error) {
+                          if (updateError) {
+                            console.error('[Discovery] Error updating gender preference:', updateError);
+                            Alert.alert(t('common.error'), 'Failed to update filter. Please try again.');
+                            return;
+                          }
+
+                          trackEvent('smart_recommendation_clicked', {
+                            type: 'gender',
+                            addedGender: rec.addedGender,
+                            count: rec.count
+                          });
+                          loadProfiles();
+                        } else if (rec.type === 'global') {
+                          // Use upsert to handle both existing and missing preferences rows
+                          const { error } = await supabase
+                            .from('preferences')
+                            .upsert({
+                              profile_id: currentProfileId,
+                              search_globally: true,
+                              // Required fields for new rows
+                              primary_reason: 'other',
+                              relationship_type: 'open'
+                            }, {
+                              onConflict: 'profile_id',
+                              ignoreDuplicates: false
+                            });
+
+                          if (error) {
+                            console.error('[Discovery] Error enabling global search:', error);
+                            Alert.alert(t('common.error'), 'Failed to enable global search. Please try again.');
+                            return;
+                          }
+
                           trackEvent('smart_recommendation_clicked', {
                             type: 'global',
                             count: rec.count
@@ -2761,6 +3133,9 @@ export default function Discover() {
                             [{ text: 'OK', onPress: () => loadProfiles() }]
                           );
                         }
+                      } catch (error) {
+                        console.error('[Discovery] Unexpected error in handlePress:', error);
+                        Alert.alert(t('common.error'), 'Something went wrong. Please try again.');
                       }
                     };
 
@@ -2769,6 +3144,7 @@ export default function Discover() {
                         key={`recommendation-${index}`}
                         className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
                         onPress={handlePress}
+                        activeOpacity={0.6}
                       >
                         <View className="bg-lavender-100 dark:bg-lavender-900/30 rounded-full p-3 mr-3">
                           <MaterialCommunityIcons name={getIcon()} size={24} color="#A08AB7" />
@@ -2905,7 +3281,7 @@ export default function Discover() {
   const currentProfile = profiles[currentIndex];
 
   return (
-    <View className="flex-1 bg-background">
+    <View className="flex-1 bg-background" style={{ paddingRight: rightSafeArea }}>
       {/* Header */}
       <View className="bg-background dark:bg-background pb-4 px-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
         {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
@@ -2988,12 +3364,6 @@ export default function Discover() {
               onPress={() => setShowSearchBar(!showSearchBar)}
             >
               <MaterialCommunityIcons name="magnify" size={20} color={colors.foreground} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="bg-muted rounded-full p-2.5"
-              onPress={handleRefresh}
-            >
-              <MaterialCommunityIcons name="refresh" size={20} color={colors.foreground} />
             </TouchableOpacity>
           </View>
         </View>
@@ -3187,78 +3557,30 @@ export default function Discover() {
         </TouchableOpacity>
       )}
 
-      {/* Card Stack */}
-      <View className="flex-1 relative">
-        {/* Show current card and one behind it for depth */}
-        {currentIndex + 1 < profiles.length && (
-          <View className="absolute w-full h-full px-4 pt-4" style={{ opacity: 0.5, transform: [{ scale: 0.95 }] }}>
-            <View className="flex-1 bg-gray-300 rounded-3xl" />
-          </View>
-        )}
-
-        <SwipeCard
+      {/* Hinge-Style Scrollable Profile View */}
+      <Animated.View style={{ flex: 1, opacity: profileOpacity }}>
+        <DiscoveryProfileView
+          ref={discoveryProfileRef}
           key={currentProfile.id}
           profile={currentProfile as any}
-          onSwipeLeft={handleSwipeLeft}
-          onSwipeRight={handleSwipeRight}
-          onSwipeUp={handleSwipeUp}
-          onPress={handleProfilePress}
+          preferences={currentProfilePreferences}
+          compatibilityBreakdown={currentProfile.compatibilityBreakdown}
           distanceUnit={distanceUnit}
+          heightUnit={heightUnit}
+          onBlock={handleBlock}
+          onReport={handleReport}
+          onPass={handleSwipeLeft}
+          onLike={handleSwipeRight}
+          onSuperLike={handleSwipeUp}
+          onRewind={handleRewind}
+          canRewind={!!lastSwipe && isPremium}
           isAdmin={isAdmin}
+          superLikesRemaining={superLikesRemaining}
+          likesRemaining={DAILY_LIKE_LIMIT - likeCount}
+          dailyLikeLimit={DAILY_LIKE_LIMIT}
+          isPremium={isPremium}
         />
-      </View>
-
-      {/* Action Buttons */}
-      <View className="pb-8 px-6">
-        <View className="flex-row justify-center items-center gap-4">
-          {/* Rewind Button */}
-          <TouchableOpacity
-            className={`rounded-full w-14 h-14 items-center justify-center shadow-lg ${
-              lastSwipe && isPremium ? 'bg-lavender-400' : 'bg-gray-300'
-            }`}
-            onPress={handleRewind}
-            disabled={!lastSwipe && isPremium}
-          >
-            <MaterialCommunityIcons
-              name="undo-variant"
-              size={28}
-              color={lastSwipe && isPremium ? 'white' : '#9CA3AF'}
-            />
-          </TouchableOpacity>
-
-          {/* Pass Button */}
-          <TouchableOpacity
-            className="bg-card dark:bg-card rounded-full w-16 h-16 items-center justify-center shadow-lg border-2 border-border"
-            onPress={handleSwipeLeft}
-          >
-            <MaterialCommunityIcons name="close" size={32} color="#EF4444" />
-          </TouchableOpacity>
-
-          {/* Obsessed Button (Super Like) */}
-          <TouchableOpacity
-            className="bg-lavender-500 rounded-full w-16 h-16 items-center justify-center shadow-lg"
-            onPress={handleSwipeUp}
-          >
-            <MaterialCommunityIcons name="star" size={32} color="white" />
-          </TouchableOpacity>
-
-          {/* Like Button */}
-          <TouchableOpacity
-            className="bg-card dark:bg-card rounded-full w-16 h-16 items-center justify-center shadow-lg border-2 border-border"
-            onPress={handleSwipeRight}
-          >
-            <MaterialCommunityIcons name="heart" size={32} color="#10B981" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Action Labels */}
-        <View className="flex-row justify-center items-center gap-4 mt-2">
-          <Text className="text-muted-foreground text-xs font-sans-medium w-14 text-center">Rewind</Text>
-          <Text className="text-muted-foreground text-xs font-sans-medium w-16 text-center">Pass</Text>
-          <Text className="text-lavender-500 text-xs font-sans-bold w-16 text-center">Obsessed</Text>
-          <Text className="text-muted-foreground text-xs font-sans-medium w-16 text-center">Like</Text>
-        </View>
-      </View>
+      </Animated.View>
 
       {/* Match Modal */}
       {matchedProfile && (
@@ -3480,26 +3802,7 @@ export default function Discover() {
         </View>
       </Modal>
 
-      {/* Swipe Counter for Free Users */}
-      {!isPremium && (
-        <View className="absolute bottom-32 right-6 bg-card dark:bg-card rounded-full px-4 py-2 shadow-lg border-2 border-lavender-500">
-          <Text className="text-lavender-500 font-sans-bold text-sm">
-            {t('discover.swipesRemaining', { count: swipeCount, limit: DAILY_SWIPE_LIMIT })}
-          </Text>
-        </View>
-      )}
 
-      {/* Super Like Counter for Premium Users */}
-      {isPremium && (
-        <View className="absolute bottom-32 right-6 bg-card dark:bg-card rounded-full px-4 py-2 shadow-lg border-2 border-lavender-500">
-          <View className="flex-row items-center gap-1">
-            <MaterialCommunityIcons name="star" size={16} color="#A08AB7" />
-            <Text className="text-lavender-500 font-sans-bold text-sm">
-              {t('discover.superLikesRemaining', { count: superLikesRemaining })}
-            </Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 }

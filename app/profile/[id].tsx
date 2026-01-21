@@ -14,7 +14,6 @@ import { formatHeight, HeightUnit } from '@/lib/height-utils';
 import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
-import { useColorScheme } from '@/lib/useColorScheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -187,7 +186,6 @@ export default function ProfileView() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
-  const { colors, isDarkColorScheme } = useColorScheme();
   const insets = useSafeAreaInsets();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [currentProfile, setCurrentProfile] = useState<any>(null);
@@ -592,11 +590,16 @@ export default function ProfileView() {
     setIsLiked(true);
 
     try {
-      // Insert like
-      await supabase.from('likes').insert({
+      // Try to insert like (may fail if already exists)
+      const { error: likeInsertError } = await supabase.from('likes').insert({
         liker_profile_id: currentProfileId,
         liked_profile_id: id,
       });
+
+      // Ignore duplicate key errors - the like already exists
+      if (likeInsertError && !likeInsertError.message?.includes('duplicate')) {
+        throw likeInsertError;
+      }
 
       // Check for mutual match
       const { data: mutualLike } = await supabase
@@ -604,33 +607,84 @@ export default function ProfileView() {
         .select('id')
         .eq('liker_profile_id', id)
         .eq('liked_profile_id', currentProfileId)
-        .single();
+        .maybeSingle();
 
       if (mutualLike) {
-        // It's a match!
+        // Check if match already exists
         const profile1Id = currentProfileId < id ? currentProfileId : id;
         const profile2Id = currentProfileId < id ? id : currentProfileId;
 
-        const { data: newMatch, error: matchError } = await supabase.from('matches').insert({
-          profile1_id: profile1Id,
-          profile2_id: profile2Id,
-          initiated_by: currentProfileId,
-          compatibility_score: profile?.compatibility_score || null,
-          status: 'active',
-        }).select('id').single();
+        const { data: existingMatch } = await supabase
+          .from('matches')
+          .select('id, status')
+          .eq('profile1_id', profile1Id)
+          .eq('profile2_id', profile2Id)
+          .maybeSingle();
 
-        if (matchError) throw matchError;
-
-        setTimeout(() => {
-          Alert.alert('🎉 It\'s a Match!', `You matched with ${profile?.display_name}!`, [
-            { text: 'Send Message', onPress: () => router.push(`/chat/${newMatch.id}`) },
-            { text: 'Keep Swiping', onPress: () => router.back() }
+        if (existingMatch?.status === 'active') {
+          // Already matched
+          Alert.alert('Already Matched!', `You're already matched with ${profile?.display_name}!`, [
+            { text: 'Send Message', onPress: () => router.push(`/chat/${existingMatch.id}`) },
+            { text: 'OK', onPress: () => router.back() }
           ]);
-        }, 500);
+          return;
+        }
+
+        // Either no match or unmatched - create/recreate
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
+
+        if (existingMatch && existingMatch.status === 'unmatched') {
+          // Reactivate the unmatched record
+          const { data: reactivatedMatch, error: updateError } = await supabase
+            .from('matches')
+            .update({
+              status: 'active',
+              matched_at: new Date().toISOString(),
+              expires_at: expiresAt.toISOString(),
+              unmatched_by: null,
+              unmatched_at: null,
+              unmatch_reason: null,
+              first_message_sent_at: null,
+            })
+            .eq('id', existingMatch.id)
+            .select('id')
+            .single();
+
+          if (updateError) throw updateError;
+
+          setTimeout(() => {
+            Alert.alert('🎉 It\'s a Match!', `You matched with ${profile?.display_name}!`, [
+              { text: 'Send Message', onPress: () => router.push(`/chat/${reactivatedMatch.id}`) },
+              { text: 'Keep Swiping', onPress: () => router.back() }
+            ]);
+          }, 500);
+        } else {
+          // Create new match
+          const { data: newMatch, error: matchError } = await supabase.from('matches').insert({
+            profile1_id: profile1Id,
+            profile2_id: profile2Id,
+            initiated_by: currentProfileId,
+            compatibility_score: profile?.compatibility_score || null,
+            status: 'active',
+            expires_at: expiresAt.toISOString(),
+          }).select('id').single();
+
+          if (matchError) throw matchError;
+
+          setTimeout(() => {
+            Alert.alert('🎉 It\'s a Match!', `You matched with ${profile?.display_name}!`, [
+              { text: 'Send Message', onPress: () => router.push(`/chat/${newMatch.id}`) },
+              { text: 'Keep Swiping', onPress: () => router.back() }
+            ]);
+          }, 500);
+        }
       } else {
+        // No mutual like yet
         setTimeout(() => router.back(), 800);
       }
     } catch (error: any) {
+      console.error('Error liking profile:', error);
       Alert.alert('Error', 'Failed to like profile');
       setIsLiked(false);
     }
@@ -676,12 +730,16 @@ export default function ProfileView() {
         const profile1Id = currentProfileId < id ? currentProfileId : id;
         const profile2Id = currentProfileId < id ? id : currentProfileId;
 
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
+
         const { data: newMatch, error: matchError } = await supabase.from('matches').insert({
           profile1_id: profile1Id,
           profile2_id: profile2Id,
           initiated_by: currentProfileId,
           compatibility_score: profile?.compatibility_score || null,
           status: 'active',
+          expires_at: expiresAt.toISOString(),
         }).select('id').single();
 
         if (matchError) throw matchError;
@@ -793,7 +851,7 @@ export default function ProfileView() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color="#A08AB7" />
       </View>
     );
@@ -801,8 +859,8 @@ export default function ProfileView() {
 
   if (!profile) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: colors.mutedForeground }}>Profile not found</Text>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: '#6B7280' }}>Profile not found</Text>
       </View>
     );
   }
@@ -859,7 +917,7 @@ export default function ProfileView() {
         animate={{ opacity: 1, translateY: 0 }}
         transition={{ type: 'timing', duration: 500 }}
         style={{
-          backgroundColor: colors.card,
+          backgroundColor: '#FFFFFF',
           borderRadius: 20,
           padding: 20,
           marginBottom: 16,
@@ -873,7 +931,7 @@ export default function ProfileView() {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
           <MaterialCommunityIcons name="heart-multiple" size={24} color="#A08AB7" />
-          <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.foreground, marginLeft: 12 }}>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#000000', marginLeft: 12 }}>
             Why We Match
           </Text>
         </View>
@@ -982,19 +1040,19 @@ export default function ProfileView() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar barStyle={isDarkColorScheme ? "light-content" : "dark-content"} />
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+      <StatusBar barStyle="dark-content" />
 
       {/* Back Button */}
       <TouchableOpacity
-        style={[styles.floatingButton, { top: insets.top + 8, left: 16, backgroundColor: isDarkColorScheme ? 'rgba(30,30,32,0.9)' : 'rgba(255,255,255,0.9)' }]}
+        style={[styles.floatingButton, { top: insets.top + 8, left: 16, backgroundColor: 'rgba(255,255,255,0.9)' }]}
         onPress={() => router.back()}
       >
-        <MaterialCommunityIcons name="arrow-left" size={24} color={colors.foreground} />
+        <MaterialCommunityIcons name="arrow-left" size={24} color={'#000000'} />
       </TouchableOpacity>
 
       {/* Report/Block Menu */}
-      <View style={[styles.floatingButton, { top: insets.top + 8, right: 16, backgroundColor: isDarkColorScheme ? 'rgba(30,30,32,0.9)' : 'rgba(255,255,255,0.9)' }]}>
+      <View style={[styles.floatingButton, { top: insets.top + 8, right: 16, backgroundColor: 'rgba(255,255,255,0.9)' }]}>
         <ModerationMenu
           profileId={id}
           profileName={profile.display_name}
@@ -1012,15 +1070,14 @@ export default function ProfileView() {
         hideActions={true}
         hideCompatibilityScore={true}
         isAdmin={isAdmin}
+        isPhotoRevealed={otherUserRevealed}
         renderAdditionalContent={renderWhyWeMatch}
       />
 
       {/* Fixed Action Buttons with Animations */}
       {!isMatched ? (
         <LinearGradient
-          colors={isDarkColorScheme
-            ? ['transparent', 'rgba(10,10,11,0.9)', colors.background]
-            : ['transparent', 'rgba(255,255,255,0.9)', colors.background]}
+          colors={['transparent', 'rgba(255,255,255,0.9)', '#FFFFFF']}
           className="absolute bottom-0 left-0 right-0 pt-8"
           style={{ paddingBottom: Math.max(insets.bottom, 32) }}
         >
@@ -1032,7 +1089,7 @@ export default function ProfileView() {
               transition={{ type: 'spring', delay: 100 }}
             >
               <TouchableOpacity
-                style={{ backgroundColor: colors.card, borderColor: colors.border }}
+                style={{ backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' }}
                 className="rounded-full w-14 h-14 items-center justify-center shadow-xl border"
                 onPress={handlePass}
                 disabled={isLiked || isSuperLiked}
@@ -1072,7 +1129,7 @@ export default function ProfileView() {
               transition={{ type: 'spring', delay: 300 }}
             >
               <TouchableOpacity
-                style={isLiked ? { backgroundColor: '#22C55E' } : { backgroundColor: colors.card, borderColor: colors.border }}
+                style={isLiked ? { backgroundColor: '#22C55E' } : { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' }}
                 className="rounded-full w-14 h-14 items-center justify-center shadow-xl border"
                 onPress={handleLike}
                 disabled={isLiked || isSuperLiked}
@@ -1095,9 +1152,7 @@ export default function ProfileView() {
         </LinearGradient>
       ) : (
         <LinearGradient
-          colors={isDarkColorScheme
-            ? ['transparent', 'rgba(10,10,11,0.9)', colors.background]
-            : ['transparent', 'rgba(255,255,255,0.9)', colors.background]}
+          colors={['transparent', 'rgba(255,255,255,0.9)', '#FFFFFF']}
           className="absolute bottom-0 left-0 right-0 pt-8"
           style={{ paddingBottom: Math.max(insets.bottom, 32) }}
         >
@@ -1107,7 +1162,7 @@ export default function ProfileView() {
               <TouchableOpacity
                 onPress={togglePhotoReveal}
                 disabled={revealLoading}
-                style={hasRevealedPhotos ? { backgroundColor: colors.card, borderColor: '#9333EA' } : { backgroundColor: isDarkColorScheme ? '#3B2A4D' : '#F3E8FF', borderColor: '#D8B4FE' }}
+                style={hasRevealedPhotos ? { backgroundColor: '#FFFFFF', borderColor: '#9333EA' } : { backgroundColor: '#F3E8FF', borderColor: '#D8B4FE' }}
                 className="rounded-full py-3 shadow-lg border-2"
               >
                 <View className="flex-row items-center justify-center gap-2">
@@ -1135,9 +1190,9 @@ export default function ProfileView() {
                 <MaterialCommunityIcons
                   name={otherUserRevealed ? "lock-open" : "lock"}
                   size={16}
-                  color={otherUserRevealed ? "#10B981" : colors.mutedForeground}
+                  color={otherUserRevealed ? "#10B981" : '#6B7280'}
                 />
-                <Text style={{ color: colors.mutedForeground }} className="text-xs">
+                <Text style={{ color: '#6B7280' }} className="text-xs">
                   {otherUserRevealed
                     ? `${profile.display_name} revealed their photos to you`
                     : `${profile.display_name}'s photos are blurred`}
@@ -1157,10 +1212,10 @@ export default function ProfileView() {
                 </View>
               </TouchableOpacity>
             ) : (
-              <View style={{ backgroundColor: isDarkColorScheme ? '#2D2D30' : '#E5E7EB' }} className="rounded-full py-4">
+              <View style={{ backgroundColor: '#E5E7EB' }} className="rounded-full py-4">
                 <View className="flex-row items-center justify-center gap-2">
-                  <MaterialCommunityIcons name="eye" size={24} color={colors.mutedForeground} />
-                  <Text style={{ color: colors.mutedForeground }} className="text-lg font-semibold">Viewing Profile</Text>
+                  <MaterialCommunityIcons name="eye" size={24} color={'#6B7280'} />
+                  <Text style={{ color: '#6B7280' }} className="text-lg font-semibold">Viewing Profile</Text>
                 </View>
               </View>
             )}

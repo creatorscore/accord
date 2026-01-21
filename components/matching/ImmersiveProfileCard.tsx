@@ -13,6 +13,7 @@ import {
   Alert,
   Modal,
   Pressable,
+  InteractionManager,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -281,30 +282,24 @@ export default function ImmersiveProfileCard({
   const photos = profile.photos || [];
   const heroPhoto = photos[0]?.url || 'https://via.placeholder.com/400x600';
 
-  // Fallback waveform bars
+  // Pre-computed waveform bars - use simple static pattern to avoid main thread blocking
+  // This prevents ANR on Android by avoiding trigonometric calculations during render
   const waveformBars = useMemo(() => {
-    const seed = profile.voice_intro_url
-      ? profile.voice_intro_url.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-      : profile.display_name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const bars = [];
-    const numBars = 45; // More bars for smoother look
+    // Use a simple hash to pick from pre-computed patterns
+    const hash = (profile.voice_intro_url || profile.display_name || 'default')
+      .split('')
+      .reduce((acc, char, i) => (acc + char.charCodeAt(0) * (i + 1)) % 5, 0);
 
-    // Create wave-like pattern with natural audio characteristics
-    for (let i = 0; i < numBars; i++) {
-      // Multiple sine waves for organic look
-      const wave1 = Math.sin((seed * 0.01) + (i * 0.3)) * 0.3;
-      const wave2 = Math.sin((seed * 0.02) + (i * 0.15)) * 0.2;
-      const wave3 = Math.sin((seed * 0.005) + (i * 0.5)) * 0.15;
+    // 5 pre-computed waveform patterns (avoids runtime trig calculations)
+    const patterns = [
+      [0.4, 0.6, 0.8, 0.5, 0.3, 0.7, 0.9, 0.6, 0.4, 0.5, 0.7, 0.8, 0.6, 0.4, 0.3, 0.5, 0.7, 0.9, 0.7, 0.5, 0.4, 0.6, 0.8, 0.7, 0.5, 0.4, 0.6, 0.8, 0.9, 0.7, 0.5, 0.4, 0.3, 0.5, 0.7, 0.8, 0.6, 0.4, 0.5, 0.7, 0.8, 0.6, 0.4, 0.5, 0.6],
+      [0.3, 0.5, 0.7, 0.9, 0.7, 0.5, 0.4, 0.6, 0.8, 0.7, 0.5, 0.3, 0.4, 0.6, 0.8, 0.9, 0.7, 0.5, 0.4, 0.3, 0.5, 0.7, 0.8, 0.6, 0.4, 0.5, 0.7, 0.9, 0.8, 0.6, 0.4, 0.3, 0.5, 0.7, 0.8, 0.6, 0.4, 0.5, 0.6, 0.8, 0.7, 0.5, 0.4, 0.6, 0.7],
+      [0.5, 0.7, 0.6, 0.4, 0.5, 0.8, 0.9, 0.7, 0.5, 0.4, 0.6, 0.7, 0.5, 0.4, 0.6, 0.8, 0.7, 0.5, 0.3, 0.5, 0.7, 0.9, 0.8, 0.6, 0.4, 0.3, 0.5, 0.7, 0.8, 0.6, 0.4, 0.5, 0.7, 0.8, 0.6, 0.4, 0.5, 0.7, 0.9, 0.7, 0.5, 0.4, 0.6, 0.8, 0.7],
+      [0.6, 0.4, 0.5, 0.7, 0.9, 0.8, 0.6, 0.4, 0.3, 0.5, 0.7, 0.8, 0.6, 0.5, 0.7, 0.9, 0.7, 0.5, 0.4, 0.6, 0.8, 0.7, 0.5, 0.4, 0.6, 0.8, 0.9, 0.7, 0.5, 0.4, 0.3, 0.5, 0.7, 0.9, 0.8, 0.6, 0.4, 0.5, 0.7, 0.8, 0.6, 0.4, 0.5, 0.7, 0.8],
+      [0.7, 0.5, 0.4, 0.6, 0.8, 0.7, 0.5, 0.3, 0.5, 0.7, 0.9, 0.8, 0.6, 0.4, 0.5, 0.7, 0.8, 0.6, 0.4, 0.5, 0.7, 0.9, 0.7, 0.5, 0.4, 0.6, 0.8, 0.7, 0.5, 0.4, 0.6, 0.8, 0.9, 0.7, 0.5, 0.4, 0.3, 0.5, 0.7, 0.8, 0.6, 0.4, 0.5, 0.6, 0.7],
+    ];
 
-      // Add some randomness seeded by position
-      const rand = Math.abs(Math.sin(seed + i * 7.3)) * 0.2;
-
-      // Combine waves with base height
-      const base = 0.35;
-      const height = Math.max(0.15, Math.min(1, base + wave1 + wave2 + wave3 + rand));
-      bars.push(height);
-    }
-    return bars;
+    return patterns[hash];
   }, [profile.voice_intro_url, profile.display_name]);
 
   const formatTime = (milliseconds: number) => {

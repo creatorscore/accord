@@ -5,6 +5,8 @@ import { decryptMessage, getPrivateKey } from '@/lib/encryption';
 export type ActivityType =
   | 'like_received'
   | 'super_like_received'
+  | 'like_sent'
+  | 'super_like_sent'
   | 'match'
   | 'message_received'
   | 'review_received'

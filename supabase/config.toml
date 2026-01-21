@@ -18,3 +18,25 @@ verify_jwt = false
 
 [functions.email-new-match]
 verify_jwt = false
+
+[functions.process-expired-bans]
+verify_jwt = false
+
+[functions.policy-restrict-straight-men]
+verify_jwt = false
+
+[functions.policy-restriction-reminder]
+verify_jwt = false
+
+[functions.policy-restriction-deactivate]
+verify_jwt = false
+
+# Notification triggers (called by database triggers via pg_net)
+[functions.notify-new-like]
+verify_jwt = false
+
+[functions.notify-new-match]
+verify_jwt = false
+
+[functions.notify-new-message]
+verify_jwt = false

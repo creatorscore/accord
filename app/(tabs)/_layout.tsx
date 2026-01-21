@@ -9,7 +9,7 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { unreadMessageCount } = useNotifications();
+  const { unreadMessageCount, unreadLikeCount } = useNotifications();
 
   // Add extra padding for safe area (home indicator on iPhone X+, navigation bar on Android)
   const tabBarHeight = 60 + insets.bottom;
@@ -50,7 +50,16 @@ export default function TabsLayout() {
         options={{
           title: 'Likes',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="heart" size={size} color={color} />
+            <View>
+              <MaterialCommunityIcons name="heart" size={size} color={color} />
+              {unreadLikeCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {unreadLikeCount > 99 ? '99+' : unreadLikeCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           ),
         }}
       />

@@ -10,10 +10,12 @@ interface SplashScreenProps {
 
 export function SplashScreen({ onFinish }: SplashScreenProps) {
   useEffect(() => {
-    // Auto-finish after 2.5 seconds
+    // PERFORMANCE: Reduced from 2.5s to 1.5s to improve cold-start time
+    // The animations still look smooth but we save 1 second on every app launch
+    // This is critical for low-RAM devices where startup is already slow
     const timer = setTimeout(() => {
       onFinish();
-    }, 2500);
+    }, 1500);
 
     return () => clearTimeout(timer);
   }, [onFinish]);

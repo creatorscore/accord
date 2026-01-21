@@ -28,6 +28,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash } from '@/lib/image-optimization';
 import { HeightUnit, cmToInches, inchesToCm } from '@/lib/height-utils';
 import { openAppSettings } from '@/lib/open-settings';
+import { validateContent } from '@/lib/content-moderation';
 
 interface Photo {
   id?: string;
@@ -68,7 +69,7 @@ const ORIENTATIONS = [
   'Lesbian',
   'Gay',
   'Bisexual',
-  'Straight',
+  'Straight', // Note: Hidden for men-only users (filtered in getAvailableOrientations)
   'Queer',
   'Asexual',
   'Pansexual',
@@ -84,6 +85,21 @@ const ORIENTATIONS = [
   'Prefer not to say',
   'Other',
 ];
+
+// Genders that are considered "men only" - straight men are not allowed on the platform
+const MEN_ONLY_GENDERS = ['Man', 'Trans Man'];
+
+// Helper function to get available orientations based on gender
+// Straight men are not allowed - only show "Straight" if user is NOT exclusively male-identifying
+function getAvailableOrientations(selectedGenders: string[]): string[] {
+  const isExclusivelyMale = selectedGenders.length > 0 &&
+    selectedGenders.every(g => MEN_ONLY_GENDERS.includes(g));
+
+  if (isExclusivelyMale) {
+    return ORIENTATIONS.filter(o => o !== 'Straight');
+  }
+  return ORIENTATIONS;
+}
 
 const PRONOUNS = [
   'she/her',
@@ -349,6 +365,7 @@ export default function EditProfile() {
   const [bio, setBio] = useState('');
   const [occupation, setOccupation] = useState('');
   const [education, setEducation] = useState('');
+  const [hometown, setHometown] = useState('');
   const [locationCity, setLocationCity] = useState('');
   const [locationState, setLocationState] = useState('');
   const [refreshingLocation, setRefreshingLocation] = useState(false);
@@ -468,6 +485,7 @@ export default function EditProfile() {
         setBio(profileData.bio || '');
         setOccupation(profileData.occupation || '');
         setEducation(profileData.education || '');
+        setHometown(profileData.hometown || '');
         setLocationCity(profileData.location_city || '');
         setLocationState(profileData.location_state || '');
 
@@ -1010,6 +1028,39 @@ export default function EditProfile() {
       // Filter out empty prompt answers
       const validPromptAnswers = promptAnswers.filter(pa => pa.prompt && pa.answer);
 
+      // Validate prompt answers for gibberish and profanity
+      for (const pa of validPromptAnswers) {
+        // Validate the prompt text (if custom)
+        const promptValidation = validateContent(pa.prompt, {
+          checkProfanity: true,
+          checkGibberish: true,
+          fieldName: 'prompt',
+        });
+        if (!promptValidation.isValid) {
+          setSaving(false);
+          Alert.alert(
+            promptValidation.moderationResult?.isGibberish ? 'Invalid Prompt' : 'Inappropriate Content',
+            promptValidation.error
+          );
+          return false;
+        }
+
+        // Validate the answer
+        const answerValidation = validateContent(pa.answer, {
+          checkProfanity: true,
+          checkGibberish: true,
+          fieldName: 'prompt answer',
+        });
+        if (!answerValidation.isValid) {
+          setSaving(false);
+          Alert.alert(
+            answerValidation.moderationResult?.isGibberish ? 'Invalid Response' : 'Inappropriate Content',
+            answerValidation.error
+          );
+          return false;
+        }
+      }
+
       // Update or create profile
       const profilePayload = {
         user_id: user?.id,
@@ -1020,6 +1071,7 @@ export default function EditProfile() {
         bio,
         occupation,
         education,
+        hometown,
         // NOTE: location_city and location_state are NOT included here
         // Location can only be updated via GPS refresh button (no manual editing)
         gender: gender.length > 0 ? gender : null,
@@ -1043,10 +1095,9 @@ export default function EditProfile() {
         political_views: politicalViews || null,
         voice_intro_url: voiceIntroUrl,
         voice_intro_prompt: voiceIntroPrompt || null,
-        // Clear photo review flag when user saves their profile (they likely uploaded new photos)
-        photo_review_required: false,
-        photo_review_reason: null,
-        photo_review_requested_at: null,
+        // NOTE: photo_review_required is NOT cleared here - only admins can clear it
+        // after reviewing the user's updated photos. This prevents users from bypassing
+        // the photo review process by simply saving their profile.
       };
 
       let finalProfileId = profileId;
@@ -1059,6 +1110,32 @@ export default function EditProfile() {
           .eq('id', profileId);
 
         if (error) throw error;
+
+        // Check if user was policy_restricted as straight man and has now updated their profile
+        // to no longer be a straight man - if so, clear the restriction
+        const isStillStraightMan = (() => {
+          const genderArr = gender.length > 0 ? gender : [];
+          const orientationArr = sexualOrientation.length > 0 ? sexualOrientation : [];
+          const menOnlyGenders = ['Man', 'Trans Man'];
+          const isExclusivelyMale = genderArr.length > 0 &&
+            genderArr.every(g => menOnlyGenders.includes(g));
+          return isExclusivelyMale && orientationArr.includes('Straight');
+        })();
+
+        if (!isStillStraightMan) {
+          // Clear policy restriction if they're no longer a straight man
+          await supabase
+            .from('profiles')
+            .update({
+              policy_restricted: false,
+              policy_restricted_reason: null,
+              policy_restricted_at: null,
+              policy_restriction_notified_at: null,
+              policy_restriction_reminder_sent: false,
+            })
+            .eq('id', profileId)
+            .eq('policy_restricted', true); // Only update if they were restricted
+        }
       } else {
         // Create new profile
         const { data, error } = await supabase
@@ -1125,7 +1202,7 @@ export default function EditProfile() {
             .getPublicUrl(fileName);
 
           // Insert photo record into database with content hash for duplicate detection
-          const { error: insertError } = await supabase
+          const { data: photoData, error: insertError } = await supabase
             .from('photos')
             .insert({
               profile_id: finalProfileId,
@@ -1134,9 +1211,51 @@ export default function EditProfile() {
               is_primary: photo.is_primary,
               display_order: photo.display_order,
               content_hash: photo.contentHash,
-            });
+              moderation_status: 'pending', // Start as pending until moderation completes
+            })
+            .select('id')
+            .single();
 
-          if (insertError) console.error('Error inserting photo record:', insertError);
+          if (insertError) {
+            console.error('Error inserting photo record:', insertError);
+          } else {
+            // Run NSFW moderation check
+            // This uses AWS Rekognition to detect explicit content
+            try {
+              const moderationResponse = await fetch(
+                `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/moderate-photo`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+                  },
+                  body: JSON.stringify({
+                    photo_url: publicUrl,
+                    photo_id: photoData?.id,
+                    profile_id: finalProfileId,
+                  }),
+                }
+              );
+
+              const moderationResult = await moderationResponse.json();
+              console.log(`🔍 Moderation result:`, moderationResult);
+
+              // If photo was rejected for explicit content, alert user and remove photo
+              if (moderationResult.approved === false && moderationResult.reason === 'explicit_content') {
+                // Delete the photo from storage and database
+                await supabase.storage.from('profile-photos').remove([fileName]);
+                await supabase.from('photos').delete().eq('id', photoData?.id);
+
+                Alert.alert(
+                  'Photo Rejected',
+                  'This photo contains inappropriate content and cannot be uploaded. Please choose a different photo.'
+                );
+              }
+            } catch (moderationError: any) {
+              console.error('Moderation check failed (non-blocking):', moderationError);
+            }
+          }
         } catch (error) {
           console.error('Error uploading photo:', error);
         }
@@ -1529,10 +1648,19 @@ export default function EditProfile() {
                     gender.includes(g) && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => {
+                    let newGenders: string[];
                     if (gender.includes(g)) {
-                      setGender(gender.filter(item => item !== g));
+                      newGenders = gender.filter(item => item !== g);
                     } else {
-                      setGender([...gender, g]);
+                      newGenders = [...gender, g];
+                    }
+                    setGender(newGenders);
+
+                    // If user becomes exclusively male-identifying, remove "Straight" from orientation
+                    const isExclusivelyMale = newGenders.length > 0 &&
+                      newGenders.every(gen => MEN_ONLY_GENDERS.includes(gen));
+                    if (isExclusivelyMale && sexualOrientation.includes('Straight')) {
+                      setSexualOrientation(sexualOrientation.filter(o => o !== 'Straight'));
                     }
                   }}
                 >
@@ -1608,7 +1736,7 @@ export default function EditProfile() {
             <Text style={styles.inputLabel}>Sexual Orientation</Text>
             <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {ORIENTATIONS.map((o) => (
+              {getAvailableOrientations(gender).map((o) => (
                 <TouchableOpacity
                   key={o}
                   style={[
@@ -1774,6 +1902,18 @@ export default function EditProfile() {
               onChangeText={setEducation}
               placeholder="Your education"
               placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Hometown</Text>
+            <TextInput
+              style={styles.input}
+              value={hometown}
+              onChangeText={setHometown}
+              placeholder="e.g., Los Angeles, CA"
+              placeholderTextColor="#9CA3AF"
+              maxLength={100}
             />
           </View>
 
@@ -2647,6 +2787,7 @@ export default function EditProfile() {
               bio,
               occupation,
               education,
+              hometown,
               // Location is read-only - set via GPS only
               location_city: locationCity,
               location_state: locationState,

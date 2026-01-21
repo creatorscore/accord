@@ -1,5 +1,6 @@
 import { Platform, LogBox } from 'react-native';
 import { supabase } from './supabase';
+import Constants from 'expo-constants';
 
 // Suppress Expo Go notification warning (notifications work fine in dev/production builds)
 LogBox.ignoreLogs([
@@ -72,17 +73,20 @@ export async function registerForPushNotifications(): Promise<string | null> {
   try {
     // Check if notifications are available
     if (!Notifications) {
+      console.log('[Push] Notifications module not available');
       return null;
     }
 
-    // Request permissions first
-    const hasPermission = await requestNotificationPermissions();
-    if (!hasPermission) {
+    // Check if running on a physical device
+    if (!Device?.isDevice) {
+      console.log('[Push] Not a physical device, push notifications not supported');
       return null;
     }
 
-    // Configure notification channel for Android FIRST
+    // Configure notification channel for Android FIRST (required for Android 13+)
+    // This MUST be done before requesting permissions or getting token
     if (Platform.OS === 'android') {
+      console.log('[Push] Setting up Android notification channel...');
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Default',
         importance: Notifications.AndroidImportance.MAX,
@@ -91,14 +95,48 @@ export async function registerForPushNotifications(): Promise<string | null> {
       });
     }
 
-    // Get the push token (FCM will be used automatically if google-services.json exists)
+    // Request permissions
+    const hasPermission = await requestNotificationPermissions();
+    if (!hasPermission) {
+      console.log('[Push] Permission not granted');
+      return null;
+    }
+
+    // Get project ID from Constants (recommended by Expo)
+    const projectId =
+      Constants?.expoConfig?.extra?.eas?.projectId ??
+      Constants?.easConfig?.projectId ??
+      '71ca414e-ff65-488b-97f6-9150455475a0'; // Fallback to hardcoded
+
+    console.log('[Push] Using project ID:', projectId);
+
+    // First try to get the device push token (raw FCM/APNs token) for debugging
+    try {
+      const deviceToken = await Notifications.getDevicePushTokenAsync();
+      console.log('[Push] Device token type:', deviceToken?.type);
+      console.log('[Push] Device token obtained:', deviceToken?.data ? 'yes' : 'no');
+    } catch (deviceTokenError: any) {
+      console.error('[Push] Failed to get device token:', deviceTokenError?.message);
+      // Continue anyway - Expo token might still work
+    }
+
+    // Get the Expo push token
+    console.log('[Push] Requesting Expo push token...');
     const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: '71ca414e-ff65-488b-97f6-9150455475a0',
+      projectId,
     });
+
+    console.log('[Push] Expo token obtained:', tokenData?.data ? 'yes' : 'no');
+
+    if (!tokenData?.data) {
+      console.error('[Push] Token data is empty');
+      return null;
+    }
 
     return tokenData.data;
   } catch (error: any) {
-    console.error('Push notifications setup failed:', error?.message);
+    console.error('[Push] Setup failed:', error?.message);
+    console.error('[Push] Error details:', JSON.stringify(error, null, 2));
     return null;
   }
 }
@@ -676,6 +714,55 @@ export function setupNotificationListener(
   return Notifications.addNotificationResponseReceivedListener((response: any) => {
     const data = response.notification.request.content.data;
     onNotificationTap(data);
+  });
+}
+
+/**
+ * Listen for push token changes at runtime
+ * CRITICAL: FCM can rotate tokens silently while the app is running.
+ * When this happens, the old token becomes invalid (DeviceNotRegistered error).
+ * This listener ensures we always have the latest valid token in the database.
+ *
+ * From Expo docs: "In rare situations, a push token may be changed by the push
+ * notification service while the app is running. When a token is rolled, the old
+ * one becomes invalid and sending notifications to it will fail."
+ */
+export function addPushTokenChangeListener(
+  onTokenChange: (token: string) => void
+): any {
+  if (!Notifications) {
+    console.log('[Push] Notifications module not available for token listener');
+    return { remove: () => {} }; // Return mock subscription
+  }
+
+  console.log('[Push] Setting up push token change listener...');
+
+  return Notifications.addPushTokenListener((tokenData: any) => {
+    // tokenData is a DevicePushToken object with { type: 'fcm'|'apns', data: string }
+    // We need to convert it to an Expo push token format
+    console.log('[Push] Token change detected:', tokenData?.type);
+
+    if (tokenData?.data) {
+      // The listener gives us the raw FCM/APNs token, but we need Expo token
+      // We'll re-fetch the Expo push token to ensure consistency
+      (async () => {
+        try {
+          const projectId =
+            Constants?.expoConfig?.extra?.eas?.projectId ??
+            Constants?.easConfig?.projectId ??
+            '71ca414e-ff65-488b-97f6-9150455475a0';
+
+          const expoPushToken = await Notifications.getExpoPushTokenAsync({ projectId });
+
+          if (expoPushToken?.data) {
+            console.log('[Push] Got new Expo token after device token change');
+            onTokenChange(expoPushToken.data);
+          }
+        } catch (error) {
+          console.error('[Push] Error getting Expo token after device token change:', error);
+        }
+      })();
+    }
   });
 }
 

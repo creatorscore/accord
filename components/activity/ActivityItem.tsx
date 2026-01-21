@@ -11,6 +11,11 @@ interface ActivityItemProps {
   onUnmatch?: (activity: ActivityItemType) => void;
 }
 
+// Helper to check if actor was deleted
+// Actor is considered deleted if we have an actor_profile_id but no valid actor data
+const isDeleted = (a: ActivityItemType) =>
+  a.actor_profile_id && (!a.actor || !a.actor.id || !a.actor.display_name);
+
 const ACTIVITY_CONFIG: Record<
   ActivityType,
   {
@@ -26,32 +31,61 @@ const ACTIVITY_CONFIG: Record<
     icon: 'heart',
     color: '#FF6B6B',
     bgColor: '#FFF0F0',
-    getTitle: (a) => `${a.actor?.display_name || 'Someone'} liked your profile`,
-    getSubtitle: () => 'Tap to see their profile',
+    getTitle: (a) => isDeleted(a)
+      ? 'A user who liked you has left Accord'
+      : `${a.actor?.display_name || 'Someone'} liked your profile`,
+    getSubtitle: (a) => isDeleted(a) ? null : 'Tap to see their profile',
     getRoute: (a) => (a.actor_profile_id ? `/profile/${a.actor_profile_id}` : null),
   },
   super_like_received: {
     icon: 'star',
     color: '#FFD700',
     bgColor: '#FFFBEB',
-    getTitle: (a) => `${a.actor?.display_name || 'Someone'} Super Liked you!`,
-    getSubtitle: () => 'They really like you!',
+    getTitle: (a) => isDeleted(a)
+      ? 'A user who Super Liked you has left Accord'
+      : `${a.actor?.display_name || 'Someone'} Super Liked you!`,
+    getSubtitle: (a) => isDeleted(a) ? null : 'They really like you!',
+    getRoute: (a) => (a.actor_profile_id ? `/profile/${a.actor_profile_id}` : null),
+  },
+  like_sent: {
+    icon: 'heart-outline',
+    color: '#F472B6',
+    bgColor: '#FDF2F8',
+    getTitle: (a) => isDeleted(a)
+      ? 'You liked a user who has left Accord'
+      : `You liked ${a.actor?.display_name || 'someone'}`,
+    getSubtitle: (a) => isDeleted(a) ? null : 'Waiting for them to like you back',
+    getRoute: (a) => (a.actor_profile_id ? `/profile/${a.actor_profile_id}` : null),
+  },
+  super_like_sent: {
+    icon: 'star-outline',
+    color: '#FBBF24',
+    bgColor: '#FFFBEB',
+    getTitle: (a) => isDeleted(a)
+      ? 'You Super Liked a user who has left Accord'
+      : `You Super Liked ${a.actor?.display_name || 'someone'}`,
+    getSubtitle: (a) => isDeleted(a) ? null : 'Waiting for them to like you back',
     getRoute: (a) => (a.actor_profile_id ? `/profile/${a.actor_profile_id}` : null),
   },
   match: {
     icon: 'heart-multiple',
     color: '#A08AB7',
     bgColor: '#F5F0FF',
-    getTitle: (a) => `You matched with ${a.actor?.display_name || 'someone'}!`,
-    getSubtitle: () => 'Tap to start chatting',
+    getTitle: (a) => isDeleted(a)
+      ? 'A former match has left Accord'
+      : `You matched with ${a.actor?.display_name || 'someone'}!`,
+    getSubtitle: (a) => isDeleted(a) ? 'This conversation is no longer available' : 'Tap to start chatting',
     getRoute: (a) => (a.reference_id ? `/chat/${a.reference_id}` : null),
   },
   message_received: {
     icon: 'message-text',
     color: '#4ECDC4',
     bgColor: '#E6FAF8',
-    getTitle: (a) => `New message from ${a.actor?.display_name || 'someone'}`,
+    getTitle: (a) => isDeleted(a)
+      ? 'Message from a user who has left Accord'
+      : `New message from ${a.actor?.display_name || 'someone'}`,
     getSubtitle: (a) => {
+      if (isDeleted(a)) return 'This conversation is no longer available';
       // Use decrypted preview if available, otherwise fall back to metadata preview
       const preview = a.decrypted_preview || a.metadata?.preview;
       if (!preview) return null;
@@ -82,6 +116,7 @@ const ACTIVITY_CONFIG: Record<
     color: '#6B7280',
     bgColor: '#F3F4F6',
     getTitle: (a) => {
+      if (isDeleted(a)) return 'A user who viewed your profile has left Accord';
       const count = a.metadata?.view_count || 1;
       if (count > 1) return `${count} people viewed your profile`;
       return `${a.actor?.display_name || 'Someone'} viewed your profile`;
@@ -119,14 +154,23 @@ export default function ActivityItem({ activity, onPress, onUnmatch }: ActivityI
   const config = ACTIVITY_CONFIG[activity.activity_type];
   if (!config) return null;
 
+  // Check if the actor profile was deleted (uses the isDeleted helper for consistency)
+  const isActorDeleted = isDeleted(activity);
+
   const title = config.getTitle(activity);
   const subtitle = config.getSubtitle(activity);
-  const route = config.getRoute(activity);
+
+  // Don't navigate to deleted profiles - only get route if actor exists or activity doesn't need actor
+  const route = isActorDeleted
+    ? (activity.activity_type === 'verification_approved' ? config.getRoute(activity) : null)
+    : config.getRoute(activity);
 
   // Only show unmatch button for match-related activities that have a reference_id (match ID)
+  // Don't show unmatch for deleted profiles since the match may already be gone
   const canUnmatch = (activity.activity_type === 'match' || activity.activity_type === 'message_received')
     && activity.reference_id
-    && onUnmatch;
+    && onUnmatch
+    && !isActorDeleted;
 
   const handlePress = () => {
     if (onPress) onPress();
@@ -159,8 +203,10 @@ export default function ActivityItem({ activity, onPress, onUnmatch }: ActivityI
       activeOpacity={0.7}
     >
       {/* Avatar or Icon */}
-      <View style={styles.iconContainer} className="bg-muted">
-        {actorPhoto ? (
+      <View style={[styles.iconContainer, isActorDeleted && styles.deletedIconContainer]} className="bg-muted">
+        {isActorDeleted ? (
+          <MaterialCommunityIcons name="account-off" size={24} color="#9CA3AF" />
+        ) : actorPhoto ? (
           <Image
             source={{ uri: actorPhoto }}
             style={styles.avatar}
@@ -172,7 +218,7 @@ export default function ActivityItem({ activity, onPress, onUnmatch }: ActivityI
           <MaterialCommunityIcons name={config.icon as any} size={24} color={config.color} />
         )}
         {/* Activity type badge */}
-        <View style={[styles.typeBadge, { backgroundColor: config.color }]}>
+        <View style={[styles.typeBadge, { backgroundColor: isActorDeleted ? '#9CA3AF' : config.color }]}>
           <MaterialCommunityIcons name={config.icon as any} size={12} color="white" />
         </View>
       </View>
@@ -236,6 +282,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
     position: 'relative',
+  },
+  deletedIconContainer: {
+    opacity: 0.6,
   },
   avatar: {
     width: 50,
