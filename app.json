@@ -2,8 +2,8 @@
   "expo": {
     "name": "Accord - Lavender Marriage",
     "slug": "accord",
-    "version": "1.1.2",
-    "orientation": "portrait",
+    "version": "1.1.8",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
@@ -15,9 +15,9 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.privyreviews.accord",
-      "buildNumber": "58",
+      "buildNumber": "63",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Accord needs access to your photos to upload profile pictures.",
@@ -68,7 +68,8 @@
         "backgroundColor": "#9B87CE"
       },
       "package": "com.privyreviews.accord",
-      "versionCode": 48,
+      "googleServicesFile": "./android/app/google-services.json",
+      "versionCode": 54,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.CAMERA",
@@ -85,6 +86,15 @@
     },
     "scheme": "accord",
     "plugins": [
+      [
+        "react-native-edge-to-edge",
+        {
+          "android": {
+            "parentTheme": "Default",
+            "enforceNavigationBarContrast": true
+          }
+        }
+      ],
       "expo-router",
       "expo-dev-client",
       [
@@ -121,7 +131,7 @@
       [
         "react-native-capture-protection",
         {
-          "captureType": "fullMediaCapture"
+          "captureType": "callbackTiramisu"
         }
       ],
       [
@@ -150,6 +160,10 @@
       "postHogApiKey": "phc_3KdZG8HkLD0v1YIGuR6khBLQGO41A8cerUmxa6EIEUG",
       "postHogHost": "https://us.i.posthog.com"
     },
-    "owner": "vfranz"
+    "owner": "vfranz",
+    "runtimeVersion": "1.1.8",
+    "updates": {
+      "url": "https://u.expo.dev/71ca414e-ff65-488b-97f6-9150455475a0"
+    }
   }
 }
