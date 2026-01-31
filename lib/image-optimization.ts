@@ -329,12 +329,30 @@ export function getRecommendedQuality(fileSizeBytes: number): number {
  */
 export async function generateImageHash(uri: string): Promise<string> {
   try {
-    // Read the image as base64
+    // Get file info for size-based hashing to avoid loading entire file into RAM
+    const info = await FileSystem.getInfoAsync(uri);
+    const fileSize = (info as any).size || 0;
+
+    // For files under 2MB, hash normally. For larger files, use size+partial content
+    // to avoid spiking memory with massive base64 strings
+    if (fileSize > 2 * 1024 * 1024) {
+      // Hash file size + first 64KB as a fingerprint (avoids full base64 in RAM)
+      const partial = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+        length: 65536,
+        position: 0,
+      });
+      const hash = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        `${fileSize}:${partial}`
+      );
+      return hash;
+    }
+
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
 
-    // Generate SHA-256 hash of the content
     const hash = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       base64

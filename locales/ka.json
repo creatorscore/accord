@@ -818,6 +818,69 @@
       "purchaseFailedMessage": "შესყიდვის დასრულება ვერ მოხერხდა. გთხოვთ, სცადოთ ხელახლა ან დაუკავშირდეთ მხარდაჭერას თუ პრობლემა გრძელდება."
     }
   },
+  "pushNotifications": {
+    "match": {
+      "title": "ეს მატჩია! 💜",
+      "body": "თქვენ დამატჩეთ {{name}}-თან! დაიწყეთ ჩატი ახლავე."
+    },
+    "message": {
+      "title": "ახალი შეტყობინება {{name}}-ისგან",
+      "bodyText": "გამოგიგზავნათ შეტყობინება",
+      "bodyPhoto": "გამოგიგზავნათ ფოტო",
+      "bodyVoice": "გამოგიგზავნათ ხმოვანი შეტყობინება",
+      "bodyVideo": "გამოგიგზავნათ ვიდეო"
+    },
+    "like": {
+      "premiumTitle": "{{name}}-ს მოსწონხართ! 💜",
+      "premiumBody": "ნახეთ ვის მოსწონხართ და მატჩი მყისიერად.",
+      "premiumSuperTitle": "{{name}}-მა სუპერ-მოწონება დააჭირა! ⭐",
+      "premiumSuperBody": "მათ ძალიან უნდათ თქვენთან დაკავშირება!",
+      "freeTitle": "ვიღაცას მოსწონხართ! 💜",
+      "freeBody": "გადადით Premium-ზე რომ ნახოთ ვის მოსწონხართ და მატჩი მყისიერად.",
+      "freeSuperTitle": "ვიღაცამ სუპერ-მოწონება დააჭირა! ⭐",
+      "freeSuperBody": "გადადით Premium-ზე რომ ნახოთ ვის უნდა ძალიან თქვენთან მატჩი."
+    },
+    "trialExpiration": {
+      "threeDaysTitle": "თქვენი უფასო საცდელი პერიოდი მთავრდება 3 დღეში",
+      "threeDaysBody": "არ დაკარგოთ წვდომა premium ფუნქციებზე! გამოიწერეთ ახლავე თქვენი იდეალური მატჩის საპოვნელად.",
+      "oneDayTitle": "თქვენი უფასო საცდელი პერიოდი მთავრდება ხვალ!",
+      "oneDayBody": "ბოლო შანსი გამოიწეროთ და შეინარჩუნოთ premium ფუნქციები. შეეხეთ გასაუმჯობესებლად.",
+      "todayTitle": "თქვენი უფასო საცდელი პერიოდი მთავრდება დღეს!",
+      "todayBody": "თქვენი premium წვდომა იწურება დღეს ღამით. გამოიწერეთ ახლავე იდეალური მატჩის პოვნის გზის გასაგრძელებლად."
+    },
+    "trialEngagement": {
+      "day1Title": "თქვენი Premium საცდელი პერიოდი აქტიურია!",
+      "day1Body": "გახსენით შეუზღუდავი მოწონებები, ნახეთ ვის მოსწონხართ, გაგზავნეთ სუპერ-მოწონებები და სხვა. დაიწყეთ premium ფუნქციების შესწავლა!",
+      "day3TitleWithLikes": "{{count}} {{person}}-ს მოსწონხართ!",
+      "day3TitleNoLikes": "თქვენ ყურადღებას იქცევთ!",
+      "day3BodyWithLikes": "შეეხეთ რომ ნახოთ ვინ არიან - ეს Premium ფუნქციაა რომელიც შეგიძლიათ შეინარჩუნოთ!",
+      "day3BodyNoLikes": "გააგრძელეთ Premium ფუნქციების გამოყენება გამოსარჩევად და მეტი მოწონების მისაღებად.",
+      "day5Title": "მხოლოდ 2 დღე დარჩა თქვენს საცდელ პერიოდში!",
+      "day5BodyWithStats": "თქვენ {{highlights}}. არ დაკარგოთ წვდომა ამ ფუნქციებზე!",
+      "day5BodyNoStats": "თქვენ შეისწავლეთ premium ფუნქციები. გამოიწერეთ ახლავე მათ შესანარჩუნებლად!",
+      "day6Title": "ბოლო დღე ხვალ!",
+      "day6Body": "დაიფიქსირეთ 33% დაზოგვა ჩვენი წლიური გეგმით სანამ თქვენი საცდელი პერიოდი დასრულდება. თქვენი კავშირები ელოდებიან!"
+    },
+    "swipesRefreshed": {
+      "title": "თქვენი სვაიპები დაბრუნდა! 🎉",
+      "body": "თქვენ გაქვთ 15 ახალი სვაიპი თქვენი იდეალური მატჩის აღმოსაჩენად. დაიწყეთ სვაიპი ახლავე!"
+    },
+    "reviews": {
+      "readyTitle": "მიმოხილვის დროა! ⭐",
+      "readyBody": "გააზიარეთ თქვენი გამოცდილება {{name}}-თან. თქვენი მიმოხილვა ეხმარება ნდობის ჩამოყალიბებას ჩვენს საზოგადოებაში.",
+      "reminderTitle": "ბოლო შანსი მიმოხილვისთვის! ⏰",
+      "reminderBody": "თქვენი მიმოხილვის ფანჯარა {{name}}-სთვის მალე იწურება. არ გამოტოვოთ!"
+    },
+    "stats": {
+      "person": "ადამიანი",
+      "people": "ადამიანი",
+      "seenLikes": "ნახეთ {{count}} ვისაც მოსწონხართ",
+      "sentSuperLikes": "გაგზავნეთ {{count}} სუპერ-მოწონება",
+      "sentSuperLikesPlural": "გაგზავნეთ {{count}} სუპერ-მოწონება",
+      "madeMatch": "გააკეთეთ {{count}} მატჩი",
+      "madeMatchesPlural": "გააკეთეთ {{count}} მატჩი"
+    }
+  },
   "whatsNew": {
     "title": "რა არის ახალი",
     "version": "ვერსია {{version}}",
@@ -878,5 +941,51 @@
         }
       }
     }
+  },
+  "toast": {
+    "photoLimitTitle": "Maximum Photos",
+    "photoLimitMessage": "You can upload up to 6 photos",
+    "photoAlreadyAdded": "This photo is already in your profile",
+    "photoProcessError": "Failed to process photo. Please try again.",
+    "morePhotosNeeded": "Please add at least 4 photos to continue",
+    "profileNotFound": "Profile not found. Please go back and try again.",
+    "uploadFailed": "Failed to upload. Please try again.",
+    "permissionDenied": "Permission Denied",
+    "needPhotoAccess": "We need permission to access your photos",
+    "invalidImage": "Invalid Image",
+    "micPermissionRequired": "Microphone access is needed to record",
+    "recordingFailed": "Failed to start recording",
+    "stopRecordingFailed": "Failed to stop recording",
+    "profileLoadError": "Failed to load your profile",
+    "profilesLoadError": "Failed to load profiles",
+    "superLikeError": "Failed to send super like. Please try again.",
+    "noRecentSwipes": "There are no recent swipes to undo.",
+    "swipeUndone": "Your last swipe has been undone.",
+    "undoSwipeError": "Failed to undo swipe. Please try again.",
+    "blockSuccess": "User has been blocked",
+    "blockError": "Failed to block user. Please try again.",
+    "filterError": "Failed to update filter. Please try again.",
+    "globalSearchError": "Failed to enable global search. Please try again.",
+    "genericError": "Something went wrong. Please try again.",
+    "photosBlurred": "Your photos are now blurred for this match",
+    "photosRevealed": "Your photos are now visible to {{name}}",
+    "photoRevealError": "Failed to update photo visibility. Please try again.",
+    "reportSubmitted": "Thank you for helping keep Accord safe",
+    "reportError": "Failed to submit report. Please try again.",
+    "reactionError": "Failed to add reaction",
+    "chatLoadError": "Failed to load chat. Please try again.",
+    "messagesLoadError": "Failed to load messages",
+    "voiceRecordError": "Failed to record voice message. Please try again.",
+    "locationErrorPrecise": "Precise location is required for accurate matching",
+    "locationErrorGeneric": "Could not determine your location",
+    "saveError": "Failed to save. Please try again.",
+    "selectPhotoError": "Failed to select photo. Please try again.",
+    "profileSaveError": "Failed to save profile",
+    "voiceUploadFailed": "Failed to save voice intro",
+    "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
+    "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
+    "obsessedTitle": "Obsessed!",
+    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
+    "obsessedBasic": "{{name}} will be notified that you're obsessed!"
   }
 }

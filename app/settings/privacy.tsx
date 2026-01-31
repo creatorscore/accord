@@ -13,6 +13,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -226,7 +227,7 @@ export default function PrivacySettings() {
         </View>
         <Switch
           value={value}
-          onValueChange={onValueChange}
+          onValueChange={(v) => { Haptics.selectionAsync(); onValueChange(v); }}
           trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
           thumbColor={value ? '#A08AB7' : '#F3F4F6'}
           disabled={saving || isLocked}

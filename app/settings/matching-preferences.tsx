@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { formatDistanceSlider, DistanceUnit } from '@/lib/distance-utils';
+import * as Haptics from 'expo-haptics';
 
 interface MatchingPreferences {
   gender_preference: string[];
@@ -156,8 +157,8 @@ export default function MatchingPreferences() {
     gender_preference: [],
     wants_children: null,
     relationship_type: 'platonic',
-    age_min: 22,
-    age_max: 50,
+    age_min: 18,
+    age_max: 65,
     max_distance_miles: 100,
     distance_unit: 'miles',
     willing_to_relocate: false,
@@ -200,8 +201,8 @@ export default function MatchingPreferences() {
           gender_preference: data.gender_preference || [],
           wants_children: data.wants_children,
           relationship_type: data.relationship_type || 'platonic',
-          age_min: data.age_min || 22,
-          age_max: data.age_max || 50,
+          age_min: data.age_min || 18,
+          age_max: data.age_max || 65,
           max_distance_miles: data.max_distance_miles || 100,
           distance_unit: data.distance_unit || 'miles',
           willing_to_relocate: data.willing_to_relocate || false,
@@ -606,9 +607,10 @@ export default function MatchingPreferences() {
               </View>
               <Switch
                 value={preferences.willing_to_relocate}
-                onValueChange={(value) =>
-                  setPreferences((prev) => ({ ...prev, willing_to_relocate: value }))
-                }
+                onValueChange={(value) => {
+                  Haptics.selectionAsync();
+                  setPreferences((prev) => ({ ...prev, willing_to_relocate: value }));
+                }}
                 trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
                 thumbColor={preferences.willing_to_relocate ? '#A08AB7' : '#F3F4F6'}
               />
@@ -628,9 +630,10 @@ export default function MatchingPreferences() {
               </View>
               <Switch
                 value={preferences.search_globally}
-                onValueChange={(value) =>
-                  setPreferences((prev) => ({ ...prev, search_globally: value }))
-                }
+                onValueChange={(value) => {
+                  Haptics.selectionAsync();
+                  setPreferences((prev) => ({ ...prev, search_globally: value }));
+                }}
                 trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
                 thumbColor={preferences.search_globally ? '#A08AB7' : '#F3F4F6'}
               />

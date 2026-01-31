@@ -64,6 +64,22 @@ Accord is a native mobile dating application (iOS + Android) designed specifical
 
 **IMPORTANT:** When making database changes, always follow the rules in [DATABASE_MIGRATION_RULES.md](./DATABASE_MIGRATION_RULES.md) to ensure backward compatibility across app versions.
 
+### Important: Array-Type Columns
+
+Several columns are stored as PostgreSQL arrays (`TEXT[]`), NOT scalar strings. When filtering on these in client code, always use `Array.isArray()` checks and `.some()` instead of `.includes()`:
+
+| Table | Column | Type |
+|-------|--------|------|
+| profiles | gender | TEXT[] |
+| profiles | sexual_orientation | TEXT[] |
+| profiles | ethnicity | TEXT[] |
+| profiles | love_language | TEXT[] |
+| preferences | housing_preference | TEXT[] |
+| preferences | financial_arrangement | TEXT[] |
+| preferences | children_arrangement | TEXT[] |
+| preferences | primary_reasons | TEXT[] |
+| preferences | gender_preference | VARCHAR[] |
+
 ### Core Tables
 
 ```sql
@@ -79,10 +95,11 @@ CREATE TABLE profiles (
   display_name VARCHAR NOT NULL,
   age INTEGER NOT NULL CHECK (age >= 18 AND age <= 100),
   birth_date DATE, -- Auto-calculates age
-  gender VARCHAR, -- Man, Woman, Non-binary, Trans Man, Trans Woman, Other
+  gender TEXT[] NOT NULL, -- Array of gender identities: Man, Woman, Non-binary, Trans Man, Trans Woman, Genderfluid, Genderqueer, Other
   pronouns VARCHAR, -- she/her, he/him, they/them, she/they, he/they, any pronouns, ask me, prefer not to say
-  ethnicity VARCHAR, -- Asian, Black/African, Hispanic/Latinx, Indigenous/Native, Middle Eastern/North African, Pacific Islander, South Asian, White/Caucasian, Multiracial, Other, Prefer not to say
-  sexual_orientation VARCHAR, -- Straight, Lesbian, Gay, Bisexual, Queer, Asexual, Pansexual, Other
+  ethnicity TEXT[], -- Array of ethnicities: Asian, Black/African, Hispanic/Latinx, Indigenous/Native, Middle Eastern/North African, Pacific Islander, South Asian, White/Caucasian, Multiracial, Other, Prefer not to say
+  sexual_orientation TEXT[] NOT NULL, -- Array of orientations: Straight, Lesbian, Gay, Bisexual, Queer, Asexual, Pansexual, Other
+  hometown VARCHAR, -- User hometown (e.g., "Los Angeles, CA")
 
   -- Location
   location_city VARCHAR,
@@ -97,11 +114,12 @@ CREATE TABLE profiles (
   occupation VARCHAR,
   education VARCHAR,
   height_inches INTEGER, -- Height in inches (e.g., 5'10" = 70 inches)
+  height_unit VARCHAR DEFAULT 'imperial' CHECK (height_unit IN ('imperial', 'metric')),
 
   -- Personality & Interests
-  zodiac_sign VARCHAR, -- Aries, Taurus, Gemini, Cancer, Leo, Virgo, Libra, Scorpio, Sagittarius, Capricorn, Aquarius, Pisces
+  zodiac_sign VARCHAR, -- Aries, Taurus, etc.
   personality_type VARCHAR, -- MBTI (e.g., ENFJ, INTJ, ISFP)
-  love_language VARCHAR, -- Words of Affirmation, Quality Time, Receiving Gifts, Acts of Service, Physical Touch
+  love_language TEXT[], -- Array of love languages: Words of Affirmation, Quality Time, Receiving Gifts, Acts of Service, Physical Touch
   languages_spoken TEXT[], -- Array of languages
   religion VARCHAR, -- Christian, Muslim, Jewish, Hindu, Buddhist, Atheist, Agnostic, Spiritual but not religious, Prefer not to say
   political_views VARCHAR, -- Liberal, Conservative, Moderate, Progressive, Libertarian, Apolitical, Prefer not to say
@@ -112,15 +130,32 @@ CREATE TABLE profiles (
   -- Voice Intro
   voice_intro_url TEXT, -- 30 second voice introduction from Supabase Storage
   voice_intro_duration INTEGER, -- Duration in seconds
+  voice_intro_prompt TEXT, -- Custom prompt/title for the voice intro
 
   -- Verification & Status
   is_verified BOOLEAN DEFAULT false,
   is_premium BOOLEAN DEFAULT false,
   is_platinum BOOLEAN DEFAULT false,
   is_admin BOOLEAN DEFAULT false,
+  is_active BOOLEAN DEFAULT true,
   verification_status VARCHAR DEFAULT 'pending', -- pending, approved, rejected
   profile_complete BOOLEAN DEFAULT false,
   onboarding_step INTEGER DEFAULT 0,
+
+  -- Photo Verification (Persona selfie check)
+  photo_verified BOOLEAN DEFAULT false,
+  photo_verification_status VARCHAR DEFAULT 'unverified', -- unverified, pending, verified, failed
+  photo_verification_session_id VARCHAR,
+  photo_verification_started_at TIMESTAMPTZ,
+  photo_verification_completed_at TIMESTAMPTZ,
+  photo_verification_attempts INTEGER DEFAULT 0,
+
+  -- Photo Review (admin-required re-upload)
+  photo_review_required BOOLEAN DEFAULT false,
+  photo_review_reason TEXT,
+  photo_review_requested_at TIMESTAMPTZ,
+  photo_review_cleared_by UUID REFERENCES profiles(id),
+  photo_review_cleared_at TIMESTAMPTZ,
 
   -- Privacy Settings
   photo_blur_enabled BOOLEAN DEFAULT false, -- Blur photos until matched
@@ -141,12 +176,35 @@ CREATE TABLE profiles (
   super_likes_reset_date TIMESTAMP DEFAULT now(), -- Resets every Sunday
   last_boost_at TIMESTAMP,
   boost_count INTEGER DEFAULT 0,
+  daily_likes_count INTEGER DEFAULT 0, -- Resets daily at midnight
+  daily_likes_reset_date DATE DEFAULT CURRENT_DATE,
 
   -- Reviews System
   review_aggregate_score NUMERIC, -- Average of all visible reviews (null if <5 reviews)
   review_count INTEGER DEFAULT 0, -- Total number of visible reviews
   show_reviews BOOLEAN DEFAULT true, -- Quick toggle for showing/hiding reviews
-  seeking_gender TEXT, -- What gender seeking in matches
+
+  -- Ban & Policy
+  ban_reason TEXT,
+  ban_expires_at TIMESTAMPTZ,
+  ban_user_message TEXT,
+  device_id TEXT,
+  policy_restricted BOOLEAN DEFAULT false,
+  policy_restricted_reason TEXT,
+  policy_restricted_at TIMESTAMPTZ,
+
+  -- Email Status (MailerLite sync)
+  email_unsubscribed_at TIMESTAMPTZ,
+  email_bounced BOOLEAN DEFAULT false,
+  email_spam_complaint BOOLEAN DEFAULT false,
+
+  -- Onboarding Reminders
+  onboarding_reminder_24h_sent_at TIMESTAMPTZ,
+  onboarding_reminder_3d_sent_at TIMESTAMPTZ,
+  onboarding_reminder_7d_sent_at TIMESTAMPTZ,
+
+  -- i18n
+  preferred_language VARCHAR DEFAULT 'en',
 
   -- Timestamps
   last_active_at TIMESTAMPTZ DEFAULT now(),
@@ -162,7 +220,10 @@ CREATE TABLE photos (
   url TEXT NOT NULL, -- Public URL
   display_order INTEGER DEFAULT 0, -- Order in profile (0-5)
   is_primary BOOLEAN DEFAULT false,
-  moderation_status VARCHAR DEFAULT 'pending', -- pending, approved, rejected
+  moderation_status VARCHAR DEFAULT 'approved', -- pending, approved, rejected
+  moderation_reason TEXT,
+  moderated_at TIMESTAMPTZ,
+  content_hash TEXT, -- SHA-256 hash for duplicate detection
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -175,16 +236,19 @@ CREATE TABLE preferences (
   max_distance_miles INTEGER DEFAULT 50,
   willing_to_relocate BOOLEAN DEFAULT false,
   search_globally BOOLEAN DEFAULT false, -- Search anywhere in the world
+  preferred_cities TEXT[] DEFAULT ARRAY[]::TEXT[], -- Cities user is interested in (e.g., ["New York, NY"])
+  distance_unit VARCHAR DEFAULT 'miles' CHECK (distance_unit IN ('miles', 'km')),
 
   -- Marriage Goals
-  primary_reason VARCHAR NOT NULL, -- financial, immigration, family_pressure, legal_benefits, companionship, safety, other
-  relationship_type VARCHAR NOT NULL, -- platonic, romantic, open
+  primary_reason VARCHAR, -- DEPRECATED: Use primary_reasons instead
+  primary_reasons TEXT[], -- Array of reasons (multi-select): financial, immigration, family_pressure, legal_benefits, companionship, safety, other
+  relationship_type VARCHAR, -- platonic, romantic, open
   wants_children BOOLEAN,
-  children_arrangement VARCHAR, -- How children would be handled
+  children_arrangement TEXT[], -- Array of children arrangement preferences
 
   -- Financial & Living
-  financial_arrangement VARCHAR, -- separate, shared_expenses, joint, prenup_required, flexible
-  housing_preference VARCHAR, -- separate_spaces, roommates, separate_homes, shared_bedroom, flexible
+  financial_arrangement TEXT[], -- Array: separate, shared_expenses, joint, prenup_required, flexible
+  housing_preference TEXT[], -- Array: separate_spaces, roommates, separate_homes, shared_bedroom, flexible
 
   -- Lifestyle
   lifestyle_preferences JSONB, -- {smoking, drinking, pets, etc.}
@@ -197,6 +261,9 @@ CREATE TABLE preferences (
   -- Dealbreakers & Must-Haves
   dealbreakers TEXT[], -- Array of dealbreakers
   must_haves TEXT[], -- Array of must-haves
+
+  -- Discovery Filters (persisted from discover modal)
+  discovery_filters JSONB DEFAULT '{}'::jsonb, -- Stores premium filter selections for discover screen
 
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
@@ -237,6 +304,8 @@ CREATE TABLE matches (
   is_muted BOOLEAN DEFAULT false,
   is_archived BOOLEAN DEFAULT false,
   is_pinned BOOLEAN DEFAULT false,
+  expires_at TIMESTAMPTZ, -- Match expires 7 days after matched_at if no message sent
+  first_message_sent_at TIMESTAMPTZ, -- Prevents expiration once set
   UNIQUE(profile1_id, profile2_id),
   CHECK (profile1_id < profile2_id) -- Ensure ordered pair
 );
@@ -281,10 +350,11 @@ CREATE TABLE blocks (
 
 CREATE TABLE reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  reporter_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  reporter_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE, -- nullable (anonymous reports)
   reported_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   reason VARCHAR NOT NULL, -- harassment, fake_profile, inappropriate_content, scam, other
   details TEXT,
+  evidence_urls TEXT[], -- Array of Supabase Storage URLs for evidence photos
   status VARCHAR DEFAULT 'pending', -- pending, reviewing, resolved, dismissed
   reviewed_by UUID,
   reviewed_at TIMESTAMPTZ,

@@ -47,9 +47,27 @@ Deno.serve(async (req) => {
     // Validate AWS credentials
     if (!AWS_ACCESS_KEY || !AWS_SECRET_KEY) {
       console.error('❌ AWS credentials not configured!');
+
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+
+      // Parse body to get photo_id for flagging
+      try {
+        const { photo_id, profile_id } = await req.json();
+        // Flag the profile for manual review since we can't auto-moderate
+        if (profile_id) {
+          await supabaseAdmin
+            .from('profiles')
+            .update({ photo_review_required: true })
+            .eq('id', profile_id);
+        }
+      } catch (_e) { /* ignore parse errors */ }
+
       return new Response(
-        JSON.stringify({ error: 'AWS credentials not configured' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        JSON.stringify({ error: 'AWS credentials not configured', approved: false, reason: 'needs_review' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
@@ -284,8 +302,9 @@ async function callRekognition(action: string, params: any) {
   const body = JSON.stringify(params);
 
   const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
-  const dateStamp = amzDate.substring(0, 8);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateStamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
+  const amzDate = `${dateStamp}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
 
   const payloadHash = await sha256(body);
   const headers: Record<string, string> = {

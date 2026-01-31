@@ -3,19 +3,14 @@
 /**
  * App Store Connect API - Subscription Price Updater v2
  *
- * Uses the correct API flow:
- * 1. Get subscriptions for the app
- * 2. For each subscription, get the base price point
- * 3. Get price point equalizations for all territories
- * 4. Find closest price point for each territory based on target USD equivalent
- * 5. Create subscription prices for each territory
+ * FIXED VERSION: Correctly handles territories where Apple uses USD
+ * by matching the customerPrice directly in the currency Apple uses
+ * for that territory.
  *
- * Prerequisites:
- * - APP_STORE_KEY_ID, APP_STORE_ISSUER_ID, APP_STORE_PRIVATE_KEY, APP_STORE_APP_ID
- *
- * Usage:
- *   node scripts/update-ios-pricing-v2.js --dry-run
- *   node scripts/update-ios-pricing-v2.js
+ * Key insight: Apple only supports specific currencies per territory.
+ * For most territories, Apple uses USD. For some, they use local currency.
+ * This script uses a new CSV that specifies the APPLE currency for each
+ * territory, not the country's local currency.
  */
 
 const fs = require('fs');
@@ -24,17 +19,24 @@ const jwt = require('jsonwebtoken');
 
 const CONFIG = {
   apiBaseUrl: 'https://api.appstoreconnect.apple.com/v1',
-  pricingCsvPath: path.join(__dirname, '..', 'complete-regional-pricing.csv'),
-  tokenExpiration: 20 * 60
+  pricingCsvPath: path.join(__dirname, 'apple-regional-pricing.csv'),
+  tokenExpiration: 20 * 60,
+  tokenRefreshInterval: 15 * 60 * 1000
 };
 
-// Territory code to country name mapping for our CSV
+let currentToken = null;
+let tokenCreatedAt = null;
+let credentials = null;
+
+// Territory codes to country names mapping (matching CSV)
 const TERRITORY_TO_COUNTRY = {
   'USA': 'United States',
+  'AFG': 'Afghanistan',
   'ALB': 'Albania',
   'DZA': 'Algeria',
   'AGO': 'Angola',
-  'ATG': 'Antigua & Barbuda',
+  'AIA': 'Anguilla',
+  'ATG': 'Antigua and Barbuda',
   'ARG': 'Argentina',
   'ARM': 'Armenia',
   'AUS': 'Australia',
@@ -42,17 +44,19 @@ const TERRITORY_TO_COUNTRY = {
   'AZE': 'Azerbaijan',
   'BHS': 'Bahamas',
   'BHR': 'Bahrain',
-  'BGD': 'Bangladesh',
+  'BRB': 'Barbados',
   'BLR': 'Belarus',
   'BEL': 'Belgium',
   'BLZ': 'Belize',
   'BEN': 'Benin',
   'BMU': 'Bermuda',
+  'BTN': 'Bhutan',
   'BOL': 'Bolivia',
-  'BIH': 'Bosnia & Herzegovina',
+  'BIH': 'Bosnia and Herzegovina',
   'BWA': 'Botswana',
   'BRA': 'Brazil',
   'VGB': 'British Virgin Islands',
+  'BRN': 'Brunei',
   'BGR': 'Bulgaria',
   'BFA': 'Burkina Faso',
   'KHM': 'Cambodia',
@@ -62,8 +66,10 @@ const TERRITORY_TO_COUNTRY = {
   'CYM': 'Cayman Islands',
   'TCD': 'Chad',
   'CHL': 'Chile',
-  'CHN': 'China',
+  'CHN': 'China mainland',
   'COL': 'Colombia',
+  'COD': 'Congo Democratic Republic of the',
+  'COG': 'Congo Republic of the',
   'CRI': 'Costa Rica',
   'CIV': "Côte d'Ivoire",
   'HRV': 'Croatia',
@@ -88,7 +94,8 @@ const TERRITORY_TO_COUNTRY = {
   'GRC': 'Greece',
   'GRD': 'Grenada',
   'GTM': 'Guatemala',
-  'GIN': 'Guinea',
+  'GNB': 'Guinea-Bissau',
+  'GUY': 'Guyana',
   'HND': 'Honduras',
   'HKG': 'Hong Kong',
   'HUN': 'Hungary',
@@ -104,6 +111,8 @@ const TERRITORY_TO_COUNTRY = {
   'JOR': 'Jordan',
   'KAZ': 'Kazakhstan',
   'KEN': 'Kenya',
+  'KOR': 'Korea Republic of',
+  'XKS': 'Kosovo',
   'KWT': 'Kuwait',
   'KGZ': 'Kyrgyzstan',
   'LAO': 'Laos',
@@ -113,6 +122,7 @@ const TERRITORY_TO_COUNTRY = {
   'LBY': 'Libya',
   'LTU': 'Lithuania',
   'LUX': 'Luxembourg',
+  'MAC': 'Macau',
   'MDG': 'Madagascar',
   'MWI': 'Malawi',
   'MYS': 'Malaysia',
@@ -122,12 +132,16 @@ const TERRITORY_TO_COUNTRY = {
   'MRT': 'Mauritania',
   'MUS': 'Mauritius',
   'MEX': 'Mexico',
+  'FSM': 'Micronesia',
   'MDA': 'Moldova',
   'MNG': 'Mongolia',
+  'MNE': 'Montenegro',
+  'MSR': 'Montserrat',
   'MAR': 'Morocco',
   'MOZ': 'Mozambique',
   'MMR': 'Myanmar',
   'NAM': 'Namibia',
+  'NRU': 'Nauru',
   'NPL': 'Nepal',
   'NLD': 'Netherlands',
   'NZL': 'New Zealand',
@@ -138,6 +152,7 @@ const TERRITORY_TO_COUNTRY = {
   'NOR': 'Norway',
   'OMN': 'Oman',
   'PAK': 'Pakistan',
+  'PLW': 'Palau',
   'PAN': 'Panama',
   'PNG': 'Papua New Guinea',
   'PRY': 'Paraguay',
@@ -149,6 +164,7 @@ const TERRITORY_TO_COUNTRY = {
   'ROU': 'Romania',
   'RUS': 'Russia',
   'RWA': 'Rwanda',
+  'STP': 'São Tomé and Príncipe',
   'SAU': 'Saudi Arabia',
   'SEN': 'Senegal',
   'SRB': 'Serbia',
@@ -159,11 +175,11 @@ const TERRITORY_TO_COUNTRY = {
   'SVN': 'Slovenia',
   'SLB': 'Solomon Islands',
   'ZAF': 'South Africa',
-  'KOR': 'South Korea',
   'ESP': 'Spain',
   'LKA': 'Sri Lanka',
-  'KNA': 'St Kitts & Nevis',
-  'LCA': 'St Lucia',
+  'KNA': 'St. Kitts and Nevis',
+  'LCA': 'St. Lucia',
+  'VCT': 'St. Vincent and the Grenadines',
   'SUR': 'Suriname',
   'SWE': 'Sweden',
   'CHE': 'Switzerland',
@@ -172,10 +188,11 @@ const TERRITORY_TO_COUNTRY = {
   'TZA': 'Tanzania',
   'THA': 'Thailand',
   'TON': 'Tonga',
-  'TTO': 'Trinidad & Tobago',
+  'TTO': 'Trinidad and Tobago',
   'TUN': 'Tunisia',
-  'TUR': 'Turkey',
+  'TUR': 'Türkiye',
   'TKM': 'Turkmenistan',
+  'TCA': 'Turks and Caicos Islands',
   'UGA': 'Uganda',
   'UKR': 'Ukraine',
   'ARE': 'United Arab Emirates',
@@ -187,80 +204,64 @@ const TERRITORY_TO_COUNTRY = {
   'VNM': 'Vietnam',
   'YEM': 'Yemen',
   'ZMB': 'Zambia',
-  'ZWE': 'Zimbabwe',
-  'MAC': 'Macao',
-  'FSM': 'Micronesia'
+  'ZWE': 'Zimbabwe'
 };
 
-/**
- * Generate JWT token for App Store Connect API
- */
 function generateToken(keyId, issuerId, privateKey) {
   const now = Math.floor(Date.now() / 1000);
-  const payload = {
-    iss: issuerId,
-    iat: now,
-    exp: now + CONFIG.tokenExpiration,
-    aud: 'appstoreconnect-v1'
-  };
-  return jwt.sign(payload, privateKey, {
+  return jwt.sign({
+    iss: issuerId, iat: now, exp: now + CONFIG.tokenExpiration, aud: 'appstoreconnect-v1'
+  }, privateKey, {
     algorithm: 'ES256',
     header: { alg: 'ES256', kid: keyId, typ: 'JWT' }
   });
 }
 
-/**
- * Make authenticated API request
- */
-async function apiRequest(token, endpoint, method = 'GET', body = null) {
+function getToken() {
+  const now = Date.now();
+  if (!currentToken || !tokenCreatedAt || (now - tokenCreatedAt) > CONFIG.tokenRefreshInterval) {
+    console.log('\n🔄 Generating new API token...');
+    currentToken = generateToken(credentials.keyId, credentials.issuerId, credentials.privateKey);
+    tokenCreatedAt = now;
+  }
+  return currentToken;
+}
+
+async function apiRequest(endpoint, method = 'GET', body = null) {
   const fetch = (await import('node-fetch')).default;
-
+  const token = getToken();
   const url = endpoint.startsWith('http') ? endpoint : `${CONFIG.apiBaseUrl}${endpoint}`;
-
   const options = {
     method,
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    }
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
   };
-
-  if (body) {
-    options.body = JSON.stringify(body);
-  }
+  if (body) options.body = JSON.stringify(body);
 
   const response = await fetch(url, options);
-
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`API ${method} ${endpoint}: ${response.status} - ${errorText}`);
+    throw new Error(`${response.status}: ${errorText.slice(0, 200)}`);
   }
-
   if (response.status === 204) return null;
   return response.json();
 }
 
-/**
- * Parse CSV line handling quoted fields
- */
 function parseCSVLine(line) {
   const result = [];
   let current = '';
   let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
+  for (const char of line) {
     if (char === '"') inQuotes = !inQuotes;
-    else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else current += char;
+    else if (char === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else current += char;
   }
   result.push(current.trim());
   return result;
 }
 
 /**
- * Parse regional pricing CSV - returns map by country name
+ * Parse the apple-regional-pricing.csv
+ * Format: Country,Apple Currency,Monthly Price,3-Month Price,Annual Price,Monthly USD Equiv,Notes
  */
 function parsePricingCsv(csvPath) {
   const content = fs.readFileSync(csvPath, 'utf-8');
@@ -269,339 +270,421 @@ function parsePricingCsv(csvPath) {
 
   for (let i = 1; i < lines.length; i++) {
     const values = parseCSVLine(lines[i]);
-    if (values.length < 7) continue;
-
+    if (values.length < 6) continue;
     const country = values[0].trim();
     pricing[country] = {
       currency: values[1].trim(),
       monthly: parseFloat(values[2]) || 0,
       threeMonth: parseFloat(values[3]) || 0,
       annual: parseFloat(values[4]) || 0,
-      monthlyUsd: parseFloat(values[5]) || 0,
-      threeMonthMonthlyUsd: parseFloat(values[6]) || 0,
-      annualMonthlyUsd: parseFloat(values[7]) || 0
+      monthlyUsd: parseFloat(values[5]) || 0
     };
   }
   return pricing;
 }
 
-/**
- * Determine subscription duration type from name
- */
 function getSubscriptionType(name) {
-  const nameLower = name.toLowerCase();
-  if (nameLower.includes('month') && !nameLower.includes('3') && !nameLower.includes('three')) {
-    return 'monthly';
-  } else if (nameLower.includes('3') || nameLower.includes('three') || nameLower.includes('quarter')) {
-    return 'threeMonth';
-  } else if (nameLower.includes('year') || nameLower.includes('annual')) {
-    return 'annual';
+  const n = name.toLowerCase();
+  if (n.includes('3') || n.includes('three') || n.includes('quarter')) return 'threeMonth';
+  if (n.includes('year') || n.includes('annual')) return 'annual';
+  return 'monthly';
+}
+
+async function getAllPricePoints(subscriptionId, territory) {
+  let allPoints = [];
+  let nextUrl = `/subscriptions/${subscriptionId}/pricePoints?filter[territory]=${territory}&limit=200`;
+
+  while (nextUrl) {
+    try {
+      const response = await apiRequest(nextUrl);
+      if (response?.data) {
+        allPoints = allPoints.concat(response.data);
+      }
+      nextUrl = response?.links?.next || null;
+      if (nextUrl && nextUrl.startsWith('https://')) {
+        nextUrl = nextUrl.replace(CONFIG.apiBaseUrl, '');
+      }
+    } catch (err) {
+      console.log(`      Warning getting price points: ${err.message.slice(0, 100)}`);
+      break;
+    }
   }
-  return 'monthly'; // default
+
+  return allPoints;
 }
 
 /**
- * Get target USD price for a subscription type and country
+ * Find the best price point matching our target price.
+ * Matches customerPrice directly since our CSV now uses Apple's currency.
  */
-function getTargetPrice(pricingData, country, subscriptionType) {
-  const countryPricing = pricingData[country];
-  if (!countryPricing) return null;
+function findBestPricePoint(pricePoints, targetPrice, currency) {
+  if (!pricePoints || pricePoints.length === 0) return null;
 
-  switch (subscriptionType) {
-    case 'monthly':
-      return countryPricing.monthlyUsd;
-    case 'threeMonth':
-      // The CSV has monthly equivalent, multiply by 3 for actual 3-month price
-      return countryPricing.threeMonthMonthlyUsd * 3;
-    case 'annual':
-      // The CSV has monthly equivalent, multiply by 12 for actual annual price
-      return countryPricing.annualMonthlyUsd * 12;
-    default:
-      return countryPricing.monthlyUsd;
+  let bestMatch = null;
+  let bestDiff = Infinity;
+
+  for (const pp of pricePoints) {
+    const customerPrice = parseFloat(pp.attributes.customerPrice);
+    const diff = Math.abs(customerPrice - targetPrice);
+
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestMatch = pp;
+    }
   }
-}
 
-/**
- * Get all subscription groups for an app
- */
-async function getSubscriptionGroups(token, appId) {
-  return apiRequest(token, `/apps/${appId}/subscriptionGroups`);
-}
-
-/**
- * Get all subscriptions in a group
- */
-async function getSubscriptions(token, groupId) {
-  return apiRequest(token, `/subscriptionGroups/${groupId}/subscriptions`);
-}
-
-/**
- * Get price points for a subscription filtered by territory
- */
-async function getSubscriptionPricePoints(token, subscriptionId, territory) {
-  try {
-    const response = await apiRequest(
-      token,
-      `/subscriptions/${subscriptionId}/pricePoints?filter[territory]=${territory}&include=territory`
-    );
-    return response;
-  } catch (err) {
-    console.log(`    Warning: Could not get price points for ${territory}: ${err.message}`);
-    return null;
+  if (bestMatch) {
+    const actualPrice = parseFloat(bestMatch.attributes.customerPrice);
+    const diffPercent = targetPrice > 0 ? ((Math.abs(actualPrice - targetPrice) / targetPrice) * 100).toFixed(1) : '0';
+    return {
+      pricePoint: bestMatch,
+      actualPrice: bestMatch.attributes.customerPrice,
+      targetPrice: targetPrice,
+      currency: currency,
+      diffPercent: diffPercent,
+      isExact: bestDiff < 0.01,
+      isClose: bestDiff <= Math.max(targetPrice * 0.15, 1.0)
+    };
   }
+
+  return null;
 }
 
 /**
- * Get current subscription prices
+ * Get all scheduled/future prices for a subscription in a specific territory
  */
-async function getCurrentPrices(token, subscriptionId) {
-  return apiRequest(token, `/subscriptions/${subscriptionId}/prices?include=subscriptionPricePoint,territory`);
+async function getSubscriptionPrices(subscriptionId, territory) {
+  let allPrices = [];
+  let nextUrl = `/subscriptions/${subscriptionId}/prices?filter[territory]=${territory}&limit=200`;
+
+  while (nextUrl) {
+    try {
+      const response = await apiRequest(nextUrl);
+      if (response?.data) {
+        allPrices = allPrices.concat(response.data);
+      }
+      nextUrl = response?.links?.next || null;
+      if (nextUrl && nextUrl.startsWith('https://')) {
+        nextUrl = nextUrl.replace(CONFIG.apiBaseUrl, '');
+      }
+    } catch (err) {
+      // 404 means no prices exist, which is fine
+      if (!err.message.includes('404')) {
+        console.log(`      Warning getting prices: ${err.message.slice(0, 100)}`);
+      }
+      break;
+    }
+  }
+
+  return allPrices;
 }
 
 /**
- * Create a new subscription price for a territory
+ * Delete a scheduled subscription price
  */
-async function createSubscriptionPrice(token, subscriptionId, pricePointId, startDate = null) {
+async function deleteSubscriptionPrice(priceId) {
+  return apiRequest(`/subscriptionPrices/${priceId}`, 'DELETE');
+}
+
+/**
+ * Delete any future-dated prices for a subscription/territory to avoid 409 conflicts
+ */
+async function deleteScheduledPrices(subscriptionId, territory, isDryRun = false) {
+  const prices = await getSubscriptionPrices(subscriptionId, territory);
+  const today = new Date().toISOString().split('T')[0];
+  let deletedCount = 0;
+
+  for (const price of prices) {
+    const startDate = price.attributes?.startDate;
+    // Delete prices that start today or in the future (these cause conflicts)
+    if (startDate && startDate >= today) {
+      if (!isDryRun) {
+        try {
+          await deleteSubscriptionPrice(price.id);
+          deletedCount++;
+        } catch (err) {
+          // Some prices may not be deletable, that's okay
+          if (!err.message.includes('404') && !err.message.includes('409')) {
+            console.log(`      Warning deleting price ${price.id}: ${err.message.slice(0, 50)}`);
+          }
+        }
+      } else {
+        deletedCount++;
+      }
+    }
+  }
+
+  return deletedCount;
+}
+
+async function createSubscriptionPrice(subscriptionId, pricePointId, territory) {
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
   const body = {
     data: {
       type: 'subscriptionPrices',
       attributes: {
-        startDate: startDate || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Tomorrow
+        startDate: tomorrow,
         preserveCurrentPrice: false
       },
       relationships: {
-        subscription: {
-          data: { type: 'subscriptions', id: subscriptionId }
-        },
-        subscriptionPricePoint: {
-          data: { type: 'subscriptionPricePoints', id: pricePointId }
-        }
+        subscription: { data: { type: 'subscriptions', id: subscriptionId } },
+        subscriptionPricePoint: { data: { type: 'subscriptionPricePoints', id: pricePointId } },
+        territory: { data: { type: 'territories', id: territory } }
       }
     }
   };
 
-  return apiRequest(token, '/subscriptionPrices', 'POST', body);
+  return apiRequest('/subscriptionPrices', 'POST', body);
 }
 
-/**
- * Find closest price point from available options
- */
-function findClosestPricePoint(pricePoints, targetUsd) {
-  if (!pricePoints || pricePoints.length === 0) return null;
-
-  let closest = null;
-  let minDiff = Infinity;
-
-  for (const point of pricePoints) {
-    // Price points have customerPrice in local currency
-    // We need to look at the USD equivalent or use proceeds as approximation
-    const proceeds = parseFloat(point.attributes?.proceeds || 0);
-    // Apple takes ~30%, so customer price ≈ proceeds / 0.7
-    const estimatedCustomerUsd = proceeds / 0.7;
-
-    const diff = Math.abs(estimatedCustomerUsd - targetUsd);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = point;
-    }
-  }
-
-  return closest;
-}
-
-/**
- * Main function
- */
 async function main() {
   const args = process.argv.slice(2);
   const isDryRun = args.includes('--dry-run');
+  const applyChanges = args.includes('--apply');
+  const singleCountry = args.find(a => a.startsWith('--country='))?.split('=')[1];
 
-  console.log('='.repeat(60));
-  console.log('App Store Connect Subscription Price Updater v2');
-  console.log('='.repeat(60));
-  console.log(`Mode: ${isDryRun ? 'DRY RUN' : 'LIVE'}`);
+  console.log('='.repeat(70));
+  console.log('App Store Connect Subscription Price Updater v2 (FIXED)');
+  console.log('='.repeat(70));
+  console.log('This version uses the correct Apple currencies per territory.');
   console.log('');
 
-  // Environment variables
+  if (!isDryRun && !applyChanges) {
+    console.log('Usage:');
+    console.log('  --dry-run              Preview all changes without applying');
+    console.log('  --apply                Actually apply the price changes');
+    console.log('  --country=TERRITORY    Only update specific territory (e.g., --country=USA)');
+    console.log('');
+    console.log('Run with --dry-run first to preview changes.');
+    process.exit(0);
+  }
+
+  console.log(`Mode: ${isDryRun ? 'DRY RUN (preview only)' : 'APPLYING CHANGES'}`);
+  if (singleCountry) console.log(`Filtering to territory: ${singleCountry}`);
+  console.log('');
+
   const keyId = process.env.APP_STORE_KEY_ID;
   const issuerId = process.env.APP_STORE_ISSUER_ID;
-  let privateKey = process.env.APP_STORE_PRIVATE_KEY;
+  const privateKey = process.env.APP_STORE_PRIVATE_KEY;
   const appId = process.env.APP_STORE_APP_ID;
 
-  const missing = [];
-  if (!keyId) missing.push('APP_STORE_KEY_ID');
-  if (!issuerId) missing.push('APP_STORE_ISSUER_ID');
-  if (!privateKey) missing.push('APP_STORE_PRIVATE_KEY');
-  if (!appId) missing.push('APP_STORE_APP_ID');
-
-  if (missing.length > 0) {
-    console.error('Missing environment variables:', missing.join(', '));
+  if (!keyId || !issuerId || !privateKey || !appId) {
+    console.error('Missing environment variables: APP_STORE_KEY_ID, APP_STORE_ISSUER_ID, APP_STORE_PRIVATE_KEY, APP_STORE_APP_ID');
     process.exit(1);
   }
 
-  // Load pricing data
-  console.log('Loading regional pricing data...');
+  credentials = { keyId, issuerId, privateKey };
+
+  console.log('Loading regional pricing data from apple-regional-pricing.csv...');
   const pricingData = parsePricingCsv(CONFIG.pricingCsvPath);
-  console.log(`Loaded pricing for ${Object.keys(pricingData).length} countries`);
+  console.log(`Loaded pricing for ${Object.keys(pricingData).length} countries\n`);
 
-  // Generate token
-  console.log('Generating API token...');
-  const token = generateToken(keyId, issuerId, privateKey);
-
-  // Get subscription groups
-  console.log('Fetching subscription groups...');
-  const groups = await getSubscriptionGroups(token, appId);
+  console.log('Fetching subscription groups...\n');
+  const groups = await apiRequest(`/apps/${appId}/subscriptionGroups`);
 
   if (!groups?.data?.length) {
     console.error('No subscription groups found');
     process.exit(1);
   }
 
-  console.log(`Found ${groups.data.length} subscription group(s)`);
-
   const results = {
     updated: [],
     skipped: [],
-    errors: []
+    errors: [],
+    noMatch: [],
+    warnings: []
   };
 
-  // Process each group
-  for (const group of groups.data) {
-    console.log(`\nProcessing group: ${group.attributes?.referenceName || group.id}`);
+  let territories = Object.keys(TERRITORY_TO_COUNTRY);
+  if (singleCountry) {
+    territories = territories.filter(t => t === singleCountry);
+  }
 
-    // Get subscriptions in group
-    const subs = await getSubscriptions(token, group.id);
+  let totalProcessed = 0;
+
+  for (const group of groups.data) {
+    const subs = await apiRequest(`/subscriptionGroups/${group.id}/subscriptions`);
     if (!subs?.data?.length) continue;
 
-    console.log(`  Found ${subs.data.length} subscription(s)`);
-
-    // Process each subscription
     for (const sub of subs.data) {
       const subName = sub.attributes?.name || sub.id;
-      const subType = getSubscriptionType(subName);
+      const subProductId = sub.attributes?.productId || '';
 
-      console.log(`\n  Subscription: ${subName} (type: ${subType})`);
-      console.log('  ' + '-'.repeat(50));
+      // ONLY process Premium plans, skip Platinum
+      const isPremium = subName.toLowerCase().includes('premium') ||
+                        subProductId.toLowerCase().includes('premium');
+      const isPlatinum = subName.toLowerCase().includes('platinum') ||
+                         subProductId.toLowerCase().includes('platinum');
 
-      // Get current prices
-      const currentPrices = await getCurrentPrices(token, sub.id);
-      const currentPriceMap = new Map();
-
-      if (currentPrices?.included) {
-        for (const item of currentPrices.included) {
-          if (item.type === 'territories') {
-            currentPriceMap.set(item.id, item.attributes);
-          }
-        }
+      if (isPlatinum || !isPremium) {
+        console.log(`\nSkipping: ${subName} (${subProductId}) - Not a Premium plan`);
+        continue;
       }
 
-      // Process key territories
-      const territoriesToProcess = Object.keys(TERRITORY_TO_COUNTRY);
+      const subType = getSubscriptionType(subName);
 
-      for (const territory of territoriesToProcess) {
+      console.log(`\n${'='.repeat(70)}`);
+      console.log(`SUBSCRIPTION: ${subName} (${subType})`);
+      console.log('='.repeat(70));
+
+      for (const territory of territories) {
+        totalProcessed++;
         const country = TERRITORY_TO_COUNTRY[territory];
-        const targetUsd = getTargetPrice(pricingData, country, subType);
-
-        if (!targetUsd) {
-          results.skipped.push({ subscription: subName, territory, reason: 'No pricing data' });
+        if (!country) {
+          console.log(`  ${territory}: Unknown territory`);
           continue;
         }
 
+        const countryData = pricingData[country];
+        if (!countryData) {
+          results.skipped.push({ sub: subName, territory, country, reason: 'No pricing data in CSV' });
+          console.log(`  ${territory} (${country}): ⚠️ No pricing data in CSV`);
+          continue;
+        }
+
+        // Get target price based on subscription type
+        let targetPrice;
+        if (subType === 'monthly') {
+          targetPrice = countryData.monthly;
+        } else if (subType === 'threeMonth') {
+          targetPrice = countryData.threeMonth;
+        } else {
+          targetPrice = countryData.annual;
+        }
+
+        if (!targetPrice || targetPrice <= 0) {
+          results.skipped.push({ sub: subName, territory, country, reason: 'No target price for this subscription type' });
+          continue;
+        }
+
+        const currency = countryData.currency;
+
         try {
-          // Get available price points for this territory
-          const pricePointsResponse = await getSubscriptionPricePoints(token, sub.id, territory);
+          const pricePoints = await getAllPricePoints(sub.id, territory);
 
-          if (!pricePointsResponse?.data?.length) {
-            results.skipped.push({ subscription: subName, territory, reason: 'No price points available' });
+          if (pricePoints.length === 0) {
+            results.noMatch.push({ sub: subName, territory, country, reason: 'No price points available from Apple' });
+            console.log(`  ${territory} (${country}): ❌ No price points available`);
             continue;
           }
 
-          // Find closest price point to target
-          const bestPricePoint = findClosestPricePoint(pricePointsResponse.data, targetUsd);
+          const match = findBestPricePoint(pricePoints, targetPrice, currency);
 
-          if (!bestPricePoint) {
-            results.skipped.push({ subscription: subName, territory, reason: 'Could not find suitable price point' });
+          if (!match) {
+            results.noMatch.push({ sub: subName, territory, country, targetPrice, currency, reason: 'Could not find any price point' });
+            console.log(`  ${territory} (${country}): ❌ No price point found for ${currency} ${targetPrice}`);
             continue;
           }
 
-          const customerPrice = bestPricePoint.attributes?.customerPrice || 'N/A';
-          const proceeds = bestPricePoint.attributes?.proceeds || 'N/A';
+          // Determine status icon
+          let statusIcon = '✓';
+          if (!match.isClose) {
+            statusIcon = '⚠️';
+            results.warnings.push({
+              sub: subName,
+              territory,
+              country,
+              currency,
+              targetPrice,
+              actualPrice: match.actualPrice,
+              diffPercent: match.diffPercent
+            });
+          }
 
-          console.log(`    ${territory} (${country}): Target $${targetUsd.toFixed(2)} → ${customerPrice} (proceeds: ${proceeds})`);
+          console.log(`  ${statusIcon} ${territory} (${country}): ${currency} ${targetPrice} → ${match.actualPrice} (${match.diffPercent}% diff)`);
 
           if (!isDryRun) {
             try {
-              await createSubscriptionPrice(token, sub.id, bestPricePoint.id);
+              // Delete any existing scheduled prices first to avoid 409 conflicts
+              const deletedCount = await deleteScheduledPrices(sub.id, territory, false);
+              if (deletedCount > 0) {
+                console.log(`    🗑️ Deleted ${deletedCount} existing scheduled price(s)`);
+              }
+
+              await createSubscriptionPrice(sub.id, match.pricePoint.id, territory);
               results.updated.push({
                 subscription: subName,
                 territory,
                 country,
-                targetUsd,
-                pricePointId: bestPricePoint.id,
-                customerPrice
+                currency,
+                targetPrice,
+                actualPrice: match.actualPrice,
+                diffPercent: match.diffPercent
               });
             } catch (err) {
-              results.errors.push({
-                subscription: subName,
-                territory,
-                error: err.message
-              });
+              console.log(`    ❌ ERROR: ${err.message.slice(0, 100)}`);
+              results.errors.push({ sub: subName, territory, country, error: err.message });
             }
           } else {
             results.updated.push({
               subscription: subName,
               territory,
               country,
-              targetUsd,
-              pricePointId: bestPricePoint.id,
-              customerPrice,
+              currency,
+              targetPrice,
+              actualPrice: match.actualPrice,
+              diffPercent: match.diffPercent,
               dryRun: true
             });
           }
 
-          // Rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(r => setTimeout(r, 30));
 
         } catch (err) {
-          results.errors.push({
-            subscription: subName,
-            territory,
-            error: err.message
-          });
+          results.errors.push({ sub: subName, territory, country, error: err.message });
+          console.log(`  ${territory} (${country}): ❌ ERROR - ${err.message.slice(0, 50)}`);
+        }
+
+        if (totalProcessed % 50 === 0) {
+          console.log(`\n--- Progress: ${totalProcessed} processed ---\n`);
         }
       }
     }
   }
 
   // Summary
-  console.log('\n' + '='.repeat(60));
+  console.log('\n' + '='.repeat(70));
   console.log('SUMMARY');
-  console.log('='.repeat(60));
-  console.log(`Price updates ${isDryRun ? 'planned' : 'applied'}: ${results.updated.length}`);
-  console.log(`Skipped: ${results.skipped.length}`);
+  console.log('='.repeat(70));
+  console.log(`Total processed: ${totalProcessed}`);
+  console.log(`Successfully ${isDryRun ? 'matched' : 'updated'}: ${results.updated.length}`);
+  console.log(`Skipped (no data): ${results.skipped.length}`);
+  console.log(`No match found: ${results.noMatch.length}`);
+  console.log(`Warnings (large diff): ${results.warnings.length}`);
   console.log(`Errors: ${results.errors.length}`);
 
-  if (results.errors.length > 0) {
-    console.log('\nErrors:');
-    results.errors.slice(0, 10).forEach(e => {
-      console.log(`  ${e.subscription} / ${e.territory}: ${e.error}`);
+  if (results.warnings.length > 0) {
+    console.log('\n⚠️ Prices with >15% difference from target:');
+    results.warnings.forEach(w => {
+      console.log(`  ${w.territory} (${w.country}): Target ${w.currency} ${w.targetPrice} → Actual ${w.actualPrice} (${w.diffPercent}% diff)`);
     });
-    if (results.errors.length > 10) {
-      console.log(`  ... and ${results.errors.length - 10} more`);
-    }
+  }
+
+  if (results.errors.length > 0) {
+    console.log('\n❌ Errors:');
+    results.errors.slice(0, 10).forEach(e => console.log(`  ${e.territory} (${e.country}): ${e.error.slice(0, 80)}`));
+  }
+
+  if (results.noMatch.length > 0) {
+    console.log('\n❌ No match found:');
+    results.noMatch.slice(0, 10).forEach(e => console.log(`  ${e.territory} (${e.country}): ${e.currency || 'N/A'} ${e.targetPrice || 'N/A'}`));
   }
 
   // Save results
-  const outputPath = path.join(__dirname, 'pricing-update-results.json');
+  const outputPath = path.join(__dirname, 'pricing-v2-results.json');
   fs.writeFileSync(outputPath, JSON.stringify(results, null, 2));
   console.log(`\nResults saved to: ${outputPath}`);
 
   if (isDryRun) {
-    console.log('\nDRY RUN complete. Run without --dry-run to apply changes.');
+    console.log('\n' + '='.repeat(70));
+    console.log('DRY RUN COMPLETE - No changes were applied');
+    console.log('Run with --apply to actually update prices');
+    console.log('='.repeat(70));
   }
 }
 
 main().catch(err => {
-  console.error('Fatal error:', err);
+  console.error('\nFATAL ERROR:', err);
   process.exit(1);
 });

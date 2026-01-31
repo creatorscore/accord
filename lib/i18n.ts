@@ -108,6 +108,37 @@ export const changeLanguage = async (languageCode: string) => {
   return i18n.changeLanguage(languageCode);
 };
 
+/**
+ * Sync the user's language preference to the database
+ * This enables server-side localized push notifications
+ *
+ * @param languageCode - The language code to sync (e.g., 'en', 'es', 'ar')
+ * @param profileId - The user's profile ID
+ * @returns Promise that resolves when sync is complete
+ */
+export const syncLanguageToDatabase = async (
+  languageCode: string,
+  profileId: string
+): Promise<void> => {
+  try {
+    // Dynamic import to avoid circular dependency
+    const { supabase } = await import('./supabase');
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ preferred_language: languageCode })
+      .eq('id', profileId);
+
+    if (error) {
+      console.error('Error syncing language to database:', error);
+    } else {
+      console.log(`Language preference synced to database: ${languageCode}`);
+    }
+  } catch (error) {
+    console.error('Error syncing language to database:', error);
+  }
+};
+
 export const getCurrentLanguage = () => i18n.language;
 
 export const isRTL = () => RTL_LANGUAGES.includes(i18n.language);

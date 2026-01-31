@@ -14,11 +14,13 @@ import { useTranslation } from 'react-i18next';
  * - When trial has 3 or fewer days remaining (warning)
  * - When trial has 1 day remaining (urgent)
  * - When trial expires today (critical)
+ *
+ * Features loss aversion messaging to highlight what they'll lose
  */
 export default function TrialExpirationBanner() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { isTrial, daysRemaining, isSubscribed } = useSubscription();
+  const { isTrial, daysRemaining } = useSubscription();
 
   // Don't show if not in trial or no days remaining info
   if (!isTrial || daysRemaining === null) {
@@ -63,9 +65,27 @@ export default function TrialExpirationBanner() {
     return 'clock-alert-outline';
   };
 
+  // Get loss aversion features list
+  const getLossFeatures = () => {
+    // Show different features based on urgency
+    if (isCritical) {
+      return [
+        t('subscription.loseUnlimitedLikes', 'Unlimited likes'),
+        t('subscription.loseSeeWhoLiked', 'See who liked you'),
+        t('subscription.loseSuperLikes', 'Super Likes'),
+      ];
+    }
+    return [
+      t('subscription.loseSeeWhoLiked', 'See who liked you'),
+      t('subscription.loseVoiceMessages', 'Voice messages'),
+    ];
+  };
+
   const handlePress = () => {
     router.push('/settings/subscription');
   };
+
+  const lossFeatures = getLossFeatures();
 
   return (
     <MotiView
@@ -110,7 +130,7 @@ export default function TrialExpirationBanner() {
             padding: 16,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
             <View
               style={{
                 width: 40,
@@ -134,21 +154,73 @@ export default function TrialExpirationBanner() {
               >
                 {getMessage()}
               </Text>
-              <Text
+
+              {/* Loss aversion: Show what they'll lose */}
+              <View style={{ marginTop: 6, marginBottom: 4 }}>
+                <Text
+                  style={{
+                    color: 'rgba(255, 255, 255, 0.85)',
+                    fontSize: 12,
+                    fontWeight: '600',
+                    marginBottom: 4,
+                  }}
+                >
+                  {t('subscription.youllLose', "You'll lose access to:")}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {lossFeatures.map((feature, index) => (
+                    <View
+                      key={index}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginRight: 12,
+                        marginBottom: 2,
+                      }}
+                    >
+                      <MaterialCommunityIcons name="close-circle" size={12} color="rgba(255, 255, 255, 0.7)" />
+                      <Text
+                        style={{
+                          color: 'rgba(255, 255, 255, 0.9)',
+                          fontSize: 12,
+                          marginLeft: 4,
+                        }}
+                      >
+                        {feature}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* CTA */}
+              <View
                 style={{
-                  color: 'rgba(255, 255, 255, 0.9)',
-                  fontSize: 14,
-                  marginTop: 2,
+                  backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                  borderRadius: 8,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  marginTop: 8,
+                  alignSelf: 'flex-start',
                 }}
               >
-                {t('subscription.tapToSubscribe', 'Tap to subscribe and keep your premium features')}
-              </Text>
+                <Text
+                  style={{
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: 14,
+                  }}
+                >
+                  {t('subscription.keepPremium', 'Keep Premium')}
+                </Text>
+              </View>
             </View>
 
             <MaterialCommunityIcons
               name="chevron-right"
               size={24}
               color="rgba(255, 255, 255, 0.8)"
+              style={{ marginTop: 8 }}
             />
           </View>
         </LinearGradient>

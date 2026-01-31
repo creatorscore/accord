@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { InteractionManager } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
+import { getCurrentLanguage, syncLanguageToDatabase } from '@/lib/i18n';
 
 /**
  * ProfileDataContext - PERFORMANCE OPTIMIZATION
@@ -27,6 +28,7 @@ export interface ProfileData {
   location_state: string | null;
   push_token: string | null;
   last_active_at: string | null;
+  preferred_language: string | null;
 }
 
 interface ProfileDataContextType {
@@ -86,7 +88,8 @@ export const ProfileDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
           location_city,
           location_state,
           push_token,
-          last_active_at
+          last_active_at,
+          preferred_language
         `)
         .eq('user_id', user.id)
         .maybeSingle();
@@ -98,6 +101,13 @@ export const ProfileDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
       } else {
         setProfile(data);
         setError(null);
+
+        // Sync language preference to database if not set
+        // This ensures existing users get their device language synced for push notifications
+        if (data && !data.preferred_language) {
+          const currentLang = getCurrentLanguage();
+          syncLanguageToDatabase(currentLang, data.id).catch(console.error);
+        }
       }
     } catch (err) {
       console.error('Profile fetch error:', err);

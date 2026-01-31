@@ -4,6 +4,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { t } from '../_shared/translations.ts';
 
 const REVIEW_TRIGGER_DAYS = 3;
 
@@ -38,8 +39,8 @@ Deno.serve(async (req) => {
         profile1_id,
         profile2_id,
         matched_at,
-        profile1:profiles!matches_profile1_id_fkey(display_name, push_token, push_enabled),
-        profile2:profiles!matches_profile2_id_fkey(display_name, push_token, push_enabled)
+        profile1:profiles!matches_profile1_id_fkey(display_name, push_token, push_enabled, preferred_language),
+        profile2:profiles!matches_profile2_id_fkey(display_name, push_token, push_enabled, preferred_language)
       `)
       .eq('status', 'active')
       .lte('matched_at', triggerDaysAgo.toISOString());
@@ -98,12 +99,17 @@ Deno.serve(async (req) => {
         profile2Notified = existingPrompt.profile2_notified;
       }
 
-      // Send notification to profile1 if not already notified
+      // Send notification to profile1 if not already notified (in their preferred language)
       if (!profile1Notified && match.profile1?.push_enabled && match.profile1?.push_token) {
+        const lang1 = match.profile1?.preferred_language || 'en';
+        const otherName1 = match.profile2?.display_name || 'your match';
+        const title1 = t(lang1, 'reviews.readyTitle');
+        const body1 = t(lang1, 'reviews.readyBody', { name: otherName1 });
+
         const sent = await sendPushNotification(
           match.profile1.push_token,
-          'Time to Review! ⭐',
-          `Share your experience with ${match.profile2?.display_name || 'your match'}. Your review helps build trust in our community.`,
+          title1,
+          body1,
           { type: 'review_ready', match_id: match.id }
         );
 
@@ -117,8 +123,8 @@ Deno.serve(async (req) => {
           await supabase.from('notification_queue').insert({
             recipient_profile_id: match.profile1_id,
             notification_type: 'review_ready',
-            title: 'Time to Review! ⭐',
-            body: `Share your experience with ${match.profile2?.display_name || 'your match'}. Your review helps build trust in our community.`,
+            title: title1,
+            body: body1,
             data: { type: 'review_ready', match_id: match.id },
             status: 'sent', // Already sent via push
           });
@@ -127,12 +133,17 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Send notification to profile2 if not already notified
+      // Send notification to profile2 if not already notified (in their preferred language)
       if (!profile2Notified && match.profile2?.push_enabled && match.profile2?.push_token) {
+        const lang2 = match.profile2?.preferred_language || 'en';
+        const otherName2 = match.profile1?.display_name || 'your match';
+        const title2 = t(lang2, 'reviews.readyTitle');
+        const body2 = t(lang2, 'reviews.readyBody', { name: otherName2 });
+
         const sent = await sendPushNotification(
           match.profile2.push_token,
-          'Time to Review! ⭐',
-          `Share your experience with ${match.profile1?.display_name || 'your match'}. Your review helps build trust in our community.`,
+          title2,
+          body2,
           { type: 'review_ready', match_id: match.id }
         );
 
@@ -146,8 +157,8 @@ Deno.serve(async (req) => {
           await supabase.from('notification_queue').insert({
             recipient_profile_id: match.profile2_id,
             notification_type: 'review_ready',
-            title: 'Time to Review! ⭐',
-            body: `Share your experience with ${match.profile1?.display_name || 'your match'}. Your review helps build trust in our community.`,
+            title: title2,
+            body: body2,
             data: { type: 'review_ready', match_id: match.id },
             status: 'sent', // Already sent via push
           });
@@ -172,8 +183,8 @@ Deno.serve(async (req) => {
         reminder_sent,
         window_expires_at,
         match:matches!review_prompts_match_id_fkey(
-          profile1:profiles!matches_profile1_id_fkey(display_name, push_token, push_enabled),
-          profile2:profiles!matches_profile2_id_fkey(display_name, push_token, push_enabled)
+          profile1:profiles!matches_profile1_id_fkey(display_name, push_token, push_enabled, preferred_language),
+          profile2:profiles!matches_profile2_id_fkey(display_name, push_token, push_enabled, preferred_language)
         )
       `)
       .eq('reviews_revealed', false)
@@ -187,23 +198,27 @@ Deno.serve(async (req) => {
       const match = prompt.match;
       if (!match) continue;
 
-      // Send reminder to profile1 if they haven't reviewed yet
+      // Send reminder to profile1 if they haven't reviewed yet (in their preferred language)
       if (!prompt.profile1_reviewed && match.profile1?.push_enabled && match.profile1?.push_token) {
+        const lang1 = match.profile1?.preferred_language || 'en';
+        const otherName1 = match.profile2?.display_name || 'your match';
         await sendPushNotification(
           match.profile1.push_token,
-          'Last Chance to Review! ⏰',
-          `Your review window for ${match.profile2?.display_name || 'your match'} expires soon. Don't miss out!`,
+          t(lang1, 'reviews.reminderTitle'),
+          t(lang1, 'reviews.reminderBody', { name: otherName1 }),
           { type: 'review_reminder', match_id: prompt.match_id }
         );
         remindersSent++;
       }
 
-      // Send reminder to profile2 if they haven't reviewed yet
+      // Send reminder to profile2 if they haven't reviewed yet (in their preferred language)
       if (!prompt.profile2_reviewed && match.profile2?.push_enabled && match.profile2?.push_token) {
+        const lang2 = match.profile2?.preferred_language || 'en';
+        const otherName2 = match.profile1?.display_name || 'your match';
         await sendPushNotification(
           match.profile2.push_token,
-          'Last Chance to Review! ⏰',
-          `Your review window for ${match.profile1?.display_name || 'your match'} expires soon. Don't miss out!`,
+          t(lang2, 'reviews.reminderTitle'),
+          t(lang2, 'reviews.reminderBody', { name: otherName2 }),
           { type: 'review_reminder', match_id: prompt.match_id }
         );
         remindersSent++;

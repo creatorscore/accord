@@ -21,8 +21,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { ChatSkeleton } from '@/components/shared/SkeletonScreens';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -41,6 +43,7 @@ import IntroMessages from '@/components/messaging/IntroMessages';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
 import ReviewPromptBanner from '@/components/reviews/ReviewPromptBanner';
 import ReviewSubmissionModal from '@/components/reviews/ReviewSubmissionModal';
+import { useToast } from '@/contexts/ToastContext';
 import { validateMessage, containsContactInfo, validateContent } from '@/lib/content-moderation';
 import { encryptMessage, decryptMessage, getPrivateKey, getLegacyPrivateKey } from '@/lib/encryption';
 import { getLastActiveText, isOnline, getOnlineStatusColor } from '@/lib/online-status';
@@ -108,6 +111,7 @@ export default function Chat() {
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
   const { colors, isDarkColorScheme } = useColorScheme();
+  const { showToast } = useToast();
 
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [currentProfileName, setCurrentProfileName] = useState<string>('');
@@ -467,7 +471,7 @@ export default function Chat() {
       checkPhotoRevealStatus(otherProfileId);
     } catch (error: any) {
       console.error('❌ Error loading match profile:', error);
-      Alert.alert(t('common.error'), 'Failed to load chat. Please try again.');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.chatLoadError') });
       router.back();
     }
   };
@@ -476,22 +480,23 @@ export default function Chat() {
     try {
       console.log('Loading messages for match:', matchId);
 
-      // Fetch messages and reactions in parallel
-      const [messagesResult, reactionsResult] = await Promise.all([
-        supabase
-          .from('messages')
-          .select('*')
-          .eq('match_id', matchId)
-          .order('created_at', { ascending: true }),
-        supabase
-          .from('message_reactions')
-          .select('*')
-          .in('message_id', (await supabase
-            .from('messages')
-            .select('id')
-            .eq('match_id', matchId)
-          ).data?.map(m => m.id) || [])
-      ]);
+      // Fetch the most recent 100 messages (paginated to prevent RAM bloat)
+      const MESSAGE_PAGE_SIZE = 100;
+      const messagesResult = await supabase
+        .from('messages')
+        .select('*')
+        .eq('match_id', matchId)
+        .order('created_at', { ascending: false })
+        .limit(MESSAGE_PAGE_SIZE);
+
+      // Fetch reactions only for the loaded messages
+      const messageIds = messagesResult.data?.map(m => m.id) || [];
+      const reactionsResult = messageIds.length > 0
+        ? await supabase
+            .from('message_reactions')
+            .select('*')
+            .in('message_id', messageIds)
+        : { data: [] };
 
       const { data, error } = messagesResult;
       const { data: reactionsData } = reactionsResult;
@@ -512,11 +517,12 @@ export default function Chat() {
         });
       }
 
-      // Decrypt all text messages and attach reactions
+      // Decrypt messages and attach reactions (reverse to ascending order)
       if (data && data.length > 0) {
-        console.log('🔓 Decrypting', data.length, 'messages...');
+        const chronological = data.reverse(); // was fetched desc, flip to asc
+        console.log('🔓 Decrypting', chronological.length, 'messages...');
         const decryptedMessages = await Promise.all(
-          data.map(async (message) => {
+          chronological.map(async (message) => {
             const decrypted = await decryptSingleMessage(message as Message);
             return {
               ...decrypted,
@@ -531,7 +537,7 @@ export default function Chat() {
       }
     } catch (error: any) {
       console.error('CATCH Error loading messages:', error);
-      Alert.alert(t('common.error'), 'Failed to load messages: ' + error.message);
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.messagesLoadError') });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -863,6 +869,7 @@ export default function Chat() {
   };
 
   const handleSendMessage = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     console.log('🚀 SEND BUTTON PRESSED!');
     console.log('New message:', newMessage);
     console.log('Current profile ID:', currentProfileId);
@@ -870,7 +877,7 @@ export default function Chat() {
 
     // Check if match is still active
     if (matchStatus?.status !== 'active') {
-      Alert.alert(t('chat.cannotSendMessage'), t('chat.conversationEnded'));
+      showToast({ type: 'info', title: t('chat.cannotSendMessage'), message: t('chat.conversationEnded') });
       return;
     }
 
@@ -900,7 +907,7 @@ export default function Chat() {
     if (!messageValidation.isValid) {
       setNewMessage(messageContent); // Restore message to input
       setSending(false);
-      Alert.alert(t('chat.inappropriateContent'), messageValidation.error);
+      showToast({ type: 'error', title: t('chat.inappropriateContent'), message: messageValidation.error || t('toast.genericError') });
       return;
     }
 
@@ -1000,7 +1007,7 @@ export default function Chat() {
     } catch (error: any) {
       console.error('Error sending message:', error);
       setNewMessage(messageContent); // Restore message on error
-      Alert.alert(t('common.error'), t('chat.sendMessageError'));
+      showToast({ type: 'error', title: t('common.error'), message: t('chat.sendMessageError') });
     } finally {
       setSending(false);
     }
@@ -1026,7 +1033,7 @@ export default function Chat() {
           // Validate image before processing
           const validation = await validateImage(selectedUri);
           if (!validation.isValid) {
-            Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
+            showToast({ type: 'error', title: t('toast.invalidImage'), message: validation.error || 'Please select a different photo' });
             setSending(false);
             return;
           }
@@ -1127,14 +1134,14 @@ export default function Chat() {
           }
         } catch (uploadError: any) {
           console.error('Error uploading image:', uploadError);
-          Alert.alert(t('common.error'), t('chat.sendPhotoError'));
+          showToast({ type: 'error', title: t('common.error'), message: t('chat.sendPhotoError') });
         } finally {
           setSending(false);
         }
       }
     } catch (error: any) {
       console.error('Error picking image:', error);
-      Alert.alert(t('common.error'), t('chat.pickPhotoError'));
+      showToast({ type: 'error', title: t('common.error'), message: t('chat.pickPhotoError') });
     }
   };
 
@@ -1151,7 +1158,7 @@ export default function Chat() {
       // Request permissions
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(t('chat.permissionRequired'), t('chat.microphonePermission'));
+        showToast({ type: 'error', title: t('chat.permissionRequired'), message: t('chat.microphonePermission') });
         return;
       }
 
@@ -1204,7 +1211,7 @@ export default function Chat() {
       }, 120000);
     } catch (error: any) {
       console.error('Error starting recording:', error);
-      Alert.alert(t('common.error'), t('chat.recordingError'));
+      showToast({ type: 'error', title: t('common.error'), message: t('chat.recordingError') });
     }
   };
 
@@ -1231,7 +1238,7 @@ export default function Chat() {
       setRecordingDuration(0);
 
       if (!uri) {
-        Alert.alert(t('common.error'), 'Failed to record voice message. Please try again.');
+        showToast({ type: 'error', title: t('common.error'), message: t('toast.voiceRecordError') });
         return;
       }
 
@@ -1239,7 +1246,7 @@ export default function Chat() {
       await handleVoiceSend(uri, duration);
     } catch (error: any) {
       console.error('Error stopping recording:', error);
-      Alert.alert(t('common.error'), t('chat.stopRecordingError'));
+      showToast({ type: 'error', title: t('common.error'), message: t('chat.stopRecordingError') });
     }
   };
 
@@ -1329,7 +1336,7 @@ export default function Chat() {
       }
     } catch (error: any) {
       console.error('Error sending voice message:', error);
-      Alert.alert(t('common.error'), t('chat.sendVoiceError'));
+      showToast({ type: 'error', title: t('common.error'), message: t('chat.sendVoiceError') });
     } finally {
       setSending(false);
     }
@@ -1366,7 +1373,7 @@ export default function Chat() {
       setPlayingVoiceId(message.id);
     } catch (error: any) {
       console.error('Error playing voice message:', error);
-      Alert.alert(t('common.error'), t('chat.playVoiceError'));
+      showToast({ type: 'error', title: t('common.error'), message: t('chat.playVoiceError') });
     }
   };
 
@@ -1400,7 +1407,7 @@ export default function Chat() {
 
   const togglePhotoReveal = async () => {
     if (!currentProfileId || !matchProfile?.id || !matchId) {
-      Alert.alert(t('common.error'), 'Unable to toggle photo reveal');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.photoRevealError') });
       return;
     }
 
@@ -1418,7 +1425,7 @@ export default function Chat() {
         if (error) throw error;
 
         setHasRevealedPhotos(false);
-        Alert.alert('Photos Blurred', 'Your photos are now blurred for this match');
+        showToast({ type: 'info', title: t('toast.photosBlurred'), message: t('toast.photosBlurred') });
       } else {
         // Reveal: Insert new reveal
         const { error } = await supabase
@@ -1445,11 +1452,11 @@ export default function Chat() {
           console.log('Notification error (ignoring):', notifError);
         }
 
-        Alert.alert('Photos Revealed', `Your photos are now visible to ${matchProfile.display_name}`);
+        showToast({ type: 'success', title: t('toast.photosRevealed'), message: t('toast.photosRevealed', { name: matchProfile.display_name }) });
       }
     } catch (error: any) {
       console.error('Error toggling photo reveal:', error);
-      Alert.alert(t('common.error'), 'Failed to update photo visibility. Please try again.');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.photoRevealError') });
     } finally {
       setRevealLoading(false);
     }
@@ -1476,7 +1483,7 @@ export default function Chat() {
       ]);
     } catch (error) {
       console.error('Error blocking user:', error);
-      Alert.alert(t('common.error'), 'Failed to block user. Please try again.');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.blockError') });
     }
   };
 
@@ -1492,10 +1499,10 @@ export default function Chat() {
         status: 'pending',
       });
 
-      Alert.alert('Report Submitted', 'Thank you for helping keep Accord safe. Our team will review this report.');
+      showToast({ type: 'success', title: t('toast.reportSubmitted'), message: t('toast.reportSubmitted') });
     } catch (error) {
       console.error('Error reporting user:', error);
-      Alert.alert(t('common.error'), 'Failed to submit report. Please try again.');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.reportError') });
     }
   };
 
@@ -1506,7 +1513,7 @@ export default function Chat() {
     }
 
     if (message.sender_profile_id !== currentProfileId) {
-      Alert.alert(t('chat.cannotDelete'), t('chat.cannotDeleteMessage'));
+      showToast({ type: 'error', title: t('chat.cannotDelete'), message: t('chat.cannotDeleteMessage') });
       return;
     }
 
@@ -1531,7 +1538,7 @@ export default function Chat() {
               setMessages((prev) => prev.filter((m) => m.id !== message.id));
             } catch (error) {
               console.error('Error deleting message:', error);
-              Alert.alert(t('common.error'), t('chat.deleteMessageError'));
+              showToast({ type: 'error', title: t('common.error'), message: t('chat.deleteMessageError') });
             }
           },
         },
@@ -1689,7 +1696,7 @@ export default function Chat() {
       }
     } catch (error) {
       console.error('Error handling reaction:', error);
-      Alert.alert(t('common.error'), 'Failed to add reaction');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.reactionError') });
     } finally {
       setShowReactionPicker(false);
       setShowFullEmojiPicker(false);
@@ -1987,8 +1994,7 @@ export default function Chat() {
   if (loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color="#A08AB7" />
-        <Text style={{ marginTop: 16, color: colors.mutedForeground }}>{t('chat.loadingChat')}</Text>
+        <ChatSkeleton />
       </View>
     );
   }
@@ -2231,6 +2237,11 @@ export default function Chat() {
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={20}
+        maxToRenderPerBatch={10}
+        windowSize={11}
+        removeClippedSubviews={true}
+        updateCellsBatchingPeriod={50}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

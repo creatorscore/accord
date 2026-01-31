@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { router } from 'expo-router';
 import MatchCelebrationModal from '@/components/matching/MatchCelebrationModal';
+import { maybeRequestReview } from '@/lib/store-review';
 
 interface MatchedUser {
   id: string;
@@ -38,6 +39,7 @@ export function MatchProvider({ children }: { children: React.ReactNode }) {
 
   const handleSendMessage = useCallback(() => {
     setVisible(false);
+    maybeRequestReview();
     if (matchId) {
       setTimeout(() => {
         router.push(`/chat/${matchId}`);
@@ -47,6 +49,7 @@ export function MatchProvider({ children }: { children: React.ReactNode }) {
 
   const handleKeepSwiping = useCallback(() => {
     setVisible(false);
+    maybeRequestReview();
   }, []);
 
   return (

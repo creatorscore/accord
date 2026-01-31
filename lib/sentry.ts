@@ -46,8 +46,32 @@ export const initializeSentry = () => {
       // Sample rate for performance monitoring (adjust based on traffic)
       tracesSampleRate: 0.2, // 20% of transactions
 
-      // Filter out sensitive data
+      // Filter out sensitive data and handle known device-side errors
       beforeSend(event: any) {
+        const errorMessage = event.exception?.values?.[0]?.value || '';
+        const errorType = event.exception?.values?.[0]?.type || '';
+
+        // Check if this is a device storage space error (user's device is full)
+        const isStorageSpaceError =
+          errorMessage.includes('out of space') ||
+          errorMessage.includes('No space left on device') ||
+          errorMessage.includes('Code=640') ||
+          errorMessage.includes('Code=28');
+
+        if (isStorageSpaceError) {
+          // Drop entirely — device is out of space, not actionable
+          return null;
+        }
+
+        // Drop ANRs on low-end devices and background ANRs entirely — not actionable
+        if (errorType === 'ApplicationNotResponding') {
+          const deviceClass = event.tags?.['device.class'] || event.contexts?.device?.device_class;
+          const isBackgroundANR = errorMessage.includes('Background ANR');
+          if (deviceClass === 'low' || isBackgroundANR) {
+            return null;
+          }
+        }
+
         // Remove potentially sensitive user data
         if (event.user) {
           delete event.user.email;

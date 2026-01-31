@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,8 @@ import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { changeLanguage, getCurrentLanguage, RTL_LANGUAGES } from '@/lib/i18n';
+import { changeLanguage, getCurrentLanguage, RTL_LANGUAGES, syncLanguageToDatabase } from '@/lib/i18n';
+import { useProfileData } from '@/contexts/ProfileDataContext';
 import * as Updates from 'expo-updates';
 
 interface Language {
@@ -49,6 +50,7 @@ const LANGUAGES: Language[] = [
 export default function LanguageSettings() {
   const { t, i18n } = useTranslation();
   const [currentLang, setCurrentLang] = useState(getCurrentLanguage());
+  const { profileId } = useProfileData();
 
   const handleLanguageChange = async (languageCode: string) => {
     const selectedLanguage = LANGUAGES.find((lang) => lang.code === languageCode);
@@ -58,9 +60,14 @@ export default function LanguageSettings() {
     const newIsRTL = selectedLanguage.isRTL;
 
     try {
-      // Change language
+      // Change language locally
       await changeLanguage(languageCode);
       setCurrentLang(languageCode);
+
+      // Sync to database for server-side notifications (in background)
+      if (profileId) {
+        syncLanguageToDatabase(languageCode, profileId).catch(console.error);
+      }
 
       // If RTL direction changed, need to reload the app
       if (currentIsRTL !== newIsRTL) {

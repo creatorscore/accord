@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { restorePurchases, getCustomerInfo, getOfferings, purchasePackage, presentCodeRedemptionSheet } from '@/lib/revenue-cat';
 import { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
+import TrialValueSummary from '@/components/premium/TrialValueSummary';
 
 export default function SubscriptionManagement() {
   const router = useRouter();
@@ -290,6 +291,9 @@ export default function SubscriptionManagement() {
             )}
           </LinearGradient>
         </View>
+
+        {/* Trial Value Summary - Show during trial to demonstrate value */}
+        <TrialValueSummary />
 
         {/* Subscription Plans */}
         {!isSubscribed && offerings && !loadingOfferings && (

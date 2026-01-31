@@ -5,7 +5,6 @@ import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { I18nManager, Platform } from 'react-native';
-import { PaperProvider } from 'react-native-paper';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
@@ -140,7 +139,6 @@ export default function RootLayout() {
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
         <ThemeProvider value={NAV_THEME[colorScheme]}>
-          <PaperProvider>
             <AuthProvider>
               <ProfileDataProvider>
                 <SubscriptionProvider>
@@ -150,7 +148,13 @@ export default function RootLayout() {
                         <ActivityTracker />
                         {/* Only render Stack after i18n is initialized to prevent showing raw translation keys */}
                         {i18nInitialized ? (
-                          <Stack screenOptions={{ headerShown: false }} />
+                          <Stack screenOptions={{ headerShown: false, animation: 'fade', animationDuration: 200 }}>
+                            <Stack.Screen name="(tabs)" />
+                            <Stack.Screen name="(auth)" />
+                            <Stack.Screen name="(onboarding)" />
+                            <Stack.Screen name="chat/[matchId]" options={{ animation: 'slide_from_right' }} />
+                            <Stack.Screen name="profile/[id]" options={{ animation: 'fade_from_bottom' }} />
+                          </Stack>
                         ) : null}
                         <StatusBar style={isDarkColorScheme ? 'light' : 'dark'} />
 
@@ -183,7 +187,6 @@ export default function RootLayout() {
                 </SubscriptionProvider>
               </ProfileDataProvider>
             </AuthProvider>
-          </PaperProvider>
         </ThemeProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>

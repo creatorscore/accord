@@ -819,6 +819,69 @@
       "purchaseFailedMessage": "خریداری مکمل کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں یا اگر مسئلہ برقرار رہے تو سپورٹ سے رابطہ کریں۔"
     }
   },
+  "pushNotifications": {
+    "match": {
+      "title": "یہ ایک میچ ہے! 💜",
+      "body": "آپ نے {{name}} سے میچ کیا! ابھی چیٹ شروع کریں۔"
+    },
+    "message": {
+      "title": "{{name}} کا نیا پیغام",
+      "bodyText": "آپ کو ایک پیغام بھیجا",
+      "bodyPhoto": "آپ کو ایک تصویر بھیجی",
+      "bodyVoice": "آپ کو ایک صوتی پیغام بھیجا",
+      "bodyVideo": "آپ کو ایک ویڈیو بھیجی"
+    },
+    "like": {
+      "premiumTitle": "{{name}} نے آپ کو پسند کیا! 💜",
+      "premiumBody": "دیکھیں کس نے آپ کو پسند کیا اور فوری میچ کریں۔",
+      "premiumSuperTitle": "{{name}} نے آپ کو سپر لائک کیا! ⭐",
+      "premiumSuperBody": "وہ واقعی آپ سے جڑنا چاہتے ہیں!",
+      "freeTitle": "کسی نے آپ کو پسند کیا! 💜",
+      "freeBody": "دیکھنے کے لیے پریمیم میں اپ گریڈ کریں کہ کس نے آپ کو پسند کیا اور فوری میچ کریں۔",
+      "freeSuperTitle": "کسی نے آپ کو سپر لائک کیا! ⭐",
+      "freeSuperBody": "پریمیم میں اپ گریڈ کریں تاکہ دیکھ سکیں کہ کون واقعی آپ سے میچ کرنا چاہتا ہے۔"
+    },
+    "trialExpiration": {
+      "threeDaysTitle": "آپ کا مفت ٹرائل 3 دنوں میں ختم ہو جائے گا",
+      "threeDaysBody": "پریمیم خصوصیات تک رسائی مت کھوئیں! ابھی سبسکرائب کریں تاکہ اپنا بہترین میچ تلاش کرتے رہیں۔",
+      "oneDayTitle": "آپ کا مفت ٹرائل کل ختم ہو جائے گا!",
+      "oneDayBody": "اپنی پریمیم خصوصیات رکھنے کے لیے سبسکرائب کرنے کا آخری موقع۔ اپ گریڈ کرنے کے لیے ٹیپ کریں۔",
+      "todayTitle": "آپ کا مفت ٹرائل آج ختم ہو جائے گا!",
+      "todayBody": "آپ کی پریمیم رسائی آج رات ختم ہو جائے گی۔ اپنا بہترین میچ تلاش کرنے کا سفر جاری رکھنے کے لیے ابھی سبسکرائب کریں۔"
+    },
+    "trialEngagement": {
+      "day1Title": "آپ کا پریمیم ٹرائل فعال ہے!",
+      "day1Body": "لامحدود لائکس، دیکھیں کس نے آپ کو پسند کیا، سپر لائکس بھیجیں، اور مزید۔ اپنی پریمیم خصوصیات کی تلاش شروع کریں!",
+      "day3TitleWithLikes": "{{count}} {{person}} نے آپ کو پسند کیا!",
+      "day3TitleNoLikes": "آپ کو توجہ مل رہی ہے!",
+      "day3BodyWithLikes": "دیکھنے کے لیے ٹیپ کریں کہ وہ کون ہیں - یہ ایک پریمیم خصوصیت ہے جو آپ رکھ سکتے ہیں!",
+      "day3BodyNoLikes": "نمایاں ہونے اور مزید لائکس حاصل کرنے کے لیے پریمیم خصوصیات استعمال کرتے رہیں۔",
+      "day5Title": "آپ کے ٹرائل میں صرف 2 دن باقی ہیں!",
+      "day5BodyWithStats": "آپ نے {{highlights}}۔ ان خصوصیات تک رسائی مت کھوئیں!",
+      "day5BodyNoStats": "آپ پریمیم خصوصیات کی تلاش کر رہے ہیں۔ انہیں رکھنے کے لیے ابھی سبسکرائب کریں!",
+      "day6Title": "آخری دن کل ہے!",
+      "day6Body": "اپنے ٹرائل کے ختم ہونے سے پہلے ہماری سالانہ پلان کے ساتھ 33% بچت حاصل کریں۔ آپ کے کنکشن منتظر ہیں!"
+    },
+    "swipesRefreshed": {
+      "title": "آپ کے سوائپس واپس آ گئے! 🎉",
+      "body": "آپ کے پاس اپنا بہترین میچ تلاش کرنے کے لیے 15 نئے سوائپس ہیں۔ ابھی سوائپ کرنا شروع کریں!"
+    },
+    "reviews": {
+      "readyTitle": "جائزہ لینے کا وقت! ⭐",
+      "readyBody": "{{name}} کے ساتھ اپنا تجربہ شیئر کریں۔ آپ کا جائزہ ہماری کمیونٹی میں اعتماد بنانے میں مدد کرتا ہے۔",
+      "reminderTitle": "جائزہ لینے کا آخری موقع! ⏰",
+      "reminderBody": "{{name}} کے لیے آپ کی جائزہ ونڈو جلد ختم ہو جائے گی۔ موقع مت گنوائیں!"
+    },
+    "stats": {
+      "person": "شخص",
+      "people": "لوگ",
+      "seenLikes": "{{count}} کو دیکھا جنہوں نے آپ کو پسند کیا",
+      "sentSuperLikes": "{{count}} سپر لائک بھیجا",
+      "sentSuperLikesPlural": "{{count}} سپر لائکس بھیجے",
+      "madeMatch": "{{count}} میچ کیا",
+      "madeMatchesPlural": "{{count}} میچز کیے"
+    }
+  },
   "whatsNew": {
     "title": "نیا کیا ہے",
     "version": "ورژن {{version}}",
@@ -879,5 +942,51 @@
         }
       }
     }
+  },
+  "toast": {
+    "photoLimitTitle": "Maximum Photos",
+    "photoLimitMessage": "You can upload up to 6 photos",
+    "photoAlreadyAdded": "This photo is already in your profile",
+    "photoProcessError": "Failed to process photo. Please try again.",
+    "morePhotosNeeded": "Please add at least 4 photos to continue",
+    "profileNotFound": "Profile not found. Please go back and try again.",
+    "uploadFailed": "Failed to upload. Please try again.",
+    "permissionDenied": "Permission Denied",
+    "needPhotoAccess": "We need permission to access your photos",
+    "invalidImage": "Invalid Image",
+    "micPermissionRequired": "Microphone access is needed to record",
+    "recordingFailed": "Failed to start recording",
+    "stopRecordingFailed": "Failed to stop recording",
+    "profileLoadError": "Failed to load your profile",
+    "profilesLoadError": "Failed to load profiles",
+    "superLikeError": "Failed to send super like. Please try again.",
+    "noRecentSwipes": "There are no recent swipes to undo.",
+    "swipeUndone": "Your last swipe has been undone.",
+    "undoSwipeError": "Failed to undo swipe. Please try again.",
+    "blockSuccess": "User has been blocked",
+    "blockError": "Failed to block user. Please try again.",
+    "filterError": "Failed to update filter. Please try again.",
+    "globalSearchError": "Failed to enable global search. Please try again.",
+    "genericError": "Something went wrong. Please try again.",
+    "photosBlurred": "Your photos are now blurred for this match",
+    "photosRevealed": "Your photos are now visible to {{name}}",
+    "photoRevealError": "Failed to update photo visibility. Please try again.",
+    "reportSubmitted": "Thank you for helping keep Accord safe",
+    "reportError": "Failed to submit report. Please try again.",
+    "reactionError": "Failed to add reaction",
+    "chatLoadError": "Failed to load chat. Please try again.",
+    "messagesLoadError": "Failed to load messages",
+    "voiceRecordError": "Failed to record voice message. Please try again.",
+    "locationErrorPrecise": "Precise location is required for accurate matching",
+    "locationErrorGeneric": "Could not determine your location",
+    "saveError": "Failed to save. Please try again.",
+    "selectPhotoError": "Failed to select photo. Please try again.",
+    "profileSaveError": "Failed to save profile",
+    "voiceUploadFailed": "Failed to save voice intro",
+    "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
+    "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
+    "obsessedTitle": "Obsessed!",
+    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
+    "obsessedBasic": "{{name}} will be notified that you're obsessed!"
   }
 }

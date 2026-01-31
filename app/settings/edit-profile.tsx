@@ -460,7 +460,8 @@ export default function EditProfile() {
           political_views,
           voice_intro_url,
           voice_intro_duration,
-          voice_intro_prompt
+          voice_intro_prompt,
+          hometown
         `)
         .eq('user_id', user?.id)
         .single();
@@ -1219,7 +1220,7 @@ export default function EditProfile() {
           if (insertError) {
             console.error('Error inserting photo record:', insertError);
           } else {
-            // Run NSFW moderation check
+            // Run NSFW moderation check - BLOCKING
             // This uses AWS Rekognition to detect explicit content
             try {
               const moderationResponse = await fetch(
@@ -1241,8 +1242,12 @@ export default function EditProfile() {
               const moderationResult = await moderationResponse.json();
               console.log(`🔍 Moderation result:`, moderationResult);
 
-              // If photo was rejected for explicit content, alert user and remove photo
-              if (moderationResult.approved === false && moderationResult.reason === 'explicit_content') {
+              if (moderationResult.error) {
+                console.error('Moderation service error:', moderationResult.error);
+              }
+
+              // If photo was rejected for explicit or suggestive content, remove it
+              if (moderationResult.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
                 // Delete the photo from storage and database
                 await supabase.storage.from('profile-photos').remove([fileName]);
                 await supabase.from('photos').delete().eq('id', photoData?.id);
@@ -1253,7 +1258,7 @@ export default function EditProfile() {
                 );
               }
             } catch (moderationError: any) {
-              console.error('Moderation check failed (non-blocking):', moderationError);
+              console.error('Moderation check failed:', moderationError);
             }
           }
         } catch (error) {

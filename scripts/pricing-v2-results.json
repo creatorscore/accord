@@ -1,0 +1,4733 @@
+{
+  "updated": [
+    {
+      "subscription": "3 Month Premium",
+      "territory": "USA",
+      "country": "United States",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "AFG",
+      "country": "Afghanistan",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ALB",
+      "country": "Albania",
+      "currency": "USD",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "DZA",
+      "country": "Algeria",
+      "currency": "USD",
+      "targetPrice": 12.79,
+      "actualPrice": "12.9",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "AGO",
+      "country": "Angola",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "AIA",
+      "country": "Anguilla",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ATG",
+      "country": "Antigua and Barbuda",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ARG",
+      "country": "Argentina",
+      "currency": "USD",
+      "targetPrice": 18.64,
+      "actualPrice": "18.49",
+      "diffPercent": "0.8"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ARM",
+      "country": "Armenia",
+      "currency": "USD",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "AUS",
+      "country": "Australia",
+      "currency": "AUD",
+      "targetPrice": 58.24,
+      "actualPrice": "58.0",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "AUT",
+      "country": "Austria",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "AZE",
+      "country": "Azerbaijan",
+      "currency": "USD",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BHS",
+      "country": "Bahamas",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BHR",
+      "country": "Bahrain",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BRB",
+      "country": "Barbados",
+      "currency": "USD",
+      "targetPrice": 30.28,
+      "actualPrice": "30.49",
+      "diffPercent": "0.7"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BLR",
+      "country": "Belarus",
+      "currency": "USD",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BEL",
+      "country": "Belgium",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BLZ",
+      "country": "Belize",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BEN",
+      "country": "Benin",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BMU",
+      "country": "Bermuda",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BTN",
+      "country": "Bhutan",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BOL",
+      "country": "Bolivia",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BIH",
+      "country": "Bosnia and Herzegovina",
+      "currency": "EUR",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BWA",
+      "country": "Botswana",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BRA",
+      "country": "Brazil",
+      "currency": "BRL",
+      "targetPrice": 92.99,
+      "actualPrice": "92.9",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "VGB",
+      "country": "British Virgin Islands",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BRN",
+      "country": "Brunei",
+      "currency": "USD",
+      "targetPrice": 30.28,
+      "actualPrice": "30.49",
+      "diffPercent": "0.7"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BGR",
+      "country": "Bulgaria",
+      "currency": "EUR",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "BFA",
+      "country": "Burkina Faso",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "KHM",
+      "country": "Cambodia",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "CMR",
+      "country": "Cameroon",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "CAN",
+      "country": "Canada",
+      "currency": "CAD",
+      "targetPrice": 46.59,
+      "actualPrice": "46.49",
+      "diffPercent": "0.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "CPV",
+      "country": "Cape Verde",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "CYM",
+      "country": "Cayman Islands",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "TCD",
+      "country": "Chad",
+      "currency": "USD",
+      "targetPrice": 7.67,
+      "actualPrice": "7.69",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "CHL",
+      "country": "Chile",
+      "currency": "CLP",
+      "targetPrice": 20749,
+      "actualPrice": "20900",
+      "diffPercent": "0.7"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "CHN",
+      "country": "China mainland",
+      "currency": "CNY",
+      "targetPrice": 81.54,
+      "actualPrice": "81.8",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "COL",
+      "country": "Colombia",
+      "currency": "COP",
+      "targetPrice": 69679,
+      "actualPrice": "69500.0",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "COD",
+      "country": "Congo Democratic Republic of the",
+      "currency": "USD",
+      "targetPrice": 6.97,
+      "actualPrice": "6.95",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "COG",
+      "country": "Congo Republic of the",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "CRI",
+      "country": "Costa Rica",
+      "currency": "USD",
+      "targetPrice": 17.47,
+      "actualPrice": "17.49",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "CIV",
+      "country": "Côte d'Ivoire",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "HRV",
+      "country": "Croatia",
+      "currency": "EUR",
+      "targetPrice": 23.28,
+      "actualPrice": "23.49",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "CYP",
+      "country": "Cyprus",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "CZE",
+      "country": "Czech Republic",
+      "currency": "CZK",
+      "targetPrice": 813,
+      "actualPrice": "810.0",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "DNK",
+      "country": "Denmark",
+      "currency": "DKK",
+      "targetPrice": 254,
+      "actualPrice": "255.0",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "DMA",
+      "country": "Dominica",
+      "currency": "USD",
+      "targetPrice": 30.28,
+      "actualPrice": "30.49",
+      "diffPercent": "0.7"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "DOM",
+      "country": "Dominican Republic",
+      "currency": "USD",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ECU",
+      "country": "Ecuador",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "EGY",
+      "country": "Egypt",
+      "currency": "EGP",
+      "targetPrice": 580,
+      "actualPrice": "579.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SLV",
+      "country": "El Salvador",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "EST",
+      "country": "Estonia",
+      "currency": "EUR",
+      "targetPrice": 32.59,
+      "actualPrice": "32.49",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SWZ",
+      "country": "Eswatini",
+      "currency": "USD",
+      "targetPrice": 12.79,
+      "actualPrice": "12.9",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "FJI",
+      "country": "Fiji",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "FIN",
+      "country": "Finland",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "FRA",
+      "country": "France",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "GAB",
+      "country": "Gabon",
+      "currency": "USD",
+      "targetPrice": 18.64,
+      "actualPrice": "18.49",
+      "diffPercent": "0.8"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "GMB",
+      "country": "Gambia",
+      "currency": "USD",
+      "targetPrice": 6.97,
+      "actualPrice": "6.95",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "GEO",
+      "country": "Georgia",
+      "currency": "USD",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "DEU",
+      "country": "Germany",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "GHA",
+      "country": "Ghana",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "GRC",
+      "country": "Greece",
+      "currency": "EUR",
+      "targetPrice": 30.28,
+      "actualPrice": "30.49",
+      "diffPercent": "0.7"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "GRD",
+      "country": "Grenada",
+      "currency": "USD",
+      "targetPrice": 30.28,
+      "actualPrice": "30.49",
+      "diffPercent": "0.7"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "GTM",
+      "country": "Guatemala",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "GNB",
+      "country": "Guinea-Bissau",
+      "currency": "USD",
+      "targetPrice": 6.97,
+      "actualPrice": "6.95",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "GUY",
+      "country": "Guyana",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "HND",
+      "country": "Honduras",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "HKG",
+      "country": "Hong Kong",
+      "currency": "HKD",
+      "targetPrice": 277,
+      "actualPrice": "278.0",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "HUN",
+      "country": "Hungary",
+      "currency": "HUF",
+      "targetPrice": 12814,
+      "actualPrice": "12790",
+      "diffPercent": "0.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ISL",
+      "country": "Iceland",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "IND",
+      "country": "India",
+      "currency": "INR",
+      "targetPrice": 930,
+      "actualPrice": "929.0",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "IDN",
+      "country": "Indonesia",
+      "currency": "IDR",
+      "targetPrice": 184210,
+      "actualPrice": "184000",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "IRQ",
+      "country": "Iraq",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "IRL",
+      "country": "Ireland",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ISR",
+      "country": "Israel",
+      "currency": "ILS",
+      "targetPrice": 128.14,
+      "actualPrice": "127.9",
+      "diffPercent": "0.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ITA",
+      "country": "Italy",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "JAM",
+      "country": "Jamaica",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "JPN",
+      "country": "Japan",
+      "currency": "JPY",
+      "targetPrice": 4659,
+      "actualPrice": "4680",
+      "diffPercent": "0.5"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "JOR",
+      "country": "Jordan",
+      "currency": "USD",
+      "targetPrice": 23.28,
+      "actualPrice": "23.49",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "KAZ",
+      "country": "Kazakhstan",
+      "currency": "KZT",
+      "targetPrice": 8154,
+      "actualPrice": "8190.0",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "KEN",
+      "country": "Kenya",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "KOR",
+      "country": "Korea Republic of",
+      "currency": "KRW",
+      "targetPrice": 44259,
+      "actualPrice": "44500",
+      "diffPercent": "0.5"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "XKS",
+      "country": "Kosovo",
+      "currency": "EUR",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "KWT",
+      "country": "Kuwait",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "KGZ",
+      "country": "Kyrgyzstan",
+      "currency": "USD",
+      "targetPrice": 9.3,
+      "actualPrice": "9.29",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "LAO",
+      "country": "Laos",
+      "currency": "USD",
+      "targetPrice": 9.3,
+      "actualPrice": "9.29",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "LVA",
+      "country": "Latvia",
+      "currency": "EUR",
+      "targetPrice": 32.59,
+      "actualPrice": "32.49",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "LBN",
+      "country": "Lebanon",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "LBR",
+      "country": "Liberia",
+      "currency": "USD",
+      "targetPrice": 6.97,
+      "actualPrice": "6.95",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "LBY",
+      "country": "Libya",
+      "currency": "USD",
+      "targetPrice": 18.64,
+      "actualPrice": "18.49",
+      "diffPercent": "0.8"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "LTU",
+      "country": "Lithuania",
+      "currency": "EUR",
+      "targetPrice": 32.59,
+      "actualPrice": "32.49",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "LUX",
+      "country": "Luxembourg",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MAC",
+      "country": "Macau",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MDG",
+      "country": "Madagascar",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MWI",
+      "country": "Malawi",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MYS",
+      "country": "Malaysia",
+      "currency": "MYR",
+      "targetPrice": 76.69,
+      "actualPrice": "76.9",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MDV",
+      "country": "Maldives",
+      "currency": "USD",
+      "targetPrice": 23.28,
+      "actualPrice": "23.49",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MLI",
+      "country": "Mali",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MLT",
+      "country": "Malta",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MRT",
+      "country": "Mauritania",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MUS",
+      "country": "Mauritius",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MEX",
+      "country": "Mexico",
+      "currency": "MXN",
+      "targetPrice": 347,
+      "actualPrice": "345.0",
+      "diffPercent": "0.6"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "FSM",
+      "country": "Micronesia",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MDA",
+      "country": "Moldova",
+      "currency": "USD",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MNG",
+      "country": "Mongolia",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MNE",
+      "country": "Montenegro",
+      "currency": "EUR",
+      "targetPrice": 23.28,
+      "actualPrice": "23.49",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MSR",
+      "country": "Montserrat",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MAR",
+      "country": "Morocco",
+      "currency": "USD",
+      "targetPrice": 18.64,
+      "actualPrice": "18.49",
+      "diffPercent": "0.8"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MOZ",
+      "country": "Mozambique",
+      "currency": "USD",
+      "targetPrice": 6.97,
+      "actualPrice": "6.95",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MMR",
+      "country": "Myanmar",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "NAM",
+      "country": "Namibia",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "NRU",
+      "country": "Nauru",
+      "currency": "USD",
+      "targetPrice": 23.28,
+      "actualPrice": "23.49",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "NPL",
+      "country": "Nepal",
+      "currency": "USD",
+      "targetPrice": 9.3,
+      "actualPrice": "9.29",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "NLD",
+      "country": "Netherlands",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "NZL",
+      "country": "New Zealand",
+      "currency": "NZD",
+      "targetPrice": 58.24,
+      "actualPrice": "58.0",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "NIC",
+      "country": "Nicaragua",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "NER",
+      "country": "Niger",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "NGA",
+      "country": "Nigeria",
+      "currency": "NGN",
+      "targetPrice": 13749,
+      "actualPrice": "13700.0",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "MKD",
+      "country": "North Macedonia",
+      "currency": "USD",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "NOR",
+      "country": "Norway",
+      "currency": "NOK",
+      "targetPrice": 394,
+      "actualPrice": "395.0",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "OMN",
+      "country": "Oman",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "PAK",
+      "country": "Pakistan",
+      "currency": "PKR",
+      "targetPrice": 2327,
+      "actualPrice": "2349.0",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "PLW",
+      "country": "Palau",
+      "currency": "USD",
+      "targetPrice": 23.28,
+      "actualPrice": "23.49",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "PAN",
+      "country": "Panama",
+      "currency": "USD",
+      "targetPrice": 23.28,
+      "actualPrice": "23.49",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "PNG",
+      "country": "Papua New Guinea",
+      "currency": "USD",
+      "targetPrice": 9.3,
+      "actualPrice": "9.29",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "PRY",
+      "country": "Paraguay",
+      "currency": "USD",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "PER",
+      "country": "Peru",
+      "currency": "PEN",
+      "targetPrice": 58.02,
+      "actualPrice": "58.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "PHL",
+      "country": "Philippines",
+      "currency": "PHP",
+      "targetPrice": 580,
+      "actualPrice": "580.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "POL",
+      "country": "Poland",
+      "currency": "PLN",
+      "targetPrice": 92.99,
+      "actualPrice": "92.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "PRT",
+      "country": "Portugal",
+      "currency": "EUR",
+      "targetPrice": 30.28,
+      "actualPrice": "30.49",
+      "diffPercent": "0.7"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "QAT",
+      "country": "Qatar",
+      "currency": "QAR",
+      "targetPrice": 128.14,
+      "actualPrice": "127.99",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ROU",
+      "country": "Romania",
+      "currency": "RON",
+      "targetPrice": 104.84,
+      "actualPrice": "104.99",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "RUS",
+      "country": "Russia",
+      "currency": "RUB",
+      "targetPrice": 2327,
+      "actualPrice": "2350.0",
+      "diffPercent": "1.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "RWA",
+      "country": "Rwanda",
+      "currency": "USD",
+      "targetPrice": 6.97,
+      "actualPrice": "6.95",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "STP",
+      "country": "São Tomé and Príncipe",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SAU",
+      "country": "Saudi Arabia",
+      "currency": "SAR",
+      "targetPrice": 131.04,
+      "actualPrice": "130.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SEN",
+      "country": "Senegal",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SRB",
+      "country": "Serbia",
+      "currency": "EUR",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SYC",
+      "country": "Seychelles",
+      "currency": "USD",
+      "targetPrice": 23.28,
+      "actualPrice": "23.49",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SLE",
+      "country": "Sierra Leone",
+      "currency": "USD",
+      "targetPrice": 6.97,
+      "actualPrice": "6.95",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SGP",
+      "country": "Singapore",
+      "currency": "SGD",
+      "targetPrice": 46.59,
+      "actualPrice": "46.48",
+      "diffPercent": "0.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SVK",
+      "country": "Slovakia",
+      "currency": "EUR",
+      "targetPrice": 32.59,
+      "actualPrice": "32.49",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SVN",
+      "country": "Slovenia",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SLB",
+      "country": "Solomon Islands",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ZAF",
+      "country": "South Africa",
+      "currency": "ZAR",
+      "targetPrice": 347,
+      "actualPrice": "349.0",
+      "diffPercent": "0.6"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ESP",
+      "country": "Spain",
+      "currency": "EUR",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "LKA",
+      "country": "Sri Lanka",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "KNA",
+      "country": "St. Kitts and Nevis",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "LCA",
+      "country": "St. Lucia",
+      "currency": "USD",
+      "targetPrice": 30.28,
+      "actualPrice": "30.49",
+      "diffPercent": "0.7"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "VCT",
+      "country": "St. Vincent and the Grenadines",
+      "currency": "USD",
+      "targetPrice": 23.28,
+      "actualPrice": "23.49",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SUR",
+      "country": "Suriname",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "SWE",
+      "country": "Sweden",
+      "currency": "SEK",
+      "targetPrice": 370,
+      "actualPrice": "370.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "CHE",
+      "country": "Switzerland",
+      "currency": "CHF",
+      "targetPrice": 34.94,
+      "actualPrice": "34.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "TWN",
+      "country": "Taiwan",
+      "currency": "TWD",
+      "targetPrice": 1116,
+      "actualPrice": "1120",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "TJK",
+      "country": "Tajikistan",
+      "currency": "USD",
+      "targetPrice": 9.3,
+      "actualPrice": "9.29",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "TZA",
+      "country": "Tanzania",
+      "currency": "TZS",
+      "targetPrice": 27729,
+      "actualPrice": "27900.0",
+      "diffPercent": "0.6"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "THA",
+      "country": "Thailand",
+      "currency": "THB",
+      "targetPrice": 580,
+      "actualPrice": "580.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "TON",
+      "country": "Tonga",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "TTO",
+      "country": "Trinidad and Tobago",
+      "currency": "USD",
+      "targetPrice": 23.28,
+      "actualPrice": "23.49",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "TUN",
+      "country": "Tunisia",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "TUR",
+      "country": "Türkiye",
+      "currency": "TRY",
+      "targetPrice": 697,
+      "actualPrice": "699.0",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "TKM",
+      "country": "Turkmenistan",
+      "currency": "USD",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "TCA",
+      "country": "Turks and Caicos Islands",
+      "currency": "USD",
+      "targetPrice": 34.99,
+      "actualPrice": "34.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "UGA",
+      "country": "Uganda",
+      "currency": "USD",
+      "targetPrice": 6.97,
+      "actualPrice": "6.95",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "UKR",
+      "country": "Ukraine",
+      "currency": "USD",
+      "targetPrice": 16.29,
+      "actualPrice": "16.49",
+      "diffPercent": "1.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ARE",
+      "country": "United Arab Emirates",
+      "currency": "AED",
+      "targetPrice": 128.14,
+      "actualPrice": "127.99",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "GBR",
+      "country": "United Kingdom",
+      "currency": "GBP",
+      "targetPrice": 27.94,
+      "actualPrice": "27.95",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "URY",
+      "country": "Uruguay",
+      "currency": "USD",
+      "targetPrice": 23.28,
+      "actualPrice": "23.49",
+      "diffPercent": "0.9"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "UZB",
+      "country": "Uzbekistan",
+      "currency": "USD",
+      "targetPrice": 9.3,
+      "actualPrice": "9.29",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "VUT",
+      "country": "Vanuatu",
+      "currency": "USD",
+      "targetPrice": 11.64,
+      "actualPrice": "11.49",
+      "diffPercent": "1.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "VEN",
+      "country": "Venezuela",
+      "currency": "USD",
+      "targetPrice": 13.96,
+      "actualPrice": "13.95",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "VNM",
+      "country": "Vietnam",
+      "currency": "VND",
+      "targetPrice": 300570,
+      "actualPrice": "300000",
+      "diffPercent": "0.2"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "YEM",
+      "country": "Yemen",
+      "currency": "USD",
+      "targetPrice": 6.97,
+      "actualPrice": "6.95",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ZMB",
+      "country": "Zambia",
+      "currency": "USD",
+      "targetPrice": 9.3,
+      "actualPrice": "9.29",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "3 Month Premium",
+      "territory": "ZWE",
+      "country": "Zimbabwe",
+      "currency": "USD",
+      "targetPrice": 9.3,
+      "actualPrice": "9.29",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "USA",
+      "country": "United States",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "AFG",
+      "country": "Afghanistan",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ALB",
+      "country": "Albania",
+      "currency": "USD",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "DZA",
+      "country": "Algeria",
+      "currency": "USD",
+      "targetPrice": 5.49,
+      "actualPrice": "5.49",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "AGO",
+      "country": "Angola",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "AIA",
+      "country": "Anguilla",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ATG",
+      "country": "Antigua and Barbuda",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ARG",
+      "country": "Argentina",
+      "currency": "USD",
+      "targetPrice": 7.99,
+      "actualPrice": "7.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ARM",
+      "country": "Armenia",
+      "currency": "USD",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "AUS",
+      "country": "Australia",
+      "currency": "AUD",
+      "targetPrice": 24.99,
+      "actualPrice": "24.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "AUT",
+      "country": "Austria",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "AZE",
+      "country": "Azerbaijan",
+      "currency": "USD",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BHS",
+      "country": "Bahamas",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BHR",
+      "country": "Bahrain",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BRB",
+      "country": "Barbados",
+      "currency": "USD",
+      "targetPrice": 12.99,
+      "actualPrice": "12.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BLR",
+      "country": "Belarus",
+      "currency": "USD",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BEL",
+      "country": "Belgium",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BLZ",
+      "country": "Belize",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BEN",
+      "country": "Benin",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BMU",
+      "country": "Bermuda",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BTN",
+      "country": "Bhutan",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BOL",
+      "country": "Bolivia",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BIH",
+      "country": "Bosnia and Herzegovina",
+      "currency": "EUR",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BWA",
+      "country": "Botswana",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BRA",
+      "country": "Brazil",
+      "currency": "BRL",
+      "targetPrice": 39.9,
+      "actualPrice": "39.9",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "VGB",
+      "country": "British Virgin Islands",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BRN",
+      "country": "Brunei",
+      "currency": "USD",
+      "targetPrice": 12.99,
+      "actualPrice": "12.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BGR",
+      "country": "Bulgaria",
+      "currency": "EUR",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "BFA",
+      "country": "Burkina Faso",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "KHM",
+      "country": "Cambodia",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "CMR",
+      "country": "Cameroon",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "CAN",
+      "country": "Canada",
+      "currency": "CAD",
+      "targetPrice": 19.99,
+      "actualPrice": "19.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "CPV",
+      "country": "Cape Verde",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "CYM",
+      "country": "Cayman Islands",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "TCD",
+      "country": "Chad",
+      "currency": "USD",
+      "targetPrice": 3.29,
+      "actualPrice": "3.29",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "CHL",
+      "country": "Chile",
+      "currency": "CLP",
+      "targetPrice": 8900,
+      "actualPrice": "8900",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "CHN",
+      "country": "China mainland",
+      "currency": "CNY",
+      "targetPrice": 35,
+      "actualPrice": "35.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "COL",
+      "country": "Colombia",
+      "currency": "COP",
+      "targetPrice": 29900,
+      "actualPrice": "29900.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "COD",
+      "country": "Congo Democratic Republic of the",
+      "currency": "USD",
+      "targetPrice": 2.99,
+      "actualPrice": "2.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "COG",
+      "country": "Congo Republic of the",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "CRI",
+      "country": "Costa Rica",
+      "currency": "USD",
+      "targetPrice": 7.49,
+      "actualPrice": "7.49",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "CIV",
+      "country": "Côte d'Ivoire",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "HRV",
+      "country": "Croatia",
+      "currency": "EUR",
+      "targetPrice": 9.99,
+      "actualPrice": "9.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "CYP",
+      "country": "Cyprus",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "CZE",
+      "country": "Czech Republic",
+      "currency": "CZK",
+      "targetPrice": 349,
+      "actualPrice": "349.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "DNK",
+      "country": "Denmark",
+      "currency": "DKK",
+      "targetPrice": 109,
+      "actualPrice": "109.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "DMA",
+      "country": "Dominica",
+      "currency": "USD",
+      "targetPrice": 12.99,
+      "actualPrice": "12.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "DOM",
+      "country": "Dominican Republic",
+      "currency": "USD",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ECU",
+      "country": "Ecuador",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "EGY",
+      "country": "Egypt",
+      "currency": "EGP",
+      "targetPrice": 249,
+      "actualPrice": "249.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SLV",
+      "country": "El Salvador",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "EST",
+      "country": "Estonia",
+      "currency": "EUR",
+      "targetPrice": 13.99,
+      "actualPrice": "13.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SWZ",
+      "country": "Eswatini",
+      "currency": "USD",
+      "targetPrice": 5.49,
+      "actualPrice": "5.49",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "FJI",
+      "country": "Fiji",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "FIN",
+      "country": "Finland",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "FRA",
+      "country": "France",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "GAB",
+      "country": "Gabon",
+      "currency": "USD",
+      "targetPrice": 7.99,
+      "actualPrice": "7.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "GMB",
+      "country": "Gambia",
+      "currency": "USD",
+      "targetPrice": 2.99,
+      "actualPrice": "2.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "GEO",
+      "country": "Georgia",
+      "currency": "USD",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "DEU",
+      "country": "Germany",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "GHA",
+      "country": "Ghana",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "GRC",
+      "country": "Greece",
+      "currency": "EUR",
+      "targetPrice": 12.99,
+      "actualPrice": "12.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "GRD",
+      "country": "Grenada",
+      "currency": "USD",
+      "targetPrice": 12.99,
+      "actualPrice": "12.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "GTM",
+      "country": "Guatemala",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "GNB",
+      "country": "Guinea-Bissau",
+      "currency": "USD",
+      "targetPrice": 2.99,
+      "actualPrice": "2.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "GUY",
+      "country": "Guyana",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "HND",
+      "country": "Honduras",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "HKG",
+      "country": "Hong Kong",
+      "currency": "HKD",
+      "targetPrice": 119,
+      "actualPrice": "119.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "HUN",
+      "country": "Hungary",
+      "currency": "HUF",
+      "targetPrice": 5499,
+      "actualPrice": "5500",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ISL",
+      "country": "Iceland",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "IND",
+      "country": "India",
+      "currency": "INR",
+      "targetPrice": 399,
+      "actualPrice": "399.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "IDN",
+      "country": "Indonesia",
+      "currency": "IDR",
+      "targetPrice": 79000,
+      "actualPrice": "79000",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "IRQ",
+      "country": "Iraq",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "IRL",
+      "country": "Ireland",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ISR",
+      "country": "Israel",
+      "currency": "ILS",
+      "targetPrice": 54.99,
+      "actualPrice": "55.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ITA",
+      "country": "Italy",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "JAM",
+      "country": "Jamaica",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "JPN",
+      "country": "Japan",
+      "currency": "JPY",
+      "targetPrice": 1999,
+      "actualPrice": "2000",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "JOR",
+      "country": "Jordan",
+      "currency": "USD",
+      "targetPrice": 9.99,
+      "actualPrice": "9.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "KAZ",
+      "country": "Kazakhstan",
+      "currency": "KZT",
+      "targetPrice": 3499,
+      "actualPrice": "3500.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "KEN",
+      "country": "Kenya",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "KOR",
+      "country": "Korea Republic of",
+      "currency": "KRW",
+      "targetPrice": 18990,
+      "actualPrice": "19000",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "XKS",
+      "country": "Kosovo",
+      "currency": "EUR",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "KWT",
+      "country": "Kuwait",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "KGZ",
+      "country": "Kyrgyzstan",
+      "currency": "USD",
+      "targetPrice": 3.99,
+      "actualPrice": "3.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "LAO",
+      "country": "Laos",
+      "currency": "USD",
+      "targetPrice": 3.99,
+      "actualPrice": "3.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "LVA",
+      "country": "Latvia",
+      "currency": "EUR",
+      "targetPrice": 13.99,
+      "actualPrice": "13.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "LBN",
+      "country": "Lebanon",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "LBR",
+      "country": "Liberia",
+      "currency": "USD",
+      "targetPrice": 2.99,
+      "actualPrice": "2.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "LBY",
+      "country": "Libya",
+      "currency": "USD",
+      "targetPrice": 7.99,
+      "actualPrice": "7.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "LTU",
+      "country": "Lithuania",
+      "currency": "EUR",
+      "targetPrice": 13.99,
+      "actualPrice": "13.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "LUX",
+      "country": "Luxembourg",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MAC",
+      "country": "Macau",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MDG",
+      "country": "Madagascar",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MWI",
+      "country": "Malawi",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MYS",
+      "country": "Malaysia",
+      "currency": "MYR",
+      "targetPrice": 32.9,
+      "actualPrice": "32.9",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MDV",
+      "country": "Maldives",
+      "currency": "USD",
+      "targetPrice": 9.99,
+      "actualPrice": "9.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MLI",
+      "country": "Mali",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MLT",
+      "country": "Malta",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MRT",
+      "country": "Mauritania",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MUS",
+      "country": "Mauritius",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MEX",
+      "country": "Mexico",
+      "currency": "MXN",
+      "targetPrice": 149,
+      "actualPrice": "149.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "FSM",
+      "country": "Micronesia",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MDA",
+      "country": "Moldova",
+      "currency": "USD",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MNG",
+      "country": "Mongolia",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MNE",
+      "country": "Montenegro",
+      "currency": "EUR",
+      "targetPrice": 9.99,
+      "actualPrice": "9.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MSR",
+      "country": "Montserrat",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MAR",
+      "country": "Morocco",
+      "currency": "USD",
+      "targetPrice": 7.99,
+      "actualPrice": "7.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MOZ",
+      "country": "Mozambique",
+      "currency": "USD",
+      "targetPrice": 2.99,
+      "actualPrice": "2.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MMR",
+      "country": "Myanmar",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "NAM",
+      "country": "Namibia",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "NRU",
+      "country": "Nauru",
+      "currency": "USD",
+      "targetPrice": 9.99,
+      "actualPrice": "9.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "NPL",
+      "country": "Nepal",
+      "currency": "USD",
+      "targetPrice": 3.99,
+      "actualPrice": "3.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "NLD",
+      "country": "Netherlands",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "NZL",
+      "country": "New Zealand",
+      "currency": "NZD",
+      "targetPrice": 24.99,
+      "actualPrice": "24.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "NIC",
+      "country": "Nicaragua",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "NER",
+      "country": "Niger",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "NGA",
+      "country": "Nigeria",
+      "currency": "NGN",
+      "targetPrice": 5900,
+      "actualPrice": "5900.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "MKD",
+      "country": "North Macedonia",
+      "currency": "USD",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "NOR",
+      "country": "Norway",
+      "currency": "NOK",
+      "targetPrice": 169,
+      "actualPrice": "169.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "OMN",
+      "country": "Oman",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "PAK",
+      "country": "Pakistan",
+      "currency": "PKR",
+      "targetPrice": 999,
+      "actualPrice": "999.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "PLW",
+      "country": "Palau",
+      "currency": "USD",
+      "targetPrice": 9.99,
+      "actualPrice": "9.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "PAN",
+      "country": "Panama",
+      "currency": "USD",
+      "targetPrice": 9.99,
+      "actualPrice": "9.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "PNG",
+      "country": "Papua New Guinea",
+      "currency": "USD",
+      "targetPrice": 3.99,
+      "actualPrice": "3.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "PRY",
+      "country": "Paraguay",
+      "currency": "USD",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "PER",
+      "country": "Peru",
+      "currency": "PEN",
+      "targetPrice": 24.9,
+      "actualPrice": "24.9",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "PHL",
+      "country": "Philippines",
+      "currency": "PHP",
+      "targetPrice": 249,
+      "actualPrice": "249.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "POL",
+      "country": "Poland",
+      "currency": "PLN",
+      "targetPrice": 39.9,
+      "actualPrice": "39.9",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "PRT",
+      "country": "Portugal",
+      "currency": "EUR",
+      "targetPrice": 12.99,
+      "actualPrice": "12.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "QAT",
+      "country": "Qatar",
+      "currency": "QAR",
+      "targetPrice": 54.99,
+      "actualPrice": "54.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ROU",
+      "country": "Romania",
+      "currency": "RON",
+      "targetPrice": 44.99,
+      "actualPrice": "44.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "RUS",
+      "country": "Russia",
+      "currency": "RUB",
+      "targetPrice": 999,
+      "actualPrice": "999.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "RWA",
+      "country": "Rwanda",
+      "currency": "USD",
+      "targetPrice": 2.99,
+      "actualPrice": "2.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "STP",
+      "country": "São Tomé and Príncipe",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SAU",
+      "country": "Saudi Arabia",
+      "currency": "SAR",
+      "targetPrice": 56.24,
+      "actualPrice": "56.0",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SEN",
+      "country": "Senegal",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SRB",
+      "country": "Serbia",
+      "currency": "EUR",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SYC",
+      "country": "Seychelles",
+      "currency": "USD",
+      "targetPrice": 9.99,
+      "actualPrice": "9.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SLE",
+      "country": "Sierra Leone",
+      "currency": "USD",
+      "targetPrice": 2.99,
+      "actualPrice": "2.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SGP",
+      "country": "Singapore",
+      "currency": "SGD",
+      "targetPrice": 19.99,
+      "actualPrice": "19.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SVK",
+      "country": "Slovakia",
+      "currency": "EUR",
+      "targetPrice": 13.99,
+      "actualPrice": "13.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SVN",
+      "country": "Slovenia",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SLB",
+      "country": "Solomon Islands",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ZAF",
+      "country": "South Africa",
+      "currency": "ZAR",
+      "targetPrice": 149,
+      "actualPrice": "149.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ESP",
+      "country": "Spain",
+      "currency": "EUR",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "LKA",
+      "country": "Sri Lanka",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "KNA",
+      "country": "St. Kitts and Nevis",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "LCA",
+      "country": "St. Lucia",
+      "currency": "USD",
+      "targetPrice": 12.99,
+      "actualPrice": "12.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "VCT",
+      "country": "St. Vincent and the Grenadines",
+      "currency": "USD",
+      "targetPrice": 9.99,
+      "actualPrice": "9.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SUR",
+      "country": "Suriname",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "SWE",
+      "country": "Sweden",
+      "currency": "SEK",
+      "targetPrice": 159,
+      "actualPrice": "159.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "CHE",
+      "country": "Switzerland",
+      "currency": "CHF",
+      "targetPrice": 14.99,
+      "actualPrice": "15.0",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "TWN",
+      "country": "Taiwan",
+      "currency": "TWD",
+      "targetPrice": 479,
+      "actualPrice": "480",
+      "diffPercent": "0.2"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "TJK",
+      "country": "Tajikistan",
+      "currency": "USD",
+      "targetPrice": 3.99,
+      "actualPrice": "3.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "TZA",
+      "country": "Tanzania",
+      "currency": "TZS",
+      "targetPrice": 11900,
+      "actualPrice": "11900.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "THA",
+      "country": "Thailand",
+      "currency": "THB",
+      "targetPrice": 249,
+      "actualPrice": "249.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "TON",
+      "country": "Tonga",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "TTO",
+      "country": "Trinidad and Tobago",
+      "currency": "USD",
+      "targetPrice": 9.99,
+      "actualPrice": "9.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "TUN",
+      "country": "Tunisia",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "TUR",
+      "country": "Türkiye",
+      "currency": "TRY",
+      "targetPrice": 299,
+      "actualPrice": "299.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "TKM",
+      "country": "Turkmenistan",
+      "currency": "USD",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "TCA",
+      "country": "Turks and Caicos Islands",
+      "currency": "USD",
+      "targetPrice": 14.99,
+      "actualPrice": "14.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "UGA",
+      "country": "Uganda",
+      "currency": "USD",
+      "targetPrice": 2.99,
+      "actualPrice": "2.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "UKR",
+      "country": "Ukraine",
+      "currency": "USD",
+      "targetPrice": 6.99,
+      "actualPrice": "6.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ARE",
+      "country": "United Arab Emirates",
+      "currency": "AED",
+      "targetPrice": 54.99,
+      "actualPrice": "54.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "GBR",
+      "country": "United Kingdom",
+      "currency": "GBP",
+      "targetPrice": 11.99,
+      "actualPrice": "11.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "URY",
+      "country": "Uruguay",
+      "currency": "USD",
+      "targetPrice": 9.99,
+      "actualPrice": "9.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "UZB",
+      "country": "Uzbekistan",
+      "currency": "USD",
+      "targetPrice": 3.99,
+      "actualPrice": "3.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "VUT",
+      "country": "Vanuatu",
+      "currency": "USD",
+      "targetPrice": 4.99,
+      "actualPrice": "4.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "VEN",
+      "country": "Venezuela",
+      "currency": "USD",
+      "targetPrice": 5.99,
+      "actualPrice": "5.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "VNM",
+      "country": "Vietnam",
+      "currency": "VND",
+      "targetPrice": 129000,
+      "actualPrice": "129000",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "YEM",
+      "country": "Yemen",
+      "currency": "USD",
+      "targetPrice": 2.99,
+      "actualPrice": "2.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ZMB",
+      "country": "Zambia",
+      "currency": "USD",
+      "targetPrice": 3.99,
+      "actualPrice": "3.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Monthly",
+      "territory": "ZWE",
+      "country": "Zimbabwe",
+      "currency": "USD",
+      "targetPrice": 3.99,
+      "actualPrice": "3.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "USA",
+      "country": "United States",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "AFG",
+      "country": "Afghanistan",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ALB",
+      "country": "Albania",
+      "currency": "USD",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "DZA",
+      "country": "Algeria",
+      "currency": "USD",
+      "targetPrice": 43.99,
+      "actualPrice": "43.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "AGO",
+      "country": "Angola",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "AIA",
+      "country": "Anguilla",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ATG",
+      "country": "Antigua and Barbuda",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ARG",
+      "country": "Argentina",
+      "currency": "USD",
+      "targetPrice": 63.99,
+      "actualPrice": "63.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ARM",
+      "country": "Armenia",
+      "currency": "USD",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "AUS",
+      "country": "Australia",
+      "currency": "AUD",
+      "targetPrice": 199.99,
+      "actualPrice": "199.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "AUT",
+      "country": "Austria",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "AZE",
+      "country": "Azerbaijan",
+      "currency": "USD",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BHS",
+      "country": "Bahamas",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BHR",
+      "country": "Bahrain",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BRB",
+      "country": "Barbados",
+      "currency": "USD",
+      "targetPrice": 103.99,
+      "actualPrice": "103.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BLR",
+      "country": "Belarus",
+      "currency": "USD",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BEL",
+      "country": "Belgium",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BLZ",
+      "country": "Belize",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BEN",
+      "country": "Benin",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BMU",
+      "country": "Bermuda",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BTN",
+      "country": "Bhutan",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BOL",
+      "country": "Bolivia",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BIH",
+      "country": "Bosnia and Herzegovina",
+      "currency": "EUR",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BWA",
+      "country": "Botswana",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BRA",
+      "country": "Brazil",
+      "currency": "BRL",
+      "targetPrice": 319,
+      "actualPrice": "319.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "VGB",
+      "country": "British Virgin Islands",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BRN",
+      "country": "Brunei",
+      "currency": "USD",
+      "targetPrice": 103.99,
+      "actualPrice": "103.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BGR",
+      "country": "Bulgaria",
+      "currency": "EUR",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "BFA",
+      "country": "Burkina Faso",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "KHM",
+      "country": "Cambodia",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "CMR",
+      "country": "Cameroon",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "CAN",
+      "country": "Canada",
+      "currency": "CAD",
+      "targetPrice": 159.99,
+      "actualPrice": "159.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "CPV",
+      "country": "Cape Verde",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "CYM",
+      "country": "Cayman Islands",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "TCD",
+      "country": "Chad",
+      "currency": "USD",
+      "targetPrice": 26.39,
+      "actualPrice": "26.49",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "CHL",
+      "country": "Chile",
+      "currency": "CLP",
+      "targetPrice": 71199,
+      "actualPrice": "70990",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "CHN",
+      "country": "China mainland",
+      "currency": "CNY",
+      "targetPrice": 279.99,
+      "actualPrice": "280.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "COL",
+      "country": "Colombia",
+      "currency": "COP",
+      "targetPrice": 239000,
+      "actualPrice": "239000.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "COD",
+      "country": "Congo Democratic Republic of the",
+      "currency": "USD",
+      "targetPrice": 23.99,
+      "actualPrice": "23.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "COG",
+      "country": "Congo Republic of the",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "CRI",
+      "country": "Costa Rica",
+      "currency": "USD",
+      "targetPrice": 59.99,
+      "actualPrice": "59.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "CIV",
+      "country": "Côte d'Ivoire",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "HRV",
+      "country": "Croatia",
+      "currency": "EUR",
+      "targetPrice": 79.99,
+      "actualPrice": "79.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "CYP",
+      "country": "Cyprus",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "CZE",
+      "country": "Czech Republic",
+      "currency": "CZK",
+      "targetPrice": 2789,
+      "actualPrice": "2790.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "DNK",
+      "country": "Denmark",
+      "currency": "DKK",
+      "targetPrice": 871,
+      "actualPrice": "870.0",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "DMA",
+      "country": "Dominica",
+      "currency": "USD",
+      "targetPrice": 103.99,
+      "actualPrice": "103.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "DOM",
+      "country": "Dominican Republic",
+      "currency": "USD",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ECU",
+      "country": "Ecuador",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "EGY",
+      "country": "Egypt",
+      "currency": "EGP",
+      "targetPrice": 1990,
+      "actualPrice": "1989.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SLV",
+      "country": "El Salvador",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "EST",
+      "country": "Estonia",
+      "currency": "EUR",
+      "targetPrice": 111.99,
+      "actualPrice": "111.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SWZ",
+      "country": "Eswatini",
+      "currency": "USD",
+      "targetPrice": 43.99,
+      "actualPrice": "43.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "FJI",
+      "country": "Fiji",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "FIN",
+      "country": "Finland",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "FRA",
+      "country": "France",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "GAB",
+      "country": "Gabon",
+      "currency": "USD",
+      "targetPrice": 63.99,
+      "actualPrice": "63.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "GMB",
+      "country": "Gambia",
+      "currency": "USD",
+      "targetPrice": 23.99,
+      "actualPrice": "23.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "GEO",
+      "country": "Georgia",
+      "currency": "USD",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "DEU",
+      "country": "Germany",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "GHA",
+      "country": "Ghana",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "GRC",
+      "country": "Greece",
+      "currency": "EUR",
+      "targetPrice": 103.99,
+      "actualPrice": "103.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "GRD",
+      "country": "Grenada",
+      "currency": "USD",
+      "targetPrice": 103.99,
+      "actualPrice": "103.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "GTM",
+      "country": "Guatemala",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "GNB",
+      "country": "Guinea-Bissau",
+      "currency": "USD",
+      "targetPrice": 23.99,
+      "actualPrice": "23.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "GUY",
+      "country": "Guyana",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "HND",
+      "country": "Honduras",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "HKG",
+      "country": "Hong Kong",
+      "currency": "HKD",
+      "targetPrice": 951,
+      "actualPrice": "950.0",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "HUN",
+      "country": "Hungary",
+      "currency": "HUF",
+      "targetPrice": 43999,
+      "actualPrice": "43999",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ISL",
+      "country": "Iceland",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "IND",
+      "country": "India",
+      "currency": "INR",
+      "targetPrice": 3190,
+      "actualPrice": "3199.0",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "IDN",
+      "country": "Indonesia",
+      "currency": "IDR",
+      "targetPrice": 632000,
+      "actualPrice": "630000",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "IRQ",
+      "country": "Iraq",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "IRL",
+      "country": "Ireland",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ISR",
+      "country": "Israel",
+      "currency": "ILS",
+      "targetPrice": 439.99,
+      "actualPrice": "439.9",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ITA",
+      "country": "Italy",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "JAM",
+      "country": "Jamaica",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "JPN",
+      "country": "Japan",
+      "currency": "JPY",
+      "targetPrice": 15999,
+      "actualPrice": "16000",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "JOR",
+      "country": "Jordan",
+      "currency": "USD",
+      "targetPrice": 79.99,
+      "actualPrice": "79.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "KAZ",
+      "country": "Kazakhstan",
+      "currency": "KZT",
+      "targetPrice": 27999,
+      "actualPrice": "28000.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "KEN",
+      "country": "Kenya",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "KOR",
+      "country": "Korea Republic of",
+      "currency": "KRW",
+      "targetPrice": 151900,
+      "actualPrice": "152000",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "XKS",
+      "country": "Kosovo",
+      "currency": "EUR",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "KWT",
+      "country": "Kuwait",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "KGZ",
+      "country": "Kyrgyzstan",
+      "currency": "USD",
+      "targetPrice": 31.99,
+      "actualPrice": "31.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "LAO",
+      "country": "Laos",
+      "currency": "USD",
+      "targetPrice": 31.99,
+      "actualPrice": "31.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "LVA",
+      "country": "Latvia",
+      "currency": "EUR",
+      "targetPrice": 111.99,
+      "actualPrice": "111.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "LBN",
+      "country": "Lebanon",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "LBR",
+      "country": "Liberia",
+      "currency": "USD",
+      "targetPrice": 23.99,
+      "actualPrice": "23.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "LBY",
+      "country": "Libya",
+      "currency": "USD",
+      "targetPrice": 63.99,
+      "actualPrice": "63.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "LTU",
+      "country": "Lithuania",
+      "currency": "EUR",
+      "targetPrice": 111.99,
+      "actualPrice": "111.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "LUX",
+      "country": "Luxembourg",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MAC",
+      "country": "Macau",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MDG",
+      "country": "Madagascar",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MWI",
+      "country": "Malawi",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MYS",
+      "country": "Malaysia",
+      "currency": "MYR",
+      "targetPrice": 263,
+      "actualPrice": "264.9",
+      "diffPercent": "0.7"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MDV",
+      "country": "Maldives",
+      "currency": "USD",
+      "targetPrice": 79.99,
+      "actualPrice": "79.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MLI",
+      "country": "Mali",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MLT",
+      "country": "Malta",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MRT",
+      "country": "Mauritania",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MUS",
+      "country": "Mauritius",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MEX",
+      "country": "Mexico",
+      "currency": "MXN",
+      "targetPrice": 1190,
+      "actualPrice": "1190.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "FSM",
+      "country": "Micronesia",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MDA",
+      "country": "Moldova",
+      "currency": "USD",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MNG",
+      "country": "Mongolia",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MNE",
+      "country": "Montenegro",
+      "currency": "EUR",
+      "targetPrice": 79.99,
+      "actualPrice": "79.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MSR",
+      "country": "Montserrat",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MAR",
+      "country": "Morocco",
+      "currency": "USD",
+      "targetPrice": 63.99,
+      "actualPrice": "63.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MOZ",
+      "country": "Mozambique",
+      "currency": "USD",
+      "targetPrice": 23.99,
+      "actualPrice": "23.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MMR",
+      "country": "Myanmar",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "NAM",
+      "country": "Namibia",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "NRU",
+      "country": "Nauru",
+      "currency": "USD",
+      "targetPrice": 79.99,
+      "actualPrice": "79.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "NPL",
+      "country": "Nepal",
+      "currency": "USD",
+      "targetPrice": 31.99,
+      "actualPrice": "31.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "NLD",
+      "country": "Netherlands",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "NZL",
+      "country": "New Zealand",
+      "currency": "NZD",
+      "targetPrice": 199.99,
+      "actualPrice": "199.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "NIC",
+      "country": "Nicaragua",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "NER",
+      "country": "Niger",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "NGA",
+      "country": "Nigeria",
+      "currency": "NGN",
+      "targetPrice": 47190,
+      "actualPrice": "47000.0",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "MKD",
+      "country": "North Macedonia",
+      "currency": "USD",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "NOR",
+      "country": "Norway",
+      "currency": "NOK",
+      "targetPrice": 1349,
+      "actualPrice": "1349.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "OMN",
+      "country": "Oman",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "PAK",
+      "country": "Pakistan",
+      "currency": "PKR",
+      "targetPrice": 7990,
+      "actualPrice": "7999.0",
+      "diffPercent": "0.1"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "PLW",
+      "country": "Palau",
+      "currency": "USD",
+      "targetPrice": 79.99,
+      "actualPrice": "79.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "PAN",
+      "country": "Panama",
+      "currency": "USD",
+      "targetPrice": 79.99,
+      "actualPrice": "79.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "PNG",
+      "country": "Papua New Guinea",
+      "currency": "USD",
+      "targetPrice": 31.99,
+      "actualPrice": "31.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "PRY",
+      "country": "Paraguay",
+      "currency": "USD",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "PER",
+      "country": "Peru",
+      "currency": "PEN",
+      "targetPrice": 199,
+      "actualPrice": "199.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "PHL",
+      "country": "Philippines",
+      "currency": "PHP",
+      "targetPrice": 1990,
+      "actualPrice": "1990.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "POL",
+      "country": "Poland",
+      "currency": "PLN",
+      "targetPrice": 319,
+      "actualPrice": "319.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "PRT",
+      "country": "Portugal",
+      "currency": "EUR",
+      "targetPrice": 103.99,
+      "actualPrice": "103.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "QAT",
+      "country": "Qatar",
+      "currency": "QAR",
+      "targetPrice": 439.99,
+      "actualPrice": "439.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ROU",
+      "country": "Romania",
+      "currency": "RON",
+      "targetPrice": 359.99,
+      "actualPrice": "359.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "RUS",
+      "country": "Russia",
+      "currency": "RUB",
+      "targetPrice": 7990,
+      "actualPrice": "7990.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "RWA",
+      "country": "Rwanda",
+      "currency": "USD",
+      "targetPrice": 23.99,
+      "actualPrice": "23.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "STP",
+      "country": "São Tomé and Príncipe",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SAU",
+      "country": "Saudi Arabia",
+      "currency": "SAR",
+      "targetPrice": 449.96,
+      "actualPrice": "449.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SEN",
+      "country": "Senegal",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SRB",
+      "country": "Serbia",
+      "currency": "EUR",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SYC",
+      "country": "Seychelles",
+      "currency": "USD",
+      "targetPrice": 79.99,
+      "actualPrice": "79.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SLE",
+      "country": "Sierra Leone",
+      "currency": "USD",
+      "targetPrice": 23.99,
+      "actualPrice": "23.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SGP",
+      "country": "Singapore",
+      "currency": "SGD",
+      "targetPrice": 159.99,
+      "actualPrice": "159.98",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SVK",
+      "country": "Slovakia",
+      "currency": "EUR",
+      "targetPrice": 111.99,
+      "actualPrice": "111.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SVN",
+      "country": "Slovenia",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SLB",
+      "country": "Solomon Islands",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ZAF",
+      "country": "South Africa",
+      "currency": "ZAR",
+      "targetPrice": 1190,
+      "actualPrice": "1189.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ESP",
+      "country": "Spain",
+      "currency": "EUR",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "LKA",
+      "country": "Sri Lanka",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "KNA",
+      "country": "St. Kitts and Nevis",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "LCA",
+      "country": "St. Lucia",
+      "currency": "USD",
+      "targetPrice": 103.99,
+      "actualPrice": "103.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "VCT",
+      "country": "St. Vincent and the Grenadines",
+      "currency": "USD",
+      "targetPrice": 79.99,
+      "actualPrice": "79.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SUR",
+      "country": "Suriname",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "SWE",
+      "country": "Sweden",
+      "currency": "SEK",
+      "targetPrice": 1270,
+      "actualPrice": "1270.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "CHE",
+      "country": "Switzerland",
+      "currency": "CHF",
+      "targetPrice": 119.99,
+      "actualPrice": "120.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "TWN",
+      "country": "Taiwan",
+      "currency": "TWD",
+      "targetPrice": 3829,
+      "actualPrice": "3850",
+      "diffPercent": "0.5"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "TJK",
+      "country": "Tajikistan",
+      "currency": "USD",
+      "targetPrice": 31.99,
+      "actualPrice": "31.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "TZA",
+      "country": "Tanzania",
+      "currency": "TZS",
+      "targetPrice": 95190,
+      "actualPrice": "95000.0",
+      "diffPercent": "0.2"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "THA",
+      "country": "Thailand",
+      "currency": "THB",
+      "targetPrice": 1990,
+      "actualPrice": "1990.0",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "TON",
+      "country": "Tonga",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "TTO",
+      "country": "Trinidad and Tobago",
+      "currency": "USD",
+      "targetPrice": 79.99,
+      "actualPrice": "79.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "TUN",
+      "country": "Tunisia",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "TUR",
+      "country": "Türkiye",
+      "currency": "TRY",
+      "targetPrice": 2390,
+      "actualPrice": "2399.0",
+      "diffPercent": "0.4"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "TKM",
+      "country": "Turkmenistan",
+      "currency": "USD",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "TCA",
+      "country": "Turks and Caicos Islands",
+      "currency": "USD",
+      "targetPrice": 119.99,
+      "actualPrice": "119.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "UGA",
+      "country": "Uganda",
+      "currency": "USD",
+      "targetPrice": 23.99,
+      "actualPrice": "23.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "UKR",
+      "country": "Ukraine",
+      "currency": "USD",
+      "targetPrice": 55.99,
+      "actualPrice": "55.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ARE",
+      "country": "United Arab Emirates",
+      "currency": "AED",
+      "targetPrice": 439.99,
+      "actualPrice": "439.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "GBR",
+      "country": "United Kingdom",
+      "currency": "GBP",
+      "targetPrice": 95.99,
+      "actualPrice": "95.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "URY",
+      "country": "Uruguay",
+      "currency": "USD",
+      "targetPrice": 79.99,
+      "actualPrice": "79.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "UZB",
+      "country": "Uzbekistan",
+      "currency": "USD",
+      "targetPrice": 31.99,
+      "actualPrice": "31.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "VUT",
+      "country": "Vanuatu",
+      "currency": "USD",
+      "targetPrice": 39.99,
+      "actualPrice": "39.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "VEN",
+      "country": "Venezuela",
+      "currency": "USD",
+      "targetPrice": 47.99,
+      "actualPrice": "47.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "VNM",
+      "country": "Vietnam",
+      "currency": "VND",
+      "targetPrice": 1032000,
+      "actualPrice": "1029000",
+      "diffPercent": "0.3"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "YEM",
+      "country": "Yemen",
+      "currency": "USD",
+      "targetPrice": 23.99,
+      "actualPrice": "23.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ZMB",
+      "country": "Zambia",
+      "currency": "USD",
+      "targetPrice": 31.99,
+      "actualPrice": "31.99",
+      "diffPercent": "0.0"
+    },
+    {
+      "subscription": "Accord Premium Yearly",
+      "territory": "ZWE",
+      "country": "Zimbabwe",
+      "currency": "USD",
+      "targetPrice": 31.99,
+      "actualPrice": "31.99",
+      "diffPercent": "0.0"
+    }
+  ],
+  "skipped": [],
+  "errors": [],
+  "noMatch": [],
+  "warnings": []
+}

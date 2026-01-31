@@ -819,6 +819,69 @@
       "purchaseFailedMessage": "تکمیل خرید ناموفق بود. لطفاً دوباره تلاش کنید یا اگر مشکل ادامه دارد با پشتیبانی تماس بگیرید."
     }
   },
+  "pushNotifications": {
+    "match": {
+      "title": "یک تطابق است! 💜",
+      "body": "شما با {{name}} تطابق پیدا کردید! همین الان شروع به چت کنید."
+    },
+    "message": {
+      "title": "پیام جدید از {{name}}",
+      "bodyText": "یک پیام برای شما فرستاد",
+      "bodyPhoto": "یک عکس برای شما فرستاد",
+      "bodyVoice": "یک پیام صوتی برای شما فرستاد",
+      "bodyVideo": "یک ویدیو برای شما فرستاد"
+    },
+    "like": {
+      "premiumTitle": "{{name}} شما را پسندید! 💜",
+      "premiumBody": "ببینید چه کسی شما را پسندیده و فوراً تطابق برقرار کنید.",
+      "premiumSuperTitle": "{{name}} به شما سوپر لایک داد! ⭐",
+      "premiumSuperBody": "آن‌ها واقعاً می‌خواهند با شما ارتباط برقرار کنند!",
+      "freeTitle": "کسی شما را پسندید! 💜",
+      "freeBody": "به پریمیوم ارتقا دهید تا ببینید چه کسی شما را پسندیده و فوراً تطابق برقرار کنید.",
+      "freeSuperTitle": "کسی به شما سوپر لایک داد! ⭐",
+      "freeSuperBody": "به پریمیوم ارتقا دهید تا ببینید چه کسی واقعاً می‌خواهد با شما تطابق برقرار کند."
+    },
+    "trialExpiration": {
+      "threeDaysTitle": "دوره آزمایشی رایگان شما ۳ روز دیگر تمام می‌شود",
+      "threeDaysBody": "دسترسی به ویژگی‌های پریمیوم را از دست ندهید! همین الان مشترک شوید تا به یافتن تطابق عالی خود ادامه دهید.",
+      "oneDayTitle": "دوره آزمایشی رایگان شما فردا تمام می‌شود!",
+      "oneDayBody": "آخرین فرصت برای اشتراک و حفظ ویژگی‌های پریمیوم. برای ارتقا ضربه بزنید.",
+      "todayTitle": "دوره آزمایشی رایگان شما امروز تمام می‌شود!",
+      "todayBody": "دسترسی پریمیوم شما امشب منقضی می‌شود. همین الان مشترک شوید تا سفر خود برای یافتن تطابق عالی را ادامه دهید."
+    },
+    "trialEngagement": {
+      "day1Title": "دوره آزمایشی پریمیوم شما فعال است!",
+      "day1Body": "لایک‌های نامحدود، مشاهده افرادی که شما را لایک کرده‌اند، ارسال سوپر لایک و موارد دیگر. شروع به کاوش ویژگی‌های پریمیوم کنید!",
+      "day3TitleWithLikes": "{{count}} {{person}} شما را پسندید!",
+      "day3TitleNoLikes": "شما مورد توجه قرار گرفته‌اید!",
+      "day3BodyWithLikes": "ضربه بزنید تا ببینید چه کسانی هستند - این یک ویژگی پریمیوم است که می‌توانید نگه دارید!",
+      "day3BodyNoLikes": "به استفاده از ویژگی‌های پریمیوم ادامه دهید تا برجسته شوید و لایک‌های بیشتری بگیرید.",
+      "day5Title": "فقط ۲ روز در دوره آزمایشی باقی مانده!",
+      "day5BodyWithStats": "شما {{highlights}}. دسترسی به این ویژگی‌ها را از دست ندهید!",
+      "day5BodyNoStats": "شما در حال کاوش ویژگی‌های پریمیوم بوده‌اید. همین الان مشترک شوید تا آن‌ها را نگه دارید!",
+      "day6Title": "آخرین روز فرداست!",
+      "day6Body": "قبل از پایان دوره آزمایشی، ۳۳٪ صرفه‌جویی با پلن سالانه ما را قفل کنید. ارتباطات شما منتظرند!"
+    },
+    "swipesRefreshed": {
+      "title": "سوایپ‌های شما برگشتند! 🎉",
+      "body": "شما ۱۵ سوایپ جدید برای کشف تطابق عالی خود دارید. همین الان شروع به سوایپ کردن کنید!"
+    },
+    "reviews": {
+      "readyTitle": "وقت نقد است! ⭐",
+      "readyBody": "تجربه خود را با {{name}} به اشتراک بگذارید. نقد شما به ایجاد اعتماد در جامعه ما کمک می‌کند.",
+      "reminderTitle": "آخرین فرصت برای نقد! ⏰",
+      "reminderBody": "مهلت نقد شما برای {{name}} به زودی تمام می‌شود. از دست ندهید!"
+    },
+    "stats": {
+      "person": "نفر",
+      "people": "نفر",
+      "seenLikes": "{{count}} نفر را دیدید که شما را پسندیده‌اند",
+      "sentSuperLikes": "{{count}} سوپر لایک فرستادید",
+      "sentSuperLikesPlural": "{{count}} سوپر لایک فرستادید",
+      "madeMatch": "{{count}} تطابق برقرار کردید",
+      "madeMatchesPlural": "{{count}} تطابق برقرار کردید"
+    }
+  },
   "whatsNew": {
     "title": "چه چیزی جدید است",
     "version": "نسخه {{version}}",
@@ -879,5 +942,51 @@
         }
       }
     }
+  },
+  "toast": {
+    "photoLimitTitle": "Maximum Photos",
+    "photoLimitMessage": "You can upload up to 6 photos",
+    "photoAlreadyAdded": "This photo is already in your profile",
+    "photoProcessError": "Failed to process photo. Please try again.",
+    "morePhotosNeeded": "Please add at least 4 photos to continue",
+    "profileNotFound": "Profile not found. Please go back and try again.",
+    "uploadFailed": "Failed to upload. Please try again.",
+    "permissionDenied": "Permission Denied",
+    "needPhotoAccess": "We need permission to access your photos",
+    "invalidImage": "Invalid Image",
+    "micPermissionRequired": "Microphone access is needed to record",
+    "recordingFailed": "Failed to start recording",
+    "stopRecordingFailed": "Failed to stop recording",
+    "profileLoadError": "Failed to load your profile",
+    "profilesLoadError": "Failed to load profiles",
+    "superLikeError": "Failed to send super like. Please try again.",
+    "noRecentSwipes": "There are no recent swipes to undo.",
+    "swipeUndone": "Your last swipe has been undone.",
+    "undoSwipeError": "Failed to undo swipe. Please try again.",
+    "blockSuccess": "User has been blocked",
+    "blockError": "Failed to block user. Please try again.",
+    "filterError": "Failed to update filter. Please try again.",
+    "globalSearchError": "Failed to enable global search. Please try again.",
+    "genericError": "Something went wrong. Please try again.",
+    "photosBlurred": "Your photos are now blurred for this match",
+    "photosRevealed": "Your photos are now visible to {{name}}",
+    "photoRevealError": "Failed to update photo visibility. Please try again.",
+    "reportSubmitted": "Thank you for helping keep Accord safe",
+    "reportError": "Failed to submit report. Please try again.",
+    "reactionError": "Failed to add reaction",
+    "chatLoadError": "Failed to load chat. Please try again.",
+    "messagesLoadError": "Failed to load messages",
+    "voiceRecordError": "Failed to record voice message. Please try again.",
+    "locationErrorPrecise": "Precise location is required for accurate matching",
+    "locationErrorGeneric": "Could not determine your location",
+    "saveError": "Failed to save. Please try again.",
+    "selectPhotoError": "Failed to select photo. Please try again.",
+    "profileSaveError": "Failed to save profile",
+    "voiceUploadFailed": "Failed to save voice intro",
+    "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
+    "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
+    "obsessedTitle": "Obsessed!",
+    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
+    "obsessedBasic": "{{name}} will be notified that you're obsessed!"
   }
 }

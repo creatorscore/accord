@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  Image,
   TouchableOpacity,
   Dimensions,
   StyleSheet,
@@ -13,6 +12,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -170,6 +170,7 @@ const PREFERENCE_LABELS: { [key: string]: string } = {
 };
 
 const formatLabel = (value: string) => {
+  if (!value) return '';
   if (PREFERENCE_LABELS[value]) return PREFERENCE_LABELS[value];
   return value.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
@@ -207,7 +208,7 @@ const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boo
 };
 
 // Like Button Component - appears on photos and prompts
-const LikeButton = ({ onPress, size = 48 }: { onPress: () => void; size?: number }) => {
+const LikeButton = React.memo(({ onPress, size = 48 }: { onPress: () => void; size?: number }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
@@ -226,10 +227,10 @@ const LikeButton = ({ onPress, size = 48 }: { onPress: () => void; size?: number
       </Animated.View>
     </TouchableOpacity>
   );
-};
+});
 
 // Photo Card with Like Button
-const PhotoCard = ({
+const PhotoCard = React.memo(({
   uri,
   onLike,
   blurRadius,
@@ -256,7 +257,9 @@ const PhotoCard = ({
     <Image
       source={{ uri }}
       style={styles.photoImage}
-      resizeMode="cover"
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      transition={200}
       blurRadius={blurRadius}
       onLoad={onImageLoad}
       onError={onImageError}
@@ -275,10 +278,10 @@ const PhotoCard = ({
       </View>
     )}
   </View>
-);
+));
 
 // Prompt Card with Like Button
-const PromptCard = ({
+const PromptCard = React.memo(({
   prompt,
   answer,
   onLike,
@@ -298,7 +301,7 @@ const PromptCard = ({
       </View>
     )}
   </View>
-);
+));
 
 // Vitals Chip Component (for horizontal scroll row - Hinge style with dividers)
 const VitalsChip = ({ icon, value, isLast }: { icon: string; value: string; isLast?: boolean }) => (
@@ -325,7 +328,7 @@ const VitalsRowItem = ({ icon, value, isLast }: { icon: string; value: string; i
 );
 
 // Hinge-Style Vitals Section
-const VitalsSection = ({
+const VitalsSection = React.memo(({
   profile,
   preferences,
   heightUnit,
@@ -438,7 +441,7 @@ const VitalsSection = ({
       )}
     </View>
   );
-};
+});
 
 const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfileViewProps>(({
   profile,
@@ -539,6 +542,10 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         await sound.playAsync();
         setIsVoicePlaying(true);
       } else {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+        });
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri: profile.voice_intro_url },
           { shouldPlay: true },

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0';
+import { t } from '../_shared/translations.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,10 +36,10 @@ serve(async (req) => {
 
     console.log(`[Like Notification] Processing like from ${liker_profile_id} to ${liked_profile_id}`);
 
-    // Get liked user's profile (recipient)
+    // Get liked user's profile (recipient, including preferred_language for localization)
     const { data: recipient, error: recipientError } = await supabaseAdmin
       .from('profiles')
-      .select('push_token, push_enabled, is_premium, is_platinum, last_active_at')
+      .select('push_token, push_enabled, is_premium, is_platinum, last_active_at, preferred_language')
       .eq('id', liked_profile_id)
       .single();
 
@@ -74,26 +75,27 @@ serve(async (req) => {
 
     const isPremium = recipient.is_premium || recipient.is_platinum;
     const likerName = liker?.display_name || 'Someone';
+    const lang = recipient.preferred_language || 'en';
 
-    // Different messaging based on subscription status
+    // Different messaging based on subscription status (localized)
     let title: string;
     let body: string;
 
     if (isPremium) {
       if (like_type === 'super') {
-        title = `${likerName} super liked you! ⭐`;
-        body = 'They really want to connect with you!';
+        title = t(lang, 'like.premiumSuperTitle', { name: likerName });
+        body = t(lang, 'like.premiumSuperBody');
       } else {
-        title = `${likerName} likes you! 💜`;
-        body = 'See who liked you and match instantly.';
+        title = t(lang, 'like.premiumTitle', { name: likerName });
+        body = t(lang, 'like.premiumBody');
       }
     } else {
       if (like_type === 'super') {
-        title = 'Someone super liked you! ⭐';
-        body = 'Upgrade to Premium to see who really wants to match with you.';
+        title = t(lang, 'like.freeSuperTitle');
+        body = t(lang, 'like.freeSuperBody');
       } else {
-        title = 'Someone likes you! 💜';
-        body = 'Upgrade to Premium to see who liked you and match instantly.';
+        title = t(lang, 'like.freeTitle');
+        body = t(lang, 'like.freeBody');
       }
     }
 

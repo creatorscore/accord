@@ -17,6 +17,8 @@ import { useScreenProtection } from '@/hooks/useScreenProtection';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
 import { useSafeBlur } from '@/hooks/useSafeBlur';
+import { MessagesListSkeleton } from '@/components/shared/SkeletonScreens';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Conversation {
   match_id: string;
@@ -45,6 +47,7 @@ interface Conversation {
 
 export default function Messages() {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const { user } = useAuth();
   const { isPremium } = useSubscription();
   const insets = useSafeAreaInsets();
@@ -459,10 +462,10 @@ export default function Messages() {
               setConversations((prev) => prev.filter((c) => c.match_id !== conversation.match_id));
 
               // Show success message
-              Alert.alert(t('messages.deleteDialog.success'), t('messages.deleteDialog.successMessage'));
+              showToast({ type: 'success', title: t('messages.deleteDialog.success'), message: t('messages.deleteDialog.successMessage') });
             } catch (error: any) {
               console.error('Error deleting conversation:', error);
-              Alert.alert(t('common.error'), t('messages.deleteDialog.error'));
+              showToast({ type: 'error', title: t('common.error'), message: t('messages.deleteDialog.error') });
             }
           },
         },
@@ -517,10 +520,10 @@ export default function Messages() {
               // Remove from local state
               setConversations((prev) => prev.filter((c) => c.match_id !== conversation.match_id));
 
-              Alert.alert(t('messages.blockDialog.success'), t('messages.blockDialog.successMessage', { name: conversation.profile.display_name }));
+              showToast({ type: 'success', title: t('messages.blockDialog.success'), message: t('messages.blockDialog.successMessage', { name: conversation.profile.display_name }) });
             } catch (error: any) {
               console.error('Error blocking user:', error);
-              Alert.alert(t('common.error'), t('messages.blockDialog.error'));
+              showToast({ type: 'error', title: t('common.error'), message: t('messages.blockDialog.error') });
             }
           },
         },
@@ -541,7 +544,7 @@ export default function Messages() {
           text: t('messages.reportDialog.submit'),
           onPress: async (reason?: string) => {
             if (!reason || reason.trim() === '') {
-              Alert.alert(t('common.error'), t('messages.reportDialog.errorEmpty'));
+              showToast({ type: 'error', title: t('common.error'), message: t('messages.reportDialog.errorEmpty') });
               return;
             }
 
@@ -569,13 +572,10 @@ export default function Messages() {
 
               if (error) throw error;
 
-              Alert.alert(
-                t('messages.reportDialog.success'),
-                t('messages.reportDialog.successMessage')
-              );
+              showToast({ type: 'success', title: t('messages.reportDialog.success'), message: t('messages.reportDialog.successMessage') });
             } catch (error: any) {
               console.error('Error reporting user:', error);
-              Alert.alert(t('common.error'), t('messages.reportDialog.error'));
+              showToast({ type: 'error', title: t('common.error'), message: t('messages.reportDialog.error') });
             }
           },
         },
@@ -602,13 +602,13 @@ export default function Messages() {
         )
       );
 
-      Alert.alert(t('common.success'), t('messages.muteSuccess', {
+      showToast({ type: 'success', title: t('common.success'), message: t('messages.muteSuccess', {
         status: newMutedState ? t('messages.muted') : t('messages.unmuted'),
         name: conversation.profile.display_name
-      }));
+      }) });
     } catch (error: any) {
       console.error('Error toggling mute:', error);
-      Alert.alert(t('common.error'), t('messages.markUnreadError'));
+      showToast({ type: 'error', title: t('common.error'), message: t('messages.markUnreadError') });
     }
   };
 
@@ -626,12 +626,12 @@ export default function Messages() {
       // Remove from current view immediately
       setConversations((prev) => prev.filter((c) => c.match_id !== conversation.match_id));
 
-      Alert.alert(t('common.success'), t('messages.archiveSuccess', {
+      showToast({ type: 'success', title: t('common.success'), message: t('messages.archiveSuccess', {
         status: newArchivedState ? t('messages.archived') : t('messages.unarchived')
-      }));
+      }) });
     } catch (error: any) {
       console.error('Error toggling archive:', error);
-      Alert.alert(t('common.error'), t('messages.markUnreadError'));
+      showToast({ type: 'error', title: t('common.error'), message: t('messages.markUnreadError') });
     }
   };
 
@@ -662,12 +662,12 @@ export default function Messages() {
         });
       });
 
-      Alert.alert(t('common.success'), t('messages.pinSuccess', {
+      showToast({ type: 'success', title: t('common.success'), message: t('messages.pinSuccess', {
         status: newPinnedState ? t('messages.pinned') : t('messages.unpinned')
-      }));
+      }) });
     } catch (error: any) {
       console.error('Error toggling pin:', error);
-      Alert.alert(t('common.error'), t('messages.markUnreadError'));
+      showToast({ type: 'error', title: t('common.error'), message: t('messages.markUnreadError') });
     }
   };
 
@@ -689,10 +689,10 @@ export default function Messages() {
       // Reload conversations to update unread count
       await loadConversations();
 
-      Alert.alert(t('common.success'), t('messages.markUnreadSuccess'));
+      showToast({ type: 'success', title: t('common.success'), message: t('messages.markUnreadSuccess') });
     } catch (error: any) {
       console.error('Error marking as unread:', error);
-      Alert.alert(t('common.error'), t('messages.markUnreadError'));
+      showToast({ type: 'error', title: t('common.error'), message: t('messages.markUnreadError') });
     }
   };
 
@@ -947,10 +947,7 @@ export default function Messages() {
           <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('messages.subtitle')}</Text>
         </View>
 
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>{t('messages.loadingMessages')}</Text>
-        </View>
+        <MessagesListSkeleton />
       </View>
     );
   }
