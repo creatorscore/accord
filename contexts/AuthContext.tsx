@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
 import { initializeEncryption } from '@/lib/encryption';
-// import { setUser as setSentryUser } from '@/lib/sentry'; // Temporarily disabled
+import { setUser as setSentryUser } from '@/lib/sentry';
 import { identifyUser, resetUser, trackUserAction } from '@/lib/analytics';
 
 interface AuthContextType {
@@ -58,12 +58,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       // Update user identity in PostHog
       if (session?.user) {
-        // setSentryUser({ id: session.user.id }); // Temporarily disabled
+        setSentryUser({ id: session.user.id });
         identifyUser(session.user.id, {
           email: session.user.email,
         });
       } else {
-        // setSentryUser(null); // Temporarily disabled
+        setSentryUser(null);
         resetUser();
       }
     });

@@ -813,6 +813,69 @@
       "purchaseFailedMessage": "खरीदारी पूर्ण करने में विफल। कृपया पुनः प्रयास करें या यदि समस्या बनी रहती है तो सहायता से संपर्क करें।"
     }
   },
+  "pushNotifications": {
+    "match": {
+      "title": "यह एक मैच है! 💜",
+      "body": "आपका {{name}} से मैच हुआ! अभी चैट शुरू करें।"
+    },
+    "message": {
+      "title": "{{name}} से नया संदेश",
+      "bodyText": "आपको एक संदेश भेजा",
+      "bodyPhoto": "आपको एक फोटो भेजी",
+      "bodyVoice": "आपको एक वॉइस मैसेज भेजा",
+      "bodyVideo": "आपको एक वीडियो भेजा"
+    },
+    "like": {
+      "premiumTitle": "{{name}} को आप पसंद हैं! 💜",
+      "premiumBody": "देखें किसने आपको पसंद किया और तुरंत मैच करें।",
+      "premiumSuperTitle": "{{name}} ने आपको सुपर लाइक किया! ⭐",
+      "premiumSuperBody": "वे वाकई आपसे जुड़ना चाहते हैं!",
+      "freeTitle": "किसी को आप पसंद हैं! 💜",
+      "freeBody": "प्रीमियम में अपग्रेड करें और देखें किसने आपको पसंद किया।",
+      "freeSuperTitle": "किसी ने आपको सुपर लाइक किया! ⭐",
+      "freeSuperBody": "प्रीमियम में अपग्रेड करें और देखें कौन वाकई आपसे मैच करना चाहता है।"
+    },
+    "trialExpiration": {
+      "threeDaysTitle": "आपका मुफ्त ट्रायल 3 दिनों में समाप्त होगा",
+      "threeDaysBody": "प्रीमियम फीचर्स का एक्सेस न खोएं! अभी सब्सक्राइब करें।",
+      "oneDayTitle": "आपका मुफ्त ट्रायल कल समाप्त होगा!",
+      "oneDayBody": "सब्सक्राइब करने का आखिरी मौका। अभी अपग्रेड करें।",
+      "todayTitle": "आपका मुफ्त ट्रायल आज समाप्त होगा!",
+      "todayBody": "आपका प्रीमियम एक्सेस आज रात समाप्त होगा। अभी सब्सक्राइब करें।"
+    },
+    "trialEngagement": {
+      "day1Title": "आपका प्रीमियम ट्रायल एक्टिव है!",
+      "day1Body": "अनलिमिटेड लाइक्स, देखें किसने आपको लाइक किया, सुपर लाइक्स भेजें। प्रीमियम फीचर्स एक्सप्लोर करें!",
+      "day3TitleWithLikes": "{{count}} {{person}} ने आपको लाइक किया!",
+      "day3TitleNoLikes": "आप नोटिस हो रहे हैं!",
+      "day3BodyWithLikes": "देखें कौन हैं वे - यह प्रीमियम फीचर है जो आप रख सकते हैं!",
+      "day3BodyNoLikes": "प्रीमियम फीचर्स का उपयोग जारी रखें।",
+      "day5Title": "आपके ट्रायल में सिर्फ 2 दिन बाकी!",
+      "day5BodyWithStats": "आपने {{highlights}}। इन फीचर्स का एक्सेस न खोएं!",
+      "day5BodyNoStats": "आपने प्रीमियम फीचर्स एक्सप्लोर किए। अभी सब्सक्राइब करें!",
+      "day6Title": "कल आखिरी दिन!",
+      "day6Body": "वार्षिक प्लान पर 33% बचाएं। आपके कनेक्शन इंतज़ार कर रहे हैं!"
+    },
+    "swipesRefreshed": {
+      "title": "आपके स्वाइप्स वापस आ गए! 🎉",
+      "body": "आपके पास 15 नए स्वाइप्स हैं। अभी स्वाइप करना शुरू करें!"
+    },
+    "reviews": {
+      "readyTitle": "रिव्यू का समय! ⭐",
+      "readyBody": "{{name}} के साथ अपना अनुभव साझा करें।",
+      "reminderTitle": "रिव्यू का आखिरी मौका! ⏰",
+      "reminderBody": "{{name}} के लिए आपकी रिव्यू विंडो जल्द समाप्त होगी।"
+    },
+    "stats": {
+      "person": "व्यक्ति",
+      "people": "लोग",
+      "seenLikes": "{{count}} को देखा जिन्होंने आपको लाइक किया",
+      "sentSuperLikes": "{{count}} सुपर लाइक भेजा",
+      "sentSuperLikesPlural": "{{count}} सुपर लाइक्स भेजे",
+      "madeMatch": "{{count}} मैच किया",
+      "madeMatchesPlural": "{{count}} मैच किए"
+    }
+  },
   "whatsNew": {
     "title": "नया क्या है",
     "version": "संस्करण {{version}}",
@@ -873,5 +936,51 @@
         }
       }
     }
+  },
+  "toast": {
+    "photoLimitTitle": "Maximum Photos",
+    "photoLimitMessage": "You can upload up to 6 photos",
+    "photoAlreadyAdded": "This photo is already in your profile",
+    "photoProcessError": "Failed to process photo. Please try again.",
+    "morePhotosNeeded": "Please add at least 4 photos to continue",
+    "profileNotFound": "Profile not found. Please go back and try again.",
+    "uploadFailed": "Failed to upload. Please try again.",
+    "permissionDenied": "Permission Denied",
+    "needPhotoAccess": "We need permission to access your photos",
+    "invalidImage": "Invalid Image",
+    "micPermissionRequired": "Microphone access is needed to record",
+    "recordingFailed": "Failed to start recording",
+    "stopRecordingFailed": "Failed to stop recording",
+    "profileLoadError": "Failed to load your profile",
+    "profilesLoadError": "Failed to load profiles",
+    "superLikeError": "Failed to send super like. Please try again.",
+    "noRecentSwipes": "There are no recent swipes to undo.",
+    "swipeUndone": "Your last swipe has been undone.",
+    "undoSwipeError": "Failed to undo swipe. Please try again.",
+    "blockSuccess": "User has been blocked",
+    "blockError": "Failed to block user. Please try again.",
+    "filterError": "Failed to update filter. Please try again.",
+    "globalSearchError": "Failed to enable global search. Please try again.",
+    "genericError": "Something went wrong. Please try again.",
+    "photosBlurred": "Your photos are now blurred for this match",
+    "photosRevealed": "Your photos are now visible to {{name}}",
+    "photoRevealError": "Failed to update photo visibility. Please try again.",
+    "reportSubmitted": "Thank you for helping keep Accord safe",
+    "reportError": "Failed to submit report. Please try again.",
+    "reactionError": "Failed to add reaction",
+    "chatLoadError": "Failed to load chat. Please try again.",
+    "messagesLoadError": "Failed to load messages",
+    "voiceRecordError": "Failed to record voice message. Please try again.",
+    "locationErrorPrecise": "Precise location is required for accurate matching",
+    "locationErrorGeneric": "Could not determine your location",
+    "saveError": "Failed to save. Please try again.",
+    "selectPhotoError": "Failed to select photo. Please try again.",
+    "profileSaveError": "Failed to save profile",
+    "voiceUploadFailed": "Failed to save voice intro",
+    "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
+    "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
+    "obsessedTitle": "Obsessed!",
+    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
+    "obsessedBasic": "{{name}} will be notified that you're obsessed!"
   }
 }

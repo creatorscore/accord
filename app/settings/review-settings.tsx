@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
+import * as Haptics from 'expo-haptics';
 import { supabase } from '@/lib/supabase';
 
 interface ReviewSettings {
@@ -182,7 +183,7 @@ export default function ReviewSettingsScreen() {
               </View>
               <Switch
                 value={settings.reviews_enabled}
-                onValueChange={() => handleToggle('reviews_enabled')}
+                onValueChange={() => { Haptics.selectionAsync(); handleToggle('reviews_enabled'); }}
                 trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
                 thumbColor={settings.reviews_enabled ? '#A08AB7' : '#F3F4F6'}
                 disabled={settings.auto_disabled_by_location}
@@ -212,7 +213,7 @@ export default function ReviewSettingsScreen() {
               </View>
               <Switch
                 value={settings.show_aggregate_publicly}
-                onValueChange={() => handleToggle('show_aggregate_publicly')}
+                onValueChange={() => { Haptics.selectionAsync(); handleToggle('show_aggregate_publicly'); }}
                 trackColor={{ false: '#D1D5DB', true: '#BFDBFE' }}
                 thumbColor={settings.show_aggregate_publicly ? '#3B82F6' : '#F3F4F6'}
                 disabled={!settings.reviews_enabled}
@@ -237,7 +238,7 @@ export default function ReviewSettingsScreen() {
               </View>
               <Switch
                 value={settings.show_detailed_after_match}
-                onValueChange={() => handleToggle('show_detailed_after_match')}
+                onValueChange={() => { Haptics.selectionAsync(); handleToggle('show_detailed_after_match'); }}
                 trackColor={{ false: '#D1D5DB', true: '#A7F3D0' }}
                 thumbColor={settings.show_detailed_after_match ? '#10B981' : '#F3F4F6'}
                 disabled={!settings.reviews_enabled}
@@ -267,7 +268,7 @@ export default function ReviewSettingsScreen() {
               </View>
               <Switch
                 value={settings.allow_new_reviews}
-                onValueChange={() => handleToggle('allow_new_reviews')}
+                onValueChange={() => { Haptics.selectionAsync(); handleToggle('allow_new_reviews'); }}
                 trackColor={{ false: '#D1D5DB', true: '#FCD34D' }}
                 thumbColor={settings.allow_new_reviews ? '#F59E0B' : '#F3F4F6'}
                 disabled={!settings.reviews_enabled}

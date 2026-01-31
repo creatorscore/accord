@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { registerForPushNotifications, savePushToken } from '@/lib/notifications';
 import { openAppSettings } from '@/lib/open-settings';
 import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 
 interface NotificationPreferences {
   push_new_match: boolean;
@@ -255,7 +256,7 @@ export default function NotificationSettings() {
         ) : (
           <Switch
             value={preferences[key]}
-            onValueChange={(value) => updatePreference(key, value)}
+            onValueChange={(value) => { Haptics.selectionAsync(); updatePreference(key, value); }}
             disabled={disabled}
             trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
             thumbColor={preferences[key] ? '#A08AB7' : '#F3F4F6'}

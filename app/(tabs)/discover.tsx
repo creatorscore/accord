@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
 import { useScreenProtection } from '@/hooks/useScreenProtection';
 import DiscoveryProfileView, { DiscoveryProfileViewRef } from '@/components/matching/DiscoveryProfileView';
@@ -31,6 +32,7 @@ import { trackUserAction, trackFunnel, trackEvent } from '@/lib/analytics';
 import { prefetchImages } from '@/components/shared/ConditionalImage';
 import VerificationBanner from '@/components/shared/VerificationBanner';
 import TrialExpirationBanner from '@/components/premium/TrialExpirationBanner';
+import LikesYouTeaser from '@/components/premium/LikesYouTeaser';
 import PopularityInsightsModal from '@/components/matching/PopularityInsightsModal';
 
 interface Profile {
@@ -42,6 +44,8 @@ interface Profile {
   ethnicity?: string | string[]; // Can be single or array: users can select multiple ethnicities
   location_city?: string;
   location_state?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   bio?: string;
   occupation?: string;
   education?: string;
@@ -100,17 +104,24 @@ export default function Discover() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
+  const { showToast } = useToast();
   const { colors } = useColorScheme();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
   const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
-  const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const [currentProfileId, _setCurrentProfileId] = useState<string | null>(null);
+  const currentProfileIdRef = useRef<string | null>(null);
+  const setCurrentProfileId = (id: string | null) => {
+    currentProfileIdRef.current = id;
+    _setCurrentProfileId(id);
+  };
   const [currentUserPhoto, setCurrentUserPhoto] = useState<string | null>(null);
   const [currentUserGender, setCurrentUserGender] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const hasInitiallyLoaded = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedProfile, setMatchedProfile] = useState<Profile | null>(null);
@@ -123,8 +134,8 @@ export default function Discover() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
     // Free filters
-    ageMin: 22,
-    ageMax: 50,
+    ageMin: 18,
+    ageMax: 65,
     maxDistance: 100,
     activeToday: false,
     showBlurredPhotos: true,
@@ -257,11 +268,13 @@ export default function Discover() {
   };
 
   useEffect(() => {
-    loadCurrentProfile();
-    loadLikeCount();
+    if (user?.id) {
+      loadCurrentProfile();
+      loadLikeCount();
+    }
     // Request tracking permission on first app use
     initializeTracking();
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (currentProfileId) {
@@ -269,31 +282,29 @@ export default function Discover() {
     }
   }, [currentProfileId]);
 
-  // Initial load when profile ID is available
-  // NOTE: Do NOT include filters in dependency - filter changes are handled explicitly
-  // by the code that changes them (smart recommendations, filter modal, etc.)
+  // Load profiles when currentProfileId is set (triggered by loadCurrentProfile)
   useEffect(() => {
     if (currentProfileId) {
-      // Defer heavy profile loading until after animations complete
-      InteractionManager.runAfterInteractions(() => {
-        loadProfiles();
-      });
+      loadProfiles();
     }
   }, [currentProfileId]);
 
-  // Reload profiles every time the screen comes into focus
-  // This ensures fresh data when user returns from editing preferences or other screens
-  // NOTE: Do NOT include filters in dependency - filter changes are handled explicitly
+  // Reload profiles when screen regains focus (returning from other tabs/screens)
+  const isFirstFocusForReload = useRef(true);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
   useFocusEffect(
     useCallback(() => {
-      if (currentProfileId) {
-        console.log('🔄 Discovery screen focused - reloading profiles');
-        // Defer heavy profile loading until after animations complete
-        InteractionManager.runAfterInteractions(() => {
-          loadProfiles();
-        });
+      if (isFirstFocusForReload.current) {
+        isFirstFocusForReload.current = false;
+        return;
       }
-    }, [currentProfileId])
+      // Reload profile (and filters from DB) when returning from settings
+      loadCurrentProfile();
+      if (currentProfileIdRef.current) {
+        loadProfiles(undefined, undefined, filtersRef.current);
+      }
+    }, [])
   );
 
   // Hinge-style refresh: Show new profile when user returns to discovery screen
@@ -406,11 +417,15 @@ export default function Discover() {
   // Prefetch images for upcoming profiles as user swipes
   useEffect(() => {
     if (profiles.length > 0 && currentIndex < profiles.length) {
-      // Prefetch next 3 profiles ahead
+      // Prefetch only the primary/first photo of next 3 profiles (not all 6 per profile)
+      // to limit memory pressure from cached images
       const upcomingProfiles = profiles.slice(currentIndex, currentIndex + 3);
       const imagesToPrefetch = upcomingProfiles
-        .flatMap(p => p.photos?.map(photo => photo.url) || [])
-        .filter(Boolean);
+        .map(p => {
+          const photos = p.photos?.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+          return photos?.find(ph => ph.is_primary)?.url || photos?.[0]?.url;
+        })
+        .filter(Boolean) as string[];
 
       if (imagesToPrefetch.length > 0) {
         prefetchImages(imagesToPrefetch);
@@ -431,7 +446,51 @@ export default function Discover() {
 
   const [currentUserName, setCurrentUserName] = useState<string>('');
 
+  const persistFilters = async (newFilters: FilterOptions) => {
+    if (!currentProfileId) return;
+    try {
+      const discoveryFilters = {
+        religion: newFilters.religion,
+        politicalViews: newFilters.politicalViews,
+        ethnicity: newFilters.ethnicity,
+        sexualOrientation: newFilters.sexualOrientation,
+        heightMin: newFilters.heightMin,
+        heightMax: newFilters.heightMax,
+        zodiacSign: newFilters.zodiacSign,
+        personalityType: newFilters.personalityType,
+        loveLanguage: newFilters.loveLanguage,
+        languagesSpoken: newFilters.languagesSpoken,
+        activeToday: newFilters.activeToday,
+        showBlurredPhotos: newFilters.showBlurredPhotos,
+        smoking: newFilters.smoking,
+        drinking: newFilters.drinking,
+        pets: newFilters.pets,
+        housingPreference: newFilters.housingPreference,
+        financialArrangement: newFilters.financialArrangement,
+        primaryReason: newFilters.primaryReason,
+        relationshipType: newFilters.relationshipType,
+        wantsChildren: newFilters.wantsChildren,
+      };
+      await supabase
+        .from('preferences')
+        .update({
+          age_min: newFilters.ageMin,
+          age_max: newFilters.ageMax,
+          max_distance_miles: newFilters.maxDistance,
+          gender_preference: newFilters.genderPreference,
+          discovery_filters: discoveryFilters,
+        })
+        .eq('profile_id', currentProfileId);
+    } catch (err) {
+      console.error('Failed to persist filters:', err);
+    }
+  };
+
   const loadCurrentProfile = async () => {
+    if (!user?.id) {
+      console.log('⏳ Waiting for auth - user not available yet');
+      return;
+    }
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -451,7 +510,7 @@ export default function Discover() {
           ),
           preferences:preferences(*)
         `)
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .single();
 
       if (error) throw error;
@@ -468,36 +527,38 @@ export default function Discover() {
       // Initialize filters from user's database preferences
       // Note: Supabase returns preferences as array even for single relationship
       const userPreferences = Array.isArray(data.preferences) ? data.preferences[0] : data.preferences;
+      const df = userPreferences?.discovery_filters || {};
       const initialFilters: FilterOptions = userPreferences ? {
         // Free filters
-        ageMin: userPreferences.age_min || 22,
-        ageMax: userPreferences.age_max || 50,
+        ageMin: userPreferences.age_min || 18,
+        ageMax: userPreferences.age_max || 65,
         maxDistance: userPreferences.max_distance_miles || 100,
-        activeToday: false,
-        showBlurredPhotos: true,
-        // Premium filters
-        religion: [],
-        politicalViews: [],
-        housingPreference: [],
-        financialArrangement: [],
-        genderPreference: [],
-        ethnicity: [],
-        sexualOrientation: [],
-        heightMin: 48,
-        heightMax: 84,
-        zodiacSign: [],
-        personalityType: [],
-        loveLanguage: [],
-        languagesSpoken: [],
-        smoking: [],
-        drinking: [],
-        pets: [],
-        primaryReason: [],
-        relationshipType: [],
-        // Load children preference from matching preferences if set
-        wantsChildren: userPreferences.wants_children === true ? 'yes'
-          : userPreferences.wants_children === false ? 'no'
-          : null,
+        activeToday: df.activeToday || false,
+        showBlurredPhotos: df.showBlurredPhotos !== undefined ? df.showBlurredPhotos : true,
+        // Gender preference is a true discovery filter (who you want to see)
+        genderPreference: userPreferences.gender_preference || [],
+        // All other premium filters: only load from discovery_filters JSONB
+        // Do NOT load from the user's own preferences columns (housing_preference,
+        // relationship_type, etc.) — those are the user's OWN prefs, not filters
+        // for other profiles.
+        housingPreference: df.housingPreference || [],
+        financialArrangement: df.financialArrangement || [],
+        smoking: df.smoking || [],
+        drinking: df.drinking || [],
+        pets: df.pets || [],
+        relationshipType: df.relationshipType || [],
+        primaryReason: df.primaryReason || [],
+        religion: df.religion || [],
+        politicalViews: df.politicalViews || [],
+        ethnicity: df.ethnicity || [],
+        sexualOrientation: df.sexualOrientation || [],
+        heightMin: df.heightMin || 48,
+        heightMax: df.heightMax || 84,
+        zodiacSign: df.zodiacSign || [],
+        personalityType: df.personalityType || [],
+        loveLanguage: df.loveLanguage || [],
+        languagesSpoken: df.languagesSpoken || [],
+        wantsChildren: df.wantsChildren || null,
       } : filters;
 
       // Load distance unit preference (default to 'miles' for backward compatibility)
@@ -548,12 +609,12 @@ export default function Discover() {
         checkPopularityInsights(profileId);
       }
 
-      // Immediately start loading profiles to reduce perceived lag
-      // Don't wait for next render cycle
-      setLoading(false); // Remove initial loading state immediately
+      // Profiles will be loaded by the useEffect([currentProfileId]) hook
+      // which fires when setCurrentProfileId is called above
     } catch (error: any) {
-      Alert.alert(t('common.error'), 'Failed to load your profile');
-      setLoading(false);
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
+      // Don't set loading=false here - keep showing loading screen until loadProfiles completes
+      // The user can pull to refresh or the next focus event will retry
     }
   };
 
@@ -786,11 +847,13 @@ export default function Discover() {
     const effectiveSearchMode = searchModeOverride !== undefined ? searchModeOverride : isSearchMode;
     const effectiveSearchKeyword = searchKeywordOverride !== undefined ? searchKeywordOverride : searchKeyword;
     const effectiveFilters = filtersOverride ? { ...filters, ...filtersOverride } : filters;
+    // Use ref for profile ID to avoid stale closure issues
+    const profileId = currentProfileIdRef.current;
 
     try {
       setLoading(true);
 
-      if (!currentProfileId) {
+      if (!profileId) {
         return;
       }
 
@@ -815,32 +878,32 @@ export default function Discover() {
         supabase
           .from('likes')
           .select('liked_profile_id')
-          .eq('liker_profile_id', currentProfileId),
+          .eq('liker_profile_id', profileId),
         // Get people you already PASSED (we'll exclude these)
         supabase
           .from('passes')
           .select('passed_profile_id')
-          .eq('passer_profile_id', currentProfileId),
+          .eq('passer_profile_id', profileId),
         // Get people who LIKED YOU (we'll PRIORITIZE these, not exclude!)
         supabase
           .from('likes')
           .select('liker_profile_id')
-          .eq('liked_profile_id', currentProfileId),
+          .eq('liked_profile_id', profileId),
         // SAFETY: Users that current user has blocked
         supabase
           .from('blocks')
           .select('blocked_profile_id')
-          .eq('blocker_profile_id', currentProfileId),
+          .eq('blocker_profile_id', profileId),
         // SAFETY: Users who have blocked current user
         supabase
           .from('blocks')
           .select('blocker_profile_id')
-          .eq('blocked_profile_id', currentProfileId),
+          .eq('blocked_profile_id', profileId),
         // Contact-blocked phone numbers (hashed)
         supabase
           .from('contact_blocks')
           .select('phone_number')
-          .eq('profile_id', currentProfileId),
+          .eq('profile_id', profileId),
         // CRITICAL SAFETY: Get ALL banned users (active bans that haven't expired)
         supabase
           .from('bans')
@@ -854,7 +917,7 @@ export default function Discover() {
             *,
             preferences:preferences(*)
           `)
-          .eq('id', currentProfileId)
+          .eq('id', profileId)
           .single(),
         // Boosted profiles (for prioritization in results)
         supabase
@@ -921,10 +984,10 @@ export default function Discover() {
           p_user_lat: currentUserData.latitude,
           p_user_lon: currentUserData.longitude,
           p_max_distance_miles: effectiveFilters.maxDistance,
-          p_user_profile_id: currentProfileId,
+          p_user_profile_id: profileId,
           p_min_age: Math.max(18, effectiveFilters.ageMin),
           p_max_age: effectiveFilters.ageMax,
-          p_gender_prefs: currentUserData.preferences?.gender_preference || [],
+          p_gender_prefs: effectiveFilters.genderPreference?.length > 0 ? effectiveFilters.genderPreference : (currentUserData.preferences?.gender_preference || []),
           p_result_limit: 50  // FIX #3: Reduced from 500 to 50 for better performance
         });
 
@@ -984,7 +1047,7 @@ export default function Discover() {
             ),
             preferences:preferences(*)
           `)
-          .neq('id', currentProfileId)
+          .neq('id', profileId)
           .eq('is_active', true) // CRITICAL: Filter out banned/deactivated users
           .or('policy_restricted.is.null,policy_restricted.eq.false') // Filter policy restricted users
           .eq('incognito_mode', false)
@@ -1088,7 +1151,7 @@ export default function Discover() {
           // Call server-side function that has access to auth.users.phone
           const { data: contactBlockedProfileIds, error: rpcError } = await supabase
             .rpc('get_contact_blocked_profile_ids', {
-              requesting_profile_id: currentProfileId
+              requesting_profile_id: profileId
             });
 
           if (rpcError) {
@@ -1140,7 +1203,7 @@ export default function Discover() {
       const { data: viewerBlockedCountries } = await supabase
         .from('country_blocks')
         .select('country_code, country_name')
-        .eq('profile_id', currentProfileId);
+        .eq('profile_id', profileId);
 
       if (viewerBlockedCountries && viewerBlockedCountries.length > 0) {
         // Create sets for both country codes AND country names for flexible matching
@@ -1170,8 +1233,21 @@ export default function Discover() {
       }
 
       // ANR FIX: Transform profiles first with default scores, calculate compatibility after UI renders
+
+      // Log active filter state for debugging
+      console.log('🔍 ACTIVE FILTERS:', JSON.stringify({
+        ageMin: effectiveFilters.ageMin, ageMax: effectiveFilters.ageMax,
+        maxDistance: effectiveFilters.maxDistance,
+        genderPref: effectiveFilters.genderPreference,
+        activeToday: effectiveFilters.activeToday || filters.activeToday,
+        showBlurredPhotos: filters.showBlurredPhotos,
+        religion: filters.religion, politicalViews: filters.politicalViews,
+        selectedIntention, isSearchMode: effectiveSearchMode,
+      }));
+
       const transformedProfiles: Profile[] = filteredData
         .map((profile: any) => {
+
           // Start with default compatibility score for fast initial render
           let compatibilityScore = 75;
           let compatibilityBreakdown = undefined;
@@ -1220,6 +1296,8 @@ export default function Discover() {
           };
         })
         .filter((profile: any) => {
+          try {
+
           // ====================================================================
           // SAFETY FILTERS (ALWAYS APPLIED - NO BYPASS)
           // ====================================================================
@@ -1232,6 +1310,7 @@ export default function Discover() {
 
           // 2. CRITICAL: Incognito mode double-check (privacy protection)
           if (profile.incognito_mode === true) {
+            console.log('🚫 FILTER: incognito_mode removed', profile.display_name);
             return false;
           }
 
@@ -1241,11 +1320,13 @@ export default function Discover() {
             ...(blockedMe?.map((b: any) => b.blocker_profile_id) || [])
           ];
           if (allBlockedIds.includes(profile.id)) {
+            console.log('🚫 FILTER: blocked removed', profile.display_name);
             return false;
           }
 
           // 4. CRITICAL: Photo requirement
           if (!profile.photos || profile.photos.length === 0) {
+            console.log('🚫 FILTER: no photos removed', profile.display_name);
             return false;
           }
 
@@ -1325,15 +1406,19 @@ export default function Discover() {
           // ONE-SIDED: Only check if profile fits current user's age preferences
           // Do NOT check if current user fits profile's age preferences (removed for small userbase)
           if (profile.age < effectiveFilters.ageMin || profile.age > effectiveFilters.ageMax) {
+            console.log('🚫 FILTER [age]:', profile.display_name, profile.age, 'range:', effectiveFilters.ageMin, '-', effectiveFilters.ageMax);
             return false;
           }
+
 
           // 1b. RELATIONSHIP TYPE / INTENTION FILTER (quick filter)
           if (selectedIntention && profile.preferences?.relationship_type) {
             if (profile.preferences.relationship_type !== selectedIntention) {
+              console.log('🚫 FILTER [intention]:', profile.display_name, profile.preferences.relationship_type, '!=', selectedIntention);
               return false;
             }
           }
+
 
           // 1c. ACTIVE TODAY FILTER (quick filter)
           if (activeToday && profile.last_active_at) {
@@ -1341,28 +1426,14 @@ export default function Discover() {
             const now = new Date();
             const hoursSinceActive = (now.getTime() - lastActive.getTime()) / (1000 * 60 * 60);
             if (hoursSinceActive > 24) {
+              console.log('🚫 FILTER [activeToday-quick]:', profile.display_name);
               return false;
             }
           }
 
-          // 2. ONE-SIDED GENDER PREFERENCE (current user's preference only)
-          // Only check if current user wants this profile's gender
-          // Do NOT check if profile wants current user's gender (removed for small userbase)
-          if (currentUserData.preferences?.gender_preference &&
-              currentUserData.preferences.gender_preference.length > 0) {
-            // Convert to array if string (handles legacy data)
-            const userGenderPrefArray = Array.isArray(currentUserData.preferences.gender_preference)
-              ? currentUserData.preferences.gender_preference
-              : currentUserData.preferences.gender_preference.split(',').map((g: string) => g.trim());
 
-            const profileGenderArray = Array.isArray(profile.gender) ? profile.gender : [profile.gender];
-            const userWantsThisGender = profileGenderArray.some((g: string) =>
-              userGenderPrefArray.includes(g)
-            );
-            if (!userWantsThisGender) {
-              return false;
-            }
-          }
+          // 2. GENDER PREFERENCE - handled by RPC (p_gender_prefs), no client-side duplicate needed
+
 
           // 3. SEXUAL ORIENTATION COMPATIBILITY - DISABLED FOR LAVENDER MARRIAGE APP
           // Note: Lavender marriages are specifically for LGBTQ+ individuals seeking marriages of
@@ -1429,9 +1500,11 @@ export default function Discover() {
             }
 
             if (realTimeDistance !== null && realTimeDistance > effectiveFilters.maxDistance) {
+              console.log('🚫 FILTER: distance removed', profile.display_name, realTimeDistance, '>', effectiveFilters.maxDistance);
               return false;
             }
           }
+
 
           // 5. CHILDREN COMPATIBILITY - REMOVED AS BLOCKING FILTER
           // Note: Children preferences are important for compatibility scoring, but should NOT
@@ -1468,18 +1541,21 @@ export default function Discover() {
             if (lastActiveAt) {
               const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
               if (lastActiveAt < twentyFourHoursAgo) {
+                console.log('🚫 FILTER [activeToday]:', profile.display_name);
                 return false;
               }
             } else {
-              // No last_active_at means we can't verify, skip if filter is on
+              console.log('🚫 FILTER [activeToday-noDate]:', profile.display_name);
               return false;
             }
           }
 
           // Show Blurred Photos filter - hide profiles with photo blur if disabled
           if (!filters.showBlurredPhotos && profile.photo_blur_enabled) {
+            console.log('🚫 FILTER [blurredPhotos]:', profile.display_name);
             return false;
           }
+
 
           // ====================================================================
           // PREFERENCE FILTERS (Applied to all users, not just premium)
@@ -1488,6 +1564,7 @@ export default function Discover() {
           // Religion filter
           if (filters.religion.length > 0 && profile.religion) {
             if (!filters.religion.includes(profile.religion)) {
+              console.log('🚫 FILTER [religion]:', profile.display_name, profile.religion, 'not in', filters.religion);
               return false;
             }
           }
@@ -1495,6 +1572,7 @@ export default function Discover() {
           // Political views filter
           if (filters.politicalViews.length > 0 && profile.political_views) {
             if (!filters.politicalViews.includes(profile.political_views)) {
+              console.log('🚫 FILTER [politicalViews]:', profile.display_name);
               return false;
             }
           }
@@ -1508,6 +1586,7 @@ export default function Discover() {
 
             const hasMatch = profileHousing.some((h: string) => filters.housingPreference.includes(h));
             if (!hasMatch) {
+              console.log('🚫 FILTER [housing]:', profile.display_name);
               return false;
             }
           }
@@ -1521,6 +1600,7 @@ export default function Discover() {
 
             const hasMatch = profileFinancial.some((f: string) => filters.financialArrangement.includes(f));
             if (!hasMatch) {
+              console.log('🚫 FILTER [financial]:', profile.display_name);
               return false;
             }
           }
@@ -1529,23 +1609,25 @@ export default function Discover() {
           // PREMIUM FILTERS - Identity & Background
           // ====================================================================
 
-          // Gender preference filter
-          if (isPremium && filters.genderPreference.length > 0 && profile.gender) {
-            if (!filters.genderPreference.includes(profile.gender)) {
-              return false;
-            }
-          }
+          // Gender preference filter - handled by RPC (p_gender_prefs), no client-side duplicate needed
+          // Note: profile.gender can be an array, which caused .includes() to fail with strict equality
 
-          // Ethnicity filter
+          // Ethnicity filter (profile.ethnicity is text[] in DB)
           if (isPremium && filters.ethnicity.length > 0 && profile.ethnicity) {
-            if (!filters.ethnicity.includes(profile.ethnicity)) {
+            const profileEthnicities = Array.isArray(profile.ethnicity) ? profile.ethnicity : [profile.ethnicity];
+            const ethnicityMatch = profileEthnicities.some((e: string) => filters.ethnicity.includes(e));
+            if (!ethnicityMatch) {
+              console.log('🚫 FILTER [ethnicity]:', profile.display_name);
               return false;
             }
           }
 
-          // Sexual orientation filter
+          // Sexual orientation filter (profile.sexual_orientation is text[] in DB)
           if (isPremium && filters.sexualOrientation.length > 0 && profile.sexual_orientation) {
-            if (!filters.sexualOrientation.includes(profile.sexual_orientation)) {
+            const profileOrientations = Array.isArray(profile.sexual_orientation) ? profile.sexual_orientation : [profile.sexual_orientation];
+            const orientationMatch = profileOrientations.some((o: string) => filters.sexualOrientation.includes(o));
+            if (!orientationMatch) {
+              console.log('🚫 FILTER [orientation]:', profile.display_name);
               return false;
             }
           }
@@ -1575,9 +1657,11 @@ export default function Discover() {
             }
           }
 
-          // Love language filter
+          // Love language filter (profile.love_language is text[] in DB)
           if (isPremium && filters.loveLanguage.length > 0 && profile.love_language) {
-            if (!filters.loveLanguage.includes(profile.love_language)) {
+            const profileLoveLanguages = Array.isArray(profile.love_language) ? profile.love_language : [profile.love_language];
+            const loveLanguageMatch = profileLoveLanguages.some((l: string) => filters.loveLanguage.includes(l));
+            if (!loveLanguageMatch) {
               return false;
             }
           }
@@ -1638,6 +1722,7 @@ export default function Discover() {
 
           // Wants children filter - available to ALL users (not just premium)
           // This is a fundamental life compatibility factor that shouldn't be paywalled
+
           if (filters.wantsChildren !== null && profile.preferences?.wants_children !== undefined) {
             const wantsChildrenMap: { [key: string]: boolean | null } = {
               'yes': true,
@@ -1652,8 +1737,15 @@ export default function Discover() {
           }
 
           // All filters passed
+          console.log('✅ FILTER: passed all filters', profile.display_name);
           return true;
+          } catch (filterErr) {
+            console.error('❌ FILTER ERROR:', profile?.display_name, filterErr);
+            return false;
+          }
         });
+
+      console.log(`📊 FILTER RESULTS: ${filteredData.length} pre-filter → ${transformedProfiles.length} post-filter (${filteredData.length - transformedProfiles.length} removed by client filters)`);
 
       // Sort profiles with ORGANIC mixing of people who liked you (Hinge-style)
       // Instead of putting all "liked you" profiles at top (too obvious),
@@ -1703,6 +1795,7 @@ export default function Discover() {
 
       setProfiles(sortedProfiles);
       setCurrentIndex(0);
+      hasInitiallyLoaded.current = true;
 
       // ANR FIX: Calculate compatibility scores after animations complete
       // InteractionManager.runAfterInteractions waits for all animations/transitions to finish
@@ -1724,14 +1817,14 @@ export default function Discover() {
               try {
                 if (profile.preferences) {
                   const compatibilityScore = calculateCompatibilityScore(
-                    currentUserData,
-                    profile,
+                    currentUserData as any,
+                    profile as any,
                     currentUserData.preferences,
                     profile.preferences
                   );
                   const compatibilityBreakdown = getCompatibilityBreakdown(
-                    currentUserData,
-                    profile,
+                    currentUserData as any,
+                    profile as any,
                     currentUserData.preferences,
                     profile.preferences
                   );
@@ -1767,7 +1860,7 @@ export default function Discover() {
       }
     } catch (error: any) {
       console.error('❌ Error loading profiles:', error);
-      Alert.alert(t('common.error'), error.message || 'Failed to load profiles');
+      showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profilesLoadError') });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1897,10 +1990,7 @@ export default function Discover() {
 
           if (existingMatch?.status === 'active') {
             // Already matched and active
-            Alert.alert(
-              'Already Matched!',
-              `You're already matched with ${targetProfile.display_name}. Check your matches tab!`
-            );
+            showToast({ type: 'info', title: t('common.success'), message: t('toast.alreadyMatched', { name: targetProfile.display_name }) });
             const newIndex = currentIndex + 1;
             setCurrentIndex(newIndex);
             return true;
@@ -1967,10 +2057,7 @@ export default function Discover() {
           }
         } else {
           // No mutual like yet - just show info
-          Alert.alert(
-            'Already Liked',
-            `You've already liked ${targetProfile.display_name}. You'll match if they like you back!`
-          );
+          showToast({ type: 'info', title: t('common.success'), message: t('toast.alreadyLiked', { name: targetProfile.display_name }) });
         }
 
         const newIndex = currentIndex + 1;
@@ -2248,19 +2335,20 @@ export default function Discover() {
       });
 
       // Show obsessed alert with counter
-      Alert.alert(
-        '💜 Obsessed!',
-        isPremium
-          ? `${targetProfile.display_name} will be notified that you're obsessed!\n\n${remaining} super likes remaining this week.`
-          : `${targetProfile.display_name} will be notified that you're obsessed!`
-      );
+      showToast({
+        type: 'success',
+        title: t('toast.obsessedTitle'),
+        message: isPremium
+          ? t('toast.obsessedWithRemaining', { name: targetProfile.display_name, remaining })
+          : t('toast.obsessedBasic', { name: targetProfile.display_name })
+      });
 
       // Move to next card
       setCurrentIndex(prev => prev + 1);
       return true;
     } catch (error: any) {
       console.error('Error recording super like:', error);
-      Alert.alert(t('common.error'), 'Failed to send super like. Please try again.');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.superLikeError') });
       return false;
     }
   }, [currentProfileId, currentIndex, profiles, isPremium, isProfileComplete]);
@@ -2287,7 +2375,7 @@ export default function Discover() {
 
     // Check if there's a last swipe to undo
     if (!lastSwipe) {
-      Alert.alert('No Recent Swipes', 'There are no recent swipes to undo.');
+      showToast({ type: 'info', title: t('toast.noRecentSwipes'), message: t('toast.noRecentSwipes') });
       return;
     }
 
@@ -2358,10 +2446,10 @@ export default function Discover() {
       // Clear last swipe
       setLastSwipe(null);
 
-      Alert.alert('✨ Rewound!', 'Your last swipe has been undone.');
+      showToast({ type: 'success', title: t('toast.swipeUndone'), message: t('toast.swipeUndone') });
     } catch (error: any) {
       console.error('❌ Error rewinding:', error);
-      Alert.alert(t('common.error'), 'Failed to undo swipe. Please try again.');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.undoSwipeError') });
     }
   }, [lastSwipe, currentProfileId, isPremium, likeCount]);
 
@@ -2444,9 +2532,9 @@ export default function Discover() {
     }
   }, [currentProfileId, filters]);
 
-  // Calculate smart recommendations when empty state is shown
+  // Calculate smart recommendations when empty state is shown (only after first load)
   useEffect(() => {
-    if (currentIndex >= profiles.length && currentProfileId && !loading && !isSearchMode) {
+    if (hasInitiallyLoaded.current && currentIndex >= profiles.length && currentProfileId && !loading && !isSearchMode) {
       calculateSmartRecommendations();
     }
   }, [currentIndex, profiles.length, currentProfileId, loading, isSearchMode, calculateSmartRecommendations]);
@@ -2572,10 +2660,10 @@ export default function Discover() {
               // Move to next profile
               setCurrentIndex((prev) => prev + 1);
 
-              Alert.alert('Blocked', `You have blocked ${currentProfile.display_name}`);
+              showToast({ type: 'success', title: t('toast.blockSuccess'), message: t('toast.blockSuccess') });
             } catch (error: any) {
               console.error('Error blocking user:', error);
-              Alert.alert(t('common.error'), 'Failed to block user. Please try again.');
+              showToast({ type: 'error', title: t('common.error'), message: t('toast.blockError') });
             }
           },
         },
@@ -2746,8 +2834,8 @@ export default function Discover() {
     );
   }
 
-  // Empty state - no more profiles
-  if (currentIndex >= profiles.length) {
+  // Empty state - no more profiles (only show after first load completes)
+  if (hasInitiallyLoaded.current && currentIndex >= profiles.length) {
     return (
       <View className="flex-1 bg-background">
         {/* Header with Search/Filter Controls */}
@@ -3069,7 +3157,7 @@ export default function Discover() {
 
                           if (fetchError) {
                             console.error('[Discovery] Error fetching preferences:', fetchError);
-                            Alert.alert(t('common.error'), 'Failed to update filter. Please try again.');
+                            showToast({ type: 'error', title: t('common.error'), message: t('toast.filterError') });
                             return;
                           }
 
@@ -3092,7 +3180,7 @@ export default function Discover() {
 
                           if (updateError) {
                             console.error('[Discovery] Error updating gender preference:', updateError);
-                            Alert.alert(t('common.error'), 'Failed to update filter. Please try again.');
+                            showToast({ type: 'error', title: t('common.error'), message: t('toast.filterError') });
                             return;
                           }
 
@@ -3119,7 +3207,7 @@ export default function Discover() {
 
                           if (error) {
                             console.error('[Discovery] Error enabling global search:', error);
-                            Alert.alert(t('common.error'), 'Failed to enable global search. Please try again.');
+                            showToast({ type: 'error', title: t('common.error'), message: t('toast.globalSearchError') });
                             return;
                           }
 
@@ -3135,7 +3223,7 @@ export default function Discover() {
                         }
                       } catch (error) {
                         console.error('[Discovery] Unexpected error in handlePress:', error);
-                        Alert.alert(t('common.error'), 'Something went wrong. Please try again.');
+                        showToast({ type: 'error', title: t('common.error'), message: t('toast.genericError') });
                       }
                     };
 
@@ -3257,6 +3345,7 @@ export default function Discover() {
           onApply={(newFilters) => {
             setFilters(newFilters);
             setShowFilterModal(false);
+            persistFilters(newFilters);
             handleRefresh();
           }}
           currentFilters={filters}
@@ -3555,6 +3644,14 @@ export default function Discover() {
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
         </TouchableOpacity>
+      )}
+
+      {/* Likes You Teaser - Show for free users with pending likes */}
+      {!isPremium && !isPlatinum && popularityData.newLikesCount > 0 && (
+        <LikesYouTeaser
+          likesCount={popularityData.newLikesCount}
+          onPress={() => setShowPaywall(true)}
+        />
       )}
 
       {/* Hinge-Style Scrollable Profile View */}

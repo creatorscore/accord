@@ -14,6 +14,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { openAppSettings } from '@/lib/open-settings';
 import { searchCities, CityResult } from '@/lib/city-search';
+import { useToast } from '@/contexts/ToastContext';
 
 const GENDERS = [
   'Man',
@@ -143,6 +144,7 @@ export default function BasicInfo() {
   const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [displayName, setDisplayName] = useState('');
   const [birthDate, setBirthDate] = useState<Date | undefined>(undefined);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -174,7 +176,7 @@ export default function BasicInfo() {
   const checkAuth = async () => {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) {
-      Alert.alert(t('onboarding.errors.notAuthenticated'), t('onboarding.errors.pleaseSignIn'));
+      showToast({ type: 'error', title: t('onboarding.errors.notAuthenticated'), message: t('onboarding.errors.pleaseSignIn') });
       router.replace('/(auth)/welcome');
     }
   };
@@ -269,10 +271,7 @@ export default function BasicInfo() {
 
       if (status !== 'granted') {
         if (canAskAgain) {
-          Alert.alert(
-            t('onboarding.errors.permissionDenied'),
-            t('onboarding.errors.needLocationAccess')
-          );
+          showToast({ type: 'error', title: t('onboarding.errors.permissionDenied'), message: t('onboarding.errors.needLocationAccess') });
         } else {
           Alert.alert(
             t('onboarding.errors.permissionRequired'),
@@ -381,13 +380,7 @@ export default function BasicInfo() {
       // For iOS: Check if user has "Approximate Location" enabled (accuracy > 100m)
       // For Android in restricted regions: Accept lower accuracy (up to 1000m)
       if (Platform.OS === 'ios' && location.coords.accuracy !== null && location.coords.accuracy > 100) {
-        Alert.alert(
-          'Precise Location Required',
-          `Location accuracy is too low (${Math.round(location.coords?.accuracy || 0)} meters). Please enable "Precise Location" for Accord in your iPhone Settings:\n\n1. Open Settings\n2. Scroll to Accord\n3. Tap Location\n4. Enable "Precise Location"\n\nOr use the search feature to find your city instead.`,
-          [
-            { text: 'OK', style: 'cancel' }
-          ]
-        );
+        showToast({ type: 'error', title: t('common.error'), message: t('toast.locationErrorPrecise') });
         // DO NOT store inaccurate coordinates on iOS - return early
         return;
       }
@@ -480,11 +473,7 @@ export default function BasicInfo() {
         errorMessage += 'Please check your location settings or manually search for your city below.';
       }
 
-      Alert.alert(
-        'Location Error',
-        errorMessage,
-        [{ text: 'OK' }]
-      );
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.locationErrorGeneric') });
     } finally {
       setGettingLocation(false);
     }
@@ -556,71 +545,63 @@ export default function BasicInfo() {
   const handleContinue = async () => {
     // Validation
     if (!displayName.trim()) {
-      Alert.alert(t('onboarding.errors.required'), t('onboarding.errors.enterName'));
+      showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.errors.enterName') });
       return;
     }
 
     // Check for profanity in display name
     const nameModeration = validateDisplayName(displayName);
     if (!nameModeration.isClean) {
-      Alert.alert(t('onboarding.errors.inappropriateContent'), getModerationErrorMessage('display name'));
+      showToast({ type: 'error', title: t('onboarding.errors.inappropriateContent'), message: getModerationErrorMessage('display name') });
       return;
     }
 
     if (!birthDate) {
-      Alert.alert(t('onboarding.errors.required'), t('onboarding.errors.selectBirthDate'));
+      showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.errors.selectBirthDate') });
       return;
     }
 
     const birthDateObj = new Date(birthDate as Date);
     const age = calculateAge(birthDateObj);
     if (age < 18) {
-      Alert.alert(t('onboarding.errors.ageRequirement'), t('onboarding.errors.mustBe18'));
+      showToast({ type: 'error', title: t('onboarding.errors.ageRequirement'), message: t('onboarding.errors.mustBe18') });
       return;
     }
 
     if (age > 100) {
-      Alert.alert(t('onboarding.errors.invalidBirthDate'), t('onboarding.errors.enterValidBirthDate'));
+      showToast({ type: 'error', title: t('onboarding.errors.invalidBirthDate'), message: t('onboarding.errors.enterValidBirthDate') });
       return;
     }
 
     if (!ageCertified) {
-      Alert.alert(t('onboarding.errors.ageCertRequired'), t('onboarding.errors.confirmAge18'));
+      showToast({ type: 'error', title: t('onboarding.errors.ageCertRequired'), message: t('onboarding.errors.confirmAge18') });
       return;
     }
 
     if (!gender) {
-      Alert.alert(t('onboarding.errors.required'), t('onboarding.errors.selectGender'));
+      showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.errors.selectGender') });
       return;
     }
 
     if (!pronouns) {
-      Alert.alert(t('onboarding.errors.required'), t('onboarding.errors.selectPronouns'));
+      showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.errors.selectPronouns') });
       return;
     }
 
     if (orientation.length === 0) {
-      Alert.alert(t('onboarding.errors.required'), t('onboarding.errors.selectOrientation'));
+      showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.errors.selectOrientation') });
       return;
     }
 
     // Location validation: GPS is ALWAYS required for matching
     // Even if user hides exact location, we need it for distance-based filtering
     if (!locationCoords) {
-      Alert.alert(
-        t('onboarding.errors.locationRequired'),
-        t('onboarding.errors.useLocationButton'),
-        [{ text: t('common.ok'), style: 'default' }]
-      );
+      showToast({ type: 'error', title: t('onboarding.errors.locationRequired'), message: t('onboarding.errors.useLocationButton') });
       return;
     }
 
     if (!locationCity || !locationState) {
-      Alert.alert(
-        t('onboarding.errors.locationError'),
-        t('onboarding.errors.couldNotDetermineCity'),
-        [{ text: t('common.ok'), style: 'default' }]
-      );
+      showToast({ type: 'error', title: t('onboarding.errors.locationError'), message: t('onboarding.errors.couldNotDetermineCity') });
       return;
     }
 
@@ -702,7 +683,7 @@ export default function BasicInfo() {
 
       router.push('/(onboarding)/photos');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save profile');
+      showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profileSaveError') });
     } finally {
       setLoading(false);
     }

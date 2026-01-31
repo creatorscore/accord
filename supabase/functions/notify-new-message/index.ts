@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0';
+import { t } from '../_shared/translations.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,10 +36,10 @@ serve(async (req) => {
 
     console.log(`[Message Notification] Processing message from ${sender_profile_id} to ${receiver_profile_id}`);
 
-    // Get receiver's profile
+    // Get receiver's profile (including preferred_language for localization)
     const { data: receiver, error: receiverError } = await supabaseAdmin
       .from('profiles')
-      .select('push_token, push_enabled, last_active_at')
+      .select('push_token, push_enabled, last_active_at, preferred_language')
       .eq('id', receiver_profile_id)
       .single();
 
@@ -73,25 +74,26 @@ serve(async (req) => {
       .single();
 
     const senderName = sender?.display_name || 'Someone';
+    const lang = receiver.preferred_language || 'en';
 
-    // Determine preview based on content type
-    let preview: string;
+    // Determine preview based on content type (localized)
+    let bodyKey: string;
     switch (content_type) {
       case 'image':
-        preview = 'Sent you a photo';
+        bodyKey = 'message.bodyPhoto';
         break;
       case 'voice':
-        preview = 'Sent you a voice message';
+        bodyKey = 'message.bodyVoice';
         break;
       case 'video':
-        preview = 'Sent you a video';
+        bodyKey = 'message.bodyVideo';
         break;
       default:
-        preview = 'Sent you a message';
+        bodyKey = 'message.bodyText';
     }
 
-    const title = `New message from ${senderName}`;
-    const body = preview;
+    const title = t(lang, 'message.title', { name: senderName });
+    const body = t(lang, bodyKey);
 
     // Get all device tokens for this user
     const { data: deviceTokens } = await supabaseAdmin

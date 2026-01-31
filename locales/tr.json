@@ -811,6 +811,69 @@
       "purchaseFailedMessage": "Satın alma tamamlanamadı. Lütfen tekrar deneyin veya sorun devam ederse destekle iletişime geçin."
     }
   },
+  "pushNotifications": {
+    "match": {
+      "title": "Eslesme Var! 💜",
+      "body": "{{name}} ile eslestin! Simdi sohbet etmeye basla."
+    },
+    "message": {
+      "title": "{{name}} yeni mesaj gonderdi",
+      "bodyText": "Sana bir mesaj gonderdi",
+      "bodyPhoto": "Sana bir fotograf gonderdi",
+      "bodyVoice": "Sana bir sesli mesaj gonderdi",
+      "bodyVideo": "Sana bir video gonderdi"
+    },
+    "like": {
+      "premiumTitle": "{{name}} seni begendi! 💜",
+      "premiumBody": "Seni kimin begendigini gor ve aninda esles.",
+      "premiumSuperTitle": "{{name}} seni super begendi! ⭐",
+      "premiumSuperBody": "Seninle gercekten baglanti kurmak istiyorlar!",
+      "freeTitle": "Biri seni begendi! 💜",
+      "freeBody": "Premium'a yukselt ve seni kimin begendigini gor.",
+      "freeSuperTitle": "Biri seni super begendi! ⭐",
+      "freeSuperBody": "Premium'a yukselt ve seninle eslesmek isteyeni gor."
+    },
+    "trialExpiration": {
+      "threeDaysTitle": "Ucretsiz denemen 3 gun icinde bitiyor",
+      "threeDaysBody": "Premium ozelliklere erisimi kaybetme! Simdi abone ol.",
+      "oneDayTitle": "Ucretsiz denemen yarin bitiyor!",
+      "oneDayBody": "Abone olmak icin son sans. Simdi yukselt.",
+      "todayTitle": "Ucretsiz denemen bugun bitiyor!",
+      "todayBody": "Premium erisimin bu gece sona eriyor. Simdi abone ol."
+    },
+    "trialEngagement": {
+      "day1Title": "Premium Denemen Aktif!",
+      "day1Body": "Sinirsiz begenileri ac, seni kimin begendigini gor, Super Begeni gonder ve daha fazlasi!",
+      "day3TitleWithLikes": "{{count}} {{person}} seni begendi!",
+      "day3TitleNoLikes": "Fark ediliyorsun!",
+      "day3BodyWithLikes": "Kim olduklarini gormek icin dokun - bu koruyabilecegin bir Premium ozellik!",
+      "day3BodyNoLikes": "One cikmak icin Premium ozelliklerini kullanmaya devam et.",
+      "day5Title": "Deneme suresinde sadece 2 gun kaldi!",
+      "day5BodyWithStats": "{{highlights}}. Bu ozelliklere erisimi kaybetme!",
+      "day5BodyNoStats": "Premium ozellikleri kesfettin. Simdi abone ol!",
+      "day6Title": "Yarin son gun!",
+      "day6Body": "Denemen bitmeden yillik planda %33 tasarruf et. Baglantilarin seni bekliyor!"
+    },
+    "swipesRefreshed": {
+      "title": "Kaydirmalar geri dondu! 🎉",
+      "body": "Mukemmel eslesmeni bulmak icin 15 yeni kaydirman var. Simdi kaydirmaya basla!"
+    },
+    "reviews": {
+      "readyTitle": "Degerlendirme Zamani! ⭐",
+      "readyBody": "{{name}} ile deneyimini paylas.",
+      "reminderTitle": "Degerlendirme Icin Son Sans! ⏰",
+      "reminderBody": "{{name}} icin degerlendirme suren yakinda bitiyor."
+    },
+    "stats": {
+      "person": "kisi",
+      "people": "kisi",
+      "seenLikes": "seni begenen {{count}} kisiyi gordun",
+      "sentSuperLikes": "{{count}} Super Begeni gonderdin",
+      "sentSuperLikesPlural": "{{count}} Super Begeni gonderdin",
+      "madeMatch": "{{count}} eslesme yaptin",
+      "madeMatchesPlural": "{{count}} eslesme yaptin"
+    }
+  },
   "whatsNew": {
     "title": "Yenilikler",
     "version": "Sürüm {{version}}",
@@ -871,5 +934,51 @@
         }
       }
     }
+  },
+  "toast": {
+    "photoLimitTitle": "Maximum Photos",
+    "photoLimitMessage": "You can upload up to 6 photos",
+    "photoAlreadyAdded": "This photo is already in your profile",
+    "photoProcessError": "Failed to process photo. Please try again.",
+    "morePhotosNeeded": "Please add at least 4 photos to continue",
+    "profileNotFound": "Profile not found. Please go back and try again.",
+    "uploadFailed": "Failed to upload. Please try again.",
+    "permissionDenied": "Permission Denied",
+    "needPhotoAccess": "We need permission to access your photos",
+    "invalidImage": "Invalid Image",
+    "micPermissionRequired": "Microphone access is needed to record",
+    "recordingFailed": "Failed to start recording",
+    "stopRecordingFailed": "Failed to stop recording",
+    "profileLoadError": "Failed to load your profile",
+    "profilesLoadError": "Failed to load profiles",
+    "superLikeError": "Failed to send super like. Please try again.",
+    "noRecentSwipes": "There are no recent swipes to undo.",
+    "swipeUndone": "Your last swipe has been undone.",
+    "undoSwipeError": "Failed to undo swipe. Please try again.",
+    "blockSuccess": "User has been blocked",
+    "blockError": "Failed to block user. Please try again.",
+    "filterError": "Failed to update filter. Please try again.",
+    "globalSearchError": "Failed to enable global search. Please try again.",
+    "genericError": "Something went wrong. Please try again.",
+    "photosBlurred": "Your photos are now blurred for this match",
+    "photosRevealed": "Your photos are now visible to {{name}}",
+    "photoRevealError": "Failed to update photo visibility. Please try again.",
+    "reportSubmitted": "Thank you for helping keep Accord safe",
+    "reportError": "Failed to submit report. Please try again.",
+    "reactionError": "Failed to add reaction",
+    "chatLoadError": "Failed to load chat. Please try again.",
+    "messagesLoadError": "Failed to load messages",
+    "voiceRecordError": "Failed to record voice message. Please try again.",
+    "locationErrorPrecise": "Precise location is required for accurate matching",
+    "locationErrorGeneric": "Could not determine your location",
+    "saveError": "Failed to save. Please try again.",
+    "selectPhotoError": "Failed to select photo. Please try again.",
+    "profileSaveError": "Failed to save profile",
+    "voiceUploadFailed": "Failed to save voice intro",
+    "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
+    "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
+    "obsessedTitle": "Obsessed!",
+    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
+    "obsessedBasic": "{{name}} will be notified that you're obsessed!"
   }
 }

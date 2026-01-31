@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  Image,
   TouchableOpacity,
   Dimensions,
   StyleSheet,
@@ -15,6 +14,7 @@ import {
   Pressable,
   InteractionManager,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -178,6 +178,8 @@ const PREFERENCE_LABELS: { [key: string]: string } = {
 
 // Helper to convert database values to display labels
 const formatLabel = (value: string) => {
+  if (!value) return '';
+
   // First try to get from mapping
   if (PREFERENCE_LABELS[value]) {
     return PREFERENCE_LABELS[value];
@@ -333,6 +335,10 @@ export default function ImmersiveProfileCard({
         await sound.playAsync();
         setIsVoicePlaying(true);
       } else {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+        });
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri: profile.voice_intro_url },
           { shouldPlay: true },
@@ -387,6 +393,7 @@ export default function ImmersiveProfileCard({
             <Image
               source={{ uri: heroPhoto }}
               style={styles.headerAvatar}
+              cachePolicy="memory-disk"
               blurRadius={blurRadius}
               onLoad={onImageLoad}
               onError={onImageError}
@@ -434,7 +441,9 @@ export default function ImmersiveProfileCard({
           <Image
             source={{ uri: heroPhoto }}
             style={styles.heroImage}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={200}
             blurRadius={blurRadius}
             onLoad={onImageLoad}
             onError={onImageError}
@@ -596,7 +605,9 @@ export default function ImmersiveProfileCard({
             <Image
               source={{ uri: photos[1].url }}
               style={styles.storyPhoto}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={200}
               blurRadius={blurRadius}
               onLoad={onImageLoad}
               onError={onImageError}
@@ -669,7 +680,9 @@ export default function ImmersiveProfileCard({
                 <Image
                   source={{ uri: photos[2].url }}
                   style={styles.promptPhoto}
-                  resizeMode="cover"
+                  contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={200}
                   blurRadius={blurRadius}
               onLoad={onImageLoad}
               onError={onImageError}
@@ -750,7 +763,9 @@ export default function ImmersiveProfileCard({
             <Image
               source={{ uri: photos[3].url }}
               style={styles.storyPhoto}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={200}
               blurRadius={blurRadius}
               onLoad={onImageLoad}
               onError={onImageError}
@@ -909,7 +924,9 @@ export default function ImmersiveProfileCard({
                 <Image
                   source={{ uri: photos[4 + index].url }}
                   style={styles.promptPhoto}
-                  resizeMode="cover"
+                  contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={200}
                   blurRadius={blurRadius}
               onLoad={onImageLoad}
               onError={onImageError}
@@ -957,7 +974,9 @@ export default function ImmersiveProfileCard({
               key={index}
               source={{ uri: photo.url }}
               style={styles.storyPhoto}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={200}
               blurRadius={blurRadius}
               onLoad={onImageLoad}
               onError={onImageError}

@@ -14,6 +14,7 @@ import { formatHeight, HeightUnit } from '@/lib/height-utils';
 import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
+import { ProfileSkeleton } from '@/components/shared/SkeletonScreens';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -802,6 +803,8 @@ export default function ProfileView() {
   };
 
   const formatLabel = (value: string) => {
+    if (!value) return '';
+
     // First try to get from mapping
     if (PREFERENCE_LABELS[value]) {
       return PREFERENCE_LABELS[value];
@@ -850,11 +853,7 @@ export default function ProfileView() {
   };
 
   if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#A08AB7" />
-      </View>
-    );
+    return <ProfileSkeleton />;
   }
 
   if (!profile) {

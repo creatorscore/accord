@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0';
+import { t } from '../_shared/translations.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -34,10 +35,10 @@ serve(async (req) => {
 
     console.log(`[Match Notification] Processing match ${match_id} between ${profile1_id} and ${profile2_id}`);
 
-    // Get both profiles
+    // Get both profiles (including preferred_language for localization)
     const { data: profiles, error: profilesError } = await supabaseAdmin
       .from('profiles')
-      .select('id, display_name, push_token, push_enabled, last_active_at')
+      .select('id, display_name, push_token, push_enabled, last_active_at, preferred_language')
       .in('id', [profile1_id, profile2_id]);
 
     if (profilesError || !profiles || profiles.length !== 2) {
@@ -51,8 +52,9 @@ serve(async (req) => {
     const profile1 = profiles.find(p => p.id === profile1_id);
     const profile2 = profiles.find(p => p.id === profile2_id);
 
-    // Send notification to each user about their match
+    // Send notification to each user about their match (in their preferred language)
     const sendNotification = async (recipient: any, matcherName: string) => {
+      const lang = recipient?.preferred_language || 'en';
       if (!recipient?.push_enabled) {
         console.log(`[Match Notification] Skipping ${recipient?.id} - notifications disabled`);
         return { skipped: true, reason: 'disabled' };
@@ -90,8 +92,8 @@ serve(async (req) => {
         return { skipped: true, reason: 'no_tokens' };
       }
 
-      const title = "It's a Match! 💜";
-      const body = `You matched with ${matcherName}! Start chatting now.`;
+      const title = t(lang, 'match.title');
+      const body = t(lang, 'match.body', { name: matcherName });
 
       // Send to all devices
       const sendPromises = Array.from(tokens).map(async (token) => {

@@ -126,9 +126,17 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const rcPremium = hasPremium(info);
         const rcPlatinum = hasPlatinum(info);
 
-        // PERFORMANCE: Use isAdmin from shared ProfileDataContext instead of querying again
+        // Check admin status directly from database to avoid stale ProfileDataContext
+        // ProfileDataContext may not have loaded yet when RevenueCat finishes init
+        const { data: adminCheck } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        const isAdminUser = adminCheck?.is_admin || false;
+
         // Skip sync for admin accounts - they always keep their database premium status
-        if (isAdmin) {
+        if (isAdminUser) {
           console.log('👑 Skipping RevenueCat sync for admin account');
         }
         // If RevenueCat says no subscription but database says yes, fix it (non-admins only)

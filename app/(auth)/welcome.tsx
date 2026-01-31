@@ -1,9 +1,36 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useRef } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+
+function AnimatedButton({ onPress, style, children }: { onPress: () => void; style: any; children: React.ReactNode }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <Pressable
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onPress();
+        }}
+        onPressIn={() => {
+          Animated.spring(scaleAnim, { toValue: 0.95, useNativeDriver: true, speed: 50 }).start();
+        }}
+        onPressOut={() => {
+          Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }).start();
+        }}
+        style={style}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
 
 export default function Welcome() {
   const { t } = useTranslation();
@@ -20,7 +47,7 @@ export default function Welcome() {
 
       {/* Hero Section */}
       <View style={styles.heroSection}>
-        <Text style={styles.emoji}>💜</Text>
+        <MaterialCommunityIcons name="heart" size={56} color="#FFFFFF" style={styles.heroIcon} />
         <Text style={styles.title}>
           {t('auth.welcome.title')}
         </Text>
@@ -37,7 +64,7 @@ export default function Welcome() {
         <View style={styles.valuePropsRow}>
           <View style={styles.valueProp}>
             <View style={styles.iconContainer}>
-              <Text style={styles.propEmoji}>🛡️</Text>
+              <MaterialCommunityIcons name="shield-check-outline" size={24} color="#FFFFFF" />
             </View>
             <Text style={styles.propText}>
               {t('auth.welcome.verifiedSafe')}
@@ -46,7 +73,7 @@ export default function Welcome() {
 
           <View style={styles.valueProp}>
             <View style={styles.iconContainer}>
-              <Text style={styles.propEmoji}>💖</Text>
+              <MaterialCommunityIcons name="cards-heart-outline" size={24} color="#FFFFFF" />
             </View>
             <Text style={styles.propText}>
               {t('auth.welcome.smartMatching')}
@@ -55,7 +82,7 @@ export default function Welcome() {
 
           <View style={styles.valueProp}>
             <View style={styles.iconContainer}>
-              <Text style={styles.propEmoji}>🔒</Text>
+              <MaterialCommunityIcons name="lock-outline" size={24} color="#FFFFFF" />
             </View>
             <Text style={styles.propText}>
               {t('auth.welcome.privacyFirst')}
@@ -65,7 +92,7 @@ export default function Welcome() {
 
         {/* Trust Badge */}
         <View style={styles.trustBadge}>
-          <Text style={styles.badgeEmoji}>✊</Text>
+          <MaterialCommunityIcons name="handshake-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
           <Text style={styles.badgeText}>
             {t('auth.welcome.trustBadge')}
           </Text>
@@ -74,25 +101,23 @@ export default function Welcome() {
 
       {/* CTA Buttons */}
       <View style={styles.ctaContainer}>
-        <TouchableOpacity
-          style={styles.primaryButton}
+        <AnimatedButton
           onPress={() => router.push('/(auth)/sign-up')}
-          activeOpacity={0.9}
+          style={styles.primaryButton}
         >
           <Text style={styles.primaryButtonText}>
             {t('auth.welcome.getStarted')}
           </Text>
-        </TouchableOpacity>
+        </AnimatedButton>
 
-        <TouchableOpacity
-          style={styles.secondaryButton}
+        <AnimatedButton
           onPress={() => router.push('/(auth)/sign-in')}
-          activeOpacity={0.9}
+          style={styles.secondaryButton}
         >
           <Text style={styles.secondaryButtonText}>
             {t('auth.welcome.signIn')}
           </Text>
-        </TouchableOpacity>
+        </AnimatedButton>
 
         <Text style={styles.footerText}>
           {t('auth.welcome.footer')}
@@ -113,8 +138,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 160,
   },
-  emoji: {
-    fontSize: 64,
+  heroIcon: {
     marginBottom: 16,
   },
   title: {
@@ -163,9 +187,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 6,
   },
-  propEmoji: {
-    fontSize: 24,
-  },
   propText: {
     color: '#FFFFFF',
     fontFamily: 'Inter-SemiBold',
@@ -180,10 +201,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  badgeEmoji: {
-    fontSize: 20,
-    marginRight: 8,
   },
   badgeText: {
     color: '#FFFFFF',

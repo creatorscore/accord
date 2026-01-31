@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, TextInput, Platform, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { Waveform, type IWaveformRef, PlayerState, RecorderState } from '@/components/shared/ConditionalWaveform';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 import { openAppSettings } from '@/lib/open-settings';
@@ -26,6 +28,8 @@ const VOICE_PROMPTS = [
 export default function VoiceIntro() {
   const router = useRouter();
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const { t } = useTranslation();
   const [profileId, setProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -123,7 +127,7 @@ export default function VoiceIntro() {
             ]
           );
         } else {
-          Alert.alert('Permission Denied', 'Microphone access is needed to record your voice intro');
+          showToast({ type: 'error', title: t('toast.permissionDenied'), message: t('toast.micPermissionRequired') });
         }
         return;
       }
@@ -152,7 +156,7 @@ export default function VoiceIntro() {
       }, 1000);
 
     } catch (error: any) {
-      Alert.alert('Recording Failed', error.message || 'Failed to start recording');
+      showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.recordingFailed') });
       setIsRecording(false);
     }
   };
@@ -171,7 +175,7 @@ export default function VoiceIntro() {
         setRecordingUri(path);
       }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to stop recording');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.stopRecordingFailed') });
     }
   };
 
@@ -208,7 +212,7 @@ export default function VoiceIntro() {
 
   const handleContinue = async () => {
     if (!profileId) {
-      Alert.alert('Error', 'Profile not found. Please start over.');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.profileNotFound') });
       return;
     }
 
@@ -265,7 +269,7 @@ export default function VoiceIntro() {
 
       router.push('/(onboarding)/marriage-preferences');
     } catch (error: any) {
-      Alert.alert('Upload Failed', error.message || 'Failed to save voice intro');
+      showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.voiceUploadFailed') });
     } finally {
       setLoading(false);
     }

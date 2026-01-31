@@ -46,7 +46,7 @@ export interface CityResult {
 
 // Build admin1 lookup map (state/province names by code)
 const admin1ByCode: Record<string, string> = {};
-Object.values(admin1Data as Record<string, Admin1Entry>).forEach((entry) => {
+Object.values(admin1Data as unknown as Record<string, Admin1Entry>).forEach((entry) => {
   admin1ByCode[entry.code] = entry.name;
 });
 

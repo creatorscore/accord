@@ -40,11 +40,8 @@ export function DynamicWatermark({ userId, viewerUserId, visible = true }: Dynam
   return (
     <>
       {/* Multiple watermarks at different positions for redundancy */}
-      <WatermarkInstance text={watermarkText} position="top-left" delay={0} />
+      <WatermarkInstance text={watermarkText} position="center" delay={0} />
       <WatermarkInstance text={watermarkText} position="top-right" delay={500} />
-      <WatermarkInstance text={watermarkText} position="bottom-left" delay={1000} />
-      <WatermarkInstance text={watermarkText} position="bottom-right" delay={1500} />
-      <WatermarkInstance text={watermarkText} position="center" delay={2000} />
     </>
   );
 }
@@ -76,7 +73,7 @@ function WatermarkInstance({ text, position, delay }: WatermarkInstanceProps) {
 
         const randomX = Math.random() * 20 - 10;
         const randomY = Math.random() * 20 - 10;
-        const duration = 2000 + Math.random() * 2000;
+        const duration = 5000 + Math.random() * 3000;
 
         Animated.parallel([
           Animated.timing(translateX, {
@@ -101,10 +98,10 @@ function WatermarkInstance({ text, position, delay }: WatermarkInstanceProps) {
         if (!isMountedRef.current) return;
 
         Animated.sequence([
-          Animated.timing(opacity, { toValue: 0.05, duration: 3000, useNativeDriver: true }),
-          Animated.timing(opacity, { toValue: 0.15, duration: 3000, useNativeDriver: true }),
-          Animated.timing(opacity, { toValue: 0.08, duration: 2000, useNativeDriver: true }),
-          Animated.timing(opacity, { toValue: 0.12, duration: 2000, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.05, duration: 4000, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.15, duration: 4000, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.08, duration: 4000, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.12, duration: 4000, useNativeDriver: true }),
         ]).start(() => {
           if (isMountedRef.current) {
             animateOpacity();
@@ -117,8 +114,8 @@ function WatermarkInstance({ text, position, delay }: WatermarkInstanceProps) {
         if (!isMountedRef.current) return;
 
         Animated.sequence([
-          Animated.timing(scale, { toValue: 0.95, duration: 4000, useNativeDriver: true }),
-          Animated.timing(scale, { toValue: 1.05, duration: 4000, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 0.95, duration: 6000, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1.05, duration: 6000, useNativeDriver: true }),
         ]).start(() => {
           if (isMountedRef.current) {
             animateScale();

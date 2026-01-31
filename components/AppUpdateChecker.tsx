@@ -134,7 +134,7 @@ export default function AppUpdateChecker() {
         : (config.minimum_version_android || config.minimum_version);
 
       // Check if update is required (forced)
-      const isForcedUpdate = compareVersions(CURRENT_VERSION, minimumVersion) < 0 || config.admin_test_update;
+      const isForcedUpdate = compareVersions(CURRENT_VERSION, minimumVersion) < 0 || !!config.admin_test_update;
       const needsUpdate = compareVersions(CURRENT_VERSION, config.latest_version) < 0 || config.admin_test_update;
 
       if (!needsUpdate) {

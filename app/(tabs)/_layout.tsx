@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { useNotifications } from '@/contexts/NotificationContext';
+import * as Haptics from 'expo-haptics';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
@@ -17,6 +18,9 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      screenListeners={{
+        tabPress: () => Haptics.selectionAsync(),
+      }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#A08AB7', // lavender-500
@@ -41,7 +45,7 @@ export default function TabsLayout() {
         options={{
           title: 'Discover',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cards-heart" size={size} color={color} />
+            <MaterialCommunityIcons name="compass" size={size} color={color} />
           ),
         }}
       />
@@ -51,7 +55,7 @@ export default function TabsLayout() {
           title: 'Likes',
           tabBarIcon: ({ color, size }) => (
             <View>
-              <MaterialCommunityIcons name="heart" size={size} color={color} />
+              <MaterialCommunityIcons name="star" size={size} color={color} />
               {unreadLikeCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
@@ -68,7 +72,7 @@ export default function TabsLayout() {
         options={{
           title: 'Matches',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="heart-multiple" size={size} color={color} />
+            <MaterialCommunityIcons name="heart" size={size} color={color} />
           ),
         }}
       />

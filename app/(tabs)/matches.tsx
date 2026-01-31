@@ -17,6 +17,8 @@ import { realtimeManager } from '@/lib/realtime-manager';
 import { decryptMessage, getPrivateKey } from '@/lib/encryption';
 import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
 import { useSafeBlur } from '@/hooks/useSafeBlur';
+import { MatchesListSkeleton } from '@/components/shared/SkeletonScreens';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Match {
   id: string;
@@ -51,6 +53,7 @@ export default function Matches() {
   useScreenProtection();
 
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const { user } = useAuth();
   const { isPremium } = useSubscription();
   const { colors, isDarkColorScheme } = useColorScheme();
@@ -578,10 +581,10 @@ export default function Matches() {
               setMatches((prev) => prev.filter((m) => m.id !== match.id));
 
               // Show success message
-              Alert.alert(t('matches.unmatchDialog.success'), t('matches.unmatchDialog.successMessage', { name: match.profile.display_name }));
+              showToast({ type: 'success', title: t('matches.unmatchDialog.success'), message: t('matches.unmatchDialog.successMessage', { name: match.profile.display_name }) });
             } catch (error: any) {
               console.error('Error unmatching:', error);
-              Alert.alert(t('common.error'), t('matches.unmatchDialog.error'));
+              showToast({ type: 'error', title: t('common.error'), message: t('matches.unmatchDialog.error') });
             }
           },
         },
@@ -636,10 +639,10 @@ export default function Matches() {
               // Remove from local state
               setMatches((prev) => prev.filter((m) => m.id !== match.id));
 
-              Alert.alert(t('matches.blockDialog.success'), t('matches.blockDialog.successMessage', { name: match.profile.display_name }));
+              showToast({ type: 'success', title: t('matches.blockDialog.success'), message: t('matches.blockDialog.successMessage', { name: match.profile.display_name }) });
             } catch (error: any) {
               console.error('Error blocking user:', error);
-              Alert.alert(t('common.error'), t('matches.blockDialog.error'));
+              showToast({ type: 'error', title: t('common.error'), message: t('matches.blockDialog.error') });
             }
           },
         },
@@ -660,7 +663,7 @@ export default function Matches() {
           text: t('matches.reportDialog.submit'),
           onPress: async (reason?: string) => {
             if (!reason || reason.trim() === '') {
-              Alert.alert(t('common.error'), t('matches.reportDialog.errorEmpty'));
+              showToast({ type: 'error', title: t('common.error'), message: t('matches.reportDialog.errorEmpty') });
               return;
             }
 
@@ -688,13 +691,10 @@ export default function Matches() {
 
               if (error) throw error;
 
-              Alert.alert(
-                t('matches.reportDialog.success'),
-                t('matches.reportDialog.successMessage')
-              );
+              showToast({ type: 'success', title: t('matches.reportDialog.success'), message: t('matches.reportDialog.successMessage') });
             } catch (error: any) {
               console.error('Error reporting user:', error);
-              Alert.alert(t('common.error'), t('matches.reportDialog.error'));
+              showToast({ type: 'error', title: t('common.error'), message: t('matches.reportDialog.error') });
             }
           },
         },
@@ -1046,10 +1046,7 @@ export default function Matches() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>{t('matches.loadingMatches')}</Text>
-        </View>
+        <MatchesListSkeleton />
       </View>
     );
   }

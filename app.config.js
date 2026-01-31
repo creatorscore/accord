@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "Accord - Lavender Marriage",
     slug: "accord",
-    version: "1.1.8",
+    version: "1.1.9",
     orientation: "default",
     icon: "./assets/icon.png",
     userInterfaceStyle: "automatic",
@@ -69,7 +69,7 @@ module.exports = {
       },
       package: "com.privyreviews.accord",
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./android/app/google-services.json",
-      versionCode: 54,
+      versionCode: 55,
       softwareKeyboardLayoutMode: "resize",
       permissions: [
         "android.permission.CAMERA",
@@ -161,7 +161,7 @@ module.exports = {
       postHogHost: "https://us.i.posthog.com"
     },
     owner: "vfranz",
-    runtimeVersion: "1.1.8",
+    runtimeVersion: "1.1.9",
     updates: {
       url: "https://u.expo.dev/71ca414e-ff65-488b-97f6-9150455475a0"
     }

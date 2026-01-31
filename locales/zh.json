@@ -811,6 +811,69 @@
       "purchaseFailedMessage": "完成购买失败。请重试，如果问题持续存在，请联系支持。"
     }
   },
+  "pushNotifications": {
+    "match": {
+      "title": "配对成功！💜",
+      "body": "你和 {{name}} 配对成功！现在开始聊天吧。"
+    },
+    "message": {
+      "title": "{{name}} 发来新消息",
+      "bodyText": "给你发送了一条消息",
+      "bodyPhoto": "给你发送了一张照片",
+      "bodyVoice": "给你发送了一条语音消息",
+      "bodyVideo": "给你发送了一个视频"
+    },
+    "like": {
+      "premiumTitle": "{{name}} 喜欢你！💜",
+      "premiumBody": "查看谁喜欢了你，立即配对。",
+      "premiumSuperTitle": "{{name}} 超级喜欢你！⭐",
+      "premiumSuperBody": "他们真的很想和你联系！",
+      "freeTitle": "有人喜欢你！💜",
+      "freeBody": "升级到高级版，查看谁喜欢了你并立即配对。",
+      "freeSuperTitle": "有人超级喜欢你！⭐",
+      "freeSuperBody": "升级到高级版，看看谁真的想和你配对。"
+    },
+    "trialExpiration": {
+      "threeDaysTitle": "你的免费试用还有3天到期",
+      "threeDaysBody": "不要失去高级功能的访问权限！立即订阅继续寻找你的完美配对。",
+      "oneDayTitle": "你的免费试用明天到期！",
+      "oneDayBody": "订阅的最后机会。点击立即升级。",
+      "todayTitle": "你的免费试用今天到期！",
+      "todayBody": "你的高级访问权限今晚到期。立即订阅继续你的旅程。"
+    },
+    "trialEngagement": {
+      "day1Title": "你的高级试用已激活！",
+      "day1Body": "解锁无限喜欢，查看谁喜欢了你，发送超级喜欢等等。开始探索你的高级功能！",
+      "day3TitleWithLikes": "{{count}}{{person}}喜欢了你！",
+      "day3TitleNoLikes": "你正在被注意到！",
+      "day3BodyWithLikes": "点击查看他们是谁 - 这是你可以保留的高级功能！",
+      "day3BodyNoLikes": "继续使用高级功能来脱颖而出并获得更多喜欢。",
+      "day5Title": "试用期只剩2天了！",
+      "day5BodyWithStats": "你已经{{highlights}}。不要失去这些功能的访问权限！",
+      "day5BodyNoStats": "你已经探索了高级功能。立即订阅以保留它们！",
+      "day6Title": "明天是最后一天！",
+      "day6Body": "在试用结束前锁定年度计划33%的折扣。你的配对正在等待！"
+    },
+    "swipesRefreshed": {
+      "title": "你的滑动次数已恢复！🎉",
+      "body": "你有15次新的滑动机会来发现你的完美配对。现在开始滑动吧！"
+    },
+    "reviews": {
+      "readyTitle": "是时候评价了！⭐",
+      "readyBody": "分享你与 {{name}} 的体验。你的评价有助于建立社区信任。",
+      "reminderTitle": "评价的最后机会！⏰",
+      "reminderBody": "你对 {{name}} 的评价窗口即将关闭。不要错过！"
+    },
+    "stats": {
+      "person": "人",
+      "people": "人",
+      "seenLikes": "看到了{{count}}个喜欢你的人",
+      "sentSuperLikes": "发送了{{count}}个超级喜欢",
+      "sentSuperLikesPlural": "发送了{{count}}个超级喜欢",
+      "madeMatch": "配对了{{count}}次",
+      "madeMatchesPlural": "配对了{{count}}次"
+    }
+  },
   "whatsNew": {
     "title": "新功能",
     "version": "版本 {{version}}",
@@ -871,5 +934,51 @@
         }
       }
     }
+  },
+  "toast": {
+    "photoLimitTitle": "Maximum Photos",
+    "photoLimitMessage": "You can upload up to 6 photos",
+    "photoAlreadyAdded": "This photo is already in your profile",
+    "photoProcessError": "Failed to process photo. Please try again.",
+    "morePhotosNeeded": "Please add at least 4 photos to continue",
+    "profileNotFound": "Profile not found. Please go back and try again.",
+    "uploadFailed": "Failed to upload. Please try again.",
+    "permissionDenied": "Permission Denied",
+    "needPhotoAccess": "We need permission to access your photos",
+    "invalidImage": "Invalid Image",
+    "micPermissionRequired": "Microphone access is needed to record",
+    "recordingFailed": "Failed to start recording",
+    "stopRecordingFailed": "Failed to stop recording",
+    "profileLoadError": "Failed to load your profile",
+    "profilesLoadError": "Failed to load profiles",
+    "superLikeError": "Failed to send super like. Please try again.",
+    "noRecentSwipes": "There are no recent swipes to undo.",
+    "swipeUndone": "Your last swipe has been undone.",
+    "undoSwipeError": "Failed to undo swipe. Please try again.",
+    "blockSuccess": "User has been blocked",
+    "blockError": "Failed to block user. Please try again.",
+    "filterError": "Failed to update filter. Please try again.",
+    "globalSearchError": "Failed to enable global search. Please try again.",
+    "genericError": "Something went wrong. Please try again.",
+    "photosBlurred": "Your photos are now blurred for this match",
+    "photosRevealed": "Your photos are now visible to {{name}}",
+    "photoRevealError": "Failed to update photo visibility. Please try again.",
+    "reportSubmitted": "Thank you for helping keep Accord safe",
+    "reportError": "Failed to submit report. Please try again.",
+    "reactionError": "Failed to add reaction",
+    "chatLoadError": "Failed to load chat. Please try again.",
+    "messagesLoadError": "Failed to load messages",
+    "voiceRecordError": "Failed to record voice message. Please try again.",
+    "locationErrorPrecise": "Precise location is required for accurate matching",
+    "locationErrorGeneric": "Could not determine your location",
+    "saveError": "Failed to save. Please try again.",
+    "selectPhotoError": "Failed to select photo. Please try again.",
+    "profileSaveError": "Failed to save profile",
+    "voiceUploadFailed": "Failed to save voice intro",
+    "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
+    "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
+    "obsessedTitle": "Obsessed!",
+    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
+    "obsessedBasic": "{{name}} will be notified that you're obsessed!"
   }
 }

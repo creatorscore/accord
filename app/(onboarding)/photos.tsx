@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Alert, Switch, Platform, InteractionManager, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Image, ScrollView, Switch, Platform, InteractionManager, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash } from '@/lib/image-optimization';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 import { useTranslation } from 'react-i18next';
+import * as Haptics from 'expo-haptics';
 
 interface Photo {
   uri: string;
@@ -20,6 +22,7 @@ interface Photo {
 export default function Photos() {
   const router = useRouter();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -56,7 +59,7 @@ export default function Photos() {
       // Load existing photos
       await loadExistingPhotos(data.id);
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to load profile');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
     }
   };
 
@@ -87,15 +90,16 @@ export default function Photos() {
   };
 
   const pickImage = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (photos.length >= 6) {
-      Alert.alert('Maximum Photos', 'You can upload up to 6 photos');
+      showToast({ type: 'info', title: t('toast.photoLimitTitle'), message: t('toast.photoLimitMessage') });
       return;
     }
 
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'We need permission to access your photos');
+        showToast({ type: 'error', title: t('toast.permissionDenied'), message: t('toast.needPhotoAccess') });
         return;
       }
 
@@ -118,7 +122,7 @@ export default function Photos() {
             const validation = await validateImage(selectedUri);
             if (!validation.isValid) {
               setProcessingImage(false);
-              Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
+              showToast({ type: 'error', title: t('toast.invalidImage'), message: validation.error || t('toast.invalidImage') });
               return;
             }
 
@@ -137,10 +141,7 @@ export default function Photos() {
             const isDuplicateLocal = photos.some(p => p.contentHash === contentHash);
             if (isDuplicateLocal) {
               setProcessingImage(false);
-              Alert.alert(
-                'Photo Already Added',
-                'This photo is already in your profile. Try selecting a different photo to show more sides of yourself!'
-              );
+              showToast({ type: 'info', title: t('toast.photoAlreadyAdded'), message: t('toast.photoAlreadyAdded') });
               return;
             }
 
@@ -155,10 +156,7 @@ export default function Photos() {
 
               if (existingPhoto) {
                 setProcessingImage(false);
-                Alert.alert(
-                  'Photo Already Added',
-                  'This photo is already in your profile. Try selecting a different photo to show more sides of yourself!'
-                );
+                showToast({ type: 'info', title: t('toast.photoAlreadyAdded'), message: t('toast.photoAlreadyAdded') });
                 return;
               }
             }
@@ -171,14 +169,14 @@ export default function Photos() {
           } catch (error: any) {
             console.error('Error processing image:', error);
             setProcessingImage(false);
-            Alert.alert('Error', 'Failed to process photo. Please try again.');
+            showToast({ type: 'error', title: t('common.error'), message: t('toast.photoProcessError') });
           }
         });
       }
     } catch (error: any) {
       console.error('Error picking image:', error);
       setProcessingImage(false);
-      Alert.alert('Error', 'Failed to select photo. Please try again.');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.selectPhotoError') });
     }
   }, [photos, profileId]);
 
@@ -187,13 +185,14 @@ export default function Photos() {
   };
 
   const handleContinue = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (photos.length < 4) {
-      Alert.alert('More Photos Needed', 'Please add at least 4 photos to continue');
+      showToast({ type: 'info', title: t('toast.morePhotosNeeded'), message: t('toast.morePhotosNeeded') });
       return;
     }
 
     if (!profileId) {
-      Alert.alert('Error', 'Profile not found. Please go back and complete Step 1.');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.profileNotFound') });
       return;
     }
 
@@ -266,7 +265,7 @@ export default function Photos() {
             } else {
               console.log(`✅ Photo ${i + 1} saved to database`);
 
-              // Run NSFW moderation check in background (don't block upload)
+              // Run NSFW moderation check - BLOCKING
               // This uses AWS Rekognition to detect explicit content
               try {
                 const moderationResponse = await fetch(
@@ -288,8 +287,14 @@ export default function Photos() {
                 const moderationResult = await moderationResponse.json();
                 console.log(`🔍 Moderation result for photo ${i + 1}:`, moderationResult);
 
+                // If moderation endpoint returned an error (e.g. AWS creds not configured),
+                // keep the photo as pending but don't block upload - RLS will hide rejected photos
+                if (moderationResult.error) {
+                  console.error('Moderation service error:', moderationResult.error);
+                }
+
                 // If photo was rejected for explicit content, alert user and remove photo
-                if (moderationResult.approved === false && moderationResult.reason === 'explicit_content') {
+                if (moderationResult.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
                   // Delete the photo from storage and database
                   await supabase.storage.from('profile-photos').remove([fileName]);
                   await supabase.from('photos').delete().eq('id', photoData?.id);
@@ -301,8 +306,10 @@ export default function Photos() {
                 if (moderationError.message?.includes('inappropriate content')) {
                   throw moderationError;
                 }
-                // Otherwise log but don't block - moderation can be retried
-                console.error('Moderation check failed (non-blocking):', moderationError);
+                // Log moderation failure but don't block upload
+                // The RLS policy will hide rejected photos, and pending photos
+                // can be re-moderated via admin tools
+                console.error('Moderation check failed:', moderationError);
               }
             }
 
@@ -340,7 +347,7 @@ export default function Photos() {
     } catch (error: any) {
       console.error('Upload failed:', error);
       if (isMounted.current) {
-        Alert.alert('Upload Failed', error.message || 'Failed to upload photos. Please try again.');
+        showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.uploadFailed') });
         setUploading(false);
         setUploadProgress(0);
       }

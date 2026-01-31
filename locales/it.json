@@ -818,6 +818,69 @@
       "purchaseFailedMessage": "Impossibile completare l'acquisto. Riprova o contatta il supporto se il problema persiste."
     }
   },
+  "pushNotifications": {
+    "match": {
+      "title": "È un Match! 💜",
+      "body": "Hai fatto match con {{name}}! Inizia a chattare ora."
+    },
+    "message": {
+      "title": "Nuovo messaggio da {{name}}",
+      "bodyText": "Ti ha inviato un messaggio",
+      "bodyPhoto": "Ti ha inviato una foto",
+      "bodyVoice": "Ti ha inviato un messaggio vocale",
+      "bodyVideo": "Ti ha inviato un video"
+    },
+    "like": {
+      "premiumTitle": "Piaci a {{name}}! 💜",
+      "premiumBody": "Scopri chi ti ha messo like e fai match istantaneamente.",
+      "premiumSuperTitle": "{{name}} ti ha messo super like! ⭐",
+      "premiumSuperBody": "Vuole davvero connettersi con te!",
+      "freeTitle": "Piaci a qualcuno! 💜",
+      "freeBody": "Passa a Premium per vedere chi ti ha messo like e fare match istantaneamente.",
+      "freeSuperTitle": "Qualcuno ti ha messo super like! ⭐",
+      "freeSuperBody": "Passa a Premium per vedere chi vuole davvero fare match con te."
+    },
+    "trialExpiration": {
+      "threeDaysTitle": "La tua prova gratuita termina tra 3 giorni",
+      "threeDaysBody": "Non perdere l'accesso alle funzionalità premium! Abbonati ora.",
+      "oneDayTitle": "La tua prova gratuita termina domani!",
+      "oneDayBody": "Ultima possibilità di abbonarti. Tocca per fare l'upgrade ora.",
+      "todayTitle": "La tua prova gratuita termina oggi!",
+      "todayBody": "Il tuo accesso premium scade stanotte. Abbonati ora."
+    },
+    "trialEngagement": {
+      "day1Title": "La Tua Prova Premium è Attiva!",
+      "day1Body": "Sblocca like illimitati, scopri chi ti ha messo like, invia Super Like e altro ancora!",
+      "day3TitleWithLikes": "{{count}} {{person}} ti hanno messo like!",
+      "day3TitleNoLikes": "Ti stanno notando!",
+      "day3BodyWithLikes": "Tocca per vedere chi sono - è una funzionalità Premium che puoi mantenere!",
+      "day3BodyNoLikes": "Continua a usare le funzionalità Premium per distinguerti.",
+      "day5Title": "Solo 2 giorni rimasti nella tua prova!",
+      "day5BodyWithStats": "Hai {{highlights}}. Non perdere l'accesso a queste funzionalità!",
+      "day5BodyNoStats": "Hai esplorato le funzionalità premium. Abbonati ora per mantenerle!",
+      "day6Title": "Ultimo giorno domani!",
+      "day6Body": "Assicurati il 33% di sconto con il piano annuale. Le tue connessioni ti aspettano!"
+    },
+    "swipesRefreshed": {
+      "title": "I tuoi swipe sono tornati! 🎉",
+      "body": "Hai 15 nuovi swipe per scoprire il tuo match perfetto. Inizia a scorrere ora!"
+    },
+    "reviews": {
+      "readyTitle": "È ora di recensire! ⭐",
+      "readyBody": "Condividi la tua esperienza con {{name}}.",
+      "reminderTitle": "Ultima possibilità di recensire! ⏰",
+      "reminderBody": "La tua finestra di recensione per {{name}} sta per scadere."
+    },
+    "stats": {
+      "person": "persona",
+      "people": "persone",
+      "seenLikes": "visto {{count}} che ti hanno messo like",
+      "sentSuperLikes": "inviato {{count}} Super Like",
+      "sentSuperLikesPlural": "inviato {{count}} Super Like",
+      "madeMatch": "fatto {{count}} match",
+      "madeMatchesPlural": "fatto {{count}} match"
+    }
+  },
   "whatsNew": {
     "title": "Novità",
     "version": "Versione {{version}}",
@@ -878,5 +941,51 @@
         }
       }
     }
+  },
+  "toast": {
+    "photoLimitTitle": "Maximum Photos",
+    "photoLimitMessage": "You can upload up to 6 photos",
+    "photoAlreadyAdded": "This photo is already in your profile",
+    "photoProcessError": "Failed to process photo. Please try again.",
+    "morePhotosNeeded": "Please add at least 4 photos to continue",
+    "profileNotFound": "Profile not found. Please go back and try again.",
+    "uploadFailed": "Failed to upload. Please try again.",
+    "permissionDenied": "Permission Denied",
+    "needPhotoAccess": "We need permission to access your photos",
+    "invalidImage": "Invalid Image",
+    "micPermissionRequired": "Microphone access is needed to record",
+    "recordingFailed": "Failed to start recording",
+    "stopRecordingFailed": "Failed to stop recording",
+    "profileLoadError": "Failed to load your profile",
+    "profilesLoadError": "Failed to load profiles",
+    "superLikeError": "Failed to send super like. Please try again.",
+    "noRecentSwipes": "There are no recent swipes to undo.",
+    "swipeUndone": "Your last swipe has been undone.",
+    "undoSwipeError": "Failed to undo swipe. Please try again.",
+    "blockSuccess": "User has been blocked",
+    "blockError": "Failed to block user. Please try again.",
+    "filterError": "Failed to update filter. Please try again.",
+    "globalSearchError": "Failed to enable global search. Please try again.",
+    "genericError": "Something went wrong. Please try again.",
+    "photosBlurred": "Your photos are now blurred for this match",
+    "photosRevealed": "Your photos are now visible to {{name}}",
+    "photoRevealError": "Failed to update photo visibility. Please try again.",
+    "reportSubmitted": "Thank you for helping keep Accord safe",
+    "reportError": "Failed to submit report. Please try again.",
+    "reactionError": "Failed to add reaction",
+    "chatLoadError": "Failed to load chat. Please try again.",
+    "messagesLoadError": "Failed to load messages",
+    "voiceRecordError": "Failed to record voice message. Please try again.",
+    "locationErrorPrecise": "Precise location is required for accurate matching",
+    "locationErrorGeneric": "Could not determine your location",
+    "saveError": "Failed to save. Please try again.",
+    "selectPhotoError": "Failed to select photo. Please try again.",
+    "profileSaveError": "Failed to save profile",
+    "voiceUploadFailed": "Failed to save voice intro",
+    "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
+    "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
+    "obsessedTitle": "Obsessed!",
+    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
+    "obsessedBasic": "{{name}} will be notified that you're obsessed!"
   }
 }

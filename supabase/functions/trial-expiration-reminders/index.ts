@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { t } from '../_shared/translations.ts';
 
 /**
  * Trial Expiration Reminders - Scheduled Job
@@ -33,32 +34,37 @@ interface TrialSubscription {
   status: string;
 }
 
+interface ProfileWithLanguage {
+  id: string;
+  preferred_language: string | null;
+}
+
 interface ReminderConfig {
   daysBeforeExpiration: number;
   notificationType: string;
-  title: string;
-  body: string;
+  titleKey: string;
+  bodyKey: string;
 }
 
-// Reminder configurations
+// Reminder configurations (using translation keys)
 const REMINDER_CONFIGS: ReminderConfig[] = [
   {
     daysBeforeExpiration: 3,
     notificationType: 'trial_expiring_3_days',
-    title: 'Your free trial ends in 3 days',
-    body: "Don't lose access to premium features! Subscribe now to keep finding your perfect match.",
+    titleKey: 'trialExpiration.threeDaysTitle',
+    bodyKey: 'trialExpiration.threeDaysBody',
   },
   {
     daysBeforeExpiration: 1,
     notificationType: 'trial_expiring_1_day',
-    title: 'Your free trial ends tomorrow!',
-    body: 'Last chance to subscribe and keep your premium features. Tap to upgrade now.',
+    titleKey: 'trialExpiration.oneDayTitle',
+    bodyKey: 'trialExpiration.oneDayBody',
   },
   {
     daysBeforeExpiration: 0,
     notificationType: 'trial_expiring_today',
-    title: 'Your free trial ends today!',
-    body: "Your premium access expires tonight. Subscribe now to continue your journey to finding your perfect match.",
+    titleKey: 'trialExpiration.todayTitle',
+    bodyKey: 'trialExpiration.todayBody',
   },
 ];
 
@@ -115,7 +121,7 @@ serve(async (req) => {
         console.log(`Found ${expiringTrials.length} trials expiring in ${config.daysBeforeExpiration} days`);
 
         // Check which profiles already have this notification queued/sent today
-        const profileIds = expiringTrials.map((t: TrialSubscription) => t.profile_id);
+        const profileIds = expiringTrials.map((trial: TrialSubscription) => trial.profile_id);
 
         // Get today's start for checking if notification was already sent
         const todayStart = new Date(now);
@@ -144,22 +150,37 @@ serve(async (req) => {
 
         console.log(`Queuing ${toNotify.length} notifications for ${config.daysBeforeExpiration} day reminder`);
 
-        // Queue notifications
-        const notifications = toNotify.map((trial: TrialSubscription) => ({
-          recipient_profile_id: trial.profile_id,
-          notification_type: config.notificationType,
-          title: config.title,
-          body: config.body,
-          data: {
-            type: 'trial_expiring',
-            days_remaining: config.daysBeforeExpiration,
-            subscription_id: trial.id,
-            tier: trial.tier,
-            expires_at: trial.expires_at,
-            action: 'open_subscription',
-          },
-          status: 'pending',
-        }));
+        // Get language preferences for users to notify
+        const toNotifyIds = toNotify.map((trial: TrialSubscription) => trial.profile_id);
+        const { data: profileLanguages } = await supabase
+          .from('profiles')
+          .select('id, preferred_language')
+          .in('id', toNotifyIds);
+
+        const languageMap = new Map<string, string>();
+        (profileLanguages || []).forEach((p: ProfileWithLanguage) => {
+          languageMap.set(p.id, p.preferred_language || 'en');
+        });
+
+        // Queue notifications (localized per user)
+        const notifications = toNotify.map((trial: TrialSubscription) => {
+          const lang = languageMap.get(trial.profile_id) || 'en';
+          return {
+            recipient_profile_id: trial.profile_id,
+            notification_type: config.notificationType,
+            title: t(lang, config.titleKey),
+            body: t(lang, config.bodyKey),
+            data: {
+              type: 'trial_expiring',
+              days_remaining: config.daysBeforeExpiration,
+              subscription_id: trial.id,
+              tier: trial.tier,
+              expires_at: trial.expires_at,
+              action: 'open_subscription',
+            },
+            status: 'pending',
+          };
+        });
 
         const { error: insertError } = await supabase
           .from('notification_queue')

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
-// import { captureException } from '@/lib/sentry'; // Temporarily disabled
+import { captureException } from '@/lib/sentry';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -34,15 +34,14 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
 
-    // Send error to Sentry (temporarily disabled)
-    // try {
-    //   captureException(error, {
-    //     errorInfo: errorInfo.componentStack,
-    //     errorBoundary: true,
-    //   });
-    // } catch (sentryError) {
-    //   console.error('Failed to send error to Sentry:', sentryError);
-    // }
+    try {
+      captureException(error, {
+        errorInfo: errorInfo.componentStack,
+        errorBoundary: true,
+      });
+    } catch (sentryError) {
+      console.error('Failed to send error to Sentry:', sentryError);
+    }
   }
 
   handleReload = async () => {
@@ -63,18 +62,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           <Text style={styles.message}>
             We encountered an unexpected error. Please try restarting the app.
           </Text>
-          {this.state.error && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>
-                {this.state.error.message || this.state.error.toString()}
-              </Text>
-              {this.state.error.stack && (
-                <Text style={[styles.errorText, { fontSize: 10, marginTop: 8 }]}>
-                  {this.state.error.stack.substring(0, 500)}
-                </Text>
-              )}
-            </View>
-          )}
           <TouchableOpacity style={styles.button} onPress={this.handleReload}>
             <Text style={styles.buttonText}>Restart App</Text>
           </TouchableOpacity>
@@ -108,18 +95,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 24,
-  },
-  errorBox: {
-    backgroundColor: '#FEE2E2',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 24,
-    maxWidth: '100%',
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#991B1B',
-    fontFamily: 'monospace',
   },
   button: {
     backgroundColor: '#9B87CE',

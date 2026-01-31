@@ -36,9 +36,9 @@ export default function MatchingPreferences() {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const [ageMin, setAgeMin] = useState(25);
-  const [ageMax, setAgeMax] = useState(45);
-  const [maxDistance, setMaxDistance] = useState(50);
+  const [ageMin, setAgeMin] = useState(18);
+  const [ageMax, setAgeMax] = useState(65);
+  const [maxDistance, setMaxDistance] = useState(100);
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('miles');
   const [willingToRelocate, setWillingToRelocate] = useState(false);
   const [genderPreference, setGenderPreference] = useState<string[]>([]);

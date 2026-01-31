@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { t } from "../_shared/translations.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +18,7 @@ interface Profile {
   push_token: string | null;
   push_enabled: boolean;
   display_name: string;
+  preferred_language: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -76,11 +78,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get profile details for these users
+    // Get profile details for these users (including preferred_language for localization)
     const profileIds = usersToNotify.map((u: NotificationPrefs) => u.profile_id);
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
-      .select("id, push_token, push_enabled, display_name")
+      .select("id, push_token, push_enabled, display_name, preferred_language")
       .in("id", profileIds)
       .eq("push_enabled", true)
       .not("push_token", "is", null);
@@ -96,15 +98,17 @@ Deno.serve(async (req) => {
       .select("profile_id, push_token")
       .in("profile_id", profileIds);
 
-    // Build token map (profile_id -> all tokens)
+    // Build token map (profile_id -> all tokens) and language map
     const tokenMap = new Map<string, Set<string>>();
+    const languageMap = new Map<string, string>();
 
-    // Add tokens from profiles table
+    // Add tokens and language from profiles table
     (profiles || []).forEach((p: Profile) => {
       if (p.push_token) {
         if (!tokenMap.has(p.id)) tokenMap.set(p.id, new Set());
         tokenMap.get(p.id)!.add(p.push_token);
       }
+      languageMap.set(p.id, p.preferred_language || 'en');
     });
 
     // Add tokens from device_tokens table
@@ -115,17 +119,21 @@ Deno.serve(async (req) => {
 
     console.log(`Found ${tokenMap.size} profiles with push tokens`);
 
-    // Prepare push notifications
+    // Prepare push notifications (localized per user)
     const messages: any[] = [];
     const notifiedProfileIds: string[] = [];
 
     tokenMap.forEach((tokens, profileId) => {
+      const lang = languageMap.get(profileId) || 'en';
+      const title = t(lang, 'swipesRefreshed.title');
+      const body = t(lang, 'swipesRefreshed.body');
+
       tokens.forEach((token) => {
         messages.push({
           to: token,
           sound: "default",
-          title: "Your swipes are back! ",
-          body: "You have 15 new swipes to discover your perfect match. Start swiping now!",
+          title,
+          body,
           data: {
             type: "swipes_refreshed",
             profileId,
