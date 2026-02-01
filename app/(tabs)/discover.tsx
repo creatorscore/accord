@@ -216,6 +216,14 @@ export default function Discover() {
     currentIndexRef.current = currentIndex;
   }, [profiles, currentIndex]);
 
+  // Safely advance to the next profile index, bounded by current profiles length
+  const advanceIndex = useCallback(() => {
+    setCurrentIndex(prev => {
+      const maxIndex = profilesRef.current.length;
+      return prev + 1 <= maxIndex ? prev + 1 : prev;
+    });
+  }, []);
+
   // Transition to next profile with fade animation
   const transitionToNextProfile = useCallback(() => {
     if (isTransitioning) return;
@@ -228,7 +236,7 @@ export default function Discover() {
       useNativeDriver: true,
     }).start(() => {
       // Update index
-      setCurrentIndex(prev => prev + 1);
+      advanceIndex();
       // Reset scroll position
       discoveryProfileRef.current?.scrollToTop();
       // Fade in next profile
@@ -332,7 +340,7 @@ export default function Discover() {
 
         // Small delay to ensure screen transition is complete
         setTimeout(() => {
-          setCurrentIndex(prev => prev + 1);
+          advanceIndex();
         }, 300);
       }
 
@@ -369,7 +377,7 @@ export default function Discover() {
 
           // Small delay to ensure app transition is complete
           setTimeout(() => {
-            setCurrentIndex(prev => prev + 1);
+            advanceIndex();
             // Reset flag after advance
             setTimeout(() => {
               hasAdvancedOnFocus.current = false;
@@ -1002,7 +1010,8 @@ export default function Discover() {
           console.log('📋 RPC profile IDs:', rpcData.map((p: any) => p.id));
           console.log('🚫 Swiped IDs count:', swipedIds.length);
           // Filter out already-swiped profiles from RPC results
-          const nearbyIds = rpcData.map((p: any) => p.id).filter((id: string) => !swipedIds.includes(id));
+          const swipedSet = new Set(swipedIds);
+          const nearbyIds = rpcData.map((p: any) => p.id).filter((id: string) => !swipedSet.has(id));
           console.log('✅ Nearby IDs after filtering swiped:', nearbyIds.length, nearbyIds);
 
           if (nearbyIds.length > 0) {
@@ -1062,8 +1071,9 @@ export default function Discover() {
         console.log('🔍 SEARCH MODE: Only excluding blocked/banned users, not swiped profiles');
 
         // Only exclude blocked and banned users in search mode
+        // Cap at 150 IDs to avoid PostgREST URL length limits (400 Bad Request)
         const searchExcludeIds = [...blockedIds, ...bannedProfileIds];
-        if (searchExcludeIds.length > 0) {
+        if (searchExcludeIds.length > 0 && searchExcludeIds.length <= 150) {
           query = query.not('id', 'in', `(${searchExcludeIds.join(',')})`);
         }
 
@@ -1091,7 +1101,9 @@ export default function Discover() {
         query = query.gte('age', 18);
       } else {
         // In NORMAL mode, exclude all swiped profiles
-        if (swipedIds.length > 0) {
+        // Cap at 150 IDs to avoid PostgREST URL length limits (400 Bad Request)
+        // When over 200, we filter client-side after the query
+        if (swipedIds.length > 0 && swipedIds.length <= 150) {
           query = query.not('id', 'in', `(${swipedIds.join(',')})`);
         }
         // Apply strict age filters (no buffer - respect user preferences exactly)
@@ -1140,9 +1152,13 @@ export default function Discover() {
 
       if (error) throw error;
 
-      // Filter out contact-blocked profiles (by phone number hash)
-      // This happens BEFORE transformation to avoid unnecessary processing
+      // Client-side exclusion fallback when ID list was too large for server-side filter
+      // This handles users with 200+ swipes where the URL would exceed PostgREST limits
       let filteredData = data || [];
+      if (swipedIds.length > 150) {
+        const swipedSet = new Set(swipedIds);
+        filteredData = filteredData.filter((p: any) => !swipedSet.has(p.id));
+      }
 
       // Contact blocking using server-side function for privacy
       // This securely checks phone numbers without exposing them to the client
@@ -1887,6 +1903,7 @@ export default function Discover() {
 
     // Passing (swiping left) is unlimited for all users
     const targetProfile = profiles[currentIndex];
+    if (!targetProfile) return false;
 
     try {
       // Check if we already passed this profile (can happen in search mode)
@@ -1954,6 +1971,7 @@ export default function Discover() {
     if (!checkLikeLimit()) return false;
 
     const targetProfile = profiles[currentIndex];
+    if (!targetProfile) return false;
     console.log('❤️ Liking:', targetProfile.display_name);
 
     try {
@@ -2180,6 +2198,7 @@ export default function Discover() {
     }
 
     const targetProfile = profiles[currentIndex];
+    if (!targetProfile) return false;
 
     // Check premium status FIRST before any async operations
     if (!isPremium) {
@@ -2344,7 +2363,7 @@ export default function Discover() {
       });
 
       // Move to next card
-      setCurrentIndex(prev => prev + 1);
+      advanceIndex();
       return true;
     } catch (error: any) {
       console.error('Error recording super like:', error);
@@ -2456,6 +2475,7 @@ export default function Discover() {
   const handleProfilePress = useCallback(async () => {
     if (currentIndex >= profiles.length) return;
     const targetProfile = profiles[currentIndex];
+    if (!targetProfile) return;
 
     // Track profile view
     trackUserAction.profileViewed(targetProfile.id);
@@ -3369,6 +3389,11 @@ export default function Discover() {
 
   const currentProfile = profiles[currentIndex];
 
+  // Guard against undefined profile (race condition during loading/refresh)
+  if (!currentProfile) {
+    return null;
+  }
+
   return (
     <View className="flex-1 bg-background" style={{ paddingRight: rightSafeArea }}>
       {/* Header */}
@@ -3701,11 +3726,11 @@ export default function Discover() {
         presentationStyle="fullScreen"
         onRequestClose={handleCloseImmersiveProfile}
       >
-        {currentIndex < profiles.length && (
+        {currentIndex < profiles.length && profiles[currentIndex] && (
           <ImmersiveProfileCard
             profile={profiles[currentIndex] as any}
             preferences={currentProfilePreferences}
-            compatibilityBreakdown={profiles[currentIndex].compatibilityBreakdown}
+            compatibilityBreakdown={profiles[currentIndex]?.compatibilityBreakdown}
             onSwipeLeft={handleImmersiveSwipeLeft}
             onSwipeRight={handleImmersiveSwipeRight}
             onSuperLike={handleImmersiveSwipeUp}

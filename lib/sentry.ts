@@ -63,11 +63,50 @@ export const initializeSentry = () => {
           return null;
         }
 
-        // Drop ANRs on low-end devices and background ANRs entirely — not actionable
+        // Drop ANRs on low-end devices, background ANRs, and system-only ANRs — not actionable
         if (errorType === 'ApplicationNotResponding') {
           const deviceClass = event.tags?.['device.class'] || event.contexts?.device?.device_class;
           const isBackgroundANR = errorMessage.includes('Background ANR');
-          if (deviceClass === 'low' || isBackgroundANR) {
+          const mechanism = event.exception?.values?.[0]?.mechanism?.type || event.tags?.mechanism || '';
+          const isAppExitInfo = mechanism === 'AppExitInfo';
+
+          // Drop if low-end device, background ANR, or historical AppExitInfo report
+          if (deviceClass === 'low' || isBackgroundANR || isAppExitInfo) {
+            return null;
+          }
+
+          // Drop ANRs with no app frames (purely system/ART stack traces)
+          const frames = event.exception?.values?.[0]?.stacktrace?.frames || [];
+          const hasAppFrames = frames.some((f: any) => f.in_app === true);
+          if (!hasAppFrames) {
+            return null;
+          }
+        }
+
+        // Drop iOS AppHang events caused by system-level view snapshotting — not actionable
+        if (errorType === 'App Hanging') {
+          const frames = event.exception?.values?.[0]?.stacktrace?.frames || [];
+          const isSystemSnapshotHang = frames.some((f: any) =>
+            f.function?.includes('_UISnapshotViewRectAfterCommit') ||
+            f.function?.includes('resizableSnapshotViewFromRect')
+          );
+          if (isSystemSnapshotHang) {
+            return null;
+          }
+        }
+
+        // Drop known React Native framework crashes — not actionable
+        // IndexOutOfBoundsException in ReactViewGroup drawing order race condition
+        if (errorType === 'IndexOutOfBoundsException' && errorMessage.includes('getChildDrawingOrder')) {
+          return null;
+        }
+
+        // Drop native crashes with no app frames (system-only stack traces)
+        // e.g., EXC_BAD_ACCESS in UIKit hit-testing during view transitions
+        if (errorType === 'EXC_BAD_ACCESS') {
+          const frames = event.exception?.values?.[0]?.stacktrace?.frames || [];
+          const hasAppFrames = frames.some((f: any) => f.in_app === true);
+          if (!hasAppFrames) {
             return null;
           }
         }

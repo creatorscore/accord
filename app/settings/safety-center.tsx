@@ -124,7 +124,7 @@ export default function SafetyCenter() {
         {
           text: t('safetyCenter.alerts.call'),
           onPress: () => {
-            Linking.openURL(`tel:${phone}`);
+            Linking.openURL(`tel:${phone}`).catch(() => {});
           },
         },
       ]
@@ -132,7 +132,7 @@ export default function SafetyCenter() {
   };
 
   const handleOpenWebsite = (url: string) => {
-    Linking.openURL(url);
+    Linking.openURL(url).catch(() => {});
   };
 
   return (
