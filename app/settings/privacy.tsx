@@ -435,7 +435,7 @@ export default function PrivacySettings() {
       <View style={styles.legalSection}>
         <TouchableOpacity
           style={styles.learnMoreButton}
-          onPress={() => Linking.openURL('https://joinaccord.app/privacy')}
+          onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}
         >
           <MaterialCommunityIcons name="shield-lock-outline" size={20} color="#A08AB7" />
           <Text style={styles.learnMoreText}>Privacy Policy</Text>
@@ -444,7 +444,7 @@ export default function PrivacySettings() {
 
         <TouchableOpacity
           style={styles.learnMoreButton}
-          onPress={() => Linking.openURL('https://joinaccord.app/terms')}
+          onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}
         >
           <MaterialCommunityIcons name="file-document-outline" size={20} color="#A08AB7" />
           <Text style={styles.learnMoreText}>Terms of Service</Text>

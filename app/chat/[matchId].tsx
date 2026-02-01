@@ -2564,7 +2564,7 @@ export default function Chat() {
                 const storeUrl = Platform.OS === 'ios'
                   ? 'https://apps.apple.com/ca/app/accord-lavender-marriage/id6753855469'
                   : 'https://play.google.com/store/apps/details?id=com.privyreviews.accord';
-                Linking.openURL(storeUrl);
+                Linking.openURL(storeUrl).catch(() => {});
               }}
             >
               <LinearGradient colors={['#A08AB7', '#8B7AA5']} style={styles.updateButtonGradient}>

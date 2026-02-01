@@ -567,11 +567,11 @@ export default function PremiumPaywall({
 
           {/* Terms of Use & Privacy Policy (Required by App Store) */}
           <View style={styles.legalLinks}>
-            <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/terms')}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}>
               <Text style={styles.legalLinkText}>Terms of Use</Text>
             </TouchableOpacity>
             <Text style={styles.legalLinkSeparator}>•</Text>
-            <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/privacy')}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}>
               <Text style={styles.legalLinkText}>Privacy Policy</Text>
             </TouchableOpacity>
           </View>

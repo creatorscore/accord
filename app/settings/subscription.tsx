@@ -690,14 +690,14 @@ export default function SubscriptionManagement() {
         {/* Terms of Use & Privacy Policy (Required by App Store) */}
         <View className="mt-4 flex-row justify-center items-center space-x-4">
           <TouchableOpacity
-            onPress={() => Linking.openURL('https://joinaccord.app/terms')}
+            onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}
             className="py-2"
           >
             <Text className="text-lavender-600 text-sm font-medium underline">{t('subscriptionSettings.termsOfUse')}</Text>
           </TouchableOpacity>
           <Text className="text-gray-400">•</Text>
           <TouchableOpacity
-            onPress={() => Linking.openURL('https://joinaccord.app/privacy')}
+            onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}
             className="py-2"
           >
             <Text className="text-lavender-600 text-sm font-medium underline">{t('subscriptionSettings.privacyPolicy')}</Text>

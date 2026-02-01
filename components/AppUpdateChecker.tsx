@@ -209,7 +209,7 @@ export default function AppUpdateChecker() {
 
   const handleUpdate = () => {
     const storeUrl = Platform.OS === 'ios' ? APP_STORE_URL : PLAY_STORE_URL;
-    Linking.openURL(storeUrl);
+    Linking.openURL(storeUrl).catch(() => {});
   };
 
   const handleLater = () => {
