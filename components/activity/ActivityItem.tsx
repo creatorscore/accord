@@ -190,7 +190,7 @@ export default function ActivityItem({ activity, onPress, onUnmatch }: ActivityI
     activity.actor?.photos?.[0]?.url;
 
   // Safe blur hook - protects actor privacy while preventing crashes
-  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+  const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
     shouldBlur: (activity.actor as any)?.photo_blur_enabled || false,
     blurIntensity: 20,
   });
@@ -207,13 +207,21 @@ export default function ActivityItem({ activity, onPress, onUnmatch }: ActivityI
         {isActorDeleted ? (
           <MaterialCommunityIcons name="account-off" size={24} color="#9CA3AF" />
         ) : actorPhoto ? (
-          <Image
-            source={{ uri: actorPhoto }}
-            style={styles.avatar}
-            blurRadius={blurRadius}
-            onLoad={onImageLoad}
-            onError={onImageError}
-          />
+          <View style={{ position: 'relative' }}>
+            <Image
+              source={{ uri: actorPhoto }}
+              style={styles.avatar}
+              blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
+            />
+            {showBlurOverlay && (
+              <View
+                style={[styles.avatar, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                pointerEvents="none"
+              />
+            )}
+          </View>
         ) : (
           <MaterialCommunityIcons name={config.icon as any} size={24} color={config.color} />
         )}

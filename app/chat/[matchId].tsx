@@ -154,7 +154,7 @@ export default function Chat() {
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
 
   // Safe blur hook - protects match privacy while preventing crashes
-  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+  const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
     shouldBlur: matchProfilePhotoBlur && !otherUserRevealed,
     blurIntensity: 30,
   });
@@ -2099,13 +2099,22 @@ export default function Chat() {
           style={styles.headerProfile}
           onPress={() => router.push(`/profile/${matchProfile?.id}`)}
         >
-          <Image
-            source={{ uri: matchProfile?.photo_url || 'https://via.placeholder.com/40' }}
-            style={styles.headerAvatar}
-            blurRadius={blurRadius}
-            onLoad={onImageLoad}
-            onError={onImageError}
-          />
+          <View style={{ position: 'relative' }}>
+            <Image
+              source={{ uri: matchProfile?.photo_url || 'https://via.placeholder.com/40' }}
+              style={styles.headerAvatar}
+              blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
+            />
+            {/* Android blur fallback - CSS overlay instead of RenderScript */}
+            {showBlurOverlay && (
+              <View
+                style={[styles.headerAvatar, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                pointerEvents="none"
+              />
+            )}
+          </View>
           <View style={styles.headerInfo}>
             <View style={styles.headerNameRow}>
               <Text style={[styles.headerName, { color: colors.foreground }]}>{matchProfile?.display_name}</Text>

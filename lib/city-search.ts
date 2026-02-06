@@ -256,7 +256,7 @@ export function searchCitiesInCountry(
  *
  * @returns Array of country objects with code and name
  */
-export function getAllCountries(): Array<{ code: string; name: string }> {
+export function getAllCountries(): { code: string; name: string }[] {
   const cities = citiesData as CityRaw[];
   const countryCodesSet = new Set<string>();
 

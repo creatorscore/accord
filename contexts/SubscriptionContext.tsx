@@ -1,6 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { CustomerInfo } from 'react-native-purchases';
-import Purchases from 'react-native-purchases';
+import Purchases, { CustomerInfo } from 'react-native-purchases';
 import {
   initializeRevenueCat,
   getCustomerInfo,

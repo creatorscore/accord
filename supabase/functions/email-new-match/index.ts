@@ -213,21 +213,22 @@ serve(async (req) => {
     const profile1 = profiles.find(p => p.id === profile1_id)!;
     const profile2 = profiles.find(p => p.id === profile2_id)!;
 
-    // Get user emails from auth.users
-    const { data: users, error: usersError } = await supabase.auth.admin.listUsers();
+    // Get user emails by fetching only the specific users we need (not all 20k+ users)
+    const { data: user1Data, error: user1Error } = await supabase.auth.admin.getUserById(profile1.user_id);
+    const { data: user2Data, error: user2Error } = await supabase.auth.admin.getUserById(profile2.user_id);
 
-    if (usersError) {
-      console.error('Error fetching users:', usersError);
+    if (user1Error || user2Error) {
+      console.error('Error fetching users:', user1Error || user2Error);
       return new Response(
         JSON.stringify({ error: 'Failed to fetch user emails' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    const user1 = users.users.find(u => u.id === profile1.user_id);
-    const user2 = users.users.find(u => u.id === profile2.user_id);
+    const user1Email = user1Data?.user?.email;
+    const user2Email = user2Data?.user?.email;
 
-    if (!user1?.email || !user2?.email) {
+    if (!user1Email || !user2Email) {
       console.error('Missing email for one or both users');
       return new Response(
         JSON.stringify({ error: 'Missing user emails' }),
@@ -239,13 +240,13 @@ serve(async (req) => {
     const emailsToSend = [
       {
         userId: profile1.user_id,
-        email: user1.email,
+        email: user1Email,
         name: profile1.display_name || 'there',
         matchName: profile2.display_name || 'Someone special',
       },
       {
         userId: profile2.user_id,
-        email: user2.email,
+        email: user2Email,
         name: profile2.display_name || 'there',
         matchName: profile1.display_name || 'Someone special',
       },

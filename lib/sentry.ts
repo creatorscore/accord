@@ -111,6 +111,21 @@ export const initializeSentry = () => {
           }
         }
 
+        // Drop Android RenderScript driver crashes (SIGSEGV in libRSDriver.so)
+        // These are device-specific GPU driver bugs on low-end phones, not actionable
+        if (errorType === 'SIGSEGV') {
+          const frames = event.exception?.values?.[0]?.stacktrace?.frames || [];
+          const isRenderScriptCrash = frames.some((f: any) =>
+            f.function?.includes('rsdScript') ||
+            f.function?.includes('renderscript') ||
+            f.module?.includes('libRSDriver') ||
+            f.module?.includes('libRS.so')
+          );
+          if (isRenderScriptCrash) {
+            return null;
+          }
+        }
+
         // Remove potentially sensitive user data
         if (event.user) {
           delete event.user.email;

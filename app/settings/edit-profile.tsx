@@ -954,6 +954,7 @@ export default function EditProfile() {
         const place = reverseGeocode[0];
         const city = place.city || place.subregion || '';
         const state = place.region || '';
+        const country = place.country || place.isoCountryCode || '';
 
         // Update local state
         setLocationCity(city);
@@ -967,15 +968,22 @@ export default function EditProfile() {
           .single();
 
         if (profile) {
-          await supabase
+          const { error: updateError } = await supabase
             .from('profiles')
             .update({
               location_city: city,
               location_state: state,
+              location_country: country,
               latitude: location.coords.latitude,
               longitude: location.coords.longitude,
             })
             .eq('id', profile.id);
+
+          if (updateError) {
+            console.error('Error updating location:', updateError);
+            Alert.alert('Error', 'Failed to save location. Please try again.');
+            return;
+          }
         }
 
         Alert.alert('Location Updated', `Your location has been updated to ${city}${state ? `, ${state}` : ''}`);

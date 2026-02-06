@@ -18,12 +18,6 @@ import { MatchProvider } from '@/contexts/MatchContext';
 import { SplashScreen } from '@/components/shared/SplashScreen';
 import { ActivityTracker } from '@/components/shared/ActivityTracker';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
-
-// PERFORMANCE: Lazy load non-critical components to reduce cold start time
-// These components are not needed until after the splash screen hides
-const ScreenCaptureOverlay = lazy(() => import('@/components/shared/ScreenCaptureOverlay').then(m => ({ default: m.ScreenCaptureOverlay })));
-const AppUpdateChecker = lazy(() => import('@/components/AppUpdateChecker'));
-const WhatsNewModal = lazy(() => import('@/components/WhatsNewModal'));
 import { loadSavedLanguage, isRTL, isI18nReady } from '@/lib/i18n';
 import { initializeSentry } from '@/lib/sentry';
 import { initializePostHog, trackAppLifecycle } from '@/lib/analytics';
@@ -35,6 +29,12 @@ import { fontAssets } from '@/lib/fonts';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Application from 'expo-application';
 import '../global.css';
+
+// PERFORMANCE: Lazy load non-critical components to reduce cold start time
+// These components are not needed until after the splash screen hides
+const ScreenCaptureOverlay = lazy(() => import('@/components/shared/ScreenCaptureOverlay').then(m => ({ default: m.ScreenCaptureOverlay })));
+const AppUpdateChecker = lazy(() => import('@/components/AppUpdateChecker'));
+const WhatsNewModal = lazy(() => import('@/components/WhatsNewModal'));
 
 // Prevent splash screen from hiding until fonts are loaded
 SplashScreenExpo.preventAutoHideAsync();

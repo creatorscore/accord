@@ -25,7 +25,7 @@ interface LikeProfile {
     location_state?: string;
     occupation?: string;
     bio?: string;
-    photos: Array<{ url: string; is_primary: boolean }>;
+    photos: { url: string; is_primary: boolean }[];
     compatibility_score?: number;
   };
 }
@@ -396,7 +396,7 @@ export default function Likes() {
     setShowPaywall(true);
   };
 
-  const getPrimaryPhoto = (photos: Array<{ url: string; is_primary: boolean }>) => {
+  const getPrimaryPhoto = (photos: { url: string; is_primary: boolean }[]) => {
     const primary = photos.find(p => p.is_primary);
     return primary?.url || photos[0]?.url || 'https://via.placeholder.com/400x600?text=No+Photo';
   };

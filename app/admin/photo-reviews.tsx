@@ -15,7 +15,7 @@ interface PhotoReviewUser {
   photo_review_requested_at: string | null;
   photo_verification_status: string | null;
   is_active: boolean;
-  photos: Array<{ url: string; is_primary: boolean; display_order: number }>;
+  photos: { url: string; is_primary: boolean; display_order: number }[];
 }
 
 export default function AdminPhotoReviews() {

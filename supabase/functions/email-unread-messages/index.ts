@@ -194,26 +194,36 @@ serve(async (req) => {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
-    // Get unread messages grouped by receiver
-    const { data: unreadMessages, error: messagesError } = await supabase
-      .from('messages')
-      .select(`
-        receiver_profile_id,
-        sender_profile_id,
-        created_at,
-        sender:profiles!messages_sender_profile_id_fkey(display_name)
-      `)
-      .is('read_at', null)
-      .lt('created_at', twoHoursAgo)
-      .gt('created_at', fortyEightHoursAgo)
-      .order('created_at', { ascending: false });
+    // Get unread messages grouped by receiver (paginated to handle >1000 rows)
+    let unreadMessages: any[] = [];
+    let msgFrom = 0;
+    const msgPageSize = 1000;
+    while (true) {
+      const { data: page, error: pageError } = await supabase
+        .from('messages')
+        .select(`
+          receiver_profile_id,
+          sender_profile_id,
+          created_at,
+          sender:profiles!messages_sender_profile_id_fkey(display_name)
+        `)
+        .is('read_at', null)
+        .lt('created_at', twoHoursAgo)
+        .gt('created_at', fortyEightHoursAgo)
+        .order('created_at', { ascending: false })
+        .range(msgFrom, msgFrom + msgPageSize - 1);
 
-    if (messagesError) {
-      console.error('Error fetching unread messages:', messagesError);
-      throw messagesError;
+      if (pageError) {
+        console.error('Error fetching unread messages:', pageError);
+        throw pageError;
+      }
+      if (!page || page.length === 0) break;
+      unreadMessages = unreadMessages.concat(page);
+      if (page.length < msgPageSize) break;
+      msgFrom += msgPageSize;
     }
 
-    if (!unreadMessages || unreadMessages.length === 0) {
+    if (unreadMessages.length === 0) {
       console.log('No unread messages to notify about');
       return new Response(
         JSON.stringify({ success: true, message: 'No unread messages' }),
@@ -240,23 +250,44 @@ serve(async (req) => {
     // Get profile and user info for each receiver
     const receiverIds = Array.from(messagesByReceiver.keys());
 
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, user_id, display_name')
-      .in('id', receiverIds);
+    // Batch the .in() calls to avoid URL length limits
+    let profiles: any[] = [];
+    const inBatchSize = 500;
+    for (let i = 0; i < receiverIds.length; i += inBatchSize) {
+      const batch = receiverIds.slice(i, i + inBatchSize);
+      const { data: batchProfiles, error: batchError } = await supabase
+        .from('profiles')
+        .select('id, user_id, display_name')
+        .in('id', batch);
 
-    if (profilesError) {
-      console.error('Error fetching profiles:', profilesError);
-      throw profilesError;
+      if (batchError) {
+        console.error('Error fetching profiles batch:', batchError);
+        continue;
+      }
+      if (batchProfiles) profiles = profiles.concat(batchProfiles);
     }
 
-    // Get user emails
-    const { data: users, error: usersError } = await supabase.auth.admin.listUsers();
+    // Get user emails by fetching only the specific users we need (not all 20k+ users)
+    const userIds = profiles.map(p => p.user_id).filter(Boolean);
 
-    if (usersError) {
-      console.error('Error fetching users:', usersError);
-      throw usersError;
+    // Fetch user emails in batches from auth.users
+    const userEmailMap = new Map<string, string>();
+    for (let i = 0; i < userIds.length; i += inBatchSize) {
+      const batch = userIds.slice(i, i + inBatchSize);
+      // Use admin API to get specific users by ID
+      for (const userId of batch) {
+        try {
+          const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+          if (!userError && userData?.user?.email) {
+            userEmailMap.set(userId, userData.user.email);
+          }
+        } catch (e) {
+          console.error(`Error fetching user ${userId}:`, e);
+        }
+      }
     }
+
+    console.log(`Found ${userEmailMap.size} user emails for ${profiles.length} profiles`);
 
     const results = [];
 
@@ -265,8 +296,8 @@ serve(async (req) => {
       const userData = messagesByReceiver.get(profile.id);
       if (!userData) continue;
 
-      const user = users.users.find(u => u.id === profile.user_id);
-      if (!user?.email) {
+      const email = userEmailMap.get(profile.user_id);
+      if (!email) {
         console.log(`No email for user ${profile.user_id}`);
         continue;
       }
@@ -289,7 +320,7 @@ serve(async (req) => {
           body: JSON.stringify({
             userId: profile.user_id,
             emailType: 'unread_messages',
-            recipientEmail: user.email,
+            recipientEmail: email,
             recipientName: profile.display_name || 'there',
             subject: `💬 You have ${userData.count} unread message${userData.count > 1 ? 's' : ''} on Accord`,
             htmlContent: html,
@@ -299,8 +330,8 @@ serve(async (req) => {
       );
 
       const result = await response.json();
-      results.push({ email: user.email, count: userData.count, result });
-      console.log(`Unread messages email to ${user.email}:`, result);
+      results.push({ email, count: userData.count, result });
+      console.log(`Unread messages email to ${email}:`, result);
     }
 
     return new Response(

@@ -288,13 +288,22 @@ serve(async (req) => {
       );
     }
 
-    // Get user emails
-    const { data: users, error: usersError } = await supabase.auth.admin.listUsers();
+    // Get user emails by fetching only the specific users we need (not all 20k+ users)
+    const userIds = inactiveProfiles.map(p => p.user_id).filter(Boolean);
+    const userEmailMap = new Map<string, string>();
 
-    if (usersError) {
-      console.error('Error fetching users:', usersError);
-      throw usersError;
+    for (const userId of userIds) {
+      try {
+        const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+        if (!userError && userData?.user?.email) {
+          userEmailMap.set(userId, userData.user.email);
+        }
+      } catch (e) {
+        console.error(`Error fetching user ${userId}:`, e);
+      }
     }
+
+    console.log(`Found ${userEmailMap.size} user emails for ${inactiveProfiles.length} profiles`);
 
     const results = [];
 
@@ -306,8 +315,8 @@ serve(async (req) => {
         continue; // Not in a notification window
       }
 
-      const user = users.users.find(u => u.id === profile.user_id);
-      if (!user?.email) {
+      const email = userEmailMap.get(profile.user_id);
+      if (!email) {
         console.log(`No email for user ${profile.user_id}`);
         continue;
       }
@@ -350,7 +359,7 @@ serve(async (req) => {
           body: JSON.stringify({
             userId: profile.user_id,
             emailType: 'inactive_reminder',
-            recipientEmail: user.email,
+            recipientEmail: email,
             recipientName: profile.display_name || 'there',
             subject,
             htmlContent: html,
@@ -360,8 +369,8 @@ serve(async (req) => {
       );
 
       const result = await response.json();
-      results.push({ email: user.email, level, result });
-      console.log(`Inactive user email (${level}) to ${user.email}:`, result);
+      results.push({ email, level, result });
+      console.log(`Inactive user email (${level}) to ${email}:`, result);
     }
 
     return new Response(

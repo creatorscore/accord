@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     // Get user's profile ID
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id')
+      .select('id, voice_intro_url')
       .eq('user_id', user.id)
       .single();
 
@@ -78,7 +78,62 @@ Deno.serve(async (req) => {
       console.log('Could not save deletion feedback:', feedbackError);
     }
 
-    // Delete profile (cascade delete will handle related data via FK constraints)
+    // 1. Delete photos from Supabase Storage
+    try {
+      const { data: photos } = await supabaseAdmin
+        .from('photos')
+        .select('storage_path')
+        .eq('profile_id', profile.id);
+
+      if (photos && photos.length > 0) {
+        const storagePaths = photos.map((p: any) => p.storage_path).filter(Boolean);
+        if (storagePaths.length > 0) {
+          const { error: storageError } = await supabaseAdmin.storage
+            .from('profile-photos')
+            .remove(storagePaths);
+          if (storageError) {
+            console.error('Error deleting photos from storage:', storageError);
+          } else {
+            console.log(`Deleted ${storagePaths.length} photos from storage`);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error cleaning up photo storage:', e);
+    }
+
+    // 2. Delete voice intro from Supabase Storage
+    try {
+      if (profile.voice_intro_url) {
+        const voicePath = `${profile.id}/voice-intro.m4a`;
+        await supabaseAdmin.storage.from('voice-intros').remove([voicePath]);
+        console.log('Deleted voice intro from storage');
+      }
+    } catch (e) {
+      console.error('Error cleaning up voice intro storage:', e);
+    }
+
+    // 3. Cancel RevenueCat subscription (best-effort)
+    try {
+      const revenueCatSecretKey = Deno.env.get('REVENUECAT_SECRET_KEY');
+      if (revenueCatSecretKey) {
+        const rcResponse = await fetch(
+          `https://api.revenuecat.com/v1/subscribers/${user.id}`,
+          {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${revenueCatSecretKey}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        console.log(`RevenueCat subscriber deletion: ${rcResponse.status}`);
+      }
+    } catch (e) {
+      console.error('Error deleting RevenueCat subscriber:', e);
+    }
+
+    // 4. Delete profile (cascade delete will handle related data via FK constraints)
     const { error: deleteProfileError } = await supabaseAdmin
       .from('profiles')
       .delete()
@@ -92,7 +147,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Delete auth user using admin API
+    // 5. Delete auth user using admin API
     const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(user.id);
 
     if (deleteUserError) {

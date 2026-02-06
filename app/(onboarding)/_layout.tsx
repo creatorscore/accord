@@ -1,7 +1,6 @@
-import { Stack } from 'expo-router';
+import { Stack , router } from 'expo-router';
 import { TouchableOpacity, Alert, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 function LogoutButton({ onPress }: { onPress: () => void }) {

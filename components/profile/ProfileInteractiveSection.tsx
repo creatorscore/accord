@@ -5,13 +5,13 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface InteractiveSectionProps {
   title: string;
-  items: Array<{
+  items: {
     icon?: string;
     emoji?: string;
     label: string;
     value: string;
     detail?: string;
-  }>;
+  }[];
   expandable?: boolean;
 }
 

@@ -111,7 +111,7 @@ export async function invalidateProfileScores(profileId: string): Promise<void> 
 export async function batchCacheScores(
   sourceProfile: Profile,
   sourcePrefs: Preferences,
-  targetProfiles: Array<{ profile: Profile; preferences: Preferences }>
+  targetProfiles: { profile: Profile; preferences: Preferences }[]
 ): Promise<void> {
   const promises = targetProfiles.map(async ({ profile, preferences }) => {
     const score = calculateCompatibilityScore(
