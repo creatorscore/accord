@@ -58,7 +58,7 @@ interface Profile {
   political_views?: string;
   hobbies?: string[];
   interests?: any; // JSONB object with arrays
-  photos?: Array<{ url: string; is_primary: boolean; display_order?: number }>;
+  photos?: { url: string; is_primary: boolean; display_order?: number }[];
   compatibility_score?: number;
   compatibilityBreakdown?: {
     total: number; // Changed from 'overall' to match matching-algorithm.ts
@@ -72,7 +72,7 @@ interface Profile {
   is_verified?: boolean;
   photo_verified?: boolean;
   distance?: number | null;
-  prompt_answers?: Array<{ prompt: string; answer: string }>;
+  prompt_answers?: { prompt: string; answer: string }[];
   voice_intro_url?: string;
   voice_intro_duration?: number;
   photo_blur_enabled?: boolean;
@@ -251,7 +251,7 @@ export default function Discover() {
   }, [isTransitioning, profileOpacity]);
 
   // Smart recommendations - dynamic array from database
-  const [smartRecommendations, setSmartRecommendations] = useState<Array<{
+  const [smartRecommendations, setSmartRecommendations] = useState<{
     type: 'age' | 'distance' | 'gender' | 'global';
     count: number;
     description: string;
@@ -260,7 +260,7 @@ export default function Discover() {
     newAgeMin?: number;
     newAgeMax?: number;
     addedGender?: string;
-  }>>([]);
+  }[]>([]);
 
   // Quick filter options
   const INTENTIONS = [
@@ -334,19 +334,24 @@ export default function Discover() {
       const currentProfiles = profilesRef.current;
       const currentIdx = currentIndexRef.current;
 
+      let focusTimeout: ReturnType<typeof setTimeout> | null = null;
+
       if (currentProfiles.length > 0 && currentIdx < currentProfiles.length - 1) {
         console.log('🔄 Discovery screen refocused - advancing to next profile');
         hasAdvancedOnFocus.current = true;
 
         // Small delay to ensure screen transition is complete
-        setTimeout(() => {
+        focusTimeout = setTimeout(() => {
           advanceIndex();
         }, 300);
       }
 
-      // Reset flag when screen loses focus
+      // Reset flag and clear timeout when screen loses focus
       return () => {
         hasAdvancedOnFocus.current = false;
+        if (focusTimeout) {
+          clearTimeout(focusTimeout);
+        }
       };
     }, [])
   );
@@ -354,6 +359,9 @@ export default function Discover() {
   // Handle app foregrounding (when user returns from background)
   // This complements useFocusEffect which only handles in-app navigation
   useEffect(() => {
+    let advanceTimeout: ReturnType<typeof setTimeout> | null = null;
+    let resetTimeout: ReturnType<typeof setTimeout> | null = null;
+
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {
         // App came to foreground
@@ -376,10 +384,10 @@ export default function Discover() {
           hasAdvancedOnFocus.current = true;
 
           // Small delay to ensure app transition is complete
-          setTimeout(() => {
+          advanceTimeout = setTimeout(() => {
             advanceIndex();
             // Reset flag after advance
-            setTimeout(() => {
+            resetTimeout = setTimeout(() => {
               hasAdvancedOnFocus.current = false;
             }, 500);
           }, 300);
@@ -389,6 +397,8 @@ export default function Discover() {
 
     return () => {
       subscription.remove();
+      if (advanceTimeout) clearTimeout(advanceTimeout);
+      if (resetTimeout) clearTimeout(resetTimeout);
     };
   }, []);
 

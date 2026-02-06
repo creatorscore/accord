@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,11 @@ import {
   Dimensions,
   StyleSheet,
   Animated,
-  Platform,
-  Alert,
   Modal,
   Pressable,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
@@ -27,7 +23,7 @@ import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import { useSafeBlur } from '@/hooks/useSafeBlur';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 
-const { width, height } = Dimensions.get('window');
+const { width: _SCREEN_WIDTH, height: _SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface Profile {
   id: string;
@@ -45,7 +41,7 @@ interface Profile {
   bio?: string;
   occupation?: string;
   education?: string;
-  photos?: Array<{ url: string; is_primary: boolean }>;
+  photos?: { url: string; is_primary: boolean }[];
   compatibility_score?: number;
   is_verified?: boolean;
   photo_verified?: boolean;
@@ -57,7 +53,7 @@ interface Profile {
   languages_spoken?: string[];
   religion?: string;
   political_views?: string;
-  prompt_answers?: Array<{ prompt: string; answer: string }>;
+  prompt_answers?: { prompt: string; answer: string }[];
   voice_intro_url?: string;
   voice_intro_duration?: number;
   voice_intro_prompt?: string;
@@ -171,6 +167,7 @@ const PREFERENCE_LABELS: { [key: string]: string } = {
 
 const formatLabel = (value: string) => {
   if (!value) return '';
+  if (typeof value !== 'string') return String(value);
   if (PREFERENCE_LABELS[value]) return PREFERENCE_LABELS[value];
   return value.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
@@ -187,7 +184,8 @@ const formatArrayWithLabels = (value?: string | string[]): string => {
       items = [value];
     }
   }
-  return items.map(formatLabel).join(', ');
+  // Filter out empty/null/undefined items before mapping to prevent errors
+  return items.filter(item => item && typeof item === 'string').map(formatLabel).join(', ');
 };
 
 const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boolean | undefined): string | null => {
@@ -208,7 +206,7 @@ const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boo
 };
 
 // Like Button Component - appears on photos and prompts
-const LikeButton = React.memo(({ onPress, size = 48 }: { onPress: () => void; size?: number }) => {
+const LikeButton = React.memo(function LikeButton({ onPress, size = 48 }: { onPress: () => void; size?: number }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
@@ -230,10 +228,11 @@ const LikeButton = React.memo(({ onPress, size = 48 }: { onPress: () => void; si
 });
 
 // Photo Card with Like Button
-const PhotoCard = React.memo(({
+const PhotoCard = React.memo(function PhotoCard({
   uri,
   onLike,
   blurRadius,
+  showBlurOverlay,
   onImageLoad,
   onImageError,
   watermarkReady,
@@ -245,6 +244,7 @@ const PhotoCard = React.memo(({
   uri: string;
   onLike: () => void;
   blurRadius: number;
+  showBlurOverlay: boolean;
   onImageLoad: () => void;
   onImageError: () => void;
   watermarkReady: boolean;
@@ -252,7 +252,8 @@ const PhotoCard = React.memo(({
   viewerUserId: string | null;
   showLikeButton?: boolean;
   photoIndex?: number;
-}) => (
+}) {
+  return (
   <View style={styles.photoCard}>
     <Image
       source={{ uri }}
@@ -264,6 +265,13 @@ const PhotoCard = React.memo(({
       onLoad={onImageLoad}
       onError={onImageError}
     />
+    {/* Android blur fallback - CSS overlay instead of RenderScript */}
+    {showBlurOverlay && (
+      <View
+        style={[styles.photoImage, { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)' }]}
+        pointerEvents="none"
+      />
+    )}
     {watermarkReady && viewerUserId && (
       <DynamicWatermark
         key={`watermark-${profileId}-${photoIndex}`}
@@ -278,10 +286,11 @@ const PhotoCard = React.memo(({
       </View>
     )}
   </View>
-));
+  );
+});
 
 // Prompt Card with Like Button
-const PromptCard = React.memo(({
+const PromptCard = React.memo(function PromptCard({
   prompt,
   answer,
   onLike,
@@ -291,7 +300,8 @@ const PromptCard = React.memo(({
   answer: string;
   onLike: () => void;
   showLikeButton?: boolean;
-}) => (
+}) {
+  return (
   <View style={styles.promptCard}>
     <Text style={styles.promptQuestion}>{prompt}</Text>
     <Text style={styles.promptAnswer}>{answer}</Text>
@@ -301,10 +311,12 @@ const PromptCard = React.memo(({
       </View>
     )}
   </View>
-));
+  );
+});
 
 // Vitals Chip Component (for horizontal scroll row - Hinge style with dividers)
-const VitalsChip = ({ icon, value, isLast }: { icon: string; value: string; isLast?: boolean }) => (
+const VitalsChip = function VitalsChip({ icon, value, isLast }: { icon: string; value: string; isLast?: boolean }) {
+  return (
   <View style={styles.vitalsChipContainer}>
     <View style={styles.vitalsChip}>
       <MaterialCommunityIcons name={icon as any} size={20} color="#374151" />
@@ -312,10 +324,12 @@ const VitalsChip = ({ icon, value, isLast }: { icon: string; value: string; isLa
     </View>
     {!isLast && <View style={styles.vitalsChipDivider} />}
   </View>
-);
+  );
+};
 
 // Vitals Row Item Component (for vertical list - Hinge style with separators)
-const VitalsRowItem = ({ icon, value, isLast }: { icon: string; value: string; isLast?: boolean }) => (
+const VitalsRowItem = function VitalsRowItem({ icon, value, isLast }: { icon: string; value: string; isLast?: boolean }) {
+  return (
   <View style={styles.vitalsRowContainer}>
     <View style={styles.vitalsRowItem}>
       <View style={styles.vitalsRowIconContainer}>
@@ -325,10 +339,11 @@ const VitalsRowItem = ({ icon, value, isLast }: { icon: string; value: string; i
     </View>
     {!isLast && <View style={styles.vitalsRowSeparator} />}
   </View>
-);
+  );
+};
 
 // Hinge-Style Vitals Section
-const VitalsSection = React.memo(({
+const VitalsSection = React.memo(function VitalsSection({
   profile,
   preferences,
   heightUnit,
@@ -338,7 +353,7 @@ const VitalsSection = React.memo(({
   preferences?: Preferences;
   heightUnit: HeightUnit;
   distanceUnit: DistanceUnit;
-}) => {
+}) {
   // Build pills for horizontal scroll (using outline icons for clean Hinge look)
   const pills: { icon: string; value: string }[] = [];
 
@@ -471,7 +486,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+  const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
     shouldBlur: (profile.photo_blur_enabled || false) && !isAdmin && !isPhotoRevealed && !isOwnProfile,
     blurIntensity: 50,
   });
@@ -509,6 +524,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
     }
     setIsVoicePlaying(false);
     setPlaybackProgress(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id]);
 
   const waveformBars = useMemo(() => {
@@ -652,6 +668,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             uri={photos[0].url}
             onLike={() => handleLikeContent('photo_1')}
             blurRadius={blurRadius}
+            showBlurOverlay={showBlurOverlay}
             onImageLoad={onImageLoad}
             onImageError={onImageError}
             watermarkReady={watermarkReady}
@@ -724,6 +741,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             uri={photos[1].url}
             onLike={() => handleLikeContent('photo_2')}
             blurRadius={blurRadius}
+            showBlurOverlay={showBlurOverlay}
             onImageLoad={onImageLoad}
             onImageError={onImageError}
             watermarkReady={watermarkReady}
@@ -750,6 +768,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             uri={photos[2].url}
             onLike={() => handleLikeContent('photo_3')}
             blurRadius={blurRadius}
+            showBlurOverlay={showBlurOverlay}
             onImageLoad={onImageLoad}
             onImageError={onImageError}
             watermarkReady={watermarkReady}
@@ -975,7 +994,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
               <Text style={styles.mustHavesEmoji}>✅</Text>
               <Text style={styles.mustHavesSectionTitle}>Must-Haves</Text>
             </View>
-            <Text style={styles.mustHavesSubtitle}>Important qualities they're looking for</Text>
+            <Text style={styles.mustHavesSubtitle}>Important qualities they&apos;re looking for</Text>
             {preferences.must_haves.map((item, index) => (
               <View key={index} style={styles.mustHavesItem}>
                 <Text style={styles.mustHavesBullet}>•</Text>
@@ -1030,6 +1049,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             uri={photo.url}
             onLike={() => handleLikeContent(`photo_${index + 4}`)}
             blurRadius={blurRadius}
+            showBlurOverlay={showBlurOverlay}
             onImageLoad={onImageLoad}
             onImageError={onImageError}
             watermarkReady={watermarkReady}
@@ -1158,6 +1178,8 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
     </View>
   );
 });
+
+DiscoveryProfileView.displayName = 'DiscoveryProfileView';
 
 // Compatibility Bar Component
 const CompatBar = ({ label, score }: { label: string; score: number }) => (

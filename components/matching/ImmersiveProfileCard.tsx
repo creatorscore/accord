@@ -2,17 +2,14 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   Dimensions,
   StyleSheet,
   Animated,
-  Platform,
   StatusBar,
   Alert,
   Modal,
   Pressable,
-  InteractionManager,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -49,7 +46,7 @@ interface Profile {
   bio?: string;
   occupation?: string;
   education?: string;
-  photos?: Array<{ url: string; is_primary: boolean }>;
+  photos?: { url: string; is_primary: boolean }[];
   compatibility_score?: number;
   is_verified?: boolean;
   photo_verified?: boolean;
@@ -61,7 +58,7 @@ interface Profile {
   languages_spoken?: string[];
   religion?: string;
   political_views?: string;
-  prompt_answers?: Array<{ prompt: string; answer: string }>;
+  prompt_answers?: { prompt: string; answer: string }[];
   voice_intro_url?: string;
   voice_intro_duration?: number;
   voice_intro_prompt?: string;
@@ -179,6 +176,7 @@ const PREFERENCE_LABELS: { [key: string]: string } = {
 // Helper to convert database values to display labels
 const formatLabel = (value: string) => {
   if (!value) return '';
+  if (typeof value !== 'string') return String(value);
 
   // First try to get from mapping
   if (PREFERENCE_LABELS[value]) {
@@ -216,7 +214,7 @@ const formatArrayWithLabels = (value?: string | string[]): string => {
         } else {
           items = [value];
         }
-      } catch (e) {
+      } catch {
         items = [value];
       }
     } else {
@@ -224,7 +222,8 @@ const formatArrayWithLabels = (value?: string | string[]): string => {
     }
   }
 
-  return items.map(formatLabel).join(', ');
+  // Filter out empty/null/undefined items before mapping to prevent errors
+  return items.filter(item => item && typeof item === 'string').map(formatLabel).join(', ');
 };
 
 // Helper function to format last active time
@@ -266,7 +265,7 @@ export default function ImmersiveProfileCard({
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
 
   // Safe blur hook - protects user privacy while preventing crashes
-  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+  const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
     shouldBlur: profile.photo_blur_enabled || false,
     blurIntensity: 20,
   });
@@ -379,9 +378,6 @@ export default function ImmersiveProfileCard({
 
   if (!visible) return null;
 
-  // Intersperse photos with content
-  const photoIndexes = [1, 2, 3, 4, 5].filter(i => photos[i]);
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -448,6 +444,13 @@ export default function ImmersiveProfileCard({
             onLoad={onImageLoad}
             onError={onImageError}
           />
+          {/* Android blur fallback - CSS overlay instead of RenderScript */}
+          {showBlurOverlay && (
+            <View
+              style={[styles.heroImage, { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)' }]}
+              pointerEvents="none"
+            />
+          )}
           {/* Dynamic Watermark over hero image */}
           {watermarkReady && (
             <DynamicWatermark
@@ -602,16 +605,24 @@ export default function ImmersiveProfileCard({
 
           {/* Photo 2 */}
           {photos[1] && (
-            <Image
-              source={{ uri: photos[1].url }}
-              style={styles.storyPhoto}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={200}
-              blurRadius={blurRadius}
-              onLoad={onImageLoad}
-              onError={onImageError}
-            />
+            <View style={{ position: 'relative' }}>
+              <Image
+                source={{ uri: photos[1].url }}
+                style={styles.storyPhoto}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+                blurRadius={blurRadius}
+                onLoad={onImageLoad}
+                onError={onImageError}
+              />
+              {showBlurOverlay && (
+                <View
+                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                  pointerEvents="none"
+                />
+              )}
+            </View>
           )}
 
           {/* MARRIAGE GOALS - MOST IMPORTANT */}
@@ -677,16 +688,24 @@ export default function ImmersiveProfileCard({
                 <Text style={styles.promptAnswer}>{profile.prompt_answers[0].answer}</Text>
               </View>
               {photos[2] && (
-                <Image
-                  source={{ uri: photos[2].url }}
-                  style={styles.promptPhoto}
-                  contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={200}
-                  blurRadius={blurRadius}
-              onLoad={onImageLoad}
-              onError={onImageError}
-                />
+                <View style={{ position: 'relative' }}>
+                  <Image
+                    source={{ uri: photos[2].url }}
+                    style={styles.promptPhoto}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={200}
+                    blurRadius={blurRadius}
+                    onLoad={onImageLoad}
+                    onError={onImageError}
+                  />
+                  {showBlurOverlay && (
+                    <View
+                      style={[styles.promptPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                      pointerEvents="none"
+                    />
+                  )}
+                </View>
               )}
             </View>
           )}
@@ -728,7 +747,7 @@ export default function ImmersiveProfileCard({
                 <Text style={[styles.sectionTitle, { color: '#166534', marginBottom: 0 }]}>Must-Haves</Text>
               </View>
               <Text style={{ fontSize: 13, color: '#16A34A', marginBottom: 12, fontStyle: 'italic' }}>
-                Important qualities they're looking for
+                Important qualities they&apos;re looking for
               </Text>
               {preferences.must_haves.map((item, index) => (
                 <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -760,16 +779,24 @@ export default function ImmersiveProfileCard({
 
           {/* Photo 4 */}
           {photos[3] && (
-            <Image
-              source={{ uri: photos[3].url }}
-              style={styles.storyPhoto}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={200}
-              blurRadius={blurRadius}
-              onLoad={onImageLoad}
-              onError={onImageError}
-            />
+            <View style={{ position: 'relative' }}>
+              <Image
+                source={{ uri: photos[3].url }}
+                style={styles.storyPhoto}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+                blurRadius={blurRadius}
+                onLoad={onImageLoad}
+                onError={onImageError}
+              />
+              {showBlurOverlay && (
+                <View
+                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                  pointerEvents="none"
+                />
+              )}
+            </View>
           )}
 
           {/* LIFESTYLE COMPATIBILITY */}
@@ -921,16 +948,24 @@ export default function ImmersiveProfileCard({
                 <Text style={styles.promptAnswer}>{prompt.answer}</Text>
               </View>
               {photos[4 + index] && (
-                <Image
-                  source={{ uri: photos[4 + index].url }}
-                  style={styles.promptPhoto}
-                  contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={200}
-                  blurRadius={blurRadius}
-              onLoad={onImageLoad}
-              onError={onImageError}
-                />
+                <View style={{ position: 'relative' }}>
+                  <Image
+                    source={{ uri: photos[4 + index].url }}
+                    style={styles.promptPhoto}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={200}
+                    blurRadius={blurRadius}
+                    onLoad={onImageLoad}
+                    onError={onImageError}
+                  />
+                  {showBlurOverlay && (
+                    <View
+                      style={[styles.promptPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                      pointerEvents="none"
+                    />
+                  )}
+                </View>
               )}
             </View>
           ))}
@@ -970,17 +1005,24 @@ export default function ImmersiveProfileCard({
 
           {/* Remaining photos */}
           {photos.slice(5).map((photo, index) => (
-            <Image
-              key={index}
-              source={{ uri: photo.url }}
-              style={styles.storyPhoto}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={200}
-              blurRadius={blurRadius}
-              onLoad={onImageLoad}
-              onError={onImageError}
-            />
+            <View key={index} style={{ position: 'relative' }}>
+              <Image
+                source={{ uri: photo.url }}
+                style={styles.storyPhoto}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+                blurRadius={blurRadius}
+                onLoad={onImageLoad}
+                onError={onImageError}
+              />
+              {showBlurOverlay && (
+                <View
+                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                  pointerEvents="none"
+                />
+              )}
+            </View>
           ))}
 
           <View style={{ height: 120 }} />

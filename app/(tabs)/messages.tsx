@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Alert, Modal, Pressable, useWindowDimensions, Platform, InteractionManager } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect , router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -80,7 +79,10 @@ export default function Messages() {
   useEffect(() => {
     if (currentProfileId) {
       loadConversations();
-      subscribeToMessages();
+      const unsubscribe = subscribeToMessages();
+      return () => {
+        unsubscribe();
+      };
     }
   }, [currentProfileId, showArchived]);
 
@@ -755,7 +757,7 @@ export default function Messages() {
     const isTyping = typingUsers.has(item.match_id);
 
     // Safe blur hook - protects user privacy while preventing crashes
-    const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+    const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
       shouldBlur: (item.profile.photo_blur_enabled || false) && !item.profile.is_revealed,
       blurIntensity: 30,
     });
@@ -781,6 +783,13 @@ export default function Messages() {
               onLoad={onImageLoad}
               onError={onImageError}
             />
+            {/* Android blur fallback - CSS overlay instead of RenderScript */}
+            {showBlurOverlay && (
+              <View
+                style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                pointerEvents="none"
+              />
+            )}
             {item.profile.is_verified && (
               <View style={[styles.verifiedBadge, { backgroundColor: colors.background }]}>
                 <MaterialCommunityIcons name="check-decagram" size={16} color={colors.info} />

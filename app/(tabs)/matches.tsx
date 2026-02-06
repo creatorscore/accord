@@ -26,7 +26,7 @@ interface Match {
     id: string;
     display_name: string;
     age: number;
-    photos?: Array<{ url: string; is_primary: boolean }>;
+    photos?: { url: string; is_primary: boolean }[];
     is_verified?: boolean;
     last_active_at?: string | null;
     hide_last_active?: boolean;
@@ -78,7 +78,12 @@ export default function Matches() {
     if (currentProfileId) {
       loadMatches();
       loadLikesCount();
-      subscribeToMatches();
+      const unsubscribe = subscribeToMatches();
+      return () => {
+        if (unsubscribe) {
+          unsubscribe();
+        }
+      };
     }
   }, [currentProfileId]);
 
@@ -801,7 +806,7 @@ export default function Matches() {
     const expirationInfo = getExpirationInfo(item);
 
     // Safe blur hook - protects user privacy while preventing crashes
-    const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+    const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
       shouldBlur: (item.profile.photo_blur_enabled || false) && !item.profile.is_revealed,
       blurIntensity: 30,
     });
@@ -827,6 +832,13 @@ export default function Matches() {
               onLoad={onImageLoad}
               onError={onImageError}
             />
+            {/* Android blur fallback - CSS overlay instead of RenderScript */}
+            {showBlurOverlay && (
+              <View
+                style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                pointerEvents="none"
+              />
+            )}
             {item.profile.is_verified && (
               <View style={[styles.verifiedBadge, { backgroundColor: colors.card }]}>
                 <MaterialCommunityIcons name="check-decagram" size={18} color="#3B82F6" />
