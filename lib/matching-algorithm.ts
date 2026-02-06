@@ -72,7 +72,7 @@ interface Profile {
     books?: string[];
     tv_shows?: string[];
   } | null;
-  prompt_answers?: Array<{ prompt: string; answer: string }> | null;
+  prompt_answers?: { prompt: string; answer: string }[] | null;
   zodiac_sign: string | null;
   personality_type: string | null;
   love_language: string | string[] | null; // Multi-select support

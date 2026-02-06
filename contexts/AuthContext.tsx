@@ -227,6 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         const city = addressInfo.city || addressInfo.subregion || addressInfo.district || '';
         const state = addressInfo.region || '';
+        const country = addressInfo.country || addressInfo.isoCountryCode || '';
 
         // Get profile ID
         const { data: profile } = await supabase
@@ -260,6 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             longitude: location.coords.longitude,
             location_city: city,
             location_state: state,
+            location_country: country,
             last_active_at: new Date().toISOString(),
           })
           .eq('id', profile.id);
@@ -267,7 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         if (updateError) {
           console.error('❌ Failed to update location:', updateError);
         } else {
-          console.log('✅ Location refreshed:', city, state);
+          console.log('✅ Location refreshed:', city, state, country);
           lastLocationUpdate.current = now;
         }
       } catch (error) {

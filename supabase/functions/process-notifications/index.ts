@@ -1,7 +1,7 @@
 // Edge Function: Process Notification Queue
 // This function is triggered by a cron job every minute to process pending notifications
 // Optimized for high throughput using Expo's batch API (up to 100 per request)
-// NOW WITH: Push receipt verification and automatic stale token cleanup
+// NOW WITH: Push receipt verification, automatic stale token cleanup, and concurrent batch sending
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
@@ -9,10 +9,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-// Process up to 1000 notifications per run
-// Expo allows batches of 100, so we'll send 10 batch requests
+// Process up to 2000 notifications per run (increased from 1000 to handle broadcast bursts)
+// Expo allows batches of 100, with 3 concurrent batches = 300 per round
 const BATCH_SIZE = 100
-const MAX_NOTIFICATIONS = 1000
+const MAX_NOTIFICATIONS = 2000
+const CONCURRENT_BATCHES = 3 // 3 concurrent batches * 100 = 300 per round, well under Expo's 600/sec limit
+const IN_BATCH_SIZE = 500 // For batching .in() calls to avoid URL length limits
 
 interface NotificationQueueItem {
   id: string
@@ -142,6 +144,53 @@ async function checkPushReceipts(
   return invalidTokens
 }
 
+/**
+ * Send a batch of messages to Expo with error handling
+ * Returns the tickets array
+ */
+async function sendExpoBatch(messages: ExpoMessage[]): Promise<ExpoPushTicket[]> {
+  const response = await fetch('https://exp.host/--/api/v2/push/send', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Accept-Encoding': 'gzip, deflate',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(messages),
+  })
+
+  const result = await response.json()
+  return (result.data || []) as ExpoPushTicket[]
+}
+
+/**
+ * Process batches with controlled concurrency
+ * Sends CONCURRENT_BATCHES at a time to stay under Expo's rate limit
+ */
+async function processWithConcurrency<T, R>(
+  items: T[],
+  batchSize: number,
+  concurrency: number,
+  processor: (batch: T[]) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = []
+  const batches: T[][] = []
+
+  // Split items into batches
+  for (let i = 0; i < items.length; i += batchSize) {
+    batches.push(items.slice(i, i + batchSize))
+  }
+
+  // Process batches with controlled concurrency
+  for (let i = 0; i < batches.length; i += concurrency) {
+    const concurrentBatches = batches.slice(i, i + concurrency)
+    const batchResults = await Promise.all(concurrentBatches.map(processor))
+    results.push(...batchResults)
+  }
+
+  return results
+}
+
 serve(async (req) => {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -171,39 +220,53 @@ serve(async (req) => {
     // Get all unique profile IDs
     const profileIds = [...new Set(notifications.map((n: NotificationQueueItem) => n.recipient_profile_id))]
 
-    // Batch fetch all profiles at once
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, push_token, push_enabled')
-      .in('id', profileIds)
+    // Batch fetch all profiles (avoid URL length limits with batched .in() calls)
+    let profiles: Profile[] = []
+    for (let i = 0; i < profileIds.length; i += IN_BATCH_SIZE) {
+      const batch = profileIds.slice(i, i + IN_BATCH_SIZE)
+      const { data: batchProfiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, push_token, push_enabled')
+        .in('id', batch)
 
-    if (profilesError) {
-      throw profilesError
+      if (profilesError) {
+        console.error('Error fetching profiles batch:', profilesError)
+        continue
+      }
+      if (batchProfiles) {
+        profiles = profiles.concat(batchProfiles as Profile[])
+      }
     }
 
     // Create a map for quick profile lookup
     const profileMap = new Map<string, Profile>()
-    for (const profile of (profiles || [])) {
-      profileMap.set(profile.id, profile as Profile)
+    for (const profile of profiles) {
+      profileMap.set(profile.id, profile)
     }
 
-    // ALSO fetch device_tokens for multi-device support
-    // This catches tokens that may not be in profiles.push_token
-    const { data: deviceTokens, error: deviceTokensError } = await supabase
-      .from('device_tokens')
-      .select('profile_id, push_token')
-      .in('profile_id', profileIds)
+    // Batch fetch device_tokens for multi-device support (with batched .in() calls)
+    let deviceTokens: DeviceToken[] = []
+    for (let i = 0; i < profileIds.length; i += IN_BATCH_SIZE) {
+      const batch = profileIds.slice(i, i + IN_BATCH_SIZE)
+      const { data: batchTokens, error: deviceTokensError } = await supabase
+        .from('device_tokens')
+        .select('profile_id, push_token')
+        .in('profile_id', batch)
 
-    if (deviceTokensError) {
-      console.error('Error fetching device tokens:', deviceTokensError)
-      // Continue anyway - we still have profiles.push_token as fallback
+      if (deviceTokensError) {
+        console.error('Error fetching device tokens batch:', deviceTokensError)
+        continue
+      }
+      if (batchTokens) {
+        deviceTokens = deviceTokens.concat(batchTokens as DeviceToken[])
+      }
     }
 
     // Create a map of profile_id -> all push tokens (from both sources)
     const tokenMap = new Map<string, Set<string>>()
 
     // Add tokens from device_tokens table
-    for (const dt of (deviceTokens || []) as DeviceToken[]) {
+    for (const dt of deviceTokens) {
       if (!tokenMap.has(dt.profile_id)) {
         tokenMap.set(dt.profile_id, new Set())
       }
@@ -211,7 +274,7 @@ serve(async (req) => {
     }
 
     // Add tokens from profiles.push_token (legacy, ensures backward compat)
-    for (const profile of (profiles || [])) {
+    for (const profile of profiles) {
       if (profile.push_token) {
         if (!tokenMap.has(profile.id)) {
           tokenMap.set(profile.id, new Set())
@@ -273,71 +336,87 @@ serve(async (req) => {
     const allTicketIds: string[] = []
     const ticketToTokenMap = new Map<string, string>()
 
-    // Send notifications in batches of 100 (Expo's limit)
+    // Split toSend into batches of BATCH_SIZE
+    const sendBatches: typeof toSend[] = []
     for (let i = 0; i < toSend.length; i += BATCH_SIZE) {
-      const batch = toSend.slice(i, i + BATCH_SIZE)
-      const messages = batch.map(b => b.message)
+      sendBatches.push(toSend.slice(i, i + BATCH_SIZE))
+    }
 
-      try {
-        const response = await fetch('https://exp.host/--/api/v2/push/send', {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Accept-Encoding': 'gzip, deflate',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(messages),
-        })
+    // Process batches with controlled concurrency (3 at a time)
+    for (let i = 0; i < sendBatches.length; i += CONCURRENT_BATCHES) {
+      const concurrentBatches = sendBatches.slice(i, i + CONCURRENT_BATCHES)
 
-        const result = await response.json()
-        const tickets = (result.data || []) as ExpoPushTicket[]
+      const batchPromises = concurrentBatches.map(async (batch) => {
+        const messages = batch.map(b => b.message)
 
-        // Process tickets - Expo returns array in same order as sent
-        const successIds = new Set<string>()
-        const failedUpdates: { id: string; error: string; attempts: number }[] = []
-        const tokensToRemove: string[] = []
+        try {
+          const tickets = await sendExpoBatch(messages)
 
-        for (let j = 0; j < batch.length; j++) {
-          const notification = batch[j].notification
-          const token = batch[j].token
-          const ticket = tickets[j]
+          // Process tickets - Expo returns array in same order as sent
+          const successIds = new Set<string>()
+          const failedUpdates: { id: string; error: string; attempts: number }[] = []
+          const tokensToRemove: string[] = []
 
-          if (ticket?.status === 'error') {
-            // Check for DeviceNotRegistered error - token is invalid, remove it
-            if (ticket.details?.error === 'DeviceNotRegistered') {
-              console.log(`❌ DeviceNotRegistered error for token: ${token.substring(0, 30)}...`)
-              tokensToRemove.push(token)
-            }
+          for (let j = 0; j < batch.length; j++) {
+            const notification = batch[j].notification
+            const token = batch[j].token
+            const ticket = tickets[j]
 
-            // Only count notification as failed if ALL devices failed
-            if (!successIds.has(notification.id)) {
-              failedUpdates.push({
-                id: notification.id,
-                error: ticket.message || 'Unknown error',
-                attempts: notification.attempts
-              })
-            }
-            failureCount++
-          } else if (ticket?.status === 'ok') {
-            successIds.add(notification.id)
-            successCount++
+            if (ticket?.status === 'error') {
+              // Check for DeviceNotRegistered error - token is invalid, remove it
+              if (ticket.details?.error === 'DeviceNotRegistered') {
+                console.log(`❌ DeviceNotRegistered error for token: ${token.substring(0, 30)}...`)
+                tokensToRemove.push(token)
+              }
 
-            // Track ticket ID for later receipt verification
-            if (ticket.id) {
-              allTicketIds.push(ticket.id)
-              ticketToTokenMap.set(ticket.id, token)
+              // Only count notification as failed if ALL devices failed
+              if (!successIds.has(notification.id)) {
+                failedUpdates.push({
+                  id: notification.id,
+                  error: ticket.message || 'Unknown error',
+                  attempts: notification.attempts
+                })
+              }
+            } else if (ticket?.status === 'ok') {
+              successIds.add(notification.id)
+
+              // Track ticket ID for later receipt verification
+              if (ticket.id) {
+                allTicketIds.push(ticket.id)
+                ticketToTokenMap.set(ticket.id, token)
+              }
             }
           }
-        }
 
-        // Remove invalid tokens immediately
-        for (const token of tokensToRemove) {
+          return { successIds, failedUpdates, tokensToRemove, batchLength: batch.length }
+        } catch (error: any) {
+          console.error('Batch send error:', error)
+          return {
+            successIds: new Set<string>(),
+            failedUpdates: batch.map(item => ({
+              id: item.notification.id,
+              error: error.message,
+              attempts: item.notification.attempts
+            })),
+            tokensToRemove: [],
+            batchLength: batch.length,
+            error: true
+          }
+        }
+      })
+
+      const batchResults = await Promise.all(batchPromises)
+
+      // Process results from concurrent batches
+      for (const result of batchResults) {
+        // Remove invalid tokens
+        for (const token of result.tokensToRemove) {
           await removeInvalidToken(supabase, token)
           invalidTokensRemoved++
         }
 
         // Batch update successful notifications
-        const successIdArray = Array.from(successIds)
+        const successIdArray = Array.from(result.successIds)
         if (successIdArray.length > 0) {
           await supabase
             .from('notification_queue')
@@ -346,32 +425,22 @@ serve(async (req) => {
               processed_at: new Date().toISOString(),
             })
             .in('id', successIdArray)
+          successCount += successIdArray.length
         }
 
-        // Batch update failed notifications
-        for (const failed of failedUpdates) {
-          await supabase
-            .from('notification_queue')
-            .update({
-              status: failed.attempts + 1 >= 3 ? 'failed' : 'pending',
-              error: failed.error,
-              attempts: failed.attempts + 1
-            })
-            .eq('id', failed.id)
-        }
-      } catch (error: any) {
-        console.error('Batch send error:', error)
-        // Mark all in this batch as failed
-        for (const item of batch) {
-          await supabase
-            .from('notification_queue')
-            .update({
-              status: item.notification.attempts + 1 >= 3 ? 'failed' : 'pending',
-              error: error.message,
-              attempts: item.notification.attempts + 1
-            })
-            .eq('id', item.notification.id)
-          failureCount++
+        // Update failed notifications
+        for (const failed of result.failedUpdates) {
+          if (!result.successIds.has(failed.id)) {
+            await supabase
+              .from('notification_queue')
+              .update({
+                status: failed.attempts + 1 >= 3 ? 'failed' : 'pending',
+                error: failed.error,
+                attempts: failed.attempts + 1
+              })
+              .eq('id', failed.id)
+            failureCount++
+          }
         }
       }
     }

@@ -288,13 +288,24 @@ Deno.serve(async (req) => {
     console.log(`✅ Verified: ${isVerified}`);
 
     // Update profile with result
+    // If verified, also clear photo_review_required so user is visible in discovery again
+    const updateData: Record<string, any> = {
+      photo_verified: isVerified,
+      photo_verification_status: isVerified ? 'verified' : 'failed',
+      photo_verification_completed_at: new Date().toISOString()
+    };
+
+    if (isVerified) {
+      // Clear admin review requirement - user passed AWS Rekognition verification
+      updateData.photo_review_required = false;
+      updateData.photo_review_cleared_at = new Date().toISOString();
+      // Note: photo_review_cleared_by remains null to indicate auto-cleared by verification
+      console.log('✅ Clearing photo_review_required - user passed verification');
+    }
+
     await supabase
       .from('profiles')
-      .update({
-        photo_verified: isVerified,
-        photo_verification_status: isVerified ? 'verified' : 'failed',
-        photo_verification_completed_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', profile.id);
 
     // Send notification
@@ -303,7 +314,7 @@ Deno.serve(async (req) => {
       notification_type: isVerified ? 'photo_verification_success' : 'photo_verification_failed',
       title: isVerified ? 'Photos Verified! ✓' : 'Verification Unsuccessful',
       body: isVerified
-        ? 'Your photos have been verified. Your profile now shows a verified badge!'
+        ? 'Your photos have been verified! Your profile is now visible in discovery with a verified badge.'
         : 'We couldn\'t verify your photos. Please try again with a clear selfie that matches your profile pictures.',
       data: {
         type: 'photo_verification_update',

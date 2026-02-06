@@ -164,19 +164,29 @@ serve(async (req) => {
     let totalQueued = 0;
     let errors = 0;
 
-    // Get all active trial subscriptions
-    const { data: trialSubscriptions, error: fetchError } = await supabase
-      .from('subscriptions')
-      .select('id, profile_id, tier, started_at, expires_at, status')
-      .eq('status', 'trial')
-      .not('started_at', 'is', null);
+    // Get all active trial subscriptions (paginated to handle >1000 rows)
+    let trialSubscriptions: TrialSubscription[] = [];
+    let subFrom = 0;
+    const subPageSize = 1000;
+    while (true) {
+      const { data: page, error: pageError } = await supabase
+        .from('subscriptions')
+        .select('id, profile_id, tier, started_at, expires_at, status')
+        .eq('status', 'trial')
+        .not('started_at', 'is', null)
+        .range(subFrom, subFrom + subPageSize - 1);
 
-    if (fetchError) {
-      console.error('Error fetching trial subscriptions:', fetchError);
-      throw fetchError;
+      if (pageError) {
+        console.error('Error fetching trial subscriptions:', pageError);
+        throw pageError;
+      }
+      if (!page || page.length === 0) break;
+      trialSubscriptions = trialSubscriptions.concat(page as TrialSubscription[]);
+      if (page.length < subPageSize) break;
+      subFrom += subPageSize;
     }
 
-    if (!trialSubscriptions || trialSubscriptions.length === 0) {
+    if (trialSubscriptions.length === 0) {
       console.log('No active trial subscriptions found');
       return new Response(
         JSON.stringify({ success: true, totalQueued: 0, message: 'No trials to process' }),

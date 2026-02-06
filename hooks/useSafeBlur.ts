@@ -1,13 +1,21 @@
 /**
  * Safe Blur Hook
  *
- * Ensures photo blur is always applied when enabled, EXCEPT when images fail to load.
- * This prevents SIGSEGV crashes while maintaining user privacy protection.
+ * Provides blur functionality while preventing RenderScript SIGSEGV crashes on Android.
+ *
+ * On iOS: Uses native blurRadius (smooth, performant)
+ * On Android: Returns blurRadius=0 and showBlurOverlay=true to use CSS-based overlay
+ *
+ * This is necessary because Android's RenderScript (used by expo-image's blurRadius)
+ * is deprecated and causes fatal crashes on Android 15/16, especially on:
+ * - Samsung devices (both budget and flagship)
+ * - Devices with buggy GPU drivers
  *
  * Critical for user safety in Accord - users rely on photo blur for privacy.
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { Platform } from 'react-native';
 
 interface UseSafeBlurOptions {
   shouldBlur: boolean;
@@ -15,7 +23,10 @@ interface UseSafeBlurOptions {
 }
 
 interface UseSafeBlurReturn {
+  /** Blur radius for the image - 0 on Android to prevent crashes */
   blurRadius: number;
+  /** Whether to show a blur overlay (Android fallback) */
+  showBlurOverlay: boolean;
   onImageLoad: () => void;
   onImageError: () => void;
   resetBlur: () => void;
@@ -25,22 +36,25 @@ interface UseSafeBlurReturn {
  * Hook to safely apply blur to images while preventing crashes
  *
  * @param shouldBlur - Whether blur should be applied (e.g., photo_blur_enabled)
- * @param blurIntensity - Blur radius value (default: 30)
- * @returns Object with blurRadius value and event handlers
+ * @param blurIntensity - Blur radius value (default: 30, iOS only)
+ * @returns Object with blurRadius, showBlurOverlay, and event handlers
  *
  * @example
  * ```tsx
- * const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+ * const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
  *   shouldBlur: profile.photo_blur_enabled && !isAdmin,
  *   blurIntensity: 30
  * });
  *
- * <Image
- *   source={{ uri: photoUrl }}
- *   blurRadius={blurRadius}
- *   onLoad={onImageLoad}
- *   onError={onImageError}
- * />
+ * <View>
+ *   <Image
+ *     source={{ uri: photoUrl }}
+ *     blurRadius={blurRadius}
+ *     onLoad={onImageLoad}
+ *     onError={onImageError}
+ *   />
+ *   {showBlurOverlay && <BlurOverlay />}
+ * </View>
  * ```
  */
 export function useSafeBlur({
@@ -76,19 +90,17 @@ export function useSafeBlur({
     }
   }, []);
 
-  // Apply blur when:
-  // 1. shouldBlur is true (e.g., photo_blur_enabled)
-  // 2. Image has NOT failed to load (imageError = false)
-  //
-  // This ensures:
-  // ✅ Blur shows while image is loading
-  // ✅ Blur shows after successful load
-  // ❌ Blur does NOT show if image failed (prevents SIGSEGV crash)
-  // ❌ State updates prevented after unmount (prevents garbage pointer crash)
-  const blurRadius = shouldBlur && !imageError ? blurIntensity : 0;
+  const shouldApplyBlur = shouldBlur && !imageError;
+
+  // On Android: NEVER use blurRadius - it uses RenderScript which crashes
+  // Instead, return showBlurOverlay=true so components can render a CSS-based overlay
+  const isAndroid = Platform.OS === 'android';
 
   return {
-    blurRadius,
+    // iOS: use native blur, Android: always 0 to prevent RenderScript crashes
+    blurRadius: shouldApplyBlur && !isAndroid ? blurIntensity : 0,
+    // Android fallback: show overlay instead of native blur
+    showBlurOverlay: shouldApplyBlur && isAndroid,
     onImageLoad,
     onImageError,
     resetBlur,

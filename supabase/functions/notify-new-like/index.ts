@@ -1,11 +1,77 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0';
-import { t } from '../_shared/translations.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Inline like notification translations (subset of _shared/translations.ts)
+const likeTranslations: Record<string, Record<string, string>> = {
+  en: {
+    premiumTitle: '{{name}} likes you! 💜',
+    premiumBody: 'See who liked you and match instantly.',
+    premiumSuperTitle: '{{name}} super liked you! ⭐',
+    premiumSuperBody: 'They really want to connect with you!',
+    freeTitle: 'Someone likes you! 💜',
+    freeBody: 'Upgrade to Premium to see who liked you and match instantly.',
+    freeSuperTitle: 'Someone super liked you! ⭐',
+    freeSuperBody: 'Upgrade to Premium to see who really wants to match with you.',
+  },
+  es: {
+    premiumTitle: '¡A {{name}} le gustas! 💜',
+    premiumBody: 'Ve quién te dio like y haz match al instante.',
+    premiumSuperTitle: '¡{{name}} te dio super like! ⭐',
+    premiumSuperBody: '¡Realmente quieren conectar contigo!',
+    freeTitle: '¡A alguien le gustas! 💜',
+    freeBody: 'Actualiza a Premium para ver quién te dio like y hacer match al instante.',
+    freeSuperTitle: '¡Alguien te dio super like! ⭐',
+    freeSuperBody: 'Actualiza a Premium para ver quién realmente quiere hacer match contigo.',
+  },
+  fr: {
+    premiumTitle: '{{name}} vous aime ! 💜',
+    premiumBody: 'Voyez qui vous a liké et matchez instantanément.',
+    premiumSuperTitle: '{{name}} vous a super liké ! ⭐',
+    premiumSuperBody: 'Cette personne veut vraiment se connecter avec vous !',
+    freeTitle: 'Quelqu\'un vous aime ! 💜',
+    freeBody: 'Passez à Premium pour voir qui vous a liké et matcher instantanément.',
+    freeSuperTitle: 'Quelqu\'un vous a super liké ! ⭐',
+    freeSuperBody: 'Passez à Premium pour voir qui veut vraiment matcher avec vous.',
+  },
+  de: {
+    premiumTitle: '{{name}} mag dich! 💜',
+    premiumBody: 'Sieh, wer dich geliked hat und matche sofort.',
+    premiumSuperTitle: '{{name}} hat dir ein Super-Like gegeben! ⭐',
+    premiumSuperBody: 'Diese Person möchte sich wirklich mit dir verbinden!',
+    freeTitle: 'Jemand mag dich! 💜',
+    freeBody: 'Upgrade auf Premium, um zu sehen, wer dich geliked hat.',
+    freeSuperTitle: 'Jemand hat dir ein Super-Like gegeben! ⭐',
+    freeSuperBody: 'Upgrade auf Premium, um zu sehen, wer wirklich mit dir matchen möchte.',
+  },
+  pt: {
+    premiumTitle: '{{name}} gostou de você! 💜',
+    premiumBody: 'Veja quem te curtiu e faça match instantaneamente.',
+    premiumSuperTitle: '{{name}} te deu um super like! ⭐',
+    premiumSuperBody: 'Essa pessoa quer muito se conectar com você!',
+    freeTitle: 'Alguém gostou de você! 💜',
+    freeBody: 'Atualize para Premium para ver quem te curtiu e fazer match instantaneamente.',
+    freeSuperTitle: 'Alguém te deu um super like! ⭐',
+    freeSuperBody: 'Atualize para Premium para ver quem realmente quer fazer match com você.',
+  },
+};
+
+function getLikeText(lang: string, key: string, replacements?: Record<string, string>): string {
+  const translations = likeTranslations[lang] || likeTranslations['en'];
+  let text = translations[key] || likeTranslations['en'][key] || key;
+
+  if (replacements) {
+    for (const [k, v] of Object.entries(replacements)) {
+      text = text.replace(`{{${k}}}`, v);
+    }
+  }
+
+  return text;
+}
 
 /**
  * Server-side notification for new likes
@@ -83,19 +149,19 @@ serve(async (req) => {
 
     if (isPremium) {
       if (like_type === 'super') {
-        title = t(lang, 'like.premiumSuperTitle', { name: likerName });
-        body = t(lang, 'like.premiumSuperBody');
+        title = getLikeText(lang, 'premiumSuperTitle', { name: likerName });
+        body = getLikeText(lang, 'premiumSuperBody');
       } else {
-        title = t(lang, 'like.premiumTitle', { name: likerName });
-        body = t(lang, 'like.premiumBody');
+        title = getLikeText(lang, 'premiumTitle', { name: likerName });
+        body = getLikeText(lang, 'premiumBody');
       }
     } else {
       if (like_type === 'super') {
-        title = t(lang, 'like.freeSuperTitle');
-        body = t(lang, 'like.freeSuperBody');
+        title = getLikeText(lang, 'freeSuperTitle');
+        body = getLikeText(lang, 'freeSuperBody');
       } else {
-        title = t(lang, 'like.freeTitle');
-        body = t(lang, 'like.freeBody');
+        title = getLikeText(lang, 'freeTitle');
+        body = getLikeText(lang, 'freeBody');
       }
     }
 
@@ -156,34 +222,10 @@ serve(async (req) => {
       },
     });
 
-    // Insert into activity_feed for Activity Center display
-    // 1. Create like_received for the recipient (person who was liked)
-    const receivedActivityType = like_type === 'super' ? 'super_like_received' : 'like_received';
-    await supabaseAdmin.from('activity_feed').insert({
-      profile_id: liked_profile_id,
-      activity_type: receivedActivityType,
-      actor_profile_id: liker_profile_id,
-      reference_id: null,
-      metadata: {
-        like_type: like_type || 'standard',
-      },
-      is_read: false,
-    });
-
-    // 2. Create like_sent for the sender (person who sent the like)
-    const sentActivityType = like_type === 'super' ? 'super_like_sent' : 'like_sent';
-    await supabaseAdmin.from('activity_feed').insert({
-      profile_id: liker_profile_id,
-      activity_type: sentActivityType,
-      actor_profile_id: liked_profile_id,
-      reference_id: null,
-      metadata: {
-        like_type: like_type || 'standard',
-      },
-      is_read: true, // Mark as read since the user initiated the action
-    });
-
-    console.log(`[Like Notification] Activity feed entries created for recipient ${liked_profile_id} and sender ${liker_profile_id}`);
+    // NOTE: Activity feed entries are created by database triggers:
+    // - trigger_like_received_activity → insert_like_received_activity()
+    // - trigger_like_sent_activity → insert_like_sent_activity()
+    // Do NOT create them here to avoid duplicates.
     console.log(`[Like Notification] Sent to ${successCount}/${tokens.size} devices`);
 
     return new Response(JSON.stringify({

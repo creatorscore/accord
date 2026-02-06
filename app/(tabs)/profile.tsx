@@ -47,8 +47,8 @@ interface ProfileData {
   zodiac_sign?: string;
   personality_type?: string;
   is_verified: boolean;
-  photos?: Array<{ url: string; is_primary?: boolean; display_order?: number; caption?: string }>;
-  prompt_answers?: Array<{ prompt: string; answer: string }>;
+  photos?: { url: string; is_primary?: boolean; display_order?: number; caption?: string }[];
+  prompt_answers?: { prompt: string; answer: string }[];
   interests?: string[];
   hobbies?: string[];
   love_language?: string;

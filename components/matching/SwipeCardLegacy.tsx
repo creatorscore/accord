@@ -22,7 +22,7 @@ interface Profile {
   location_city?: string;
   location_state?: string;
   bio?: string;
-  photos?: Array<{ url: string; is_primary: boolean }>;
+  photos?: { url: string; is_primary: boolean }[];
   compatibility_score?: number;
   is_verified?: boolean;
   photo_verified?: boolean;
@@ -76,7 +76,8 @@ export default function SwipeCard({
   const lastActiveText = getLastActiveText(profile.last_active_at, profile.hide_last_active);
 
   // Safe blur hook - ensures privacy while preventing crashes
-  const { blurRadius, onImageLoad, onImageError, resetBlur } = useSafeBlur({
+  // On Android, blurRadius is 0 and showBlurOverlay is true to avoid RenderScript crashes
+  const { blurRadius, showBlurOverlay, onImageLoad, onImageError, resetBlur } = useSafeBlur({
     shouldBlur: (profile.photo_blur_enabled || false) && !isAdmin,
     blurIntensity: 30,
   });
@@ -318,7 +319,7 @@ export default function SwipeCard({
               source: { uri: currentPhoto?.url || 'https://via.placeholder.com/400' },
               style: styles.cardImage,
               contentFit: 'cover',
-              blurRadius: blurRadius, // Safe blur - protects privacy while preventing crashes
+              blurRadius: blurRadius, // iOS only - Android uses overlay to prevent RenderScript crashes
               // expo-image specific props for better performance
               cachePolicy: 'memory-disk',
               transition: 200,
@@ -327,6 +328,14 @@ export default function SwipeCard({
               onError: onImageError,
             })}
           />
+
+          {/* Android blur fallback - CSS overlay instead of RenderScript */}
+          {showBlurOverlay && (
+            <View
+              style={[styles.cardImage, { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)' }]}
+              pointerEvents="none"
+            />
+          )}
 
           {/* Dynamic Watermark - prevents screenshot sharing by embedding viewer ID */}
           {watermarkReady && (

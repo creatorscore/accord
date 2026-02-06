@@ -1,6 +1,7 @@
 // Edge Function: admin-broadcast
 // Send push notifications to all users (admin only)
-// Usage: POST with { title, body, data? }
+// Usage: POST with { title, body, data?, target? }
+// Now uses queue-based delivery via process-notifications cron
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
@@ -51,66 +52,66 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get all users with push tokens
+    // Get all user profile IDs with push enabled
     let query = supabaseAdmin
       .from('profiles')
-      .select('id, push_token, push_enabled')
-      .eq('push_enabled', true)
-      .not('push_token', 'is', null);
+      .select('id')
+      .eq('push_enabled', true);
 
     // Optional: target specific users
     if (target === 'premium') {
       query = query.or('is_premium.eq.true,is_platinum.eq.true');
     }
 
-    const { data: profiles, error: profilesError } = await query;
-
-    if (profilesError) {
-      throw profilesError;
+    // Fetch ALL profile IDs with pagination (Supabase defaults to 1000 row limit)
+    let profileIds: string[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data: page, error: pageError } = await query.range(from, from + pageSize - 1);
+      if (pageError) throw pageError;
+      if (!page || page.length === 0) break;
+      profileIds = profileIds.concat(page.map((p: { id: string }) => p.id));
+      if (page.length < pageSize) break;
+      from += pageSize;
     }
 
-    // Send notifications in batches (Expo recommends max 100 per request)
-    const BATCH_SIZE = 100;
-    let sent = 0;
-    let failed = 0;
+    if (profileIds.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'No recipients found',
+          queued: 0,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    for (let i = 0; i < profiles.length; i += BATCH_SIZE) {
-      const batch = profiles.slice(i, i + BATCH_SIZE);
-      const messages = batch.map((p) => ({
-        to: p.push_token,
-        sound: 'default',
+    // Insert into notification_queue in batches (avoid payload size limits)
+    const insertBatchSize = 500;
+    let queuedCount = 0;
+
+    for (let i = 0; i < profileIds.length; i += insertBatchSize) {
+      const batch = profileIds.slice(i, i + insertBatchSize);
+      const queueItems = batch.map(profileId => ({
+        recipient_profile_id: profileId,
+        notification_type: 'admin_broadcast',
         title,
         body,
         data: data || {},
-        priority: 'high',
-        badge: 1,
+        status: 'pending',
+        attempts: 0,
       }));
 
-      try {
-        const response = await fetch('https://exp.host/--/api/v2/push/send', {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Accept-Encoding': 'gzip, deflate',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(messages),
-        });
+      const { error: insertError } = await supabaseAdmin
+        .from('notification_queue')
+        .insert(queueItems);
 
-        const results = await response.json();
-
-        // Count successes and failures
-        if (Array.isArray(results.data)) {
-          results.data.forEach((r: any) => {
-            if (r.status === 'ok') sent++;
-            else failed++;
-          });
-        } else {
-          sent += batch.length;
-        }
-      } catch (error) {
-        console.error('Batch send error:', error);
-        failed += batch.length;
+      if (insertError) {
+        console.error('Error inserting notification batch:', insertError);
+        // Continue with remaining batches even if one fails
+      } else {
+        queuedCount += batch.length;
       }
     }
 
@@ -120,9 +121,9 @@ Deno.serve(async (req) => {
       title,
       body,
       data,
-      recipients_count: profiles.length,
-      sent_count: sent,
-      failed_count: failed,
+      recipients_count: profileIds.length,
+      sent_count: queuedCount, // queued count for backward compatibility
+      failed_count: profileIds.length - queuedCount,
     }).catch(() => {
       // Table might not exist, that's ok
     });
@@ -130,9 +131,9 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        total_recipients: profiles.length,
-        sent,
-        failed,
+        message: `Broadcast queued for ${queuedCount} users. Delivery within 1-2 minutes.`,
+        queued: queuedCount,
+        total_recipients: profileIds.length,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

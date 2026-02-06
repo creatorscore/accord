@@ -61,7 +61,7 @@ export default function ProfilePhotoCarousel({
   const insets = useSafeAreaInsets();
 
   // Safe blur hook - protects user privacy while preventing crashes
-  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+  const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
     shouldBlur: photoBlurEnabled && !isRevealed && !isAdmin,
     blurIntensity: 30,
   });
@@ -95,6 +95,13 @@ export default function ProfilePhotoCarousel({
               onLoad={onImageLoad}
               onError={onImageError}
             />
+            {/* Android blur fallback - CSS overlay instead of RenderScript */}
+            {showBlurOverlay && (
+              <View
+                style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                pointerEvents="none"
+              />
+            )}
 
             {/* Dynamic Watermark over photo */}
             {watermarkReady && (

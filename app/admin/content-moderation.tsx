@@ -19,13 +19,13 @@ interface Report {
   reporter: {
     id: string;
     display_name: string;
-    photos: Array<{ url: string; is_primary: boolean }>;
+    photos: { url: string; is_primary: boolean }[];
   };
   reported: {
     id: string;
     display_name: string;
     user_id: string;
-    photos: Array<{ url: string; is_primary: boolean }>;
+    photos: { url: string; is_primary: boolean }[];
   };
 }
 

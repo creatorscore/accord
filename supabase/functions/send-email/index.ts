@@ -203,7 +203,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: 'Accord <hello@mail.joinaccord.app>',
+        from: 'Accord <hello@news.joinaccord.app>',
         to: [payload.recipientEmail],
         subject: payload.subject,
         html: payload.htmlContent,
