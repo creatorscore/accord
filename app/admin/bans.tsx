@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, RefreshControl, TextInput, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, RefreshControl, TextInput, Modal, Image } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,11 +7,24 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendBanNotification } from '@/lib/notifications';
 
+interface FlaggedPhoto {
+  url: string;
+  confidence: string;
+  labels: string;
+}
+
+interface ProfilePhoto {
+  url: string;
+  is_primary: boolean;
+  display_order: number;
+}
+
 interface Ban {
   id: string;
   banned_email: string | null;
   banned_phone_hash: string | null;
   banned_device_id: string | null;
+  banned_profile_id: string | null;
   ban_reason: string;
   is_permanent: boolean | null;
   expires_at: string | null;
@@ -22,6 +35,8 @@ interface Ban {
   banner: {
     display_name: string;
   } | null;
+  flagged_photos: FlaggedPhoto[];
+  profile_photos: ProfilePhoto[];
 }
 
 export default function AdminBans() {
@@ -38,6 +53,7 @@ export default function AdminBans() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<FlaggedPhoto | null>(null);
 
   useEffect(() => {
     checkAdminStatus();
@@ -84,6 +100,7 @@ export default function AdminBans() {
           banned_email,
           banned_phone_hash,
           banned_device_id,
+          banned_profile_id,
           ban_reason,
           is_permanent,
           expires_at,
@@ -101,13 +118,92 @@ export default function AdminBans() {
         banned_email: ban.banned_email,
         banned_phone_hash: ban.banned_phone_hash,
         banned_device_id: ban.banned_device_id,
+        banned_profile_id: ban.banned_profile_id,
         ban_reason: ban.ban_reason,
         is_permanent: ban.is_permanent,
         expires_at: ban.expires_at,
         created_at: ban.created_at,
         banned_profile: Array.isArray(ban.banned_profile) ? ban.banned_profile[0] || null : ban.banned_profile,
         banner: Array.isArray(ban.banner) ? ban.banner[0] || null : ban.banner,
+        flagged_photos: [],
+        profile_photos: [],
       }));
+
+      // Fetch profile photos for all banned users with profile IDs
+      const allProfileIds = transformedBans
+        .map(b => b.banned_profile_id)
+        .filter(Boolean) as string[];
+
+      if (allProfileIds.length > 0) {
+        const { data: profilePhotos } = await supabase
+          .from('photos')
+          .select('profile_id, url, is_primary, display_order')
+          .in('profile_id', allProfileIds)
+          .order('display_order', { ascending: true });
+
+        if (profilePhotos && profilePhotos.length > 0) {
+          const photosByProfile = new Map<string, ProfilePhoto[]>();
+          for (const photo of profilePhotos) {
+            if (!photosByProfile.has(photo.profile_id)) {
+              photosByProfile.set(photo.profile_id, []);
+            }
+            photosByProfile.get(photo.profile_id)!.push({
+              url: photo.url,
+              is_primary: photo.is_primary,
+              display_order: photo.display_order,
+            });
+          }
+
+          for (const ban of transformedBans) {
+            if (ban.banned_profile_id && photosByProfile.has(ban.banned_profile_id)) {
+              ban.profile_photos = photosByProfile.get(ban.banned_profile_id)!;
+            }
+          }
+        }
+      }
+
+      // Fetch flagged photos from moderation_logs for NSFW auto-bans
+      const nsfwProfileIds = transformedBans
+        .filter(b => b.ban_reason?.includes('NSFW') || b.ban_reason?.includes('Explicit') || b.ban_reason?.includes('nsfw'))
+        .map(b => b.banned_profile_id)
+        .filter(Boolean) as string[];
+
+      if (nsfwProfileIds.length > 0) {
+        const { data: moderationLogs } = await supabase
+          .from('moderation_logs')
+          .select('profile_id, reason, details')
+          .in('profile_id', nsfwProfileIds)
+          .eq('action', 'photo_rejected')
+          .order('created_at', { ascending: false });
+
+        if (moderationLogs && moderationLogs.length > 0) {
+          const photosByProfile = new Map<string, FlaggedPhoto[]>();
+          for (const log of moderationLogs) {
+            const profileId = log.profile_id;
+            if (!photosByProfile.has(profileId)) {
+              photosByProfile.set(profileId, []);
+            }
+            const details = log.details as any;
+            const photoUrl = details?.photo_url || details?.storage_path || '';
+            const confidence = details?.highest_confidence || details?.confidence || 'N/A';
+            const labels = details?.labels
+              ?.filter((l: any) => l.TaxonomyLevel === 1 || l.TaxonomyLevel === 2)
+              .map((l: any) => typeof l === 'string' ? l : `${l.Name} (${Math.round(l.Confidence)}%)`)
+              .join(', ') || log.reason || '';
+            photosByProfile.get(profileId)!.push({
+              url: photoUrl,
+              confidence: typeof confidence === 'number' ? `${Math.round(confidence)}%` : String(confidence),
+              labels,
+            });
+          }
+
+          for (const ban of transformedBans) {
+            if (ban.banned_profile_id && photosByProfile.has(ban.banned_profile_id)) {
+              ban.flagged_photos = photosByProfile.get(ban.banned_profile_id)!;
+            }
+          }
+        }
+      }
 
       setBans(transformedBans);
     } catch (error: any) {
@@ -158,20 +254,15 @@ export default function AdminBans() {
 
   const handleSearchUsers = async () => {
     if (!searchQuery.trim()) {
-      console.log('Search query is empty');
       return;
     }
 
-    console.log('🔍 Searching for:', searchQuery.trim());
     setSearching(true);
     try {
       // Use RPC function to search users (includes email from auth.users)
       const { data: results, error } = await supabase.rpc('search_users_for_ban', {
         search_name: searchQuery.trim(),
       });
-
-      console.log('🔍 Search results:', results);
-      console.log('🔍 Search error:', error);
 
       if (error) throw error;
 
@@ -186,7 +277,6 @@ export default function AdminBans() {
         is_active: result.is_active,
       })) || [];
 
-      console.log('✅ Formatted results:', formattedResults.length, 'users found');
       setSearchResults(formattedResults);
     } catch (error: any) {
       console.error('❌ Error searching users:', error);
@@ -255,18 +345,12 @@ export default function AdminBans() {
             display_name: matchedUser.display_name,
             phone_number: matchedUser.phone || null,
           };
-
-          console.log('✅ Found existing user:', matchedUser.display_name);
-        } else {
-          console.log('ℹ️ No user found with email:', emailToCheck);
         }
       } catch (searchError) {
-        console.log('Error searching for user:', searchError);
       }
 
       if (existingUser && existingUserProfile) {
         // USER EXISTS - Execute full ban using Edge Function
-        console.log('⚠️ User exists - executing full ban via Edge Function');
 
         // Get current session for Edge Function auth
         const { data: { session } } = await supabase.auth.getSession();
@@ -287,8 +371,6 @@ export default function AdminBans() {
           },
         });
 
-        console.log('🔍 Edge Function response:', { banResponse, banError });
-
         if (banError) {
           // Try to read the response body from the error context
           let errorBody = null;
@@ -297,7 +379,6 @@ export default function AdminBans() {
               const response = banError.context;
               if (response && !response.bodyUsed) {
                 errorBody = await response.json();
-                console.log('🔍 Parsed error body:', errorBody);
               }
             }
           } catch (parseError) {
@@ -323,8 +404,6 @@ export default function AdminBans() {
           throw new Error('Failed to ban user in authentication system');
         }
 
-        console.log('✅ User banned successfully via Edge Function:', banResponse);
-
         // Step 2d: Send ban notifications (push + email)
         try {
           // Send push notification
@@ -345,7 +424,6 @@ export default function AdminBans() {
             });
           }
 
-          console.log('✅ Ban notifications sent (push + email)');
         } catch (notifError) {
           console.error('⚠️ Failed to send ban notifications:', notifError);
           // Don't block the ban if notifications fail
@@ -357,7 +435,6 @@ export default function AdminBans() {
         );
       } else {
         // USER DOESN'T EXIST - Create preventive ban
-        console.log('ℹ️ No existing user - creating preventive ban');
 
         const { error } = await supabase
           .from('bans')
@@ -477,7 +554,16 @@ export default function AdminBans() {
               {/* Header */}
               <View style={styles.banHeader}>
                 <View style={styles.banHeaderLeft}>
-                  <MaterialCommunityIcons name="account-cancel" size={24} color="#EF4444" />
+                  {ban.profile_photos.length > 0 ? (
+                    <Image
+                      source={{ uri: ban.profile_photos.find(p => p.is_primary)?.url || ban.profile_photos[0].url }}
+                      style={styles.banAvatar}
+                    />
+                  ) : (
+                    <View style={[styles.banAvatar, styles.banAvatarPlaceholder]}>
+                      <MaterialCommunityIcons name="account-cancel" size={24} color="#EF4444" />
+                    </View>
+                  )}
                   <View style={{ marginLeft: 12, flex: 1 }}>
                     <Text style={styles.banEmail}>{ban.banned_email || 'Manual Ban'}</Text>
                     {ban.banned_profile && (
@@ -486,6 +572,30 @@ export default function AdminBans() {
                   </View>
                 </View>
               </View>
+
+              {/* Profile Photos */}
+              {ban.profile_photos.length > 0 && (
+                <View style={styles.profilePhotosContainer}>
+                  <Text style={styles.profilePhotosLabel}>Profile Photos ({ban.profile_photos.length}):</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flaggedPhotosScroll}>
+                    {ban.profile_photos.map((photo, idx) => (
+                      <TouchableOpacity
+                        key={idx}
+                        style={styles.profilePhotoCard}
+                        onPress={() => setSelectedPhoto({ url: photo.url, confidence: '', labels: `Photo ${idx + 1}${photo.is_primary ? ' (Primary)' : ''}` })}
+                        activeOpacity={0.7}
+                      >
+                        <Image source={{ uri: photo.url }} style={styles.profilePhotoImage} resizeMode="cover" />
+                        {photo.is_primary && (
+                          <View style={styles.primaryBadge}>
+                            <Text style={styles.primaryBadgeText}>Primary</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
 
               {/* Ban Identifiers */}
               <View style={styles.identifiersContainer}>
@@ -514,6 +624,30 @@ export default function AdminBans() {
                 <Text style={styles.reasonLabel}>Reason:</Text>
                 <Text style={styles.reasonText}>{ban.ban_reason}</Text>
               </View>
+
+              {/* Flagged Photos */}
+              {ban.flagged_photos.length > 0 && (
+                <View style={styles.flaggedPhotosContainer}>
+                  <Text style={styles.flaggedPhotosLabel}>Flagged Photos:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flaggedPhotosScroll}>
+                    {ban.flagged_photos.map((photo, idx) => (
+                      <TouchableOpacity key={idx} style={styles.flaggedPhotoCard} onPress={() => photo.url && setSelectedPhoto(photo)} activeOpacity={0.7}>
+                        {photo.url ? (
+                          <Image source={{ uri: photo.url }} style={styles.flaggedPhotoImage} resizeMode="cover" />
+                        ) : (
+                          <View style={[styles.flaggedPhotoImage, styles.flaggedPhotoPlaceholder]}>
+                            <MaterialCommunityIcons name="image-off" size={24} color="#9CA3AF" />
+                          </View>
+                        )}
+                        <View style={styles.flaggedPhotoInfo}>
+                          <Text style={styles.flaggedPhotoConfidence}>{photo.confidence}</Text>
+                          <Text style={styles.flaggedPhotoLabels} numberOfLines={2}>{photo.labels}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
 
               {/* Meta */}
               <View style={styles.metaContainer}>
@@ -605,7 +739,6 @@ export default function AdminBans() {
               )}
 
               {searchResults.map((user, index) => {
-                console.log('🎨 Rendering user card:', index, user.display_name);
                 return (
                   <TouchableOpacity
                     key={user.id}
@@ -707,6 +840,33 @@ export default function AdminBans() {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* Full-Screen Photo Viewer */}
+      <Modal
+        visible={!!selectedPhoto}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setSelectedPhoto(null)}
+      >
+        <View style={styles.photoViewerOverlay}>
+          <TouchableOpacity style={styles.photoViewerClose} onPress={() => setSelectedPhoto(null)}>
+            <MaterialCommunityIcons name="close" size={28} color="white" />
+          </TouchableOpacity>
+          {selectedPhoto && (
+            <>
+              <Image
+                source={{ uri: selectedPhoto.url }}
+                style={styles.photoViewerImage}
+                resizeMode="contain"
+              />
+              <View style={styles.photoViewerInfo}>
+                <Text style={styles.photoViewerConfidence}>Confidence: {selectedPhoto.confidence}</Text>
+                <Text style={styles.photoViewerLabels}>{selectedPhoto.labels}</Text>
+              </View>
+            </>
+          )}
         </View>
       </Modal>
     </View>
@@ -970,5 +1130,126 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginBottom: 4,
+  },
+  banAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  banAvatarPlaceholder: {
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profilePhotosContainer: {
+    marginBottom: 12,
+  },
+  profilePhotosLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  profilePhotoCard: {
+    marginRight: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  profilePhotoImage: {
+    width: 100,
+    height: 100,
+  },
+  primaryBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(160, 138, 183, 0.9)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  primaryBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'white',
+  },
+  flaggedPhotosContainer: {
+    marginBottom: 12,
+  },
+  flaggedPhotosLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#DC2626',
+    marginBottom: 8,
+  },
+  flaggedPhotosScroll: {
+    flexDirection: 'row',
+  },
+  flaggedPhotoCard: {
+    marginRight: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    width: 120,
+  },
+  flaggedPhotoImage: {
+    width: 120,
+    height: 120,
+  },
+  flaggedPhotoPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  flaggedPhotoInfo: {
+    padding: 6,
+  },
+  flaggedPhotoConfidence: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  flaggedPhotoLabels: {
+    fontSize: 10,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  photoViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoViewerClose: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
+  photoViewerImage: {
+    width: '90%',
+    height: '65%',
+  },
+  photoViewerInfo: {
+    marginTop: 20,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  photoViewerConfidence: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  photoViewerLabels: {
+    fontSize: 14,
+    color: '#D1D5DB',
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
