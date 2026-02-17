@@ -1992,11 +1992,6 @@ export default function Discover() {
       });
 
       if (likeError) {
-        if (likeError.message?.includes('DISTANCE_VALIDATION_FAILED')) {
-          showToast({ type: 'info', title: t('toast.tooFarTitle'), message: t('toast.tooFarMessage') });
-          setCurrentIndex(currentIndex + 1);
-          return false;
-        }
         if (likeError.code === 'P0001' && likeError.message?.includes('Daily like limit')) {
           setShowPaywall(true);
           return false;
@@ -2190,11 +2185,6 @@ export default function Discover() {
         });
 
         if (likeError) {
-          if (likeError.message?.includes('DISTANCE_VALIDATION_FAILED')) {
-            showToast({ type: 'info', title: t('toast.tooFarTitle'), message: t('toast.tooFarMessage') });
-            setCurrentIndex(currentIndex + 1);
-            return false;
-          }
           if (likeError.code === 'P0001' && likeError.message?.includes('Premium subscription')) {
             Alert.alert(
               t('subscription.upgradeToPremium'),
