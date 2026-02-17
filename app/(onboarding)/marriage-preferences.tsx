@@ -226,30 +226,37 @@ export default function MarriagePreferences() {
       if (drinking) lifestylePreferences.drinking = drinking;
       if (pets) lifestylePreferences.pets = pets;
 
-      const { error } = await supabase
+      const marriagePrefs = {
+        primary_reasons: primaryReason.length > 0 ? primaryReason : null,
+        primary_reason: primaryReason.length > 0 ? primaryReason[0] : null,
+        relationship_type: relationshipType,
+        wants_children: wantsChildren,
+        children_arrangement: childrenArrangement.length > 0 ? childrenArrangement : null,
+        housing_preference: housingPreference.length > 0 ? housingPreference : null,
+        financial_arrangement: financialArrangement.length > 0 ? financialArrangement : null,
+        lifestyle_preferences: Object.keys(lifestylePreferences).length > 0 ? lifestylePreferences : null,
+        dealbreakers: dealbreakers.length > 0 ? dealbreakers : null,
+        must_haves: mustHaves.length > 0 ? mustHaves : null,
+      };
+
+      // Check if preferences row exists to avoid upsert overwriting other fields
+      // (e.g., if user navigates back to this step after setting matching preferences)
+      const { data: existing } = await supabase
         .from('preferences')
-        .upsert({
-          profile_id: profileId,
-          primary_reasons: primaryReason.length > 0 ? primaryReason : null,
-          primary_reason: primaryReason.length > 0 ? primaryReason[0] : null, // Keep legacy column for backward compat
-          relationship_type: relationshipType,
-          wants_children: wantsChildren,
-          children_arrangement: childrenArrangement.length > 0 ? childrenArrangement : null,
-          housing_preference: housingPreference.length > 0 ? housingPreference : null,
-          financial_arrangement: financialArrangement.length > 0 ? financialArrangement : null,
-          lifestyle_preferences: Object.keys(lifestylePreferences).length > 0 ? lifestylePreferences : null,
-          dealbreakers: dealbreakers.length > 0 ? dealbreakers : null,
-          must_haves: mustHaves.length > 0 ? mustHaves : null,
-        }, {
-          onConflict: 'profile_id'
-        });
+        .select('id')
+        .eq('profile_id', profileId)
+        .maybeSingle();
+
+      const { error } = existing
+        ? await supabase.from('preferences').update(marriagePrefs).eq('profile_id', profileId)
+        : await supabase.from('preferences').insert({ profile_id: profileId, ...marriagePrefs });
 
       if (error) throw error;
 
       // Update onboarding step
       await supabase
         .from('profiles')
-        .update({ onboarding_step: 7 })
+        .update({ onboarding_step: 8 })
         .eq('id', profileId);
 
       router.push('/(onboarding)/matching-preferences');

@@ -38,6 +38,7 @@ export default function VoiceIntro() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
+  const [isNewRecording, setIsNewRecording] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState<string>('');
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState(false);
@@ -173,6 +174,7 @@ export default function VoiceIntro() {
       const path = await liveWaveformRef.current?.stopRecord();
       if (path) {
         setRecordingUri(path);
+        setIsNewRecording(true);
       }
     } catch (error: any) {
       showToast({ type: 'error', title: t('common.error'), message: t('toast.stopRecordingFailed') });
@@ -207,6 +209,7 @@ export default function VoiceIntro() {
     setRecordingUri(null);
     setRecordingDuration(0);
     setIsPlaying(false);
+    setIsNewRecording(false);
     staticWaveformRef.current?.stopPlayer();
   };
 
@@ -219,8 +222,8 @@ export default function VoiceIntro() {
     try {
       setLoading(true);
 
-      // If there's a recording, upload it
-      if (recordingUri) {
+      // If there's a new local recording, upload it
+      if (recordingUri && isNewRecording) {
         const fileExt = 'm4a';
         const fileName = `${profileId}/voice-intro.${fileExt}`;
 
@@ -254,16 +257,26 @@ export default function VoiceIntro() {
             voice_intro_url: publicUrl,
             voice_intro_duration: recordingDuration,
             voice_intro_prompt: finalPrompt || null,
-            onboarding_step: 6,
+            onboarding_step: 7,
           })
           .eq('id', profileId);
 
         if (dbError) throw dbError;
+      } else if (recordingUri && !isNewRecording) {
+        // Existing voice intro — just update the prompt and step
+        const finalPrompt = showCustomInput ? customPrompt.trim() : selectedPrompt;
+        await supabase
+          .from('profiles')
+          .update({
+            voice_intro_prompt: finalPrompt || null,
+            onboarding_step: 7,
+          })
+          .eq('id', profileId);
       } else {
         // Skip voice intro
         await supabase
           .from('profiles')
-          .update({ onboarding_step: 6 })
+          .update({ onboarding_step: 7 })
           .eq('id', profileId);
       }
 

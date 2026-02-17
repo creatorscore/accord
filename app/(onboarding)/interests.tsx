@@ -59,7 +59,6 @@ export default function Interests() {
 
       // Load existing hobbies
       if (data.hobbies && data.hobbies.length > 0) {
-        console.log('📋 Loaded existing hobbies:', data.hobbies);
         setHobbies(data.hobbies);
       }
 
@@ -156,7 +155,7 @@ export default function Interests() {
             books,
             tv_shows: tvShows,
           },
-          onboarding_step: 4,
+          onboarding_step: 5,
         })
         .eq('id', profileId);
 
