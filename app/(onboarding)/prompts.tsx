@@ -165,7 +165,7 @@ export default function Prompts() {
         .from('profiles')
         .update({
           prompt_answers: filledPrompts,
-          onboarding_step: 5,
+          onboarding_step: 6,
         })
         .eq('id', profileId);
 
