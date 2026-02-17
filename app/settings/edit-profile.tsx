@@ -13,19 +13,18 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
-  Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
+import { updateUserLocation } from '@/lib/geolocation';
 import { MotiView } from 'moti';
 import { Audio } from 'expo-av';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash } from '@/lib/image-optimization';
+import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri } from '@/lib/image-optimization';
 import { HeightUnit, cmToInches, inchesToCm } from '@/lib/height-utils';
 import { openAppSettings } from '@/lib/open-settings';
 import { validateContent } from '@/lib/content-moderation';
@@ -39,6 +38,7 @@ interface Photo {
   is_new?: boolean;
   to_delete?: boolean;
   contentHash?: string;
+  blurDataUri?: string;
 }
 
 interface PromptAnswer {
@@ -520,7 +520,7 @@ export default function EditProfile() {
         try {
           const { data: photosData } = await supabase
             .from('photos')
-            .select('id, url, storage_path, is_primary, display_order')
+            .select('id, url, storage_path, is_primary, display_order, blur_data_uri')
             .eq('profile_id', profileData.id)
             .order('display_order', { ascending: true });
 
@@ -671,11 +671,11 @@ export default function EditProfile() {
         generateThumbnail: true,
       });
 
-      console.log(`Optimized profile image: ${(optimized.size! / 1024).toFixed(0)}KB`);
-
-      // Generate hash for duplicate detection
-      const contentHash = await generateImageHash(optimized.uri);
-      console.log(`Generated content hash: ${contentHash.substring(0, 16)}...`);
+      // Generate hash and blur thumbnail in parallel
+      const [contentHash, blurDataUri] = await Promise.all([
+        generateImageHash(optimized.uri),
+        generateBlurDataUri(optimized.uri).catch(() => undefined),
+      ]);
 
       // Check for duplicate in current selection (local check)
       const isDuplicateLocal = photos.some(p => !p.to_delete && p.contentHash === contentHash);
@@ -705,6 +705,7 @@ export default function EditProfile() {
         display_order: activePhotos.length,
         is_new: true,
         contentHash,
+        blurDataUri,
       };
       setPhotos([...photos, newPhoto]);
     }
@@ -718,7 +719,6 @@ export default function EditProfile() {
       return;
     }
 
-    console.log('🗑️ Before removing photo:', photos.length, photos.map(p => p.url.substring(0, 30)));
     const updatedPhotos = [...photos];
     const photoToRemove = updatedPhotos[index];
 
@@ -742,7 +742,6 @@ export default function EditProfile() {
     });
 
     setPhotos(updatedPhotos);
-    console.log('✅ After removing photo:', updatedPhotos.filter(p => !p.to_delete).length);
   };
 
   const movePhoto = (index: number, direction: 'up' | 'down') => {
@@ -912,84 +911,59 @@ export default function EditProfile() {
   const refreshLocation = async () => {
     setRefreshingLocation(true);
     try {
-      // Request permission
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      const location = await updateUserLocation();
+      if (!location) {
         Alert.alert(
           'Location Permission Required',
           'Please enable location access in your device settings to update your location.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: 'Open Settings', onPress: () => openAppSettings() },
           ]
         );
         return;
       }
-
-      // Get current location with high accuracy
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-      });
 
       // Reject locations with low accuracy (prevents iOS approximate location)
-      if (location.coords.accuracy && location.coords.accuracy > 100) {
+      if (location.error === 'approximate_location') {
         Alert.alert(
           'Precise Location Required',
-          'Please enable precise location access in Settings > Privacy > Location Services > Accord.',
+          `Location accuracy is too low (${Math.round(location.accuracy || 0)} meters). Please enable "Precise Location" for Accord in your device Settings.`,
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: 'Open Settings', onPress: () => openAppSettings() },
           ]
         );
         return;
       }
 
-      // Reverse geocode to get city/state
-      const reverseGeocode = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
+      const city = location.city || '';
+      const state = location.state || '';
 
-      if (reverseGeocode.length > 0) {
-        const place = reverseGeocode[0];
-        const city = place.city || place.subregion || '';
-        const state = place.region || '';
-        const country = place.country || place.isoCountryCode || '';
+      // Update local state
+      setLocationCity(city);
+      setLocationState(state);
 
-        // Update local state
-        setLocationCity(city);
-        setLocationState(state);
+      // Save to database
+      const updateData: Record<string, any> = {
+        latitude: location.latitude,
+        longitude: location.longitude,
+      };
+      if (location.city) updateData.location_city = location.city;
+      if (location.state) updateData.location_state = location.state;
 
-        // Save to database immediately
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user?.id)
-          .single();
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('user_id', user?.id);
 
-        if (profile) {
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({
-              location_city: city,
-              location_state: state,
-              location_country: country,
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            })
-            .eq('id', profile.id);
-
-          if (updateError) {
-            console.error('Error updating location:', updateError);
-            Alert.alert('Error', 'Failed to save location. Please try again.');
-            return;
-          }
-        }
-
-        Alert.alert('Location Updated', `Your location has been updated to ${city}${state ? `, ${state}` : ''}`);
-      } else {
-        Alert.alert('Error', 'Could not determine your location. Please try again.');
+      if (updateError) {
+        console.error('Error updating location:', updateError);
+        Alert.alert('Error', 'Failed to save location. Please try again.');
+        return;
       }
+
+      Alert.alert('Location Updated', `Your location has been updated to ${city}${state ? `, ${state}` : ''}`);
     } catch (error) {
       console.error('Error refreshing location:', error);
       Alert.alert('Error', 'Failed to update location. Please try again.');
@@ -1220,6 +1194,7 @@ export default function EditProfile() {
               is_primary: photo.is_primary,
               display_order: photo.display_order,
               content_hash: photo.contentHash,
+              blur_data_uri: photo.blurDataUri || null,
               moderation_status: 'pending', // Start as pending until moderation completes
             })
             .select('id')
@@ -1231,35 +1206,21 @@ export default function EditProfile() {
             // Run NSFW moderation check - BLOCKING
             // This uses AWS Rekognition to detect explicit content
             try {
-              const moderationResponse = await fetch(
-                `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/moderate-photo`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-                  },
-                  body: JSON.stringify({
-                    photo_url: publicUrl,
-                    photo_id: photoData?.id,
-                    profile_id: finalProfileId,
-                  }),
-                }
-              );
+              const { data: moderationResult, error: moderationError } = await supabase.functions.invoke('moderate-photo', {
+                body: {
+                  photo_url: publicUrl,
+                  photo_id: photoData?.id,
+                  profile_id: finalProfileId,
+                },
+              });
 
-              const moderationResult = await moderationResponse.json();
-              console.log(`🔍 Moderation result:`, moderationResult);
-
-              if (moderationResult.error) {
-                console.error('Moderation service error:', moderationResult.error);
+              if (moderationError) {
+                console.error('Moderation service error:', moderationError);
               }
 
-              // If photo was rejected for explicit or suggestive content, remove it
-              if (moderationResult.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
-                // Delete the photo from storage and database
-                await supabase.storage.from('profile-photos').remove([fileName]);
-                await supabase.from('photos').delete().eq('id', photoData?.id);
-
+              // If photo was rejected for explicit or suggestive content, alert user
+              // Keep the file in storage and DB record (marked rejected) for admin review
+              if (moderationResult?.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
                 Alert.alert(
                   'Photo Rejected',
                   'This photo contains inappropriate content and cannot be uploaded. Please choose a different photo.'
@@ -1339,7 +1300,6 @@ export default function EditProfile() {
         if (pets) lifestylePreferences.pets = pets;
 
         const preferencesPayload = {
-          profile_id: finalProfileId,
           primary_reasons: primaryReason.length > 0 ? primaryReason : null,
           primary_reason: primaryReason.length > 0 ? primaryReason[0] : null, // Keep legacy column for backward compat
           relationship_type: relationshipType || null,
@@ -1357,9 +1317,13 @@ export default function EditProfile() {
           must_haves: mustHaves.length > 0 ? mustHaves : null,
         };
 
+        // Use .update() instead of .upsert() to only modify fields managed by this page.
+        // .upsert() would reset unincluded fields (search_globally, preferred_cities,
+        // distance_unit, discovery_filters) to their defaults, destroying user data.
         const { error: prefsError } = await supabase
           .from('preferences')
-          .upsert(preferencesPayload, { onConflict: 'profile_id' });
+          .update(preferencesPayload)
+          .eq('profile_id', finalProfileId);
 
         if (prefsError) {
           console.error('Error saving preferences:', prefsError);
@@ -1651,7 +1615,7 @@ export default function EditProfile() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Gender</Text>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select one</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {GENDERS.map((g) => (
                 <TouchableOpacity
@@ -1661,19 +1625,12 @@ export default function EditProfile() {
                     gender.includes(g) && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => {
-                    let newGenders: string[];
-                    if (gender.includes(g)) {
-                      newGenders = gender.filter(item => item !== g);
-                    } else {
-                      newGenders = [...gender, g];
-                    }
+                    const newGenders = gender.includes(g) ? [] : [g];
                     setGender(newGenders);
 
-                    // If user becomes exclusively male-identifying, remove "Straight" from orientation
-                    const isExclusivelyMale = newGenders.length > 0 &&
-                      newGenders.every(gen => MEN_ONLY_GENDERS.includes(gen));
-                    if (isExclusivelyMale && sexualOrientation.includes('Straight')) {
-                      setSexualOrientation(sexualOrientation.filter(o => o !== 'Straight'));
+                    // If user selects a male-identifying gender, clear "Straight" orientation
+                    if (newGenders.length > 0 && MEN_ONLY_GENDERS.includes(newGenders[0]) && sexualOrientation.includes('Straight')) {
+                      setSexualOrientation([]);
                     }
                   }}
                 >
@@ -1686,7 +1643,7 @@ export default function EditProfile() {
             </View>
             {gender.length > 0 && (
               <Text style={{ fontSize: 12, color: '#A08AB7', marginTop: 8 }}>
-                Selected: {gender.join(', ')}
+                Selected: {gender[0]}
               </Text>
             )}
           </View>
@@ -1747,7 +1704,7 @@ export default function EditProfile() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Sexual Orientation</Text>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select one</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {getAvailableOrientations(gender).map((o) => (
                 <TouchableOpacity
@@ -1758,9 +1715,9 @@ export default function EditProfile() {
                   ]}
                   onPress={() => {
                     if (sexualOrientation.includes(o)) {
-                      setSexualOrientation(sexualOrientation.filter(item => item !== o));
+                      setSexualOrientation([]);
                     } else {
-                      setSexualOrientation([...sexualOrientation, o]);
+                      setSexualOrientation([o]);
                     }
                   }}
                 >
@@ -1773,7 +1730,7 @@ export default function EditProfile() {
             </View>
             {sexualOrientation.length > 0 && (
               <Text style={{ fontSize: 12, color: '#A08AB7', marginTop: 8 }}>
-                Selected: {sexualOrientation.join(', ')}
+                Selected: {sexualOrientation[0]}
               </Text>
             )}
           </View>
@@ -2786,8 +2743,6 @@ export default function EditProfile() {
           <TouchableOpacity
             style={[styles.actionButton, styles.previewButton]}
             onPress={() => {
-            console.log('👁️ Live Preview button clicked. Photos in state:', photos.length, photos.map(p => p.url.substring(0, 30)));
-
             // Calculate age and zodiac from birth date
             const calculatedAge = birthDate ? calculateAge(birthDate) : age;
             const calculatedZodiac = birthDate ? calculateZodiac(birthDate) : zodiac;

@@ -17,6 +17,7 @@ interface ProfilePhoto {
   url: string;
   is_primary: boolean;
   display_order: number;
+  moderation_status: string;
 }
 
 interface Ban {
@@ -137,7 +138,7 @@ export default function AdminBans() {
       if (allProfileIds.length > 0) {
         const { data: profilePhotos } = await supabase
           .from('photos')
-          .select('profile_id, url, is_primary, display_order')
+          .select('profile_id, url, is_primary, display_order, moderation_status')
           .in('profile_id', allProfileIds)
           .order('display_order', { ascending: true });
 
@@ -151,6 +152,7 @@ export default function AdminBans() {
               url: photo.url,
               is_primary: photo.is_primary,
               display_order: photo.display_order,
+              moderation_status: photo.moderation_status || 'approved',
             });
           }
 
@@ -576,23 +578,36 @@ export default function AdminBans() {
               {/* Profile Photos */}
               {ban.profile_photos.length > 0 && (
                 <View style={styles.profilePhotosContainer}>
-                  <Text style={styles.profilePhotosLabel}>Profile Photos ({ban.profile_photos.length}):</Text>
+                  <Text style={styles.profilePhotosLabel}>
+                    Profile Photos ({ban.profile_photos.length}
+                    {ban.profile_photos.some(p => p.moderation_status === 'rejected') &&
+                      ` · ${ban.profile_photos.filter(p => p.moderation_status === 'rejected').length} rejected`}
+                    ):
+                  </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flaggedPhotosScroll}>
-                    {ban.profile_photos.map((photo, idx) => (
-                      <TouchableOpacity
-                        key={idx}
-                        style={styles.profilePhotoCard}
-                        onPress={() => setSelectedPhoto({ url: photo.url, confidence: '', labels: `Photo ${idx + 1}${photo.is_primary ? ' (Primary)' : ''}` })}
-                        activeOpacity={0.7}
-                      >
-                        <Image source={{ uri: photo.url }} style={styles.profilePhotoImage} resizeMode="cover" />
-                        {photo.is_primary && (
-                          <View style={styles.primaryBadge}>
-                            <Text style={styles.primaryBadgeText}>Primary</Text>
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                    ))}
+                    {ban.profile_photos.map((photo, idx) => {
+                      const isRejected = photo.moderation_status === 'rejected';
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          style={[styles.profilePhotoCard, isRejected && styles.rejectedPhotoCard]}
+                          onPress={() => setSelectedPhoto({ url: photo.url, confidence: isRejected ? 'REJECTED' : '', labels: `Photo ${idx + 1}${photo.is_primary ? ' (Primary)' : ''}${isRejected ? ' — NSFW Rejected' : ''}` })}
+                          activeOpacity={0.7}
+                        >
+                          <Image source={{ uri: photo.url }} style={styles.profilePhotoImage} resizeMode="cover" />
+                          {isRejected && (
+                            <View style={styles.nsfwBadge}>
+                              <Text style={styles.nsfwBadgeText}>NSFW</Text>
+                            </View>
+                          )}
+                          {photo.is_primary && !isRejected && (
+                            <View style={styles.primaryBadge}>
+                              <Text style={styles.primaryBadgeText}>Primary</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
                   </ScrollView>
                 </View>
               )}
@@ -1156,6 +1171,24 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  rejectedPhotoCard: {
+    borderWidth: 2,
+    borderColor: '#EF4444',
+  },
+  nsfwBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  nsfwBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'white',
   },
   profilePhotoImage: {
     width: 100,
