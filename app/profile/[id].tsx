@@ -253,8 +253,6 @@ export default function ProfileView() {
 
       if (prefsError) {
         console.error('Error loading current user preferences:', prefsError);
-      } else {
-        console.log('✅ Current user preferences loaded:', prefsData);
       }
 
       setCurrentPreferences(prefsData);
@@ -277,7 +275,6 @@ export default function ProfileView() {
       const isAdminUser = adminCheck?.is_admin === true;
       if (isAdminUser) {
         setIsAdmin(true);
-        console.log('👑 Admin user detected');
       }
 
       // Check if there's an active match between current user and viewed profile
@@ -289,28 +286,18 @@ export default function ProfileView() {
         .single();
 
       if (match) {
-        console.log('✅ Found active match - showing matched UI');
         setIsMatched(true);
         setMatchId(match.id);
         checkPhotoRevealStatus();
       } else {
-        console.log(`🔍 No match found. Premium: ${isPremium}, Platinum: ${isPlatinum}, Admin: ${isAdminUser}`);
-
         // Check if the viewed profile has liked the current user
-        const { data: theirLike } = await supabase
-          .from('likes')
-          .select('id')
-          .eq('liker_profile_id', id)
-          .eq('liked_profile_id', currentProfileId)
-          .maybeSingle();
-
-        console.log(`🔍 Like check: theirLike exists = ${!!theirLike}`);
+        const { data: theirLikeId } = await supabase
+          .rpc('check_mutual_like', { p_target_profile_id: id });
 
         // Allow viewing with like buttons if:
         // 1. Premium/Platinum user viewing someone who liked them
         // 2. Admin viewing someone who liked them (for testing)
-        if ((isPremium || isPlatinum || isAdminUser) && theirLike) {
-          console.log('✅ Showing LIKE BUTTONS (premium/admin viewing profile from likes tab)');
+        if ((isPremium || isPlatinum || isAdminUser) && theirLikeId) {
           setIsMatched(false); // Not matched yet, will show like/pass buttons
           setMatchId(null);
           return;
@@ -327,11 +314,9 @@ export default function ProfileView() {
             .maybeSingle();
 
           if (adminMatch) {
-            console.log('👑 Admin has existing match with this profile');
             setIsMatched(true);
             setMatchId(adminMatch.id);
           } else {
-            console.log('👑 Admin viewing profile without match - showing as viewable only');
             setIsMatched(true); // Show as "matched" to allow viewing full profile
             setMatchId(null); // But no chat available
           }
@@ -339,7 +324,6 @@ export default function ProfileView() {
         }
 
         // Not matched and no permission to view - redirect back
-        console.log('❌ No permission to view this profile - showing alert');
         setIsMatched(false);
         setMatchId(null);
         Alert.alert('Not Matched', 'You can only view full profiles of your matches.', [
@@ -350,16 +334,11 @@ export default function ProfileView() {
       // Check if premium user viewing someone who liked them
       if (isPremium || isPlatinum) {
         try {
-          const { data: theirLike } = await supabase
-            .from('likes')
-            .select('id')
-            .eq('liker_profile_id', id)
-            .eq('liked_profile_id', currentProfileId)
-            .maybeSingle();
+          const { data: theirLikeId } = await supabase
+            .rpc('check_mutual_like', { p_target_profile_id: id });
 
-          if (theirLike) {
+          if (theirLikeId) {
             // Premium user viewing someone who liked them - allow it
-            console.log('✅ Premium user viewing profile from likes tab');
             setIsMatched(false); // Not matched yet, will show like/pass buttons
             setMatchId(null);
             return;
@@ -509,7 +488,8 @@ export default function ProfileView() {
           photos (
             url,
             is_primary,
-            display_order
+            display_order,
+            blur_data_uri
           )
         `)
         .eq('id', id)
@@ -564,16 +544,9 @@ export default function ProfileView() {
             demographics: breakdown.demographics,
           });
 
-          console.log('Compatibility breakdown calculated:', breakdown);
         } catch (error) {
           console.error('Error calculating compatibility:', error);
         }
-      } else {
-        console.log('Missing data for compatibility calculation:', {
-          hasCurrentProfile: !!currentProfile,
-          hasCurrentPreferences: !!currentPreferences,
-          hasPrefsData: !!prefsData,
-        });
       }
 
       setProfile(transformedProfile);
@@ -604,14 +577,10 @@ export default function ProfileView() {
       }
 
       // Check for mutual match
-      const { data: mutualLike } = await supabase
-        .from('likes')
-        .select('id')
-        .eq('liker_profile_id', id)
-        .eq('liked_profile_id', currentProfileId)
-        .maybeSingle();
+      const { data: mutualLikeId } = await supabase
+        .rpc('check_mutual_like', { p_target_profile_id: id });
 
-      if (mutualLike) {
+      if (mutualLikeId) {
         // Check if match already exists
         const profile1Id = currentProfileId < id ? currentProfileId : id;
         const profile2Id = currentProfileId < id ? id : currentProfileId;
@@ -714,20 +683,20 @@ export default function ProfileView() {
 
     try {
       // Insert super like
-      await supabase.from('likes').insert({
+      const { error: superLikeError } = await supabase.from('likes').insert({
         liker_profile_id: currentProfileId,
         liked_profile_id: id,
       });
 
-      // Check for mutual match
-      const { data: mutualLike } = await supabase
-        .from('likes')
-        .select('id')
-        .eq('liker_profile_id', id)
-        .eq('liked_profile_id', currentProfileId)
-        .single();
+      if (superLikeError) {
+        throw superLikeError;
+      }
 
-      if (mutualLike) {
+      // Check for mutual match
+      const { data: mutualLikeId } = await supabase
+        .rpc('check_mutual_like', { p_target_profile_id: id });
+
+      if (mutualLikeId) {
         // It's a match!
         const profile1Id = currentProfileId < id ? currentProfileId : id;
         const profile2Id = currentProfileId < id ? id : currentProfileId;
@@ -803,20 +772,16 @@ export default function ProfileView() {
     'open': 'Open Arrangement',
   };
 
-  const formatLabel = (value: string) => {
-    if (!value) return '';
-    if (typeof value !== 'string') return String(value);
-
-    // First try to get from mapping
-    if (PREFERENCE_LABELS[value]) {
-      return PREFERENCE_LABELS[value];
+  const formatLabel = (value: any): string => {
+    try {
+      if (!value) return '';
+      if (Array.isArray(value)) return value.filter(Boolean).map(formatLabel).join(', ');
+      if (typeof value !== 'string') return String(value);
+      if (PREFERENCE_LABELS[value]) return PREFERENCE_LABELS[value];
+      return value.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    } catch {
+      return typeof value === 'string' ? value : '';
     }
-
-    // Fallback to Title Case conversion for unmapped values
-    return value
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
   };
 
   // Helper to format array fields and apply formatLabel to each item
@@ -1204,7 +1169,8 @@ export default function ProfileView() {
             {matchId ? (
               <TouchableOpacity
                 onPress={() => router.push(`/chat/${matchId}`)}
-                className="bg-purple-600 rounded-full py-4 shadow-xl"
+                style={{ backgroundColor: '#1A1A1E' }}
+                className="rounded-full py-4 mb-4"
               >
                 <View className="flex-row items-center justify-center gap-2">
                   <MaterialCommunityIcons name="message-text" size={24} color="white" />
