@@ -195,12 +195,18 @@ export default function Likes() {
       );
 
       const formattedLikes: LikeProfile[] = (likesData || [])
-        .filter(like =>
-          !matchedProfileIds.has(like.liker_profile_id) &&
-          !passedProfileIds.has(like.liker_profile_id) &&
-          !blockedProfileIds.has(like.liker_profile_id) &&
-          !bannedProfileIds.has(like.liker_profile_id)
-        )
+        .filter(like => {
+          if (matchedProfileIds.has(like.liker_profile_id) ||
+              passedProfileIds.has(like.liker_profile_id) ||
+              blockedProfileIds.has(like.liker_profile_id) ||
+              bannedProfileIds.has(like.liker_profile_id)) {
+            return false;
+          }
+          // Exclude profiles with no approved photos
+          const prof = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
+          if (!prof || !prof.photos || prof.photos.length === 0) return false;
+          return true;
+        })
         .map(like => {
           // Supabase returns joined data as array, extract first element
           const likerProfile = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
