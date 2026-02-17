@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
-import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash } from '@/lib/image-optimization';
+import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri } from '@/lib/image-optimization';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
@@ -17,6 +17,7 @@ interface Photo {
   uri: string;
   id?: string;
   contentHash?: string;
+  blurDataUri?: string;
 }
 
 export default function Photos() {
@@ -77,7 +78,6 @@ export default function Photos() {
       }
 
       if (existingPhotos && existingPhotos.length > 0) {
-        console.log('📸 Loaded existing photos:', existingPhotos.length);
         const photoUris = existingPhotos.map(photo => ({
           uri: photo.url,
           contentHash: photo.content_hash // Include hash for deduplication
@@ -131,11 +131,11 @@ export default function Photos() {
               generateThumbnail: true, // Generate thumbnail for faster loading
             });
 
-            console.log(`Optimized image: ${(optimized.size! / 1024).toFixed(0)}KB (${optimized.width}x${optimized.height})`);
-
-            // Generate hash for duplicate detection
-            const contentHash = await generateImageHash(optimized.uri);
-            console.log(`Generated content hash: ${contentHash.substring(0, 16)}...`);
+            // Generate hash and blur thumbnail in parallel
+            const [contentHash, blurDataUri] = await Promise.all([
+              generateImageHash(optimized.uri),
+              generateBlurDataUri(optimized.uri).catch(() => undefined),
+            ]);
 
             // Check for duplicate in current selection (local check)
             const isDuplicateLocal = photos.some(p => p.contentHash === contentHash);
@@ -163,7 +163,7 @@ export default function Photos() {
 
             // Update state if component is still mounted
             if (isMounted.current) {
-              setPhotos(prev => [...prev, { uri: optimized.uri, contentHash }]);
+              setPhotos(prev => [...prev, { uri: optimized.uri, contentHash, blurDataUri }]);
               setProcessingImage(false);
             }
           } catch (error: any) {
@@ -204,10 +204,8 @@ export default function Photos() {
       const newPhotos = photos.filter(photo => !photo.uri.startsWith('http'));
 
       if (newPhotos.length === 0) {
-        console.log('✅ All photos already uploaded, skipping upload step');
         setUploadProgress(100);
       } else {
-        console.log(`📤 Uploading ${newPhotos.length} new photos...`);
 
         // Upload each new photo to Supabase Storage
         for (let i = 0; i < newPhotos.length; i++) {
@@ -249,6 +247,7 @@ export default function Photos() {
                 display_order: photos.length - newPhotos.length + i,
                 is_primary: photos.length - newPhotos.length + i === 0,
                 content_hash: photo.contentHash,
+                blur_data_uri: photo.blurDataUri || null,
                 moderation_status: 'pending', // Start as pending until moderation completes
               })
               .select('id')
@@ -257,48 +256,30 @@ export default function Photos() {
             if (dbError) {
               // If it's a duplicate constraint error, just skip - photo already exists
               if (dbError.code === '23505' || dbError.message?.includes('duplicate') || dbError.message?.includes('unique constraint')) {
-                console.log(`📸 Photo ${i + 1} already exists in database, skipping`);
+                // Photo already exists in database, skipping
               } else {
                 console.error(`Database error for photo ${i}:`, dbError);
                 throw new Error(`Failed to save photo ${i + 1}. Please try again.`);
               }
             } else {
-              console.log(`✅ Photo ${i + 1} saved to database`);
-
               // Run NSFW moderation check - BLOCKING
               // This uses AWS Rekognition to detect explicit content
               try {
-                const moderationResponse = await fetch(
-                  `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/moderate-photo`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-                    },
-                    body: JSON.stringify({
-                      photo_url: publicUrl,
-                      photo_id: photoData?.id,
-                      profile_id: profileId,
-                    }),
-                  }
-                );
+                const { data: moderationResult, error: moderationError } = await supabase.functions.invoke('moderate-photo', {
+                  body: {
+                    photo_url: publicUrl,
+                    photo_id: photoData?.id,
+                    profile_id: profileId,
+                  },
+                });
 
-                const moderationResult = await moderationResponse.json();
-                console.log(`🔍 Moderation result for photo ${i + 1}:`, moderationResult);
-
-                // If moderation endpoint returned an error (e.g. AWS creds not configured),
-                // keep the photo as pending but don't block upload - RLS will hide rejected photos
-                if (moderationResult.error) {
-                  console.error('Moderation service error:', moderationResult.error);
+                if (moderationError) {
+                  console.error('Moderation service error:', moderationError);
                 }
 
-                // If photo was rejected for explicit content, alert user and remove photo
-                if (moderationResult.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
-                  // Delete the photo from storage and database
-                  await supabase.storage.from('profile-photos').remove([fileName]);
-                  await supabase.from('photos').delete().eq('id', photoData?.id);
-
+                // If photo was rejected for explicit content, alert user
+                // Keep the file in storage and DB record (marked rejected) for admin review
+                if (moderationResult?.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
                   throw new Error('This photo contains inappropriate content and cannot be uploaded. Please choose a different photo.');
                 }
               } catch (moderationError: any) {
@@ -322,8 +303,7 @@ export default function Photos() {
         }
       }
 
-      // Update onboarding step and photo blur preference
-      console.log('💠 Photo blur setting:', photoBlurEnabled ? 'ENABLED' : 'DISABLED');
+      // Update onboarding step (photo_blur_enabled is saved immediately on toggle)
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
@@ -334,8 +314,6 @@ export default function Photos() {
 
       if (updateError) {
         console.error('Error updating onboarding step:', updateError);
-      } else {
-        console.log('✅ Photo blur preference saved:', photoBlurEnabled);
       }
 
       // Reset upload state
@@ -451,9 +429,20 @@ export default function Photos() {
             </View>
             <Switch
               value={photoBlurEnabled}
-              onValueChange={(value) => {
-                console.log('🔒 Photo blur toggled:', value ? 'ON' : 'OFF');
+              onValueChange={async (value) => {
                 setPhotoBlurEnabled(value);
+                // Save immediately so the setting persists even if user navigates away
+                if (profileId) {
+                  try {
+                    await supabase
+                      .from('profiles')
+                      .update({ photo_blur_enabled: value })
+                      .eq('id', profileId);
+                  } catch (error) {
+                    console.error('Error saving photo blur preference:', error);
+                    setPhotoBlurEnabled(!value); // revert on failure
+                  }
+                }
               }}
               trackColor={{ false: '#D1D5DB', true: '#A08AB7' }}
               thumbColor={photoBlurEnabled ? '#ffffff' : '#f4f3f4'}
