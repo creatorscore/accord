@@ -132,22 +132,6 @@ serve(async (req) => {
         data: { matchId: match_id, type: 'new_match' },
       });
 
-      // Insert into activity_feed for Activity Center display
-      // Find the other profile ID for this recipient
-      const otherProfileId = recipient.id === profile1_id ? profile2_id : profile1_id;
-      await supabaseAdmin.from('activity_feed').insert({
-        profile_id: recipient.id,
-        activity_type: 'match',
-        actor_profile_id: otherProfileId,
-        reference_id: match_id,
-        metadata: {
-          match_id: match_id,
-        },
-        is_read: false,
-      });
-
-      console.log(`[Match Notification] Activity feed entry created for ${recipient.id}`);
-
       return { sent: successCount, total: tokens.size };
     };
 

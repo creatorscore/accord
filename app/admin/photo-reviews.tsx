@@ -74,7 +74,7 @@ export default function AdminPhotoReviews() {
           photo_review_requested_at,
           photo_verification_status,
           is_active,
-          photos (url, is_primary, display_order)
+          photos (url, is_primary, display_order, blur_data_uri)
         `)
         .eq('photo_review_required', true)
         .order('photo_review_requested_at', { ascending: false });

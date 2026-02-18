@@ -11,15 +11,10 @@ const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
 export const initializeSentry = () => {
   // Only initialize if DSN is configured
   if (!SENTRY_DSN) {
-    console.log('Sentry not initialized (missing DSN)');
     return;
   }
 
   // Allow testing in dev mode for onboarding
-  if (__DEV__) {
-    console.log('⚠️ Sentry running in DEV mode for testing');
-  }
-
   try {
     Sentry.init({
       dsn: SENTRY_DSN,
@@ -51,6 +46,11 @@ export const initializeSentry = () => {
         const errorMessage = event.exception?.values?.[0]?.value || '';
         const errorType = event.exception?.values?.[0]?.type || '';
 
+        // Drop all development environment events — not actionable in Sentry
+        if (event.environment === 'development') {
+          return null;
+        }
+
         // Check if this is a device storage space error (user's device is full)
         const isStorageSpaceError =
           errorMessage.includes('out of space') ||
@@ -63,36 +63,22 @@ export const initializeSentry = () => {
           return null;
         }
 
-        // Drop ANRs on low-end devices, background ANRs, and system-only ANRs — not actionable
+        // Drop all ANRs — nearly always system/device issues, not actionable from app code
+        // Covers: background ANRs, AppExitInfo reports, low-end device stalls,
+        // malloc stalls, Vsync deadlocks, Choreographer hangs, etc.
         if (errorType === 'ApplicationNotResponding') {
-          const deviceClass = event.tags?.['device.class'] || event.contexts?.device?.device_class;
-          const isBackgroundANR = errorMessage.includes('Background ANR');
-          const mechanism = event.exception?.values?.[0]?.mechanism?.type || event.tags?.mechanism || '';
-          const isAppExitInfo = mechanism === 'AppExitInfo';
-
-          // Drop if low-end device, background ANR, or historical AppExitInfo report
-          if (deviceClass === 'low' || isBackgroundANR || isAppExitInfo) {
-            return null;
-          }
-
-          // Drop ANRs with no app frames (purely system/ART stack traces)
-          const frames = event.exception?.values?.[0]?.stacktrace?.frames || [];
-          const hasAppFrames = frames.some((f: any) => f.in_app === true);
-          if (!hasAppFrames) {
-            return null;
-          }
+          return null;
         }
 
-        // Drop iOS AppHang events caused by system-level view snapshotting — not actionable
+        // Drop iOS AppHang events — almost always system-level stalls, not actionable
+        // Covers: UIKeyboardTaskQueue deadlocks, CFRunLoop stalls, UIKit snapshotting, etc.
         if (errorType === 'App Hanging') {
-          const frames = event.exception?.values?.[0]?.stacktrace?.frames || [];
-          const isSystemSnapshotHang = frames.some((f: any) =>
-            f.function?.includes('_UISnapshotViewRectAfterCommit') ||
-            f.function?.includes('resizableSnapshotViewFromRect')
-          );
-          if (isSystemSnapshotHang) {
-            return null;
-          }
+          return null;
+        }
+
+        // Drop Android SplashScreenView NPE — OEM firmware bug, no app frames
+        if (errorType === 'NullPointerException' && errorMessage.includes('SplashScreenView')) {
+          return null;
         }
 
         // Drop known React Native framework crashes — not actionable
@@ -101,9 +87,19 @@ export const initializeSentry = () => {
           return null;
         }
 
+        // Drop Fabric renderer race condition — view unmounted before mounting completes
+        if (errorType === 'RetryableMountingLayerException') {
+          return null;
+        }
+
+        // Drop RenderScript context crashes from expo-blur on older Android devices
+        if (errorType === 'RSInvalidStateException') {
+          return null;
+        }
+
         // Drop native crashes with no app frames (system-only stack traces)
-        // e.g., EXC_BAD_ACCESS in UIKit hit-testing during view transitions
-        if (errorType === 'EXC_BAD_ACCESS') {
+        // e.g., EXC_BAD_ACCESS in UIKit, SIGABRT in libc — not actionable
+        if (errorType === 'EXC_BAD_ACCESS' || errorType === 'SIGABRT') {
           const frames = event.exception?.values?.[0]?.stacktrace?.frames || [];
           const hasAppFrames = frames.some((f: any) => f.in_app === true);
           if (!hasAppFrames) {
@@ -111,19 +107,32 @@ export const initializeSentry = () => {
           }
         }
 
-        // Drop Android RenderScript driver crashes (SIGSEGV in libRSDriver.so)
-        // These are device-specific GPU driver bugs on low-end phones, not actionable
+        // Drop all SIGSEGV crashes with no app frames — system/driver bugs, not actionable
+        // Covers RenderScript (libRSDriver.so), GPU drivers, libc, etc.
         if (errorType === 'SIGSEGV') {
           const frames = event.exception?.values?.[0]?.stacktrace?.frames || [];
-          const isRenderScriptCrash = frames.some((f: any) =>
-            f.function?.includes('rsdScript') ||
-            f.function?.includes('renderscript') ||
-            f.module?.includes('libRSDriver') ||
-            f.module?.includes('libRS.so')
-          );
-          if (isRenderScriptCrash) {
+          const hasAppFrames = frames.some((f: any) => f.in_app === true);
+          if (!hasAppFrames) {
             return null;
           }
+        }
+
+        // Drop React Native animated node race conditions — Fabric renderer timing issue
+        if (errorType === 'JSApplicationIllegalArgumentException' &&
+            errorMessage.includes('connectAnimatedNodes')) {
+          return null;
+        }
+
+        // Drop iOS CALayerInvalid — Core Animation layer cycle, system/RN bug
+        if (errorType === 'CALayerInvalid') {
+          return null;
+        }
+
+        // Drop NativeEventEmitter null argument — deprecated RN modules on newer OS versions
+        if (errorType === 'Invariant Violation' &&
+            errorMessage.includes('NativeEventEmitter') &&
+            errorMessage.includes('non-null argument')) {
+          return null;
         }
 
         // Remove potentially sensitive user data
@@ -149,7 +158,6 @@ export const initializeSentry = () => {
       },
     });
 
-    console.log('✅ Sentry initialized');
   } catch (error) {
     console.error('Failed to initialize Sentry:', error);
   }
@@ -164,7 +172,6 @@ export const captureException = (error: Error, context?: Record<string, any>) =>
     return;
   }
 
-  console.log('📤 Sending error to Sentry:', error.message);
   Sentry.captureException(error, {
     extra: context,
   });
@@ -175,11 +182,9 @@ export const captureException = (error: Error, context?: Record<string, any>) =>
  */
 export const captureMessage = (message: string, level: 'info' | 'warning' | 'error' = 'info', context?: Record<string, any>) => {
   if (!SENTRY_DSN) {
-    console.log(`Message (Sentry not configured) [${level}]:`, message, context);
     return;
   }
 
-  console.log(`📤 Sending message to Sentry [${level}]:`, message);
   Sentry.captureMessage(message, {
     level,
     extra: context,

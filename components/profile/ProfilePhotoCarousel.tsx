@@ -26,6 +26,7 @@ interface Photo {
   caption?: string;
   is_primary?: boolean;
   display_order?: number;
+  blur_data_uri?: string | null;
 }
 
 interface ProfilePhotoCarouselProps {
@@ -60,11 +61,21 @@ export default function ProfilePhotoCarousel({
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
 
-  // Safe blur hook - protects user privacy while preventing crashes
+  const shouldBlur = photoBlurEnabled && !isRevealed && !isAdmin;
+
+  // Safe blur hook - fallback for photos without blur_data_uri
   const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
-    shouldBlur: photoBlurEnabled && !isRevealed && !isAdmin,
+    shouldBlur,
     blurIntensity: 30,
   });
+
+  // Helper: use server blur data URI when available
+  const getPhotoUri = (photo: Photo) =>
+    shouldBlur && photo.blur_data_uri ? photo.blur_data_uri : photo.url;
+  const getBlurRadius = (photo: Photo) =>
+    shouldBlur && photo.blur_data_uri ? 0 : blurRadius;
+  const getShowOverlay = (photo: Photo) =>
+    shouldBlur && photo.blur_data_uri ? false : showBlurOverlay;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
@@ -88,17 +99,17 @@ export default function ProfilePhotoCarousel({
         {photos.map((photo, index) => (
           <View key={index} style={styles.photoContainer}>
             <Image
-              source={{ uri: photo.url }}
+              source={{ uri: getPhotoUri(photo) }}
               style={styles.photo}
               resizeMode="cover"
-              blurRadius={blurRadius}
+              blurRadius={getBlurRadius(photo)}
               onLoad={onImageLoad}
               onError={onImageError}
             />
             {/* Android blur fallback - CSS overlay instead of RenderScript */}
-            {showBlurOverlay && (
+            {getShowOverlay(photo) && (
               <View
-                style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
                 pointerEvents="none"
               />
             )}

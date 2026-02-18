@@ -10,8 +10,6 @@ export default function GoogleAuthCallback() {
     // This route just needs to exist to prevent the "unmatched route" error
     // After the session is set, redirect to root which will handle navigation
 
-    console.log('Google auth callback params:', params);
-
     // Small delay to ensure auth state is updated
     const timer = setTimeout(() => {
       router.replace('/');

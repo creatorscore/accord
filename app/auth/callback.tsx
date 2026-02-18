@@ -24,8 +24,6 @@ export default function AuthCallback() {
 
       // Check if this is a password recovery callback
       if (type === 'recovery' || type === 'magiclink') {
-        console.log('Password recovery callback detected');
-
         if (access_token && typeof access_token === 'string') {
           // Set the session with the tokens from the password reset link
           const { error: sessionError } = await supabase.auth.setSession({

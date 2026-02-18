@@ -27,7 +27,6 @@ export const useActivityTracker = () => {
         .update({ last_active_at: new Date().toISOString() })
         .eq('id', profileId);
 
-      console.log('📍 Updated last_active_at');
     } catch (error) {
       console.error('Error updating last_active_at:', error);
     }

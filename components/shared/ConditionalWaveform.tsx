@@ -92,8 +92,6 @@ const SimulatedWaveform = forwardRef<IWaveformRef, WaveformProps>(({
       setIsPlaying(true);
       setProgress(0);
       onPlayerStateChange?.('playing');
-      console.log('⚠️ Dev mode: Audio playback is simulated (visual only). Test in TestFlight for real audio.');
-
       // Simulate playback progress
       intervalRef.current = setInterval(() => {
         setProgress(prev => {
@@ -188,12 +186,9 @@ if (isProduction) {
     RealWaveform = waveformModule.Waveform;
     RealPlayerState = waveformModule.PlayerState;
     RealRecorderState = waveformModule.RecorderState;
-    console.log('✅ Using real audio waveform in production');
   } catch (error) {
     console.warn('Failed to load audio waveform, using simulated:', error);
   }
-} else {
-  console.log('⚠️ Using simulated waveform in development mode');
 }
 
 // Export the appropriate component based on environment

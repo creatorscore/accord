@@ -38,9 +38,6 @@ export default function SignUp() {
   };
 
   const handleSignUp = async () => {
-    console.log('Sign up button clicked');
-    console.log('Email:', email, 'Password length:', password.length);
-
     if (!email || !password || !confirmPassword) {
       if (Platform.OS === 'web') {
         alert(t('auth.signUp.errorMissingFields'));
@@ -120,14 +117,11 @@ export default function SignUp() {
         return;
       }
 
-      console.log('Calling signUp with:', email);
       const result = await signUp(email, password);
-      console.log('Sign up result:', result);
 
       // Check if email confirmation is required
       if (result.user && !result.session) {
         // Email verification required - show success message
-        console.log('Email confirmation required for:', email);
         // Track sign-up (even though not yet verified)
         trackUserAction.signUp('email');
         identifyUser(result.user.id, { email: email.toLowerCase() });
@@ -135,7 +129,6 @@ export default function SignUp() {
         setShowVerificationMessage(true);
       } else if (result.session) {
         // Direct sign in successful (email confirmation disabled)
-        console.log('Direct sign in successful');
         // Track successful sign-up
         trackUserAction.signUp('email');
         identifyUser(result.user!.id, { email: email.toLowerCase() });
@@ -145,7 +138,6 @@ export default function SignUp() {
         }, 500);
       } else if (result.user) {
         // User created but no session - try to sign in
-        console.log('User created, attempting sign in...');
         try {
           await signIn(email, password);
           Keyboard.dismiss();
@@ -187,7 +179,6 @@ export default function SignUp() {
   const handleGoogleSignUp = async () => {
     // Synchronous check to prevent ANR from multiple rapid taps on slow devices
     if (isSigningIn.current) {
-      console.log('Sign-in already in progress, ignoring tap');
       return;
     }
     isSigningIn.current = true;
@@ -223,7 +214,6 @@ export default function SignUp() {
   const handleAppleSignUp = async () => {
     // Synchronous check to prevent ANR from multiple rapid taps on slow devices
     if (isSigningIn.current) {
-      console.log('Sign-in already in progress, ignoring tap');
       return;
     }
     isSigningIn.current = true;

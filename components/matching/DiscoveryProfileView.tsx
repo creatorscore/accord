@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,10 @@ import {
   Pressable,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheetModal, BottomSheetView, BottomSheetTextInput, BottomSheetBackdrop, BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { formatDistance, DistanceUnit } from '@/lib/distance-utils';
@@ -21,6 +23,7 @@ import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
 import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import { useSafeBlur } from '@/hooks/useSafeBlur';
+import { usePhotoBlur } from '@/hooks/usePhotoBlur';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 
 const { width: _SCREEN_WIDTH, height: _SCREEN_HEIGHT } = Dimensions.get('window');
@@ -41,7 +44,7 @@ interface Profile {
   bio?: string;
   occupation?: string;
   education?: string;
-  photos?: { url: string; is_primary: boolean }[];
+  photos?: { url: string; is_primary: boolean; blur_data_uri?: string | null }[];
   compatibility_score?: number;
   is_verified?: boolean;
   photo_verified?: boolean;
@@ -114,7 +117,7 @@ interface DiscoveryProfileViewProps {
   onBlock?: () => void;
   onReport?: () => void;
   onPass?: () => void;
-  onLike?: (likedContent?: string) => void; // Optional: what content was liked (photo, prompt)
+  onLike?: (likedContent?: string, message?: string, likedContentData?: { type: string; prompt?: string; answer?: string; index?: number }) => void;
   onSuperLike?: () => void;
   onRewind?: () => void;
   canRewind?: boolean;
@@ -165,11 +168,16 @@ const PREFERENCE_LABELS: { [key: string]: string } = {
   'open': 'Open Arrangement',
 };
 
-const formatLabel = (value: string) => {
-  if (!value) return '';
-  if (typeof value !== 'string') return String(value);
-  if (PREFERENCE_LABELS[value]) return PREFERENCE_LABELS[value];
-  return value.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+const formatLabel = (value: any): string => {
+  try {
+    if (!value) return '';
+    if (Array.isArray(value)) return value.filter(Boolean).map(formatLabel).join(', ');
+    if (typeof value !== 'string') return String(value);
+    if (PREFERENCE_LABELS[value]) return PREFERENCE_LABELS[value];
+    return value.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  } catch {
+    return typeof value === 'string' ? value : '';
+  }
 };
 
 const formatArrayWithLabels = (value?: string | string[]): string => {
@@ -240,6 +248,8 @@ const PhotoCard = React.memo(function PhotoCard({
   viewerUserId,
   showLikeButton = true,
   photoIndex = 0,
+  blurDataUri,
+  shouldBlur = false,
 }: {
   uri: string;
   onLike: () => void;
@@ -252,23 +262,36 @@ const PhotoCard = React.memo(function PhotoCard({
   viewerUserId: string | null;
   showLikeButton?: boolean;
   photoIndex?: number;
+  blurDataUri?: string | null;
+  shouldBlur?: boolean;
 }) {
+  // Use two-layer blur: downsized transform URL + light native blur
+  const photoBlur = usePhotoBlur({
+    shouldBlur,
+    photoUrl: uri,
+    blurDataUri,
+    transformWidth: 800,
+  });
+  const imageUri = photoBlur.imageUri;
+  const effectiveBlurRadius = photoBlur.blurRadius;
+  const effectiveShowOverlay = photoBlur.showBlurOverlay;
+
   return (
   <View style={styles.photoCard}>
     <Image
-      source={{ uri }}
+      source={{ uri: imageUri }}
       style={styles.photoImage}
       contentFit="cover"
       cachePolicy="memory-disk"
       transition={200}
-      blurRadius={blurRadius}
+      blurRadius={effectiveBlurRadius}
       onLoad={onImageLoad}
       onError={onImageError}
     />
     {/* Android blur fallback - CSS overlay instead of RenderScript */}
-    {showBlurOverlay && (
+    {effectiveShowOverlay && (
       <View
-        style={[styles.photoImage, { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)' }]}
+        style={[styles.photoImage, { position: 'absolute', backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
         pointerEvents="none"
       />
     )}
@@ -486,8 +509,10 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
 
+  const shouldBlurPhotos = (profile.photo_blur_enabled || false) && !isPhotoRevealed && !isOwnProfile && !isAdmin;
+
   const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
-    shouldBlur: (profile.photo_blur_enabled || false) && !isAdmin && !isPhotoRevealed && !isOwnProfile,
+    shouldBlur: shouldBlurPhotos,
     blurIntensity: 50,
   });
 
@@ -499,8 +524,17 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [playbackDuration, setPlaybackDuration] = useState(profile.voice_intro_duration ? profile.voice_intro_duration * 1000 : 0);
-  const [showLikeChoice, setShowLikeChoice] = useState(false);
   const [pendingLikeContent, setPendingLikeContent] = useState<string | null>(null);
+  const [pendingLikeContentData, setPendingLikeContentData] = useState<{ type: string; prompt?: string; answer?: string; index?: number } | null>(null);
+  const [likeMessage, setLikeMessage] = useState('');
+  const likeSheetRef = useRef<BottomSheetModal>(null);
+
+  const renderLikeSheetBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.4} />
+    ),
+    [],
+  );
 
   const photos = profile.photos || [];
   const lastActiveText = getLastActiveText(profile.last_active_at, profile.hide_last_active);
@@ -586,20 +620,25 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
     }
   };
 
-  const handleLikeContent = (contentType: string) => {
+  const handleLikeContent = (contentType: string, contentData?: { type: string; prompt?: string; answer?: string; index?: number }) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPendingLikeContent(contentType);
-    setShowLikeChoice(true);
+    setPendingLikeContentData(contentData || null);
+    setLikeMessage('');
+    likeSheetRef.current?.present();
   };
 
   const handleLikeChoice = (isObsessed: boolean) => {
-    setShowLikeChoice(false);
+    likeSheetRef.current?.dismiss();
+    const trimmedMessage = likeMessage.trim() || undefined;
     if (isObsessed) {
       onSuperLike?.();
     } else {
-      onLike?.(pendingLikeContent || undefined);
+      onLike?.(pendingLikeContent || undefined, trimmedMessage, pendingLikeContentData || undefined);
     }
     setPendingLikeContent(null);
+    setPendingLikeContentData(null);
+    setLikeMessage('');
   };
 
   const handlePass = () => {
@@ -621,11 +660,8 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           <View style={styles.headerTopRow}>
             <View style={styles.nameRow}>
               <Text style={styles.profileName}>{profile.display_name}</Text>
-              {profile.is_verified && (
+              {(profile.photo_verified || profile.is_verified) && (
                 <MaterialCommunityIcons name="check-decagram" size={24} color="#A08AB7" style={{ marginLeft: 6 }} />
-              )}
-              {profile.photo_verified && (
-                <MaterialCommunityIcons name="camera-account" size={20} color="#22c55e" style={{ marginLeft: 4 }} />
               )}
             </View>
             <View style={styles.headerButtons}>
@@ -666,7 +702,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         {photos[0] && (
           <PhotoCard
             uri={photos[0].url}
-            onLike={() => handleLikeContent('photo_1')}
+            onLike={() => handleLikeContent('photo_1', { type: 'photo', index: 0 })}
             blurRadius={blurRadius}
             showBlurOverlay={showBlurOverlay}
             onImageLoad={onImageLoad}
@@ -676,6 +712,8 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             viewerUserId={viewerUserId}
             showLikeButton={!hideActions}
             photoIndex={0}
+            blurDataUri={(photos[0] as any).blur_data_uri}
+            shouldBlur={shouldBlurPhotos}
           />
         )}
 
@@ -722,7 +760,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           <PromptCard
             prompt={profile.prompt_answers[0].prompt}
             answer={profile.prompt_answers[0].answer}
-            onLike={() => handleLikeContent('prompt_1')}
+            onLike={() => handleLikeContent('prompt_1', { type: 'prompt', prompt: profile.prompt_answers![0].prompt, answer: profile.prompt_answers![0].answer })}
             showLikeButton={!hideActions}
           />
         )}
@@ -739,7 +777,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         {photos[1] && (
           <PhotoCard
             uri={photos[1].url}
-            onLike={() => handleLikeContent('photo_2')}
+            onLike={() => handleLikeContent('photo_2', { type: 'photo', index: 1 })}
             blurRadius={blurRadius}
             showBlurOverlay={showBlurOverlay}
             onImageLoad={onImageLoad}
@@ -749,6 +787,8 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             viewerUserId={viewerUserId}
             showLikeButton={!hideActions}
             photoIndex={1}
+            blurDataUri={(photos[1] as any).blur_data_uri}
+            shouldBlur={shouldBlurPhotos}
           />
         )}
 
@@ -757,7 +797,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           <PromptCard
             prompt={profile.prompt_answers[1].prompt}
             answer={profile.prompt_answers[1].answer}
-            onLike={() => handleLikeContent('prompt_2')}
+            onLike={() => handleLikeContent('prompt_2', { type: 'prompt', prompt: profile.prompt_answers![1].prompt, answer: profile.prompt_answers![1].answer })}
             showLikeButton={!hideActions}
           />
         )}
@@ -766,7 +806,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         {photos[2] && (
           <PhotoCard
             uri={photos[2].url}
-            onLike={() => handleLikeContent('photo_3')}
+            onLike={() => handleLikeContent('photo_3', { type: 'photo', index: 2 })}
             blurRadius={blurRadius}
             showBlurOverlay={showBlurOverlay}
             onImageLoad={onImageLoad}
@@ -776,6 +816,8 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             viewerUserId={viewerUserId}
             showLikeButton={!hideActions}
             photoIndex={2}
+            blurDataUri={(photos[2] as any).blur_data_uri}
+            shouldBlur={shouldBlurPhotos}
           />
         )}
 
@@ -1026,7 +1068,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           <PromptCard
             prompt={profile.prompt_answers[2].prompt}
             answer={profile.prompt_answers[2].answer}
-            onLike={() => handleLikeContent('prompt_3')}
+            onLike={() => handleLikeContent('prompt_3', { type: 'prompt', prompt: profile.prompt_answers![2].prompt, answer: profile.prompt_answers![2].answer })}
             showLikeButton={!hideActions}
           />
         )}
@@ -1037,7 +1079,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             key={`prompt_${index + 4}`}
             prompt={promptItem.prompt}
             answer={promptItem.answer}
-            onLike={() => handleLikeContent(`prompt_${index + 4}`)}
+            onLike={() => handleLikeContent(`prompt_${index + 4}`, { type: 'prompt', prompt: promptItem.prompt, answer: promptItem.answer })}
             showLikeButton={!hideActions}
           />
         ))}
@@ -1047,7 +1089,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           <PhotoCard
             key={index}
             uri={photo.url}
-            onLike={() => handleLikeContent(`photo_${index + 4}`)}
+            onLike={() => handleLikeContent(`photo_${index + 4}`, { type: 'photo', index: index + 3 })}
             blurRadius={blurRadius}
             showBlurOverlay={showBlurOverlay}
             onImageLoad={onImageLoad}
@@ -1057,6 +1099,8 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             viewerUserId={viewerUserId}
             showLikeButton={!hideActions}
             photoIndex={index + 3}
+            blurDataUri={(photo as any).blur_data_uri}
+            shouldBlur={shouldBlurPhotos}
           />
         ))}
 
@@ -1135,46 +1179,114 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         </Pressable>
       </Modal>
 
-      {/* Like/Obsessed Choice Modal */}
-      <Modal
-        visible={showLikeChoice}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowLikeChoice(false)}
+      {/* Like/Obsessed Choice — Gorhom Bottom Sheet */}
+      <BottomSheetModal
+        ref={likeSheetRef}
+        enableDynamicSizing
+        enablePanDownToClose
+        backdropComponent={renderLikeSheetBackdrop}
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+        handleIndicatorStyle={styles.likeSheetHandle}
+        backgroundStyle={styles.likeSheetBackground}
       >
-        <Pressable style={styles.likeChoiceOverlay} onPress={() => setShowLikeChoice(false)}>
-          <Pressable style={styles.likeChoiceSheet} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.likeChoiceTitle}>How do you feel?</Text>
-            <View style={styles.likeChoiceButtons}>
-              <TouchableOpacity
-                style={styles.likeChoiceButton}
-                onPress={() => handleLikeChoice(false)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.likeChoiceIconContainer}>
-                  <MaterialCommunityIcons name="heart" size={32} color="#A08AB7" />
-                </View>
-                <Text style={styles.likeChoiceLabel}>Like</Text>
-                {!isPremium && (
-                  <Text style={styles.likeChoiceCount}>{likesRemaining}/{dailyLikeLimit} today</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.likeChoiceButton, superLikesRemaining === 0 && styles.likeChoiceButtonDisabled]}
-                onPress={() => handleLikeChoice(true)}
-                activeOpacity={0.8}
-                disabled={superLikesRemaining === 0}
-              >
-                <View style={[styles.likeChoiceIconContainer, styles.obsessedIconContainer, superLikesRemaining === 0 && styles.obsessedIconDisabled]}>
-                  <MaterialCommunityIcons name="star" size={32} color={superLikesRemaining > 0 ? "#F59E0B" : "#D1D5DB"} />
-                </View>
-                <Text style={[styles.likeChoiceLabel, superLikesRemaining === 0 && styles.likeChoiceLabelDisabled]}>Obsessed</Text>
-                <Text style={styles.likeChoiceCount}>{superLikesRemaining} remaining</Text>
-              </TouchableOpacity>
+        <BottomSheetView style={[styles.likeChoiceSheet, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
+          {/* Liked content preview */}
+          {pendingLikeContentData?.type === 'prompt' && pendingLikeContentData.prompt && (
+            <View style={styles.likeChoicePromptPreview}>
+              <Text style={styles.likeChoicePromptQuestion} numberOfLines={1}>{pendingLikeContentData.prompt}</Text>
+              <Text style={styles.likeChoicePromptAnswer} numberOfLines={2}>{pendingLikeContentData.answer}</Text>
             </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          )}
+          {pendingLikeContentData?.type === 'photo' && pendingLikeContentData.index != null && photos[pendingLikeContentData.index] && (
+            <View style={styles.likeChoicePhotoPreview}>
+              <Image
+                source={{ uri: photos[pendingLikeContentData.index].url }}
+                style={styles.likeChoicePhotoThumb}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+              <Text style={styles.likeChoicePhotoLabel}>Liked their photo</Text>
+            </View>
+          )}
+
+          {/* Message input */}
+          <View style={styles.likeChoiceInputContainer}>
+            <BottomSheetTextInput
+              style={styles.likeChoiceInput}
+              placeholder="Say something nice..."
+              placeholderTextColor="#B0A4C0"
+              value={likeMessage}
+              onChangeText={setLikeMessage}
+              maxLength={150}
+              multiline
+              numberOfLines={3}
+            />
+            {likeMessage.length > 0 && (
+              <View style={styles.likeChoiceCharCountContainer}>
+                <Text style={[
+                  styles.likeChoiceCharCount,
+                  likeMessage.length > 130 && { color: '#F59E0B' },
+                  likeMessage.length >= 150 && { color: '#EF4444' },
+                ]}>{likeMessage.length}/150</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Action buttons */}
+          <View style={styles.likeChoiceButtons}>
+            <TouchableOpacity
+              style={styles.likeChoicePrimaryButton}
+              onPress={() => handleLikeChoice(false)}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={['#A08AB7', '#8B6FA8']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.likeChoicePrimaryGradient}
+              >
+                <Ionicons name="heart" size={20} color="white" />
+                <Text style={styles.likeChoicePrimaryText}>
+                  {likeMessage.trim() ? 'Send Like with Comment' : 'Send Like'}
+                </Text>
+              </LinearGradient>
+              {!isPremium && (
+                <Text style={styles.likeChoicePrimarySubtext}>{likesRemaining}/{dailyLikeLimit} today</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.likeChoiceSecondaryButton, superLikesRemaining === 0 && styles.likeChoiceButtonDisabled]}
+              onPress={() => handleLikeChoice(true)}
+              activeOpacity={0.85}
+              disabled={superLikesRemaining === 0}
+            >
+              <LinearGradient
+                colors={superLikesRemaining > 0 ? ['#FEF3C7', '#FDE68A'] : ['#F3F4F6', '#E5E7EB']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.likeChoiceSecondaryGradient}
+              >
+                <MaterialCommunityIcons name="star" size={20} color={superLikesRemaining > 0 ? '#D97706' : '#9CA3AF'} />
+                <Text style={[
+                  styles.likeChoiceSecondaryText,
+                  superLikesRemaining === 0 && { color: '#9CA3AF' },
+                ]}>Obsessed</Text>
+                <View style={[
+                  styles.likeChoiceCountBadge,
+                  superLikesRemaining === 0 && { backgroundColor: '#E5E7EB' },
+                ]}>
+                  <Text style={[
+                    styles.likeChoiceCountBadgeText,
+                    superLikesRemaining === 0 && { color: '#9CA3AF' },
+                  ]}>{superLikesRemaining}</Text>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </BottomSheetView>
+      </BottomSheetModal>
     </View>
   );
 });
@@ -1951,69 +2063,151 @@ const styles = StyleSheet.create({
   actionTextDanger: {
     color: '#EF4444',
   },
-  // Like/Obsessed Choice Modal styles
-  likeChoiceOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  // Like/Obsessed Choice — Bottom Sheet styles
+  likeSheetHandle: {
+    backgroundColor: '#D1D5DB',
+    width: 36,
+    height: 4,
+  },
+  likeSheetBackground: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   likeChoiceSheet: {
-    backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    minWidth: 240,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    paddingTop: 8,
+    paddingHorizontal: 24,
   },
-  likeChoiceTitle: {
-    fontSize: 20,
+  likeChoicePromptPreview: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#A08AB7',
+  },
+  likeChoicePromptQuestion: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#000000',
-    marginBottom: 24,
+    color: '#8B7FA0',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
   },
-  likeChoiceButtons: {
-    flexDirection: 'row',
-    gap: 32,
-  },
-  likeChoiceButton: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  likeChoiceIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#F3F0F8',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  obsessedIconContainer: {
-    backgroundColor: '#FEF3C7',
-  },
-  likeChoiceLabel: {
-    fontSize: 16,
+  likeChoicePromptAnswer: {
+    fontSize: 15,
     fontWeight: '600',
-    color: '#000000',
+    color: '#1F2937',
+    lineHeight: 21,
   },
-  likeChoiceLabelDisabled: {
-    color: '#9CA3AF',
+  likeChoicePhotoPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
   },
-  likeChoiceCount: {
+  likeChoicePhotoThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#E5E7EB',
+  },
+  likeChoicePhotoLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  likeChoiceInputContainer: {
+    marginBottom: 20,
+  },
+  likeChoiceInput: {
+    backgroundColor: '#F9F7FC',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
+    fontSize: 15,
+    color: '#1F2937',
+    borderWidth: 1.5,
+    borderColor: '#E8E0F0',
+    minHeight: 56,
+    maxHeight: 100,
+    textAlignVertical: 'top',
+    lineHeight: 22,
+  },
+  likeChoiceCharCountContainer: {
+    alignItems: 'flex-end',
+    marginTop: 6,
+    paddingRight: 4,
+  },
+  likeChoiceCharCount: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#6B7280',
-    marginTop: 2,
+    color: '#B0A4C0',
+  },
+  likeChoiceButtons: {
+    gap: 10,
+  },
+  likeChoicePrimaryButton: {
+    alignItems: 'center',
+  },
+  likeChoicePrimaryGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 56,
+    borderRadius: 28,
+    width: '100%',
+    shadowColor: '#A08AB7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  likeChoicePrimaryText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: 'white',
+    letterSpacing: 0.2,
+  },
+  likeChoicePrimarySubtext: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#9CA3AF',
+    marginTop: 6,
+  },
+  likeChoiceSecondaryButton: {
+    alignItems: 'center',
+  },
+  likeChoiceSecondaryGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    borderRadius: 24,
+    width: '100%',
+  },
+  likeChoiceSecondaryText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#92400E',
+    letterSpacing: 0.2,
+  },
+  likeChoiceCountBadge: {
+    backgroundColor: 'rgba(217, 119, 6, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 2,
+  },
+  likeChoiceCountBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#D97706',
   },
   likeChoiceButtonDisabled: {
-    opacity: 0.6,
-  },
-  obsessedIconDisabled: {
-    backgroundColor: '#F3F4F6',
+    opacity: 0.5,
   },
 });
 

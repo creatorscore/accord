@@ -75,13 +75,13 @@ export default function ContentModeration() {
           reporter:reporter_profile_id (
             id,
             display_name,
-            photos (url, is_primary)
+            photos (url, is_primary, blur_data_uri)
           ),
           reported:reported_profile_id (
             id,
             display_name,
             user_id,
-            photos (url, is_primary)
+            photos (url, is_primary, blur_data_uri)
           )
         `)
         .order('created_at', { ascending: false });

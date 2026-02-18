@@ -157,9 +157,6 @@ export default function AdminPushNotifications() {
                 throw new Error('Supabase URL not configured');
               }
 
-              console.log('🔔 Sending notification to:', targetAudience);
-              console.log('📡 URL:', `${supabaseUrl}/functions/v1/admin-send-notification`);
-
               // Add timeout to fetch (30 seconds)
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -189,10 +186,7 @@ export default function AdminPushNotifications() {
 
                 clearTimeout(timeoutId);
 
-                console.log('📥 Response status:', response.status);
-
                 result = await response.json();
-                console.log('📥 Response data:', result);
 
                 if (!response.ok) {
                   throw new Error(result.error || `Server error: ${response.status}`);

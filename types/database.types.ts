@@ -225,6 +225,7 @@ export type Database = {
           created_at: string | null
           id: string
           like_type: string | null
+          liked_content: string | null
           liked_profile_id: string
           liker_profile_id: string
           message: string | null
@@ -233,6 +234,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           like_type?: string | null
+          liked_content?: string | null
           liked_profile_id: string
           liker_profile_id: string
           message?: string | null
@@ -241,6 +243,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           like_type?: string | null
+          liked_content?: string | null
           liked_profile_id?: string
           liker_profile_id?: string
           message?: string | null
@@ -534,6 +537,7 @@ export type Database = {
       }
       photos: {
         Row: {
+          blur_data_uri: string | null
           created_at: string | null
           display_order: number
           id: string
@@ -544,6 +548,7 @@ export type Database = {
           url: string
         }
         Insert: {
+          blur_data_uri?: string | null
           created_at?: string | null
           display_order?: number
           id?: string
@@ -554,6 +559,7 @@ export type Database = {
           url: string
         }
         Update: {
+          blur_data_uri?: string | null
           created_at?: string | null
           display_order?: number
           id?: string

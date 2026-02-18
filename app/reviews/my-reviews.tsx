@@ -108,7 +108,8 @@ export default function MyReviewsScreen() {
           match_id,
           reviewer:profiles!reviews_reviewer_id_fkey(
             display_name,
-            photos(url, is_primary)
+            photo_blur_enabled,
+            photos(url, is_primary, blur_data_uri)
           )
         `)
         .eq('reviewee_id', profile.id)
@@ -130,8 +131,12 @@ export default function MyReviewsScreen() {
             .eq('id', review.match_id)
             .single();
 
-          const primaryPhoto = review.reviewer.photos?.find((p: any) => p.is_primary);
-          const photoUrl = primaryPhoto?.url || review.reviewer.photos?.[0]?.url;
+          const primaryPhoto = review.reviewer.photos?.find((p: any) => p.is_primary) || review.reviewer.photos?.[0];
+          // Respect reviewer's photo_blur_enabled privacy setting
+          const reviewerBlurEnabled = review.reviewer.photo_blur_enabled || false;
+          const photoUrl = reviewerBlurEnabled && primaryPhoto?.blur_data_uri
+            ? primaryPhoto.blur_data_uri
+            : primaryPhoto?.url;
 
           return {
             ...review,
@@ -163,11 +168,13 @@ export default function MyReviewsScreen() {
             compatibility_score,
             profile1:profiles!matches_profile1_id_fkey(
               display_name,
-              photos(url, is_primary)
+              photo_blur_enabled,
+              photos(url, is_primary, blur_data_uri)
             ),
             profile2:profiles!matches_profile2_id_fkey(
               display_name,
-              photos(url, is_primary)
+              photo_blur_enabled,
+              photos(url, is_primary, blur_data_uri)
             )
           )
         `)
@@ -180,8 +187,12 @@ export default function MyReviewsScreen() {
         const otherProfileId = isProfile1 ? prompt.profile2_id : prompt.profile1_id;
         const otherProfile = isProfile1 ? prompt.match.profile2 : prompt.match.profile1;
 
-        const primaryPhoto = otherProfile.photos?.find((p: any) => p.is_primary);
-        const photoUrl = primaryPhoto?.url || otherProfile.photos?.[0]?.url;
+        const primaryPhoto = otherProfile.photos?.find((p: any) => p.is_primary) || otherProfile.photos?.[0];
+        // Respect the other user's photo_blur_enabled privacy setting
+        const otherBlurEnabled = otherProfile.photo_blur_enabled || false;
+        const photoUrl = otherBlurEnabled && primaryPhoto?.blur_data_uri
+          ? primaryPhoto.blur_data_uri
+          : primaryPhoto?.url;
 
         return {
           match_id: prompt.match_id,

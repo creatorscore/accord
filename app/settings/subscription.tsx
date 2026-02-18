@@ -5,10 +5,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { restorePurchases, getCustomerInfo, getOfferings, purchasePackage, presentCodeRedemptionSheet } from '@/lib/revenue-cat';
+import { restorePurchases, getCustomerInfo, getOfferings, purchasePackage, presentCodeRedemptionSheet, checkTrialEligibility, TrialInfo } from '@/lib/revenue-cat';
 import { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
-import TrialValueSummary from '@/components/premium/TrialValueSummary';
-
 export default function SubscriptionManagement() {
   const router = useRouter();
   const { t } = useTranslation();
@@ -20,6 +18,7 @@ export default function SubscriptionManagement() {
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [loadingOfferings, setLoadingOfferings] = useState(true);
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'quarterly' | 'annual'>('monthly'); // Default to monthly (least commitment)
+  const [trialEligibility, setTrialEligibility] = useState<Record<string, { eligible: boolean; trialInfo: TrialInfo }>>({});
 
   // ALWAYS use RevenueCat - no development mode bypass
   // This ensures subscriptions work in TestFlight and Production
@@ -39,6 +38,15 @@ export default function SubscriptionManagement() {
       setLoadingOfferings(true);
       const available = await getOfferings();
       setOfferings(available);
+      // Check trial eligibility for all packages
+      if (available) {
+        try {
+          const eligibility = await checkTrialEligibility(available.availablePackages);
+          setTrialEligibility(eligibility);
+        } catch (e) {
+          console.warn('⚠️ Failed to check trial eligibility:', e);
+        }
+      }
     } catch (error: any) {
       console.error('Error loading offerings:', error);
       // Show user-friendly error message
@@ -98,16 +106,29 @@ export default function SubscriptionManagement() {
       return;
     }
 
-    // Open App Store or Play Store subscription management
-    try {
-      if (Platform.OS === 'ios') {
-        await Linking.openURL('https://apps.apple.com/account/subscriptions');
-      } else {
-        await Linking.openURL('https://play.google.com/store/account/subscriptions');
-      }
-    } catch (error) {
-      Alert.alert(t('common.error'), t('subscriptionSettings.alerts.couldNotOpenManagement'));
-    }
+    // Show retention warning before opening store management
+    Alert.alert(
+      t('subscriptionSettings.alerts.cancelWarningTitle'),
+      t('subscriptionSettings.alerts.cancelWarningMessage'),
+      [
+        { text: t('subscriptionSettings.alerts.keepSubscription'), style: 'cancel' },
+        {
+          text: t('subscriptionSettings.alerts.continueToManage'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (Platform.OS === 'ios') {
+                await Linking.openURL('https://apps.apple.com/account/subscriptions');
+              } else {
+                await Linking.openURL('https://play.google.com/store/account/subscriptions');
+              }
+            } catch (error) {
+              Alert.alert(t('common.error'), t('subscriptionSettings.alerts.couldNotOpenManagement'));
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleRedeemCode = async () => {
@@ -292,9 +313,6 @@ export default function SubscriptionManagement() {
           </LinearGradient>
         </View>
 
-        {/* Trial Value Summary - Show during trial to demonstrate value */}
-        <TrialValueSummary />
-
         {/* Subscription Plans */}
         {!isSubscribed && offerings && !loadingOfferings && (
           <View className="mb-6">
@@ -348,12 +366,6 @@ export default function SubscriptionManagement() {
               </View>
 
               {(() => {
-                // Log all available packages for debugging
-                console.log('🔍 Available packages:', offerings.availablePackages.map(pkg => ({
-                  identifier: pkg.identifier,
-                  productId: pkg.product.identifier,
-                })));
-
                 // Try to find premium package for current billing period
                 // Check for various naming patterns: premium_monthly, premium-monthly, monthly_premium, etc.
                 const premiumPackage = offerings.availablePackages.find(pkg => {
@@ -374,8 +386,6 @@ export default function SubscriptionManagement() {
                     return isPremium && isAnnual;
                   }
                 });
-
-                console.log('🎯 Found premium package:', premiumPackage?.identifier);
 
                 // If no package found for specific billing period, try to find ANY premium package
                 const displayPackage = premiumPackage || offerings.availablePackages.find(pkg => {
@@ -425,7 +435,13 @@ export default function SubscriptionManagement() {
                       )}
                       <View className="bg-lavender-500 rounded-xl py-4 mb-4">
                         <Text className="text-white text-center text-lg font-bold">
-                          {loading ? t('subscriptionSettings.processing') : t('subscriptionSettings.subscribeToPremium')}
+                          {loading ? t('subscriptionSettings.processing') : (() => {
+                            const eligibility = trialEligibility[displayPackage.product.identifier];
+                            if (eligibility?.eligible && eligibility.trialInfo.trialText) {
+                              return `Start ${eligibility.trialInfo.trialText.replace(/\b\w/g, (c) => c.toUpperCase())}`;
+                            }
+                            return t('subscriptionSettings.subscribeToPremium');
+                          })()}
                         </Text>
                       </View>
                       <View className="bg-lavender-50 rounded-xl p-4">
@@ -458,8 +474,6 @@ export default function SubscriptionManagement() {
                   return isPlatinum && isAnnual;
                 }
               });
-
-              console.log('🎯 Found platinum package:', platinumPackage?.identifier);
 
               // If no platinum package found, show "Coming Soon"
               if (!platinumPackage) {
@@ -527,7 +541,13 @@ export default function SubscriptionManagement() {
                       </View>
                       <View className="bg-yellow-500 rounded-xl py-4 mb-4">
                         <Text className="text-white text-center text-lg font-bold">
-                          {loading ? t('subscriptionSettings.processing') : t('subscriptionSettings.subscribeToPlatinum')}
+                          {loading ? t('subscriptionSettings.processing') : (() => {
+                            const eligibility = trialEligibility[platinumPackage.product.identifier];
+                            if (eligibility?.eligible && eligibility.trialInfo.trialText) {
+                              return `Start ${eligibility.trialInfo.trialText.replace(/\b\w/g, (c) => c.toUpperCase())}`;
+                            }
+                            return t('subscriptionSettings.subscribeToPlatinum');
+                          })()}
                         </Text>
                       </View>
                       <View className="bg-yellow-50 rounded-xl p-4">

@@ -4,8 +4,10 @@ import 'expo-standard-web-crypto';
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { I18nManager, Platform } from 'react-native';
+import { I18nManager, Platform, processColor, View, AppState } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import * as SplashScreenExpo from 'expo-splash-screen';
@@ -23,7 +25,8 @@ import { initializeSentry } from '@/lib/sentry';
 import { initializePostHog, trackAppLifecycle } from '@/lib/analytics';
 import { configureGoogleSignIn } from '@/lib/auth-providers';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
-import { useColorScheme, useInitializeColorScheme, useInitialAndroidBarSync } from '@/lib/useColorScheme';
+import { useColorScheme, useInitializeColorScheme } from '@/lib/useColorScheme';
+import { SystemBars } from 'react-native-edge-to-edge';
 import { NAV_THEME } from '@/theme';
 import { fontAssets } from '@/lib/fonts';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -38,6 +41,32 @@ const WhatsNewModal = lazy(() => import('@/components/WhatsNewModal'));
 
 // Prevent splash screen from hiding until fonts are loaded
 SplashScreenExpo.preventAutoHideAsync();
+
+/**
+ * Permanent dark overlay covering the system navigation bar / home indicator area.
+ * react-native-edge-to-edge forces the system bar transparent, so whatever renders
+ * behind it determines the visible color. This overlay sits on TOP of all screen
+ * content (zIndex 9999) with pointerEvents="none" so touches pass through.
+ * Height = exactly the safe-area bottom inset (home indicator on iOS, gesture bar on Android).
+ */
+function BottomBarBackground() {
+  const insets = useSafeAreaInsets();
+  if (insets.bottom === 0) return null;
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: insets.bottom,
+        backgroundColor: '#0A0A0B',
+        zIndex: 9999,
+      }}
+      pointerEvents="none"
+    />
+  );
+}
 
 // PERFORMANCE: Defer Sentry initialization to avoid blocking cold start
 // Sentry.init() is heavyweight and can add 300-500ms to startup on low-RAM devices
@@ -55,9 +84,6 @@ export default function RootLayout() {
   // Initialize color scheme from storage
   useInitializeColorScheme();
 
-  // Sync Android navigation bar with theme
-  useInitialAndroidBarSync();
-
   // Get current color scheme for theme provider
   const { colorScheme, isDarkColorScheme } = useColorScheme();
 
@@ -70,6 +96,38 @@ export default function RootLayout() {
       await SplashScreenExpo.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  // Force Android navigation bar to dark (#0A0A0B) on EVERY foreground event.
+  // The native plugin only sets this in onCreate(), but Android resets to transparent
+  // on onResume() because react-native-edge-to-edge's theme enforces transparency.
+  // We bypass expo-navigation-bar's JS guard (which blocks calls when edge-to-edge
+  // is enabled) by calling the native module directly.
+  useEffect(() => {
+    const setAndroidNavBarDark = () => {
+      if (Platform.OS !== 'android') return;
+      try {
+        const ExpoNavigationBar = require('expo-navigation-bar/build/ExpoNavigationBar').default;
+        const color = processColor('#0A0A0B');
+        if (ExpoNavigationBar?.setBackgroundColorAsync && color != null) {
+          ExpoNavigationBar.setBackgroundColorAsync(color);
+        }
+      } catch {
+        // Silently ignore if module not available
+      }
+    };
+
+    // Apply immediately on mount
+    setAndroidNavBarDark();
+
+    // Re-apply every time the app comes back to foreground
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        setAndroidNavBarDark();
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     // PERFORMANCE: All initialization is now non-blocking for faster cold start
@@ -137,7 +195,8 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
-      <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0A0A0B' }} onLayout={onLayoutRootView}>
+        <BottomSheetModalProvider>
         <ThemeProvider value={NAV_THEME[colorScheme]}>
             <AuthProvider>
               <ProfileDataProvider>
@@ -149,11 +208,13 @@ export default function RootLayout() {
                         {/* Only render Stack after i18n is initialized to prevent showing raw translation keys */}
                         {i18nInitialized ? (
                           <Stack screenOptions={{ headerShown: false, animation: 'fade', animationDuration: 200 }}>
+                            <Stack.Screen name="index" />
                             <Stack.Screen name="(tabs)" />
                             <Stack.Screen name="(auth)" />
                             <Stack.Screen name="(onboarding)" />
+                            <Stack.Screen name="auth" />
                             <Stack.Screen name="chat/[matchId]" options={{ animation: 'slide_from_right' }} />
-                            <Stack.Screen name="profile/[id]" options={{ animation: 'fade_from_bottom' }} />
+                            <Stack.Screen name="profile" options={{ animation: 'fade_from_bottom' }} />
                           </Stack>
                         ) : null}
                         <StatusBar style={isDarkColorScheme ? 'light' : 'dark'} />
@@ -181,6 +242,12 @@ export default function RootLayout() {
                         <Suspense fallback={null}>
                           <ScreenCaptureOverlay visible={showSecurityOverlay} />
                         </Suspense>
+
+                        {/* Set navigation bar icon style (light icons for dark background) */}
+                        <SystemBars style={{ navigationBar: 'light' }} />
+
+                        {/* Always-dark overlay behind system navigation bar / home indicator */}
+                        <BottomBarBackground />
                       </NotificationProvider>
                     </MatchProvider>
                   </ToastProvider>
@@ -188,6 +255,7 @@ export default function RootLayout() {
               </ProfileDataProvider>
             </AuthProvider>
         </ThemeProvider>
+        </BottomSheetModalProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>
   );

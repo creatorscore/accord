@@ -51,7 +51,6 @@ export default function MatchingPreferences() {
     if (contextPushToken) {
       setNotificationToken(contextPushToken);
       setNotificationsEnabled(true);
-      console.log('📱 Push token already available from context');
     }
   }, [contextPushToken]);
 
@@ -202,20 +201,15 @@ export default function MatchingPreferences() {
 
           // If no token exists, try to register one now
           if (!tokenToSave) {
-            console.log('📱 No push token found, attempting to register...');
             tokenToSave = await registerForPushNotifications();
           }
 
           if (tokenToSave) {
             // Use ensurePushTokenSaved which handles both profiles and device_tokens tables
             const saved = await ensurePushTokenSaved(user.id, tokenToSave);
-            if (saved) {
-              console.log('✅ Push token saved after onboarding completion');
-            } else {
-              console.warn('⚠️ Push token save returned false - will retry via NotificationContext');
+            if (!saved) {
+              console.warn('Push token save returned false - will retry via NotificationContext');
             }
-          } else {
-            console.log('📱 No push token available (user denied permissions or running in simulator)');
           }
         } catch (pushError) {
           console.warn('Push notification save failed:', pushError);

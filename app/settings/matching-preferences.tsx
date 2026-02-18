@@ -228,9 +228,19 @@ export default function MatchingPreferences() {
 
     setSaving(true);
     try {
+      // Force search_globally off for non-premium users
+      const prefsToSave = isPremium ? preferences : { ...preferences, search_globally: false };
+
+      // Use .update() instead of .upsert() to only modify fields managed by this page.
+      // .upsert() would reset unincluded fields (primary_reasons, financial_arrangement,
+      // housing_preference, children_arrangement, dealbreakers, must_haves, discovery_filters)
+      // to their defaults, destroying data set during onboarding or edit-profile.
       const { error } = await supabase
         .from('preferences')
-        .update(preferences)
+        .update({
+          ...prefsToSave,
+          updated_at: new Date().toISOString(),
+        })
         .eq('profile_id', profileId);
 
       if (error) throw error;
@@ -246,7 +256,7 @@ export default function MatchingPreferences() {
         ]
       );
     } catch (error: any) {
-      console.error('Error saving matching preferences:', error);
+      console.error('❌ Error saving matching preferences:', error);
       Alert.alert('Error', 'Failed to save preferences. Please try again.');
     } finally {
       setSaving(false);
@@ -280,6 +290,13 @@ export default function MatchingPreferences() {
   };
 
   const selectCity = (city: string) => {
+    if (preferences.preferred_cities.length >= 2) {
+      Alert.alert('Limit Reached', 'You can add up to 2 preferred cities.');
+      setNewCity('');
+      setCitySuggestions([]);
+      setShowCitySuggestions(false);
+      return;
+    }
     if (!preferences.preferred_cities.includes(city)) {
       setPreferences((prev) => ({
         ...prev,
@@ -292,6 +309,10 @@ export default function MatchingPreferences() {
   };
 
   const addCity = () => {
+    if (preferences.preferred_cities.length >= 2) {
+      Alert.alert('Limit Reached', 'You can add up to 2 preferred cities.');
+      return;
+    }
     if (newCity.trim() && !preferences.preferred_cities.includes(newCity.trim())) {
       Keyboard.dismiss(); // Dismiss keyboard when city is added
       setPreferences((prev) => ({
@@ -622,21 +643,32 @@ export default function MatchingPreferences() {
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={styles.switchTitle}>Search globally</Text>
+                    {!isPremium && (
+                      <View style={{ backgroundColor: '#A08AB7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>PREMIUM</Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.switchDescription}>
                     Match with people anywhere in the world
                   </Text>
                 </View>
               </View>
-              <Switch
-                value={preferences.search_globally}
-                onValueChange={(value) => {
-                  Haptics.selectionAsync();
-                  setPreferences((prev) => ({ ...prev, search_globally: value }));
-                }}
-                trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
-                thumbColor={preferences.search_globally ? '#A08AB7' : '#F3F4F6'}
-              />
+              {isPremium ? (
+                <Switch
+                  value={preferences.search_globally}
+                  onValueChange={(value) => {
+                    Haptics.selectionAsync();
+                    setPreferences((prev) => ({ ...prev, search_globally: value }));
+                  }}
+                  trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
+                  thumbColor={preferences.search_globally ? '#A08AB7' : '#F3F4F6'}
+                />
+              ) : (
+                <TouchableOpacity onPress={() => router.push('/settings/subscription')}>
+                  <MaterialCommunityIcons name="lock" size={24} color="#A08AB7" />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -671,13 +703,16 @@ export default function MatchingPreferences() {
                   autoCorrect={false}
                 />
                 <TouchableOpacity
-                  style={[styles.addCityButton, !newCity.trim() && styles.addCityButtonDisabled]}
+                  style={[styles.addCityButton, (!newCity.trim() || preferences.preferred_cities.length >= 2) && styles.addCityButtonDisabled]}
                   onPress={addCity}
-                  disabled={!newCity.trim()}
+                  disabled={!newCity.trim() || preferences.preferred_cities.length >= 2}
                 >
-                  <MaterialCommunityIcons name="plus" size={20} color={newCity.trim() ? '#fff' : '#9CA3AF'} />
+                  <MaterialCommunityIcons name="plus" size={20} color={newCity.trim() && preferences.preferred_cities.length < 2 ? '#fff' : '#9CA3AF'} />
                 </TouchableOpacity>
               </View>
+              <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>
+                {preferences.preferred_cities.length}/2 cities added
+              </Text>
 
               {/* Autocomplete Suggestions */}
               {showCitySuggestions && citySuggestions.length > 0 && (

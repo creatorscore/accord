@@ -73,20 +73,17 @@ export async function registerForPushNotifications(): Promise<string | null> {
   try {
     // Check if notifications are available
     if (!Notifications) {
-      console.log('[Push] Notifications module not available');
       return null;
     }
 
     // Check if running on a physical device
     if (!Device?.isDevice) {
-      console.log('[Push] Not a physical device, push notifications not supported');
       return null;
     }
 
     // Configure notification channel for Android FIRST (required for Android 13+)
     // This MUST be done before requesting permissions or getting token
     if (Platform.OS === 'android') {
-      console.log('[Push] Setting up Android notification channel...');
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Default',
         importance: Notifications.AndroidImportance.MAX,
@@ -98,7 +95,6 @@ export async function registerForPushNotifications(): Promise<string | null> {
     // Request permissions
     const hasPermission = await requestNotificationPermissions();
     if (!hasPermission) {
-      console.log('[Push] Permission not granted');
       return null;
     }
 
@@ -108,25 +104,18 @@ export async function registerForPushNotifications(): Promise<string | null> {
       Constants?.easConfig?.projectId ??
       '71ca414e-ff65-488b-97f6-9150455475a0'; // Fallback to hardcoded
 
-    console.log('[Push] Using project ID:', projectId);
-
     // First try to get the device push token (raw FCM/APNs token) for debugging
     try {
       const deviceToken = await Notifications.getDevicePushTokenAsync();
-      console.log('[Push] Device token type:', deviceToken?.type);
-      console.log('[Push] Device token obtained:', deviceToken?.data ? 'yes' : 'no');
     } catch (deviceTokenError: any) {
       console.error('[Push] Failed to get device token:', deviceTokenError?.message);
       // Continue anyway - Expo token might still work
     }
 
     // Get the Expo push token
-    console.log('[Push] Requesting Expo push token...');
     const tokenData = await Notifications.getExpoPushTokenAsync({
       projectId,
     });
-
-    console.log('[Push] Expo token obtained:', tokenData?.data ? 'yes' : 'no');
 
     if (!tokenData?.data) {
       console.error('[Push] Token data is empty');
@@ -460,7 +449,6 @@ export async function sendMessageNotification(
       const secondsSinceActive = (now.getTime() - lastActive.getTime()) / 1000;
 
       if (secondsSinceActive < 60) {
-        console.log(`Skipping push notification for ${recipientProfileId} - user active ${Math.round(secondsSinceActive)}s ago`);
         return;
       }
     }
@@ -549,7 +537,6 @@ export async function sendReactionNotification(
       const secondsSinceActive = (now.getTime() - lastActive.getTime()) / 1000;
 
       if (secondsSinceActive < 60) {
-        console.log(`Skipping reaction push notification for ${recipientProfileId} - user active ${Math.round(secondsSinceActive)}s ago`);
         return;
       }
     }
@@ -731,16 +718,10 @@ export function addPushTokenChangeListener(
   onTokenChange: (token: string) => void
 ): any {
   if (!Notifications) {
-    console.log('[Push] Notifications module not available for token listener');
     return { remove: () => {} }; // Return mock subscription
   }
 
-  console.log('[Push] Setting up push token change listener...');
-
   return Notifications.addPushTokenListener((tokenData: any) => {
-    // tokenData is a DevicePushToken object with { type: 'fcm'|'apns', data: string }
-    // We need to convert it to an Expo push token format
-    console.log('[Push] Token change detected:', tokenData?.type);
 
     if (tokenData?.data) {
       // The listener gives us the raw FCM/APNs token, but we need Expo token
@@ -755,7 +736,6 @@ export function addPushTokenChangeListener(
           const expoPushToken = await Notifications.getExpoPushTokenAsync({ projectId });
 
           if (expoPushToken?.data) {
-            console.log('[Push] Got new Expo token after device token change');
             onTokenChange(expoPushToken.data);
           }
         } catch (error) {
@@ -877,7 +857,6 @@ export async function sendBanNotification(
             banReason: banReason,
           },
         });
-        console.log('✅ Ban email sent to:', userEmail);
       } catch (emailError) {
         console.warn('Failed to send ban email (non-critical):', emailError);
         // Continue with push notification even if email fails

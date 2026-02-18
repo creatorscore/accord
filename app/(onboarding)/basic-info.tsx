@@ -188,14 +188,11 @@ export default function BasicInfo() {
     // Remove invalid orientations based on gender selection
     let newOrientation = orientation;
 
-    // Remove "Straight" if cis man (straight cis men not allowed on platform)
+    // Clear orientation if it's no longer valid for the selected gender
     if (CIS_MEN_GENDERS.includes(g) && newOrientation.includes('Straight')) {
-      newOrientation = newOrientation.filter(o => o !== 'Straight');
-    }
-
-    // Remove "Lesbian" if any male gender (lesbian means women attracted to women)
-    if (MEN_GENDERS.includes(g) && newOrientation.includes('Lesbian')) {
-      newOrientation = newOrientation.filter(o => o !== 'Lesbian');
+      newOrientation = [];
+    } else if (MEN_GENDERS.includes(g) && newOrientation.includes('Lesbian')) {
+      newOrientation = [];
     }
 
     if (newOrientation !== orientation) {
@@ -212,10 +209,11 @@ export default function BasicInfo() {
   };
 
   const toggleOrientation = (o: string) => {
+    // Single-select: tap to select, tap again to deselect
     if (orientation.includes(o)) {
-      setOrientation(orientation.filter(item => item !== o));
+      setOrientation([]);
     } else {
-      setOrientation([...orientation, o]);
+      setOrientation([o]);
     }
   };
 
@@ -302,18 +300,18 @@ export default function BasicInfo() {
       try {
         // First: Try getLastKnownPositionAsync (instant, no GPS needed)
         // This often has a recent location cached and won't block
-        console.log('📍 Checking for cached location...');
+
         const lastKnown = await Location.getLastKnownPositionAsync({
           maxAge: 60000, // Accept location up to 1 minute old
           requiredAccuracy: 1000, // Accept up to 1km accuracy
         });
 
         if (lastKnown && lastKnown.coords) {
-          console.log('✅ Using cached location (instant)');
+
           location = lastKnown;
         }
       } catch (cachedError) {
-        console.log('⚠️ No cached location available');
+
       }
 
       // If no cached location, try getting fresh location with reduced timeouts
@@ -323,7 +321,7 @@ export default function BasicInfo() {
 
         try {
           // Second attempt: Try BALANCED accuracy first (faster than HIGHEST, good enough)
-          console.log('📍 Attempting balanced-accuracy location...');
+
           location = await Promise.race([
             Location.getCurrentPositionAsync({
               accuracy: Location.Accuracy.Balanced,
@@ -333,9 +331,9 @@ export default function BasicInfo() {
               setTimeout(() => reject(new Error('Timeout')), 5000)
             )
           ]);
-          console.log('✅ Balanced-accuracy location obtained');
+
         } catch (balancedError) {
-          console.log('⚠️ Balanced accuracy failed, trying low accuracy...');
+
 
           // Yield to main thread between attempts
           await new Promise(resolve => setTimeout(resolve, 50));
@@ -351,9 +349,9 @@ export default function BasicInfo() {
                 setTimeout(() => reject(new Error('Timeout')), 3000)
               )
             ]);
-            console.log('✅ Low-accuracy location obtained');
+
           } catch (lowError) {
-            console.log('⚠️ Low accuracy failed, final attempt with lowest...');
+
 
             // Final attempt: Lowest accuracy, shortest timeout
             location = await Promise.race([
@@ -364,13 +362,12 @@ export default function BasicInfo() {
                 setTimeout(() => reject(new Error('Timeout')), 2000)
               )
             ]);
-            console.log('✅ Lowest-accuracy location obtained');
+
           }
         }
       }
 
-      console.log('📍 Location accuracy:', location.coords.accuracy, 'meters');
-      console.log('📍 Coordinates:', location.coords.latitude, location.coords.longitude);
+
 
       // Check if we got valid coordinates
       if (!location.coords) {
@@ -451,12 +448,7 @@ export default function BasicInfo() {
       if (state) setLocationState(state);
       if (country) setLocationCountry(country);
 
-      console.log('✅ Location captured:', {
-        city: city,
-        state: state,
-        accuracy: location.coords.accuracy,
-        coords: `${location.coords.latitude}, ${location.coords.longitude}`
-      });
+
     } catch (error: any) {
       console.error('Location error:', error);
 
@@ -509,7 +501,7 @@ export default function BasicInfo() {
         // Use offline city database - works everywhere, no permissions needed!
         const results = searchCities(searchText, 15);
 
-        console.log('📍 City search:', results.length, 'results for:', searchText);
+
         setLocationSuggestions(results);
         setShowSuggestions(results.length > 0);
       } catch (error: any) {
@@ -534,12 +526,7 @@ export default function BasicInfo() {
     setShowSuggestions(false);
     setLocationSuggestions([]);
 
-    console.log('✅ Location selected:', {
-      city: suggestion.city,
-      state: suggestion.state,
-      country: suggestion.country,
-      coords: `${suggestion.latitude}, ${suggestion.longitude}`
-    });
+
   };
 
   const handleContinue = async () => {
@@ -632,7 +619,7 @@ export default function BasicInfo() {
       let encryptionPublicKey: string | null = null;
       try {
         encryptionPublicKey = await initializeEncryption(currentUser.id);
-        console.log('✅ Encryption keys initialized successfully');
+
       } catch (encryptionError) {
         console.error('⚠️ Failed to initialize encryption keys:', encryptionError);
         // Don't block onboarding if encryption fails - user can still proceed
@@ -643,7 +630,7 @@ export default function BasicInfo() {
       let deviceFingerprint: string | null = null;
       try {
         deviceFingerprint = await getDeviceFingerprint();
-        console.log('✅ Device fingerprint captured for ban prevention');
+
       } catch (fingerprintError) {
         console.error('⚠️ Failed to get device fingerprint:', fingerprintError);
         // Don't block onboarding if fingerprinting fails
@@ -965,7 +952,7 @@ export default function BasicInfo() {
           {/* Sexual Orientation */}
           <View>
             <Text className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{t('onboarding.sexualOrientation')}</Text>
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that apply</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select one</Text>
             <View className="flex-row flex-wrap gap-2">
               {getAvailableOrientations(gender).map((o) => (
                 <TouchableOpacity

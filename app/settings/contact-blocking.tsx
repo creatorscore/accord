@@ -127,8 +127,6 @@ export default function ContactBlocking() {
     setBlocking(true);
 
     try {
-      console.log('📱 Fetching contacts...');
-
       // Fetch all contacts with phone numbers
       // Note: On Android, we need to explicitly request PhoneNumbers field
       const { data: contactsData } = await Contacts.getContactsAsync({
@@ -136,8 +134,6 @@ export default function ContactBlocking() {
         pageSize: 10000, // Fetch all contacts at once
         pageOffset: 0,
       });
-
-      console.log(`📱 Found ${contactsData?.length || 0} contacts`);
 
       if (!contactsData || contactsData.length === 0) {
         Alert.alert(
@@ -160,8 +156,6 @@ export default function ContactBlocking() {
         }
       }
 
-      console.log(`📱 Extracted ${phoneNumbers.length} phone numbers from contacts`);
-
       if (phoneNumbers.length === 0) {
         Alert.alert(
           t('contactBlocking.noPhoneNumbers'),
@@ -176,15 +170,11 @@ export default function ContactBlocking() {
         phoneNumbers.map(num => hashPhoneNumber(num))
       );
 
-      console.log(`🔐 Hashed ${hashedNumbers.length} phone numbers`);
-
       // Insert into database (upsert to avoid duplicates)
       const blocksToInsert = hashedNumbers.map(hash => ({
         profile_id: currentProfileId,
         phone_number: hash,
       }));
-
-      console.log(`💾 Upserting ${blocksToInsert.length} contact blocks to database...`);
 
       const { error, count } = await supabase
         .from('contact_blocks')
@@ -197,8 +187,6 @@ export default function ContactBlocking() {
         console.error('Database upsert error:', error);
         throw error;
       }
-
-      console.log(`✅ Successfully saved contact blocks`);
 
       setContactsBlocked(hashedNumbers.length);
       setIsEnabled(true);

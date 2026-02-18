@@ -56,8 +56,6 @@ export default function UnmatchModal({
         throw new Error(data.error || 'Failed to unmatch');
       }
 
-      console.log('Unmatch successful:', data);
-
       // Track analytics
       try {
         const { trackEvent } = await import('@/lib/analytics');

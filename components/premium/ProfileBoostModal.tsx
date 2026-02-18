@@ -12,6 +12,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { MotiView } from 'moti';
+import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 interface ProfileBoostModalProps {
@@ -165,7 +166,18 @@ export default function ProfileBoostModal({
       );
     } catch (error: any) {
       console.error('Error activating boost:', error);
-      Alert.alert('Error', 'Failed to activate boost. Please try again.');
+      if (error?.code === '42501' || (error?.code === 'P0001' && error?.message?.includes('Premium'))) {
+        Alert.alert(
+          'Premium Feature',
+          'Profile boosts require an active Premium subscription.',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: onClose },
+            { text: 'Upgrade', onPress: () => { onClose(); router.push('/settings/subscription'); } },
+          ]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to activate boost. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -181,7 +193,7 @@ export default function ProfileBoostModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" transparent>
+    <Modal visible={visible} animationType="slide" transparent>
       <BlurView intensity={40} tint="dark" style={styles.container}>
         <View style={styles.modalContent}>
           <LinearGradient colors={['#FFD700', '#FFA500']} style={styles.header}>

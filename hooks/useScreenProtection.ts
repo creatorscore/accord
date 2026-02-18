@@ -51,7 +51,6 @@ export function useScreenProtection(
 
         // In __DEV__ mode (Metro bundler), disable protection for easier development
         if (__DEV__) {
-          console.log('⚠️ Screenshot protection DISABLED in __DEV__ mode');
           return;
         }
 
@@ -64,31 +63,19 @@ export function useScreenProtection(
           appSwitcher: options?.appSwitcher !== false,
         };
 
-        console.log('🛡️ Enabling screen protection with options:', protectOptions);
-
         await CaptureProtection.prevent(protectOptions);
         protectionEnabledRef.current = true;
-
-        console.log('✅ react-native-capture-protection v2 ENABLED');
-        console.log('   - Screenshots: BLOCKED (will appear BLACK on iOS)');
-        console.log('   - Screen recording: BLOCKED');
-        console.log('   - App switcher: PROTECTED');
 
         // STEP 2: Also enable expo-screen-capture as backup (OS-level blocking)
         if (options?.screenshot !== false) {
           try {
             await ScreenCapture.preventScreenCaptureAsync();
-            console.log('✅ expo-screen-capture backup enabled');
           } catch (e) {
             // This might fail on some devices, but react-native-capture-protection
             // should still work
             console.warn('expo-screen-capture not available:', e);
           }
         }
-
-        // Verify protection status
-        const status = await CaptureProtection.protectionStatus();
-        console.log('🛡️ Protection status:', status);
 
       } catch (error) {
         console.error('❌ CRITICAL: Failed to enable screenshot protection:', error);
@@ -131,7 +118,6 @@ export function useScreenProtection(
           }
 
           protectionEnabledRef.current = false;
-          console.log('✅ Screenshot protection disabled');
         } catch (error) {
           console.error('Error disabling screenshot protection:', error);
         }
@@ -174,7 +160,6 @@ export async function enableGlobalProtection() {
       record: true,
       appSwitcher: true,
     });
-    console.log('✅ Global screen protection enabled');
     return true;
   } catch (error) {
     console.error('Failed to enable global protection:', error);
@@ -192,7 +177,6 @@ export async function disableGlobalProtection() {
       record: true,
       appSwitcher: true,
     });
-    console.log('✅ Global screen protection disabled');
     return true;
   } catch (error) {
     console.error('Failed to disable global protection:', error);

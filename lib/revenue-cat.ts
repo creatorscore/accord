@@ -22,14 +22,9 @@ export type SubscriptionTier = typeof SUBSCRIPTION_TIERS[keyof typeof SUBSCRIPTI
  */
 export const initializeRevenueCat = async (userId?: string) => {
   try {
-    const apiKey = Platform.OS === 'ios' ? REVENUECAT_API_KEY_IOS : REVENUECAT_API_KEY_ANDROID;
+    if (isInitialized) return;
 
-    console.log('🔧 Initializing RevenueCat...', {
-      platform: Platform.OS,
-      hasApiKey: !!apiKey,
-      apiKeyPreview: apiKey ? `${apiKey.substring(0, 10)}...` : 'none',
-      userId: userId || 'anonymous',
-    });
+    const apiKey = Platform.OS === 'ios' ? REVENUECAT_API_KEY_IOS : REVENUECAT_API_KEY_ANDROID;
 
     if (!apiKey) {
       console.warn('⚠️ RevenueCat API key not configured - running in free mode');
@@ -45,7 +40,6 @@ export const initializeRevenueCat = async (userId?: string) => {
     }
 
     isInitialized = true;
-    console.log('✅ RevenueCat initialized successfully');
   } catch (error) {
     console.error('❌ RevenueCat initialization failed:', error);
     isInitialized = false;
@@ -62,19 +56,9 @@ export const getOfferings = async (): Promise<PurchasesOffering | null> => {
   }
 
   try {
-    console.log('📦 Fetching offerings from RevenueCat...');
     const offerings = await Purchases.getOfferings();
 
-    console.log('📦 Offerings response:', {
-      hasOfferings: !!offerings,
-      hasCurrent: !!offerings.current,
-      currentIdentifier: offerings.current?.identifier,
-      allOfferingIds: Object.keys(offerings.all || {}),
-      packageCount: offerings.current?.availablePackages?.length || 0,
-    });
-
     if (offerings.current !== null && offerings.current.availablePackages.length > 0) {
-      console.log('✅ Successfully loaded offerings');
       return offerings.current;
     }
 
@@ -100,16 +84,11 @@ export const getOfferings = async (): Promise<PurchasesOffering | null> => {
  */
 export const purchasePackage = async (pkg: PurchasesPackage): Promise<CustomerInfo | null> => {
   if (!isInitialized) {
-    console.log('RevenueCat not initialized - cannot make purchases');
     throw new Error('RevenueCat not initialized. Please restart the app.');
   }
 
   try {
     const { customerInfo } = await Purchases.purchasePackage(pkg);
-    console.log('✅ Purchase successful:', {
-      hasActiveSubscriptions: Object.keys(customerInfo.entitlements.active).length > 0,
-      activeEntitlements: Object.keys(customerInfo.entitlements.active),
-    });
 
     // Track purchase event in Firebase Analytics for Google Ads conversion tracking
     // Firebase analytics removed - can be re-added later
@@ -118,7 +97,6 @@ export const purchasePackage = async (pkg: PurchasesPackage): Promise<CustomerIn
     return customerInfo;
   } catch (error: any) {
     if (error.userCancelled) {
-      console.log('User cancelled purchase');
       // Return null for user cancellation (not an error)
       return null;
     } else {
@@ -149,10 +127,6 @@ export const restorePurchases = async (): Promise<CustomerInfo> => {
 
   try {
     const customerInfo = await Purchases.restorePurchases();
-    console.log('Purchases restored successfully:', {
-      hasActiveSubscriptions: Object.keys(customerInfo.entitlements.active).length > 0,
-      activeEntitlements: Object.keys(customerInfo.entitlements.active),
-    });
     return customerInfo;
   } catch (error) {
     console.error('Error restoring purchases:', error);
@@ -173,7 +147,6 @@ export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
     const customerInfo = await Purchases.getCustomerInfo();
     return customerInfo;
   } catch (error) {
-    console.log('RevenueCat not configured, running in free mode');
     return null;
   }
 };
@@ -365,6 +338,114 @@ export const getPriceString = (pkg: PurchasesPackage): string => {
 };
 
 /**
+ * Trial info extracted from a package's introductory price
+ */
+export interface TrialInfo {
+  hasTrial: boolean;
+  trialDays: number | null;
+  trialText: string | null;
+}
+
+/**
+ * Extract trial details from a package's introductory price
+ */
+export const getTrialInfo = (pkg: PurchasesPackage): TrialInfo => {
+  const introPrice = (pkg.product as any).introPrice;
+
+  if (!introPrice || introPrice.price !== 0) {
+    return { hasTrial: false, trialDays: null, trialText: null };
+  }
+
+  const units = introPrice.periodNumberOfUnits || 1;
+  const periodUnit: string = (introPrice.periodUnit || '').toUpperCase();
+
+  let totalDays: number;
+  switch (periodUnit) {
+    case 'DAY':
+      totalDays = units;
+      break;
+    case 'WEEK':
+      totalDays = units * 7;
+      break;
+    case 'MONTH':
+      totalDays = units * 30;
+      break;
+    case 'YEAR':
+      totalDays = units * 365;
+      break;
+    default:
+      totalDays = units;
+      break;
+  }
+
+  return {
+    hasTrial: true,
+    trialDays: totalDays,
+    trialText: `${totalDays}-day free trial`,
+  };
+};
+
+/**
+ * Check trial/introductory price eligibility for a set of packages.
+ * On iOS, uses the SDK eligibility check. On Android (always UNKNOWN), falls back to introPrice inspection.
+ */
+export const checkTrialEligibility = async (
+  packages: PurchasesPackage[]
+): Promise<Record<string, { eligible: boolean; trialInfo: TrialInfo }>> => {
+  const result: Record<string, { eligible: boolean; trialInfo: TrialInfo }> = {};
+
+  // Build product IDs list
+  const productIds = packages.map((p) => p.product.identifier);
+
+  let eligibilityMap: Record<string, { status: number }> = {};
+
+  if (isInitialized) {
+    try {
+      const raw = await Purchases.checkTrialOrIntroductoryPriceEligibility(productIds);
+      // Convert to simple map
+      for (const [key, value] of Object.entries(raw)) {
+        eligibilityMap[key] = { status: (value as any).status };
+      }
+    } catch (error) {
+      console.warn('⚠️ Trial eligibility check failed, falling back to introPrice inspection:', error);
+    }
+  }
+
+  for (const pkg of packages) {
+    const trialInfo = getTrialInfo(pkg);
+    const eligibility = eligibilityMap[pkg.product.identifier];
+
+    if (!trialInfo.hasTrial) {
+      // No intro offer on this product
+      result[pkg.product.identifier] = { eligible: false, trialInfo };
+      continue;
+    }
+
+    if (eligibility) {
+      // Status values: 0 = UNKNOWN, 1 = INELIGIBLE, 2 = ELIGIBLE, 3 = NO_INTRO_OFFER_EXISTS
+      const status = eligibility.status;
+      if (status === 2) {
+        // ELIGIBLE
+        result[pkg.product.identifier] = { eligible: true, trialInfo };
+      } else if (status === 1 || status === 3) {
+        // INELIGIBLE or NO_INTRO_OFFER_EXISTS
+        result[pkg.product.identifier] = { eligible: false, trialInfo };
+      } else {
+        // UNKNOWN (0) - always returned on Android where we can't verify prior redemption.
+        // Only trust introPrice on iOS; on Android, treat as ineligible to avoid showing
+        // trial text to users who already redeemed theirs.
+        result[pkg.product.identifier] = { eligible: Platform.OS === 'ios', trialInfo };
+      }
+    } else {
+      // No eligibility data (SDK not initialized or call failed) - fall back to introPrice
+      result[pkg.product.identifier] = { eligible: trialInfo.hasTrial, trialInfo };
+    }
+  }
+
+  return result;
+};
+
+/**
  * Check if RevenueCat is initialized
  */
 export const isRevenueCatInitialized = (): boolean => {
@@ -388,9 +469,7 @@ export const presentCodeRedemptionSheet = async (): Promise<void> => {
   }
 
   try {
-    console.log('🎁 Presenting code redemption sheet...');
     await Purchases.presentCodeRedemptionSheet();
-    console.log('✅ Code redemption sheet presented');
   } catch (error: any) {
     console.error('❌ Error presenting code redemption sheet:', error);
     throw error;
@@ -409,15 +488,6 @@ export const syncSubscriptionStatus = async (
     const tier = getSubscriptionTier(customerInfo);
     const isPremiumUser = tier === SUBSCRIPTION_TIERS.PREMIUM || tier === SUBSCRIPTION_TIERS.PLATINUM;
     const isPlatinumUser = tier === SUBSCRIPTION_TIERS.PLATINUM;
-
-    // This would be called from your backend/edge function
-    // For now, just log what would be updated
-    console.log('Syncing subscription status to database:', {
-      profileId,
-      isPremium: isPremiumUser,
-      isPlatinum: isPlatinumUser,
-      tier,
-    });
 
     // TODO: Call Supabase edge function to update subscription status
     // This should be done server-side for security

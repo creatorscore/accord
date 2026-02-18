@@ -51,7 +51,7 @@ import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { checkMessagingVersionRequirement, getCurrentVersion } from '@/lib/version-check';
 import * as Linking from 'expo-linking';
-import { useSafeBlur } from '@/hooks/useSafeBlur';
+import { usePhotoBlur } from '@/hooks/usePhotoBlur';
 import EmojiPicker from 'rn-emoji-keyboard';
 
 interface MessageReaction {
@@ -81,7 +81,9 @@ interface MatchProfile {
   display_name: string;
   age: number;
   photo_url?: string;
+  photo_blur_data_uri?: string | null;
   is_verified?: boolean;
+  photo_verified?: boolean;
   occupation?: string;
   location_city?: string;
   compatibility_score?: number;
@@ -146,17 +148,30 @@ export default function Chat() {
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null);
 
   // Photo reveal state
+  // Like intro context (shows what was liked + comment at top of chat)
+  const [likeIntro, setLikeIntro] = useState<{
+    senderName: string;
+    senderId: string;
+    message?: string;
+    likedContent?: { type: string; prompt?: string; answer?: string; index?: number };
+    photoUrl?: string;
+    createdAt: string;
+  } | null>(null);
+
   const [hasRevealedPhotos, setHasRevealedPhotos] = useState(false);
   const [otherUserRevealed, setOtherUserRevealed] = useState(false);
   const [currentUserPhotoBlur, setCurrentUserPhotoBlur] = useState(false);
   const [matchProfilePhotoBlur, setMatchProfilePhotoBlur] = useState(false);
   const [revealLoading, setRevealLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
 
-  // Safe blur hook - protects match privacy while preventing crashes
-  const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
-    shouldBlur: matchProfilePhotoBlur && !otherUserRevealed,
-    blurIntensity: 30,
+  // Photo blur - uses server-side data URI when available, falls back to legacy blur
+  const { imageUri: matchPhotoUri, blurRadius, showBlurOverlay, onImageLoad, onImageError } = usePhotoBlur({
+    shouldBlur: matchProfilePhotoBlur && !otherUserRevealed && !isAdmin,
+    photoUrl: matchProfile?.photo_url || 'https://via.placeholder.com/40',
+    blurDataUri: matchProfile?.photo_blur_data_uri,
+    blurIntensity: 20,
   });
 
   // Typing indicator state (Premium feature)
@@ -256,11 +271,11 @@ export default function Chat() {
       // Cleanup subscriptions when component unmounts or dependencies change
       return () => {
         if (unsubscribeMessages) {
-          console.log('🔌 Unsubscribing from chat realtime channel');
+
           unsubscribeMessages();
         }
         if (unsubscribeReactions) {
-          console.log('🔌 Unsubscribing from reactions realtime channel');
+
           unsubscribeReactions();
         }
       };
@@ -272,7 +287,7 @@ export default function Chat() {
   useFocusEffect(
     useCallback(() => {
       if (currentProfileId && !loading) {
-        console.log('📱 Chat screen focused - refreshing messages');
+
         loadMessages();
         markMessagesAsRead();
       }
@@ -321,7 +336,7 @@ export default function Chat() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, display_name, photo_blur_enabled')
+        .select('id, display_name, photo_blur_enabled, is_admin')
         .eq('user_id', user?.id)
         .single();
 
@@ -329,6 +344,7 @@ export default function Chat() {
       setCurrentProfileId(data.id);
       setCurrentProfileName(data.display_name);
       setCurrentUserPhotoBlur(data.photo_blur_enabled || false);
+      setIsAdmin(data.is_admin || false);
     } catch (error: any) {
       console.error('Error loading profile:', error);
     }
@@ -336,7 +352,7 @@ export default function Chat() {
 
   const loadMatchProfile = async () => {
     try {
-      console.log('🔍 Loading match profile for match:', matchId);
+
 
       // Get match details including status and compatibility score in one query
       const { data: matchData, error: matchError } = await supabase
@@ -345,7 +361,7 @@ export default function Chat() {
         .eq('id', matchId)
         .single();
 
-      console.log('Match data:', { matchData, matchError });
+
 
       if (matchError) throw matchError;
 
@@ -359,7 +375,7 @@ export default function Chat() {
 
       // If match is unmatched or blocked, stop here
       if (matchData.status !== 'active') {
-        console.log('⚠️ Match is not active:', matchData.status);
+
         setLoading(false);
         return;
       }
@@ -370,7 +386,7 @@ export default function Chat() {
           ? matchData.profile2_id
           : matchData.profile1_id;
 
-      console.log('Other profile ID:', otherProfileId);
+
 
       // Run all remaining queries in parallel for better performance
       const [banResult, profileResult, currentUserResult] = await Promise.all([
@@ -389,6 +405,7 @@ export default function Chat() {
             display_name,
             age,
             is_verified,
+            photo_verified,
             occupation,
             location_city,
             latitude,
@@ -399,7 +416,8 @@ export default function Chat() {
             photos (
               url,
               is_primary,
-              display_order
+              display_order,
+              blur_data_uri
             )
           `)
           .eq('id', otherProfileId)
@@ -426,7 +444,7 @@ export default function Chat() {
       const profile = profileResult.data;
       if (profileResult.error || !profile) throw profileResult.error;
 
-      console.log('Profile data:', { profile });
+
 
       const photos = profile.photos?.sort((a: any, b: any) => a.display_order - b.display_order);
       const primaryPhoto = photos?.find((p: any) => p.is_primary) || photos?.[0];
@@ -454,7 +472,9 @@ export default function Chat() {
         display_name: profile.display_name,
         age: profile.age,
         photo_url: primaryPhoto?.url,
+        photo_blur_data_uri: primaryPhoto?.blur_data_uri,
         is_verified: profile.is_verified,
+        photo_verified: profile.photo_verified,
         occupation: profile.occupation,
         location_city: profile.location_city,
         compatibility_score: matchData.compatibility_score,
@@ -463,9 +483,12 @@ export default function Chat() {
         hide_last_active: profile.hide_last_active,
       };
 
-      console.log('✅ Match profile loaded:', matchProfileData);
+
       setMatchProfile(matchProfileData);
       setMatchProfilePhotoBlur(profile.photo_blur_enabled || false);
+
+      // Load like intro context (async, non-blocking)
+      loadLikeIntro(otherProfileId, profile.display_name);
 
       // Check photo reveal status (async, non-blocking)
       checkPhotoRevealStatus(otherProfileId);
@@ -476,9 +499,99 @@ export default function Chat() {
     }
   };
 
+  const loadLikeIntro = async (otherProfileId: string, otherDisplayName: string) => {
+    try {
+      // Find the like between these two profiles that has a message or liked_content
+      // Check both directions (either user could have liked first)
+      const { data: likes, error } = await supabase
+        .from('likes')
+        .select('liker_profile_id, message, liked_content, created_at')
+        .or(
+          `and(liker_profile_id.eq.${currentProfileId},liked_profile_id.eq.${otherProfileId}),` +
+          `and(liker_profile_id.eq.${otherProfileId},liked_profile_id.eq.${currentProfileId})`
+        )
+        .not('message', 'is', null)
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (error || !likes?.length) {
+        // Also check for likes with liked_content but no message
+        const { data: contentLikes, error: contentError } = await supabase
+          .from('likes')
+          .select('liker_profile_id, message, liked_content, created_at')
+          .or(
+            `and(liker_profile_id.eq.${currentProfileId},liked_profile_id.eq.${otherProfileId}),` +
+            `and(liker_profile_id.eq.${otherProfileId},liked_profile_id.eq.${currentProfileId})`
+          )
+          .not('liked_content', 'is', null)
+          .order('created_at', { ascending: true })
+          .limit(1);
+
+        if (contentError || !contentLikes?.length) return;
+
+        const like = contentLikes[0];
+        const isFromMe = like.liker_profile_id === currentProfileId;
+        const parsedContent = like.liked_content ? (() => { try { return JSON.parse(like.liked_content); } catch { return null; } })() : null;
+
+        // If it's just a photo like with no message, skip — not interesting enough for intro
+        if (parsedContent?.type === 'photo' && !like.message) return;
+
+        let photoUrl: string | undefined;
+        if (parsedContent?.type === 'photo' && typeof parsedContent.index === 'number') {
+          const { data: photos } = await supabase
+            .from('photos')
+            .select('url')
+            .eq('profile_id', isFromMe ? otherProfileId : currentProfileId)
+            .order('display_order', { ascending: true });
+          if (photos?.[parsedContent.index]) {
+            photoUrl = photos[parsedContent.index].url;
+          }
+        }
+
+        setLikeIntro({
+          senderName: isFromMe ? currentProfileName : otherDisplayName,
+          senderId: like.liker_profile_id,
+          message: like.message || undefined,
+          likedContent: parsedContent || undefined,
+          photoUrl,
+          createdAt: like.created_at,
+        });
+        return;
+      }
+
+      const like = likes[0];
+      const isFromMe = like.liker_profile_id === currentProfileId;
+      const parsedContent = like.liked_content ? (() => { try { return JSON.parse(like.liked_content); } catch { return null; } })() : null;
+
+      let photoUrl: string | undefined;
+      if (parsedContent?.type === 'photo' && typeof parsedContent.index === 'number') {
+        const { data: photos } = await supabase
+          .from('photos')
+          .select('url')
+          .eq('profile_id', isFromMe ? otherProfileId : currentProfileId)
+          .order('display_order', { ascending: true });
+        if (photos?.[parsedContent.index]) {
+          photoUrl = photos[parsedContent.index].url;
+        }
+      }
+
+      setLikeIntro({
+        senderName: isFromMe ? currentProfileName : otherDisplayName,
+        senderId: like.liker_profile_id,
+        message: like.message || undefined,
+        likedContent: parsedContent || undefined,
+        photoUrl,
+        createdAt: like.created_at,
+      });
+    } catch (error) {
+      // Non-critical — silently fail
+      console.error('Error loading like intro:', error);
+    }
+  };
+
   const loadMessages = async () => {
     try {
-      console.log('Loading messages for match:', matchId);
+
 
       // Fetch the most recent 100 messages (paginated to prevent RAM bloat)
       const MESSAGE_PAGE_SIZE = 100;
@@ -501,7 +614,7 @@ export default function Chat() {
       const { data, error } = messagesResult;
       const { data: reactionsData } = reactionsResult;
 
-      console.log('Messages query result:', { data, error, count: data?.length });
+
 
       if (error) {
         console.error('ERROR LOADING MESSAGES:', error);
@@ -520,7 +633,7 @@ export default function Chat() {
       // Decrypt messages and attach reactions (reverse to ascending order)
       if (data && data.length > 0) {
         const chronological = data.reverse(); // was fetched desc, flip to asc
-        console.log('🔓 Decrypting', chronological.length, 'messages...');
+
         const decryptedMessages = await Promise.all(
           chronological.map(async (message) => {
             const decrypted = await decryptSingleMessage(message as Message);
@@ -531,7 +644,7 @@ export default function Chat() {
           })
         );
         setMessages(decryptedMessages);
-        console.log('✅ All messages decrypted');
+
       } else {
         setMessages([]);
       }
@@ -569,10 +682,10 @@ export default function Chat() {
             // Check if message already exists to avoid duplicates
             const exists = prev.some(msg => msg.id === decryptedMessage.id);
             if (exists) {
-              console.log('📭 Message already exists, skipping duplicate:', decryptedMessage.id);
+
               return prev;
             }
-            console.log('📬 Adding new message from realtime:', decryptedMessage.id);
+
             return [...prev, { ...decryptedMessage, reactions: [] }];
           });
 
@@ -601,7 +714,7 @@ export default function Chat() {
           table: 'message_reactions',
         },
         async (payload) => {
-          console.log('📬 Reaction change received:', payload.eventType);
+
 
           if (payload.eventType === 'INSERT') {
             const newReaction = payload.new as MessageReaction;
@@ -719,7 +832,7 @@ export default function Chat() {
       const unsubscribe = subscribeToTypingIndicator();
       return () => {
         if (unsubscribe) {
-          console.log('🔌 Unsubscribing from typing indicator channel');
+
           unsubscribe();
         }
       };
@@ -784,7 +897,7 @@ export default function Chat() {
     const encryptedParts = message.encrypted_content.split(':');
     if (encryptedParts.length < 2) {
       // Plain text message (no colon separators)
-      console.log('⚠️ Plain text message detected');
+
       return { ...message, decrypted_content: message.encrypted_content };
     }
 
@@ -834,14 +947,14 @@ export default function Chat() {
             return { ...message, decrypted_content: decryptedContent };
           }
         } catch (error) {
-          console.log('🔄 Current key decryption failed, trying legacy key...');
+
         }
       }
 
       // Fallback: Try legacy key for old messages
       if (myLegacyPrivateKey) {
         try {
-          console.log('🔑 Attempting decryption with legacy key...');
+
           const decryptedContent = await decryptMessage(
             message.encrypted_content,
             myLegacyPrivateKey,
@@ -850,16 +963,16 @@ export default function Chat() {
 
           // Check if decryption succeeded
           if (decryptedContent !== '[Unable to decrypt message]') {
-            console.log('✅ Successfully decrypted with legacy key');
+
             return { ...message, decrypted_content: decryptedContent };
           }
         } catch (error) {
-          console.log('❌ Legacy key decryption also failed');
+
         }
       }
 
       // Both keys failed
-      console.log('⚠️ Unable to decrypt message with any available keys');
+
       return { ...message, decrypted_content: t('chat.unableToDecrypt') };
     } catch (error) {
       console.error('Error decrypting message:', error);
@@ -870,10 +983,7 @@ export default function Chat() {
 
   const handleSendMessage = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    console.log('🚀 SEND BUTTON PRESSED!');
-    console.log('New message:', newMessage);
-    console.log('Current profile ID:', currentProfileId);
-    console.log('Match profile:', matchProfile);
+
 
     // Check if match is still active
     if (matchStatus?.status !== 'active') {
@@ -888,7 +998,7 @@ export default function Chat() {
     }
 
     if (!newMessage.trim() || !currentProfileId || !matchProfile || !user) {
-      console.log('❌ VALIDATION FAILED - Missing required data');
+
       return;
     }
 
@@ -912,10 +1022,7 @@ export default function Chat() {
     }
 
     try {
-      console.log('=== SENDING MESSAGE ===');
-      console.log('Match ID:', matchId);
-      console.log('Sender ID:', currentProfileId);
-      console.log('Receiver ID:', matchProfile.id);
+
 
       let encryptedContent = messageContent; // Default to plain text
 
@@ -932,14 +1039,14 @@ export default function Chat() {
 
         if (recipientProfile?.encryption_public_key) {
           // Both parties have keys - encrypt the message
-          console.log('🔐 Encrypting message...');
+
           try {
             encryptedContent = await encryptMessage(
               messageContent,
               senderPrivateKey,
               recipientProfile.encryption_public_key
             );
-            console.log('✅ Message encrypted successfully');
+
           } catch (encryptError: any) {
             console.warn('⚠️ Encryption failed, sending as plain text:', encryptError.message);
             // Fall back to plain text
@@ -961,7 +1068,7 @@ export default function Chat() {
         content_type: 'text',
       }).select();
 
-      console.log('Insert result:', { data, error });
+
 
       if (error) {
         console.error('DATABASE ERROR:', error);
@@ -982,12 +1089,12 @@ export default function Chat() {
           .eq('id', matchId);
       }
 
-      console.log('Message sent successfully!');
+
 
       // Add message to UI immediately (optimistic update)
       // Note: We already have the decrypted content (messageContent), so we don't need to decrypt
       if (data && data[0]) {
-        console.log('Adding message to UI:', data[0]);
+
         // Replace encrypted content with plain text for display (since we just sent it)
         const displayMessage = { ...data[0], encrypted_content: messageContent } as Message;
         setMessages((prev) => [...prev, displayMessage]);
@@ -1002,7 +1109,7 @@ export default function Chat() {
           matchId as string
         );
       } catch (notifError) {
-        console.log('Notification error (ignoring):', notifError);
+
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
@@ -1045,7 +1152,7 @@ export default function Chat() {
             quality: IMAGE_CONFIG.chat.quality,
           });
 
-          console.log(`Optimized chat image: ${(optimized.size! / 1024).toFixed(0)}KB (${optimized.width}x${optimized.height})`);
+
 
           // Upload optimized image to Supabase Storage
           const fileName = `${matchId}_${Date.now()}.jpg`;
@@ -1069,7 +1176,7 @@ export default function Chat() {
             .getPublicUrl(filePath);
 
           // Send image message
-          console.log('📤 Sending image message:', { publicUrl, matchId, currentProfileId });
+
 
           const { data: insertedMessage, error: messageError } = await supabase
             .from('messages')
@@ -1089,27 +1196,40 @@ export default function Chat() {
             throw messageError;
           }
 
-          console.log('✅ Image message inserted:', insertedMessage);
+          // Run NSFW moderation check on chat photos (non-blocking)
+          try {
+            const { data: moderationResult } = await supabase.functions.invoke('moderate-photo', {
+              body: {
+                photo_url: publicUrl,
+                profile_id: currentProfileId,
+              },
+            });
+
+            if (moderationResult?.approved === false && moderationResult.reason === 'explicit_content') {
+              // Delete the message and media
+              await supabase.from('messages').delete().eq('id', insertedMessage?.id);
+              await supabase.storage.from('chat-media').remove([filePath]);
+              Alert.alert('Photo Rejected', 'This photo contains inappropriate content and cannot be sent.');
+              return;
+            }
+          } catch (moderationError) {
+            console.error('Chat photo moderation check failed:', moderationError);
+          }
 
           // Add message to local state immediately (realtime will handle duplicates)
           if (insertedMessage) {
-            console.log('📝 Adding image message to state. Current messages:', messages.length);
+
             setMessages((prev) => {
               // Force a new array reference for React to detect the change
               const newMessages = [...prev, insertedMessage as Message];
-              console.log('📝 New messages count:', newMessages.length);
-              console.log('📝 New message details:', {
-                id: insertedMessage.id,
-                content_type: insertedMessage.content_type,
-                media_url: insertedMessage.media_url
-              });
+
               return newMessages;
             });
 
             // Force FlatList to scroll to bottom after state update
             // Store timeout refs for cleanup on unmount
             const scrollTimeout1 = setTimeout(() => {
-              console.log('📜 Scrolling to end...');
+
               flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
             scrollTimeoutRefs.current.push(scrollTimeout1);
@@ -1130,7 +1250,7 @@ export default function Chat() {
               matchId as string
             );
           } catch (notifError) {
-            console.log('Notification error (ignoring):', notifError);
+    
           }
         } catch (uploadError: any) {
           console.error('Error uploading image:', uploadError);
@@ -1332,11 +1452,22 @@ export default function Chat() {
           matchId as string
         );
       } catch (notifError) {
-        console.log('Notification error (ignoring):', notifError);
+
       }
     } catch (error: any) {
       console.error('Error sending voice message:', error);
-      showToast({ type: 'error', title: t('common.error'), message: t('chat.sendVoiceError') });
+      if (error?.code === 'P0001' && error?.message?.includes('Premium subscription')) {
+        Alert.alert(
+          t('subscription.upgradeToPremium'),
+          'Voice messages are a Premium feature. Upgrade to send voice messages.',
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('common.upgrade'), onPress: () => router.push('/settings/subscription') },
+          ]
+        );
+      } else {
+        showToast({ type: 'error', title: t('common.error'), message: t('chat.sendVoiceError') });
+      }
     } finally {
       setSending(false);
     }
@@ -1449,7 +1580,7 @@ export default function Chat() {
             matchId as string
           );
         } catch (notifError) {
-          console.log('Notification error (ignoring):', notifError);
+  
         }
 
         showToast({ type: 'success', title: t('toast.photosRevealed'), message: t('toast.photosRevealed', { name: matchProfile.display_name }) });
@@ -1804,10 +1935,7 @@ export default function Chat() {
             </Text>
           </View>
         )}
-        <MotiView
-          from={{ opacity: 0, translateY: 10 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 300 }}
+        <View
           style={[styles.messageRow, isMine && styles.messageRowMine]}
         >
         {/* Message Bubble */}
@@ -1986,7 +2114,7 @@ export default function Chat() {
             ))}
           </View>
         )}
-      </MotiView>
+      </View>
       </TouchableOpacity>
     );
   };
@@ -2101,7 +2229,7 @@ export default function Chat() {
         >
           <View style={{ position: 'relative' }}>
             <Image
-              source={{ uri: matchProfile?.photo_url || 'https://via.placeholder.com/40' }}
+              source={{ uri: matchPhotoUri }}
               style={styles.headerAvatar}
               blurRadius={blurRadius}
               onLoad={onImageLoad}
@@ -2110,7 +2238,7 @@ export default function Chat() {
             {/* Android blur fallback - CSS overlay instead of RenderScript */}
             {showBlurOverlay && (
               <View
-                style={[styles.headerAvatar, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                style={[styles.headerAvatar, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
                 pointerEvents="none"
               />
             )}
@@ -2118,8 +2246,8 @@ export default function Chat() {
           <View style={styles.headerInfo}>
             <View style={styles.headerNameRow}>
               <Text style={[styles.headerName, { color: colors.foreground }]}>{matchProfile?.display_name}</Text>
-              {matchProfile?.is_verified && (
-                <MaterialCommunityIcons name="check-decagram" size={16} color="#3B82F6" />
+              {(matchProfile?.photo_verified || matchProfile?.is_verified) && (
+                <MaterialCommunityIcons name="check-decagram" size={16} color="#A08AB7" />
               )}
             </View>
             <View style={styles.encryptionRow}>
@@ -2259,25 +2387,86 @@ export default function Chat() {
             colors={['#A08AB7']}
           />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MotiView
-              from={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: 'spring' }}
-            >
-              <View style={styles.emptyIconContainer}>
-                <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.emptyIcon}>
-                  <MaterialCommunityIcons name="message-text-outline" size={40} color="white" />
-                </LinearGradient>
+        ListHeaderComponent={likeIntro ? (
+          <MotiView
+            from={{ opacity: 0, translateY: 10 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400 }}
+            style={[styles.likeIntroCard, { backgroundColor: isDarkColorScheme ? '#2A2235' : '#F8F5FB' }]}
+          >
+            <Text style={[styles.likeIntroLabel, { color: colors.mutedForeground }]}>
+              {likeIntro.senderId === currentProfileId
+                ? (likeIntro.likedContent?.type === 'prompt'
+                    ? t('chat.youLikedPrompt', { name: matchProfile?.display_name })
+                    : likeIntro.likedContent?.type === 'photo'
+                      ? t('chat.youLikedPhoto', { name: matchProfile?.display_name })
+                      : t('chat.youLikedProfile', { name: matchProfile?.display_name }))
+                : (likeIntro.likedContent?.type === 'prompt'
+                    ? t('chat.theyLikedPrompt', { name: likeIntro.senderName })
+                    : likeIntro.likedContent?.type === 'photo'
+                      ? t('chat.theyLikedPhoto', { name: likeIntro.senderName })
+                      : t('chat.theyLikedProfile', { name: likeIntro.senderName }))}
+            </Text>
+
+            {likeIntro.likedContent?.type === 'prompt' && likeIntro.likedContent.prompt && (
+              <View style={[styles.likeIntroPromptCard, { backgroundColor: isDarkColorScheme ? '#1E1A26' : '#FFFFFF' }]}>
+                <View style={styles.likeIntroPromptBorder} />
+                <View style={styles.likeIntroPromptContent}>
+                  <Text style={[styles.likeIntroPromptQuestion, { color: colors.mutedForeground }]}>
+                    {likeIntro.likedContent.prompt}
+                  </Text>
+                  {likeIntro.likedContent.answer && (
+                    <Text style={[styles.likeIntroPromptAnswer, { color: colors.foreground }]}>
+                      {likeIntro.likedContent.answer}
+                    </Text>
+                  )}
+                </View>
               </View>
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t('chat.sayHello')}</Text>
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                {t('chat.youMatchedWith', { name: matchProfile?.display_name })} {'\n'}
-                {t('chat.startConversation')}
-              </Text>
-            </MotiView>
-          </View>
+            )}
+
+            {likeIntro.likedContent?.type === 'photo' && likeIntro.photoUrl && (
+              <Image
+                source={{ uri: likeIntro.photoUrl }}
+                style={styles.likeIntroPhoto}
+                resizeMode="cover"
+              />
+            )}
+
+            {likeIntro.message && (
+              <View style={styles.likeIntroMessageRow}>
+                <MaterialCommunityIcons name="comment-text-outline" size={16} color="#A08AB7" />
+                <Text style={[styles.likeIntroMessage, { color: colors.foreground }]}>
+                  "{likeIntro.message}"
+                </Text>
+              </View>
+            )}
+
+            <Text style={[styles.likeIntroTime, { color: colors.mutedForeground }]}>
+              {new Date(likeIntro.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </Text>
+          </MotiView>
+        ) : null}
+        ListEmptyComponent={
+          likeIntro ? null : (
+            <View style={styles.emptyContainer}>
+              <MotiView
+                from={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring' }}
+              >
+                <View style={styles.emptyIconContainer}>
+                  <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.emptyIcon}>
+                    <MaterialCommunityIcons name="message-text-outline" size={40} color="white" />
+                  </LinearGradient>
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t('chat.sayHello')}</Text>
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                  {t('chat.youMatchedWith', { name: matchProfile?.display_name })} {'\n'}
+                  {t('chat.startConversation')}
+                </Text>
+              </MotiView>
+            </View>
+          )
         }
       />
 
@@ -2819,6 +3008,66 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  likeIntroCard: {
+    alignSelf: 'center',
+    alignItems: 'center',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    maxWidth: '85%',
+    width: '85%',
+  },
+  likeIntroLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 10,
+  },
+  likeIntroPromptCard: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 10,
+    width: '100%',
+  },
+  likeIntroPromptBorder: {
+    width: 3,
+    backgroundColor: '#A08AB7',
+  },
+  likeIntroPromptContent: {
+    flex: 1,
+    padding: 10,
+  },
+  likeIntroPromptQuestion: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  likeIntroPromptAnswer: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  likeIntroPhoto: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  likeIntroMessageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginBottom: 6,
+  },
+  likeIntroMessage: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    lineHeight: 20,
+    flex: 1,
+  },
+  likeIntroTime: {
+    fontSize: 11,
+    marginTop: 2,
   },
   inputContainer: {
     flexDirection: 'row',

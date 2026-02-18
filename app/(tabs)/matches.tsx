@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Modal, Alert, Pressable, InteractionManager, useWindowDimensions, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
@@ -15,8 +15,7 @@ import { useScreenProtection } from '@/hooks/useScreenProtection';
 import { isOnline, getLastActiveText } from '@/lib/online-status';
 import { realtimeManager } from '@/lib/realtime-manager';
 import { decryptMessage, getPrivateKey } from '@/lib/encryption';
-import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
-import { useSafeBlur } from '@/hooks/useSafeBlur';
+import { usePhotoBlur } from '@/hooks/usePhotoBlur';
 import { MatchesListSkeleton } from '@/components/shared/SkeletonScreens';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -26,8 +25,9 @@ interface Match {
     id: string;
     display_name: string;
     age: number;
-    photos?: { url: string; is_primary: boolean }[];
+    photos?: { url: string; is_primary: boolean; blur_data_uri?: string | null }[];
     is_verified?: boolean;
+    photo_verified?: boolean;
     last_active_at?: string | null;
     hide_last_active?: boolean;
     photo_blur_enabled?: boolean;
@@ -48,6 +48,162 @@ interface Match {
   decrypted_preview?: string;
 }
 
+// Utility functions extracted outside component to avoid re-creation
+function getTimeAgoStatic(dateString: string, t: any) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (seconds < 60) return t('matches.timeAgo.justNow');
+  if (seconds < 3600) return t('matches.timeAgo.minutesAgo', { count: Math.floor(seconds / 60) });
+  if (seconds < 86400) return t('matches.timeAgo.hoursAgo', { count: Math.floor(seconds / 3600) });
+  if (seconds < 604800) return t('matches.timeAgo.daysAgo', { count: Math.floor(seconds / 86400) });
+  return t('matches.timeAgo.weeksAgo', { count: Math.floor(seconds / 604800) });
+}
+
+function getExpirationInfoStatic(match: Match): { text: string; isUrgent: boolean; isExpired: boolean } | null {
+  if (match.first_message_sent_at) return null;
+  if (!match.expires_at) return null;
+
+  const now = new Date();
+  const expiresAt = new Date(match.expires_at);
+  const timeLeft = expiresAt.getTime() - now.getTime();
+
+  if (timeLeft <= 0) {
+    return { text: 'Expired', isUrgent: true, isExpired: true };
+  }
+
+  const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
+  const daysLeft = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+  const isUrgent = hoursLeft < 24;
+
+  if (daysLeft >= 1) {
+    return { text: `Expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`, isUrgent, isExpired: false };
+  } else if (hoursLeft >= 1) {
+    return { text: `Expires in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`, isUrgent, isExpired: false };
+  } else {
+    const minutesLeft = Math.floor(timeLeft / (1000 * 60));
+    return { text: `Expires in ${Math.max(1, minutesLeft)} ${minutesLeft === 1 ? 'minute' : 'minutes'}`, isUrgent: true, isExpired: false };
+  }
+}
+
+// Extracted & memoized MatchCard - prevents re-creation on parent re-render
+interface MatchCardProps {
+  item: Match;
+  currentProfileId: string | null;
+  colors: any;
+  onPress: (match: Match) => void;
+  onLongPress: (match: Match) => void;
+  t: any;
+  isAdmin?: boolean;
+}
+
+const MatchCard = memo(function MatchCard({ item, currentProfileId, colors, onPress, onLongPress, t, isAdmin = false }: MatchCardProps) {
+  const primaryPhoto = item.profile.photos?.find(p => p.is_primary) || item.profile.photos?.[0];
+  const hasUnread = (item.unread_count || 0) > 0;
+  const userIsOnline = isOnline(item.profile.last_active_at || null);
+  const showOnlineStatus = userIsOnline && !item.profile.hide_last_active;
+  const lastActiveText = getLastActiveText(item.profile.last_active_at || null, item.profile.hide_last_active);
+  const expirationInfo = getExpirationInfoStatic(item);
+
+  const { imageUri, blurRadius, showBlurOverlay, onImageLoad, onImageError } = usePhotoBlur({
+    shouldBlur: (item.profile.photo_blur_enabled || false) && !item.profile.is_revealed && !isAdmin,
+    photoUrl: primaryPhoto?.url || 'https://via.placeholder.com/80',
+    blurDataUri: primaryPhoto?.blur_data_uri,
+    blurIntensity: 30,
+  });
+
+  return (
+    <TouchableOpacity
+      style={[styles.matchCard, { backgroundColor: colors.card }]}
+      onPress={() => onPress(item)}
+      onLongPress={() => onLongPress(item)}
+      activeOpacity={0.7}
+    >
+      {/* Profile Photo */}
+      <View style={styles.photoContainer}>
+        <Image
+          source={{ uri: imageUri }}
+          style={styles.photo}
+          blurRadius={blurRadius}
+          onLoad={onImageLoad}
+          onError={onImageError}
+        />
+        {showBlurOverlay && (
+          <View
+            style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
+            pointerEvents="none"
+          />
+        )}
+        {(item.profile.is_verified || item.profile.photo_verified) && (
+          <View style={[styles.verifiedBadge, { backgroundColor: colors.card }]}>
+            <MaterialCommunityIcons name="check-decagram" size={18} color="#A08AB7" />
+          </View>
+        )}
+        {hasUnread && <View style={styles.unreadDot} />}
+        {showOnlineStatus && <View style={styles.onlineDot} />}
+      </View>
+
+      {/* Match Info */}
+      <View style={styles.matchInfo}>
+        <View style={styles.matchHeader}>
+          <Text style={[styles.matchName, { color: colors.foreground }]} numberOfLines={1}>
+            {item.profile.display_name}, {item.profile.age}
+          </Text>
+          {item.last_message && (
+            <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>{getTimeAgoStatic(item.last_message.created_at, t)}</Text>
+          )}
+        </View>
+
+        {typeof item.compatibility_score === 'number' && item.compatibility_score > 0 && (
+          <View style={styles.compatibilityRow}>
+            <LinearGradient
+              colors={['#A08AB7', '#CDC2E5']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.compatibilityBadge}
+            ><MaterialCommunityIcons name="heart" size={12} color="white" /><Text style={styles.compatibilityText}>{t('matches.matchPercentage', { score: item.compatibility_score })}</Text></LinearGradient>
+          </View>
+        )}
+
+        {expirationInfo && (
+          <View style={[styles.expirationBadge, expirationInfo.isUrgent && styles.expirationUrgent]}>
+            <MaterialCommunityIcons
+              name={expirationInfo.isExpired ? "timer-off" : "timer-sand"}
+              size={12}
+              color={expirationInfo.isUrgent ? "#EF4444" : "#F59E0B"}
+            />
+            <Text style={[styles.expirationText, expirationInfo.isUrgent && styles.expirationTextUrgent]}>
+              {expirationInfo.text}
+            </Text>
+          </View>
+        )}
+
+        {lastActiveText && !expirationInfo && (
+          <Text style={styles.onlineStatusText}>{lastActiveText}</Text>
+        )}
+
+        {item.last_message ? (
+          <Text
+            style={[styles.lastMessage, { color: colors.mutedForeground }, hasUnread && { color: colors.foreground, fontWeight: '600' }]}
+            numberOfLines={1}
+          >
+            {item.last_message.sender_profile_id === currentProfileId ? t('matches.youLabel') : ''}
+            {item.decrypted_preview || item.last_message.encrypted_content}
+          </Text>
+        ) : (
+          <View style={styles.ctaRow}>
+            <MaterialCommunityIcons name="message-outline" size={14} color="#9B87CE" />
+            <Text style={styles.ctaText}>{t('matches.sayHi')}</Text>
+          </View>
+        )}
+      </View>
+
+      <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+    </TouchableOpacity>
+  );
+});
+
 export default function Matches() {
   // Protect match list from screenshots
   useScreenProtection();
@@ -62,13 +218,13 @@ export default function Matches() {
   const isLandscape = width > height;
   const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
-  const unreadActivityCount = useUnreadActivityCount(currentProfileId);
   const [matches, setMatches] = useState<Match[]>([]);
   const [likesCount, setLikesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [actionSheetMatch, setActionSheetMatch] = useState<Match | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     loadCurrentProfile();
@@ -91,12 +247,13 @@ export default function Matches() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, is_admin')
         .eq('user_id', user?.id)
         .single();
 
       if (error) throw error;
       setCurrentProfileId(data.id);
+      setIsAdmin(data.is_admin || false);
     } catch (error: any) {
       console.error('Error loading profile:', error);
     }
@@ -110,7 +267,6 @@ export default function Matches() {
       // Get current user's private key
       const myPrivateKey = await getPrivateKey(user.id);
       if (!myPrivateKey) {
-        console.log('No private key found, returning matches without decryption');
         return matchesList;
       }
 
@@ -122,7 +278,6 @@ export default function Matches() {
         .maybeSingle();
 
       if (!myProfile) {
-        console.log('No profile found for decryption, returning matches without decryption');
         return matchesList;
       }
 
@@ -145,7 +300,6 @@ export default function Matches() {
             const otherPublicKey = match.profile.encryption_public_key;
 
             if (!otherPublicKey) {
-              console.log('No public key for match, showing encrypted content');
               return { ...match, decrypted_preview: match.last_message.encrypted_content };
             }
 
@@ -255,6 +409,7 @@ export default function Matches() {
             display_name,
             age,
             is_verified,
+            photo_verified,
             last_active_at,
             hide_last_active,
             photo_blur_enabled,
@@ -262,7 +417,8 @@ export default function Matches() {
             photos (
               url,
               is_primary,
-              display_order
+              display_order,
+              blur_data_uri
             )
           `)
           .in('id', otherProfileIds),
@@ -332,6 +488,7 @@ export default function Matches() {
             display_name: profile.display_name,
             age: profile.age,
             is_verified: profile.is_verified,
+            photo_verified: profile.photo_verified,
             last_active_at: profile.last_active_at,
             hide_last_active: profile.hide_last_active,
             photo_blur_enabled: profile.photo_blur_enabled,
@@ -390,56 +547,12 @@ export default function Matches() {
     try {
       if (!currentProfileId) return;
 
-      // Get count of likes where current user is liked
-      const { data: likesData } = await supabase
-        .from('likes')
-        .select('id, liker_profile_id')
-        .eq('liked_profile_id', currentProfileId);
+      // Use server-side RPC that counts unmatched likes (excludes matched, passed, blocked, banned)
+      // This is also secure: free users get the count without seeing WHO liked them
+      const { data: count, error } = await supabase.rpc('count_unmatched_received_likes');
 
-      // Filter out likes that already became matches
-      const { data: matchesData } = await supabase
-        .from('matches')
-        .select('profile1_id, profile2_id')
-        .or(`profile1_id.eq.${currentProfileId},profile2_id.eq.${currentProfileId}`);
-
-      const matchedProfileIds = new Set(
-        matchesData?.flatMap(m => [m.profile1_id, m.profile2_id]) || []
-      );
-
-      // Filter out users we've passed on
-      const { data: passes } = await supabase
-        .from('passes')
-        .select('passed_profile_id')
-        .eq('passer_profile_id', currentProfileId);
-
-      const passedProfileIds = new Set(
-        passes?.map(p => p.passed_profile_id) || []
-      );
-
-      // SAFETY: Filter out blocked users from like count
-      const { data: blockedByMe } = await supabase
-        .from('blocks')
-        .select('blocked_profile_id')
-        .eq('blocker_profile_id', currentProfileId);
-
-      const { data: blockedMe } = await supabase
-        .from('blocks')
-        .select('blocker_profile_id')
-        .eq('blocked_profile_id', currentProfileId);
-
-      const blockedProfileIds = new Set([
-        ...(blockedByMe?.map(b => b.blocked_profile_id) || []),
-        ...(blockedMe?.map(b => b.blocker_profile_id) || [])
-      ]);
-
-      const unmatchedLikesCount = likesData?.filter(
-        like =>
-          !matchedProfileIds.has(like.liker_profile_id) &&
-          !passedProfileIds.has(like.liker_profile_id) &&
-          !blockedProfileIds.has(like.liker_profile_id)
-      ).length || 0;
-
-      setLikesCount(unmatchedLikesCount);
+      if (error) throw error;
+      setLikesCount(count || 0);
     } catch (error: any) {
       console.error('Error loading likes count:', error);
     }
@@ -534,11 +647,6 @@ export default function Matches() {
     loadMatches();
     loadLikesCount();
   }, [currentProfileId]);
-
-  const handleMatchPress = (match: Match) => {
-    // Navigate to profile page (consistent with messages tab)
-    router.push(`/profile/${match.profile.id}`);
-  };
 
   const handleLikesPress = () => {
     router.push('/likes');
@@ -708,10 +816,15 @@ export default function Matches() {
     );
   };
 
-  const handleMatchLongPress = (match: Match) => {
+  // Stable callback refs for MatchCard (defined before handleActionSelect which references them)
+  const handleMatchPress = useCallback((match: Match) => {
+    router.push(`/profile/${match.profile.id}`);
+  }, []);
+
+  const handleMatchLongPress = useCallback((match: Match) => {
     setActionSheetMatch(match);
     setShowActionSheet(true);
-  };
+  }, []);
 
   const handleActionSelect = (action: string) => {
     if (!actionSheetMatch) return;
@@ -738,180 +851,6 @@ export default function Matches() {
           break;
       }
     }, 100);
-  };
-
-  const getTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-    if (seconds < 60) return t('matches.timeAgo.justNow');
-    if (seconds < 3600) return t('matches.timeAgo.minutesAgo', { count: Math.floor(seconds / 60) });
-    if (seconds < 86400) return t('matches.timeAgo.hoursAgo', { count: Math.floor(seconds / 3600) });
-    if (seconds < 604800) return t('matches.timeAgo.daysAgo', { count: Math.floor(seconds / 86400) });
-    return t('matches.timeAgo.weeksAgo', { count: Math.floor(seconds / 604800) });
-  };
-
-  const getExpirationInfo = (match: Match): { text: string; isUrgent: boolean; isExpired: boolean } | null => {
-    // If first message sent, match doesn't expire
-    if (match.first_message_sent_at) return null;
-
-    // If no expiration set (old matches before feature), don't show timer
-    if (!match.expires_at) return null;
-
-    const now = new Date();
-    const expiresAt = new Date(match.expires_at);
-    const timeLeft = expiresAt.getTime() - now.getTime();
-
-    // Already expired
-    if (timeLeft <= 0) {
-      return { text: 'Expired', isUrgent: true, isExpired: true };
-    }
-
-    const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
-    const daysLeft = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
-
-    // Less than 24 hours = urgent
-    const isUrgent = hoursLeft < 24;
-
-    if (daysLeft >= 1) {
-      return {
-        text: `Expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`,
-        isUrgent,
-        isExpired: false
-      };
-    } else if (hoursLeft >= 1) {
-      return {
-        text: `Expires in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`,
-        isUrgent,
-        isExpired: false
-      };
-    } else {
-      const minutesLeft = Math.floor(timeLeft / (1000 * 60));
-      return {
-        text: `Expires in ${Math.max(1, minutesLeft)} ${minutesLeft === 1 ? 'minute' : 'minutes'}`,
-        isUrgent: true,
-        isExpired: false
-      };
-    }
-  };
-
-  // Separate MatchCard component to use useSafeBlur hook
-  const MatchCard = ({ item, index }: { item: Match; index: number }) => {
-    const primaryPhoto = item.profile.photos?.find(p => p.is_primary) || item.profile.photos?.[0];
-    const hasUnread = (item.unread_count || 0) > 0;
-    const userIsOnline = isOnline(item.profile.last_active_at || null);
-    const showOnlineStatus = userIsOnline && !item.profile.hide_last_active;
-    const lastActiveText = getLastActiveText(item.profile.last_active_at || null, item.profile.hide_last_active);
-    const expirationInfo = getExpirationInfo(item);
-
-    // Safe blur hook - protects user privacy while preventing crashes
-    const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
-      shouldBlur: (item.profile.photo_blur_enabled || false) && !item.profile.is_revealed,
-      blurIntensity: 30,
-    });
-
-    return (
-      <MotiView
-        from={{ opacity: 0, translateY: 20 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: 'timing', duration: 400, delay: index * 50 }}
-      >
-        <TouchableOpacity
-          style={[styles.matchCard, { backgroundColor: colors.card }]}
-          onPress={() => handleMatchPress(item)}
-          onLongPress={() => handleMatchLongPress(item)}
-          activeOpacity={0.7}
-        >
-          {/* Profile Photo */}
-          <View style={styles.photoContainer}>
-            <Image
-              source={{ uri: primaryPhoto?.url || 'https://via.placeholder.com/80' }}
-              style={styles.photo}
-              blurRadius={blurRadius}
-              onLoad={onImageLoad}
-              onError={onImageError}
-            />
-            {/* Android blur fallback - CSS overlay instead of RenderScript */}
-            {showBlurOverlay && (
-              <View
-                style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
-                pointerEvents="none"
-              />
-            )}
-            {item.profile.is_verified && (
-              <View style={[styles.verifiedBadge, { backgroundColor: colors.card }]}>
-                <MaterialCommunityIcons name="check-decagram" size={18} color="#3B82F6" />
-              </View>
-            )}
-            {hasUnread && <View style={styles.unreadDot} />}
-            {showOnlineStatus && <View style={styles.onlineDot} />}
-          </View>
-
-          {/* Match Info */}
-          <View style={styles.matchInfo}>
-            <View style={styles.matchHeader}>
-              <Text style={[styles.matchName, { color: colors.foreground }]} numberOfLines={1}>
-                {item.profile.display_name}, {item.profile.age}
-              </Text>
-              {item.last_message && (
-                <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>{getTimeAgo(item.last_message.created_at)}</Text>
-              )}
-            </View>
-
-            {/* Compatibility Score - only show if we have a real score (not 0 or null) */}
-            {typeof item.compatibility_score === 'number' && item.compatibility_score > 0 && (
-              <View style={styles.compatibilityRow}>
-                <LinearGradient
-                  colors={['#A08AB7', '#CDC2E5']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.compatibilityBadge}
-                ><MaterialCommunityIcons name="heart" size={12} color="white" /><Text style={styles.compatibilityText}>{t('matches.matchPercentage', { score: item.compatibility_score })}</Text></LinearGradient>
-              </View>
-            )}
-
-            {/* Expiration Timer */}
-            {expirationInfo && (
-              <View style={[styles.expirationBadge, expirationInfo.isUrgent && styles.expirationUrgent]}>
-                <MaterialCommunityIcons
-                  name={expirationInfo.isExpired ? "timer-off" : "timer-sand"}
-                  size={12}
-                  color={expirationInfo.isUrgent ? "#EF4444" : "#F59E0B"}
-                />
-                <Text style={[styles.expirationText, expirationInfo.isUrgent && styles.expirationTextUrgent]}>
-                  {expirationInfo.text}
-                </Text>
-              </View>
-            )}
-
-            {/* Online Status */}
-            {lastActiveText && !expirationInfo && (
-              <Text style={styles.onlineStatusText}>{lastActiveText}</Text>
-            )}
-
-            {/* Last Message or CTA */}
-            {item.last_message ? (
-              <Text
-                style={[styles.lastMessage, { color: colors.mutedForeground }, hasUnread && { color: colors.foreground, fontWeight: '600' }]}
-                numberOfLines={1}
-              >
-                {item.last_message.sender_profile_id === currentProfileId ? t('matches.youLabel') : ''}
-                {item.decrypted_preview || item.last_message.encrypted_content}
-              </Text>
-            ) : (
-              <View style={styles.ctaRow}>
-                <MaterialCommunityIcons name="message-outline" size={14} color="#9B87CE" />
-                <Text style={styles.ctaText}>{t('matches.sayHi')}</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Chevron */}
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
-        </TouchableOpacity>
-      </MotiView>
-    );
   };
 
   const getExpiringMatchesCount = (): { urgent: number; soon: number } => {
@@ -1026,9 +965,26 @@ export default function Matches() {
     );
   };
 
-  const renderMatch = ({ item, index }: { item: Match; index: number }) => {
-    return <MatchCard item={item} index={index} />;
-  };
+  const listHeader = useMemo(() => (
+    <>
+      {renderExpirationWarning()}
+      {renderLikesCard()}
+    </>
+  ), [matches, likesCount, isPremium, t]);
+
+  const renderMatch = useCallback(({ item }: { item: Match }) => {
+    return (
+      <MatchCard
+        item={item}
+        currentProfileId={currentProfileId}
+        colors={colors}
+        onPress={handleMatchPress}
+        onLongPress={handleMatchLongPress}
+        t={t}
+        isAdmin={isAdmin}
+      />
+    );
+  }, [currentProfileId, colors, handleMatchPress, handleMatchLongPress, t, isAdmin]);
 
   // Loading state
   if (loading) {
@@ -1040,22 +996,6 @@ export default function Matches() {
             <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('matches.title')}</Text>
             <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('matches.subtitle')}</Text>
           </View>
-          {/* Activity Bell */}
-          <TouchableOpacity
-            onPress={() => router.push('/activity')}
-            style={[styles.activityButton, { backgroundColor: isPremium ? '#F5F0FF' : colors.muted }]}
-          >
-            <View style={{ position: 'relative' }}>
-              <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#A08AB7" />
-              {unreadActivityCount > 0 && (
-                <View style={styles.activityBadge}>
-                  <Text style={styles.activityBadgeText}>
-                    {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
         </View>
 
         <MatchesListSkeleton />
@@ -1073,22 +1013,6 @@ export default function Matches() {
             <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('matches.title')}</Text>
             <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('matches.subtitle')}</Text>
           </View>
-          {/* Activity Bell */}
-          <TouchableOpacity
-            onPress={() => router.push('/activity')}
-            style={[styles.activityButton, { backgroundColor: isPremium ? '#F5F0FF' : colors.muted }]}
-          >
-            <View style={{ position: 'relative' }}>
-              <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#A08AB7" />
-              {unreadActivityCount > 0 && (
-                <View style={styles.activityBadge}>
-                  <Text style={styles.activityBadgeText}>
-                    {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.emptyContainer}>
@@ -1140,22 +1064,6 @@ export default function Matches() {
               : t('matches.connections', { count: matches.length })}
           </Text>
         </View>
-        {/* Activity Bell */}
-        <TouchableOpacity
-          onPress={() => router.push('/activity')}
-          style={[styles.activityButton, { backgroundColor: isPremium ? '#F5F0FF' : colors.muted }]}
-        >
-          <View style={{ position: 'relative' }}>
-            <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#A08AB7" />
-            {unreadActivityCount > 0 && (
-              <View style={styles.activityBadge}>
-                <Text style={styles.activityBadgeText}>
-                  {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
-                </Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
       </View>
 
       {/* Matches List */}
@@ -1163,12 +1071,7 @@ export default function Matches() {
         data={matches}
         renderItem={renderMatch}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={() => (
-          <>
-            {renderExpirationWarning()}
-            {renderLikesCard()}
-          </>
-        )}
+        ListHeaderComponent={listHeader}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
@@ -1621,28 +1524,5 @@ const styles = StyleSheet.create({
   },
   actionTextDanger: {
     color: '#EF4444',
-  },
-  activityButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activityBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activityBadgeText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
   },
 });

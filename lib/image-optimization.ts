@@ -21,6 +21,12 @@ export const IMAGE_CONFIG = {
     quality: 0.7,
     format: ImageManipulator.SaveFormat.JPEG,
   },
+  // Blur thumbnail for privacy blur (server-side)
+  blur: {
+    maxWidth: 20,
+    quality: 0.5,
+    format: ImageManipulator.SaveFormat.JPEG,
+  },
   // Chat images
   chat: {
     maxWidth: 1080,
@@ -97,8 +103,6 @@ export async function optimizeImage(
 
     // If file is still too large, compress more aggressively
     if (fileSize > IMAGE_CONFIG.maxFileSize) {
-      console.log(`Image too large (${(fileSize / 1024 / 1024).toFixed(2)}MB), compressing further...`);
-
       // Progressive compression
       while (fileSize > IMAGE_CONFIG.maxFileSize && finalQuality > 0.3) {
         finalQuality -= 0.1;
@@ -110,8 +114,6 @@ export async function optimizeImage(
 
         finalUri = recompressed.uri;
         fileSize = await getFileSize(recompressed.uri);
-
-        console.log(`Recompressed to ${(fileSize / 1024 / 1024).toFixed(2)}MB with quality ${finalQuality}`);
       }
     }
 
@@ -321,6 +323,31 @@ export function getRecommendedQuality(fileSizeBytes: number): number {
   if (sizeMb < 6) return 0.75;
   if (sizeMb < 10) return 0.7;
   return 0.6;
+}
+
+/**
+ * Generate a tiny (~20px wide) JPEG thumbnail as a base64 data URI.
+ * When displayed in a full-size container, bilinear interpolation creates
+ * a natural blur effect — same technique used by Medium and Facebook.
+ * Result is ~300-500 bytes, stored directly in the database.
+ */
+export async function generateBlurDataUri(uri: string): Promise<string> {
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: IMAGE_CONFIG.blur.maxWidth } }],
+      {
+        compress: IMAGE_CONFIG.blur.quality,
+        format: IMAGE_CONFIG.blur.format,
+        base64: true,
+      }
+    );
+
+    return `data:image/jpeg;base64,${result.base64}`;
+  } catch (error) {
+    console.error('Error generating blur data URI:', error);
+    throw new Error('Failed to generate blur thumbnail');
+  }
 }
 
 /**

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  TextInput,
+  Keyboard,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
@@ -20,6 +22,7 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { updateUserLocation } from '@/lib/geolocation';
 import { openAppSettings } from '@/lib/open-settings';
+import { searchCities, CityResult } from '@/lib/city-search';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import PhotoVerificationCard from '@/components/security/PhotoVerificationCard';
 
@@ -47,6 +50,11 @@ export default function PrivacySettings() {
     hide_distance: false,
   });
   const [currentLocation, setCurrentLocation] = useState<string>('');
+  const [cityQuery, setCityQuery] = useState('');
+  const [cityResults, setCityResults] = useState<CityResult[]>([]);
+  const [showCitySearch, setShowCitySearch] = useState(false);
+  const [savingCity, setSavingCity] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadSettings();
@@ -65,7 +73,7 @@ export default function PrivacySettings() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('photo_blur_enabled, incognito_mode, hide_last_active, hide_distance')
+        .select('photo_blur_enabled, incognito_mode, hide_last_active, hide_distance, location_city, location_state, latitude, longitude')
         .eq('user_id', user?.id)
         .single();
 
@@ -78,6 +86,14 @@ export default function PrivacySettings() {
           hide_last_active: data.hide_last_active || false,
           hide_distance: data.hide_distance || false,
         });
+
+        // Show existing location
+        if (data.location_city || data.location_state) {
+          const parts = [data.location_city, data.location_state].filter(Boolean);
+          setCurrentLocation(parts.join(', '));
+        } else if (data.latitude && data.longitude) {
+          setCurrentLocation(`${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`);
+        }
       }
     } catch (error: any) {
       console.error('Error loading privacy settings:', error);
@@ -90,12 +106,10 @@ export default function PrivacySettings() {
   const updateSetting = async (key: keyof PrivacySettings, value: boolean) => {
     // CRITICAL: Gate incognito mode for premium/platinum users only
     if (key === 'incognito_mode' && value === true && !isPremium && !isPlatinum) {
-      console.log('🚫 Incognito mode requires premium subscription');
       setShowPaywall(true);
       return;
     }
 
-    console.log(`🔧 Updating ${key} to ${value} for user ${user?.id}`);
     const previousValue = settings[key];
 
     // Optimistically update UI
@@ -103,24 +117,32 @@ export default function PrivacySettings() {
     setSaving(true);
 
     try {
-      console.log(`📤 Sending update to database...`);
       const { data, error } = await supabase
         .from('profiles')
         .update({ [key]: value })
         .eq('user_id', user?.id)
-        .select();
+        .select('photo_blur_enabled, incognito_mode, hide_last_active, hide_distance')
+        .single();
 
       if (error) {
         console.error('❌ Database error:', error);
         throw error;
       }
 
-      console.log('✅ Setting updated successfully:', data);
+      // Verify the write actually took effect
+      if (data && (data as Record<string, boolean>)[key] !== value) {
+        throw new Error('Setting was not saved correctly');
+      }
+
     } catch (error: any) {
       console.error('❌ Error updating privacy setting:', error);
       // Revert on error
       setSettings(prev => ({ ...prev, [key]: previousValue }));
-      Alert.alert('Error', 'Failed to update privacy setting. Please try again.');
+      if (error?.code === 'P0001' && error?.message?.includes('Premium')) {
+        setShowPaywall(true);
+      } else {
+        Alert.alert('Error', 'Failed to update privacy setting. Please try again.');
+      }
     } finally {
       setSaving(false);
     }
@@ -154,31 +176,86 @@ export default function PrivacySettings() {
         return;
       }
 
-      // Update profile in database
+      // Update profile in database (include city/state if available)
+      const updateData: any = {
+        latitude: location.latitude,
+        longitude: location.longitude,
+      };
+      if (location.city) updateData.location_city = location.city;
+      if (location.state) updateData.location_state = location.state;
+
       const { error } = await supabase
         .from('profiles')
-        .update({
-          latitude: location.latitude,
-          longitude: location.longitude,
-        })
+        .update(updateData)
         .eq('user_id', user?.id);
 
       if (error) throw error;
 
-      // Update display with accuracy info
-      setCurrentLocation(
-        `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)} (±${Math.round(location.accuracy || 0)}m)`
-      );
+      // Update display with city/state or coordinates
+      if (location.city || location.state) {
+        const parts = [location.city, location.state].filter(Boolean);
+        setCurrentLocation(parts.join(', '));
+      } else {
+        setCurrentLocation(`${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`);
+      }
 
       Alert.alert(
         'Success',
-        `Your location has been updated!\n\nAccuracy: ±${Math.round(location.accuracy || 0)} meters`
+        location.city
+          ? `Location updated to ${location.city}${location.state ? ', ' + location.state : ''}`
+          : `Your location has been updated!`
       );
     } catch (error: any) {
       console.error('Error updating location:', error);
       Alert.alert('Error', 'Failed to update location. Please try again.');
     } finally {
       setUpdatingLocation(false);
+    }
+  };
+
+  const handleCitySearch = useCallback((query: string) => {
+    setCityQuery(query);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (query.length < 2) {
+      setCityResults([]);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      const results = searchCities(query, 8);
+      setCityResults(results);
+    }, 150);
+  }, []);
+
+  const handleSelectCity = async (city: CityResult) => {
+    Keyboard.dismiss();
+    setSavingCity(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          location_city: city.city,
+          location_state: city.state,
+          location_country: city.countryCode,
+          latitude: city.latitude,
+          longitude: city.longitude,
+        })
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      setCurrentLocation(city.displayName);
+      setCityQuery('');
+      setCityResults([]);
+      setShowCitySearch(false);
+
+      Alert.alert('Success', `Location updated to ${city.displayName}`);
+    } catch (error: any) {
+      console.error('Error setting city location:', error);
+      Alert.alert('Error', 'Failed to update location. Please try again.');
+    } finally {
+      setSavingCity(false);
     }
   };
 
@@ -368,7 +445,7 @@ export default function PrivacySettings() {
             <View style={styles.locationContent}>
               <Text style={styles.settingTitle}>Update Location</Text>
               <Text style={styles.settingDescription}>
-                Refresh your GPS coordinates to show accurate distance to matches
+                Use GPS or search for your city to set your location
               </Text>
               {currentLocation && (
                 <Text style={styles.currentLocationText}>
@@ -378,27 +455,94 @@ export default function PrivacySettings() {
             </View>
           </View>
 
-          <TouchableOpacity
-            style={[
-              styles.updateLocationButton,
-              updatingLocation && styles.updateLocationButtonDisabled,
-            ]}
-            onPress={handleUpdateLocation}
-            disabled={updatingLocation}
-          >
-            {updatingLocation ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <MaterialCommunityIcons
-                  name="crosshairs-gps"
-                  size={18}
-                  color="#fff"
-                />
-                <Text style={styles.updateLocationButtonText}>Update Now</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View style={styles.locationButtonsRow}>
+            <TouchableOpacity
+              style={[
+                styles.updateLocationButton,
+                { flex: 1 },
+                updatingLocation && styles.updateLocationButtonDisabled,
+              ]}
+              onPress={handleUpdateLocation}
+              disabled={updatingLocation}
+            >
+              {updatingLocation ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <MaterialCommunityIcons
+                    name="crosshairs-gps"
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={styles.updateLocationButtonText}>Use GPS</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.searchCityButton,
+                showCitySearch && styles.searchCityButtonActive,
+              ]}
+              onPress={() => {
+                setShowCitySearch(!showCitySearch);
+                if (showCitySearch) {
+                  setCityQuery('');
+                  setCityResults([]);
+                }
+              }}
+            >
+              <MaterialCommunityIcons
+                name="magnify"
+                size={18}
+                color={showCitySearch ? '#fff' : '#A08AB7'}
+              />
+              <Text style={[
+                styles.searchCityButtonText,
+                showCitySearch && { color: '#fff' },
+              ]}>
+                Search City
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {showCitySearch && (
+            <View style={styles.citySearchContainer}>
+              <TextInput
+                style={styles.citySearchInput}
+                placeholder="Search city or country..."
+                placeholderTextColor="#9CA3AF"
+                value={cityQuery}
+                onChangeText={handleCitySearch}
+                autoFocus
+              />
+              {savingCity && (
+                <ActivityIndicator size="small" color="#A08AB7" style={{ marginTop: 8 }} />
+              )}
+              {cityResults.length > 0 && (
+                <View style={styles.cityResultsList}>
+                  {cityResults.map((result, index) => (
+                    <TouchableOpacity
+                      key={`${result.city}-${result.state}-${result.countryCode}-${index}`}
+                      style={[
+                        styles.cityResultItem,
+                        index < cityResults.length - 1 && styles.cityResultBorder,
+                      ]}
+                      onPress={() => handleSelectCity(result)}
+                    >
+                      <MaterialCommunityIcons name="map-marker-outline" size={18} color="#A08AB7" />
+                      <Text style={styles.cityResultText} numberOfLines={1}>
+                        {result.displayName}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              {cityQuery.length >= 2 && cityResults.length === 0 && !savingCity && (
+                <Text style={styles.noResultsText}>No cities found</Text>
+              )}
+            </View>
+          )}
         </MotiView>
       </View>
 
@@ -698,6 +842,72 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  locationButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  searchCityButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3E8FF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  searchCityButtonActive: {
+    backgroundColor: '#A08AB7',
+  },
+  searchCityButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#A08AB7',
+  },
+  citySearchContainer: {
+    marginTop: 12,
+  },
+  citySearchInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#111827',
+  },
+  cityResultsList: {
+    marginTop: 8,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  cityResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 10,
+  },
+  cityResultBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  cityResultText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#374151',
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 12,
   },
   warningCard: {
     flexDirection: 'row',

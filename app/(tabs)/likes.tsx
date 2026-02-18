@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, RefreshControl, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -67,6 +67,15 @@ export default function Likes() {
       loadLikes();
     }
   }, [currentProfileId]);
+
+  // Refresh likes when screen regains focus (e.g. after liking from profile view)
+  useFocusEffect(
+    useCallback(() => {
+      if (currentProfileId) {
+        loadLikes();
+      }
+    }, [currentProfileId])
+  );
 
   const loadCurrentProfile = async () => {
     if (!user) return;

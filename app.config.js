@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "Accord - Lavender Marriage",
     slug: "accord",
-    version: "2.0.0",
+    version: "2.0.2",
     orientation: "default",
     icon: "./assets/icon.png",
     userInterfaceStyle: "automatic",
@@ -17,7 +17,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.privyreviews.accord",
-      buildNumber: "64",
+      buildNumber: "66",
       icon: "./assets/icon.png",
       infoPlist: {
         NSPhotoLibraryUsageDescription: "Accord needs access to your photos to upload profile pictures.",
@@ -68,8 +68,8 @@ module.exports = {
         backgroundColor: "#9B87CE"
       },
       package: "com.privyreviews.accord",
-      googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./android/app/google-services.json",
-      versionCode: 56,
+      googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
+      versionCode: 58,
       softwareKeyboardLayoutMode: "resize",
       permissions: [
         "android.permission.CAMERA",
@@ -91,7 +91,7 @@ module.exports = {
         {
           android: {
             parentTheme: "Default",
-            enforceNavigationBarContrast: true
+            enforceNavigationBarContrast: false
           }
         }
       ],
@@ -141,8 +141,10 @@ module.exports = {
         }
       ],
       "expo-font",
+      "expo-localization",
       "expo-web-browser",
-      "./plugins/withAndroidManifestFix.js"
+      "./plugins/withAndroidManifestFix.js",
+      "./plugins/withDarkNavigationBar.js"
     ],
     extra: {
       router: {
@@ -161,7 +163,7 @@ module.exports = {
       postHogHost: "https://us.i.posthog.com"
     },
     owner: "vfranz",
-    runtimeVersion: "2.0.0",
+    runtimeVersion: "2.0.2",
     updates: {
       url: "https://u.expo.dev/71ca414e-ff65-488b-97f6-9150455475a0"
     }

@@ -896,14 +896,16 @@ function calculateDemographicsScore(
   const gender2Array = toArray(profile2.gender);
 
   // Check if profile1's gender(s) match profile2's preferences
+  const genderPref2 = toArray(prefs2.gender_preference);
   const profile1MatchesPrefs =
-    prefs2.gender_preference.length === 0 ||
-    gender1Array.some(g => prefs2.gender_preference.includes(g));
+    genderPref2.length === 0 ||
+    gender1Array.some(g => genderPref2.includes(g));
 
   // Check if profile2's gender(s) match profile1's preferences
+  const genderPref1 = toArray(prefs1.gender_preference);
   const profile2MatchesPrefs =
-    prefs1.gender_preference.length === 0 ||
-    gender2Array.some(g => prefs1.gender_preference.includes(g));
+    genderPref1.length === 0 ||
+    gender2Array.some(g => genderPref1.includes(g));
 
   if (profile1MatchesPrefs && profile2MatchesPrefs) {
     score += 50;

@@ -55,7 +55,8 @@ export default function ProfilePreview() {
           photos (
             url,
             is_primary,
-            display_order
+            display_order,
+            blur_data_uri
           ),
           preferences:preferences(*)
         `)

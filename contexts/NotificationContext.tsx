@@ -91,88 +91,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   // Fetch unread like count (excluding matched, passed, blocked, and banned profiles)
+  // Uses server-side RPC — secure (free users get count without seeing WHO liked them)
+  // Also much faster than the previous 6-query client-side approach
   const refreshUnreadLikeCount = async () => {
     if (!profileId) return;
 
     try {
-      // Get all likes
-      const { data: likesData, error } = await supabase
-        .from('likes')
-        .select('liker_profile_id')
-        .eq('liked_profile_id', profileId);
+      const { data: count, error } = await supabase.rpc('count_unmatched_received_likes');
 
       if (error) {
-        console.error('Error fetching likes:', error);
+        console.error('Error fetching unread like count:', error);
         return;
       }
 
-      if (!likesData || likesData.length === 0) {
-        setUnreadLikeCount(0);
-        return;
-      }
-
-      // Run all exclusion queries IN PARALLEL for better performance
-      const [
-        { data: matches },
-        { data: passes },
-        { data: blockedByMe },
-        { data: blockedMe },
-        { data: bannedUsers }
-      ] = await Promise.all([
-        // Get matched profile IDs
-        supabase
-          .from('matches')
-          .select('profile1_id, profile2_id')
-          .or(`profile1_id.eq.${profileId},profile2_id.eq.${profileId}`),
-        // Get passed profile IDs
-        supabase
-          .from('passes')
-          .select('passed_profile_id')
-          .eq('passer_profile_id', profileId),
-        // Get blocked profile IDs (bidirectional) - blocked by me
-        supabase
-          .from('blocks')
-          .select('blocked_profile_id')
-          .eq('blocker_profile_id', profileId),
-        // Get blocked profile IDs (bidirectional) - blocked me
-        supabase
-          .from('blocks')
-          .select('blocker_profile_id')
-          .eq('blocked_profile_id', profileId),
-        // Get banned profile IDs
-        supabase
-          .from('bans')
-          .select('banned_profile_id')
-          .not('banned_profile_id', 'is', null)
-          .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
-      ]);
-
-      const matchedProfileIds = new Set(
-        matches?.flatMap(m => [m.profile1_id, m.profile2_id]) || []
-      );
-
-      const passedProfileIds = new Set(
-        passes?.map(p => p.passed_profile_id) || []
-      );
-
-      const blockedProfileIds = new Set([
-        ...(blockedByMe?.map(b => b.blocked_profile_id) || []),
-        ...(blockedMe?.map(b => b.blocker_profile_id) || [])
-      ]);
-
-      const bannedProfileIds = new Set(
-        bannedUsers?.map(b => b.banned_profile_id).filter(Boolean) || []
-      );
-
-      // Filter and count
-      const filteredLikes = likesData.filter(like =>
-        !matchedProfileIds.has(like.liker_profile_id) &&
-        !passedProfileIds.has(like.liker_profile_id) &&
-        !blockedProfileIds.has(like.liker_profile_id) &&
-        !bannedProfileIds.has(like.liker_profile_id)
-      );
-
-      setUnreadLikeCount(filteredLikes.length);
+      setUnreadLikeCount(count || 0);
     } catch (error) {
       console.error('Error fetching unread like count:', error);
     }
@@ -216,7 +148,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 // Skip toast if user is already viewing this chat
                 const currentPath = pathnameRef.current;
                 if (currentPath === `/chat/${newMessage.match_id}`) {
-                  console.log('Skipping toast - user is already in this chat');
                   return;
                 }
 
@@ -446,7 +377,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       try {
         const { status } = await Notifications.getPermissionsAsync();
         setPermissionStatus(status);
-        console.log('[Push] Current permission status:', status);
       } catch (e) {
         console.warn('[Push] Could not check permission status:', e);
       }
@@ -469,7 +399,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       } else if (!token) {
         // Token not obtained - either permissions denied or device not supported
         // Start periodic permission check for users who may enable later in settings
-        console.log('[Push] No token obtained, will check for permission changes');
         startPermissionMonitoring();
       }
     } catch (error) {
@@ -484,8 +413,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (pushToken || permissionCheckInterval.current) {
       return;
     }
-
-    console.log('[Push] Starting permission monitoring...');
 
     // Check every 30 seconds while app is in foreground
     permissionCheckInterval.current = setInterval(async () => {
@@ -512,7 +439,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
         // If permission was denied before but now granted, register!
         if (status === 'granted' && permissionStatus !== 'granted') {
-          console.log('[Push] Permission now granted! Registering token...');
           setPermissionStatus('granted');
 
           const token = await registerForPushNotifications();
@@ -522,7 +448,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             await savePushToken(user.id, token);
             setupListeners();
             stopPermissionMonitoring();
-            console.log('[Push] ✅ Token registered after permission change!');
           }
         } else if (status !== permissionStatus) {
           setPermissionStatus(status);
@@ -537,18 +462,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (permissionCheckInterval.current) {
       clearInterval(permissionCheckInterval.current);
       permissionCheckInterval.current = null;
-      console.log('[Push] Stopped permission monitoring');
     }
   }, []);
 
   // Manual retry function - can be called from settings or profile screen
   const retryPushTokenRegistration = useCallback(async () => {
     if (!user?.id) {
-      console.log('[Push] Cannot retry - no user logged in');
       return;
     }
-
-    console.log('[Push] Manual retry of push token registration...');
 
     try {
       // First check if permissions are now granted
@@ -558,7 +479,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         // Request permissions again
         const { status: newStatus } = await Notifications.requestPermissionsAsync();
         if (newStatus !== 'granted') {
-          console.log('[Push] Permission still denied after request');
           setPermissionStatus(newStatus);
           return;
         }
@@ -580,9 +500,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
         setupListeners();
         stopPermissionMonitoring();
-        console.log('[Push] ✅ Token registered on manual retry!');
-      } else {
-        console.log('[Push] Failed to get token on manual retry');
       }
     } catch (error) {
       console.error('[Push] Error on manual retry:', error);
@@ -601,13 +518,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     try {
       const success = await ensurePushTokenSaved(user.id, pushToken);
       if (success) {
-        console.log('✅ Push token saved successfully on retry', retryCount.current);
         retryCount.current = 0; // Reset on success
       } else {
         // Token not saved yet, schedule another retry
         retryCount.current++;
         const delay = Math.min(1000 * Math.pow(2, retryCount.current), 60000); // Exponential backoff, max 60s
-        console.log(`⏰ Retry ${retryCount.current}/${maxRetries} in ${delay}ms`);
         setTimeout(retrySavePushToken, delay);
       }
     } catch (error) {
@@ -627,12 +542,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        console.log('📱 App foregrounded - checking push token');
-
         // Clear badge count when app is opened
         try {
           await Notifications.setBadgeCountAsync(0);
-          console.log('🔔 Badge count cleared');
         } catch (error) {
           console.warn('Failed to clear badge:', error);
         }
@@ -650,7 +562,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
             // If we don't have a token but permissions are now granted, register!
             if (!pushToken && currentStatus === 'granted') {
-              console.log('📱 No push token but permissions granted, registering...');
               const newToken = await registerForPushNotifications();
               if (newToken) {
                 setPushToken(newToken);
@@ -659,7 +570,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 await savePushToken(user.id, newToken);
                 setupListeners();
                 stopPermissionMonitoring();
-                console.log('✅ Push token obtained on foreground after permission change!');
               }
             } else if (!pushToken && currentStatus !== 'granted') {
               // Still no permissions - update status and keep monitoring
@@ -668,10 +578,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             } else if (pushToken) {
               // We have a token - verify it's saved
               retryCount.current = 0;
-              const saved = await ensurePushTokenSaved(user.id, pushToken);
-              if (saved) {
-                console.log('✅ Push token verified/saved on foreground');
-              }
+              await ensurePushTokenSaved(user.id, pushToken);
             }
           } catch (error) {
             console.warn('Error checking push token on foreground:', error);
@@ -700,15 +607,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     // FCM can rotate tokens silently - when this happens, we MUST update the database
     // Without this, users get DeviceNotRegistered errors and miss all notifications
     pushTokenListener.current = addPushTokenChangeListener(async (newToken: string) => {
-      console.log('[Push] 🔄 Token changed at runtime! Updating database...');
-      console.log('[Push] New token:', newToken.substring(0, 30) + '...');
-
       if (user?.id && newToken) {
         try {
           // Update both in-memory state and database
           setPushToken(newToken);
           await savePushToken(user.id, newToken);
-          console.log('[Push] ✅ Token updated successfully after runtime change');
         } catch (error) {
           console.error('[Push] ❌ Failed to update token after runtime change:', error);
           // Schedule retry
@@ -721,8 +624,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     // Handle notifications received while app is in foreground
     notificationListener.current = Notifications.addNotificationReceivedListener(
       (notification) => {
-        console.log('Notification received in foreground:', notification);
-
         const data = notification.request.content.data;
         const title = notification.request.content.title || '';
         const body = notification.request.content.body || '';
@@ -777,8 +678,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     // to check for pending notifications after mounting
     pendingNavigation.current = data;
 
-    console.log('Notification tapped:', data.type);
-
     // Handle navigation based on notification type
     try {
       switch (data.type) {
@@ -820,7 +719,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
               if (existingMatch) {
                 // The like has become a match! Redirect to matches instead
-                console.log('Like is now a match, redirecting to matches tab');
                 router.push('/(tabs)/matches');
                 return;
               }

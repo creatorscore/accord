@@ -323,12 +323,7 @@ export function measureScreenRender(screenName: string) {
  * (Can be extended to send to PostHog, Sentry, etc.)
  */
 export function reportPerformanceMetrics(): void {
-  const summary = performanceMonitor.getSummary();
-  const stats = performanceMonitor.getStats();
   const slowOps = performanceMonitor.getSlowOperations(1000);
-
-  console.log('📊 Performance Summary:', summary);
-  console.log('📈 Operation Stats:', stats);
 
   if (slowOps.length > 0) {
     console.warn('🐌 Slow Operations:', slowOps);
@@ -429,11 +424,6 @@ export const startupPerformance = {
  */
 export function logPerformance(operation: string, startTime: number): void {
   const duration = Date.now() - startTime;
-
-  if (__DEV__) {
-    const emoji = duration < 100 ? '⚡' : duration < 500 ? '✅' : duration < 1000 ? '⚠️' : '🐌';
-    console.log(`${emoji} ${operation}: ${duration}ms`);
-  }
 
   performanceMonitor.recordMetric({
     type: 'api_call',
