@@ -97,7 +97,6 @@ export default function PhotoVerificationCard() {
     try {
       // Resize and compress image to reduce payload size
       // AWS Rekognition works well with 800x800 images
-      console.log('📷 Resizing image for verification...');
       const manipulated = await ImageManipulator.manipulateAsync(
         imageUri,
         [{ resize: { width: 800, height: 800 } }],
@@ -110,14 +109,9 @@ export default function PhotoVerificationCard() {
       });
 
       // Call Edge Function
-      console.log('📤 Calling photo-verification-start edge function...');
-      console.log('📷 Base64 length:', base64.length, '(~' + Math.round(base64.length / 1024) + ' KB)');
-
       const { data, error } = await supabase.functions.invoke('photo-verification-start', {
         body: { selfie_base64: base64 },
       });
-
-      console.log('📥 Edge function response:', { data, error });
 
       if (error) {
         // Attach any additional data from the response to the error

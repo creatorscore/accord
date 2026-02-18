@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -23,12 +23,11 @@ export default function TabsLayout() {
       }}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#A08AB7', // lavender-500
-        tabBarInactiveTintColor: isDark ? '#71717A' : '#A1A1AA', // muted-foreground
+        tabBarActiveTintColor: '#FFFFFF',
+        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.5)',
         tabBarStyle: {
-          backgroundColor: isDark ? '#18181B' : '#FFFFFF', // card
-          borderTopWidth: 1,
-          borderTopColor: isDark ? '#27272A' : '#E4E4E7', // border
+          backgroundColor: '#0A0A0B',
+          borderTopWidth: 0,
           paddingBottom: paddingBottom,
           paddingTop: 5,
           height: tabBarHeight,
@@ -45,7 +44,7 @@ export default function TabsLayout() {
         options={{
           title: 'Discover',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'search' : 'search-outline'} size={24} color={color} />
+            <Ionicons name="search" size={22} color={color} />
           ),
         }}
       />
@@ -55,7 +54,7 @@ export default function TabsLayout() {
           title: 'Likes',
           tabBarIcon: ({ color, focused }) => (
             <View>
-              <Ionicons name={focused ? 'star' : 'star-outline'} size={24} color={color} />
+              <FontAwesome5 name="star" size={22} color={color} />
               {unreadLikeCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
@@ -72,7 +71,7 @@ export default function TabsLayout() {
         options={{
           title: 'Matches',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'heart' : 'heart-outline'} size={24} color={color} />
+            <FontAwesome5 name="heart" size={22} color={color} />
           ),
         }}
       />
@@ -82,7 +81,7 @@ export default function TabsLayout() {
           title: 'Messages',
           tabBarIcon: ({ color, focused }) => (
             <View>
-              <Ionicons name={focused ? 'chatbubble' : 'chatbubble-outline'} size={22} color={color} />
+              <FontAwesome5 name="comment-alt" size={22} color={color} />
               {unreadMessageCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
@@ -99,7 +98,7 @@ export default function TabsLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
+            <FontAwesome5 name="user" size={22} color={color} />
           ),
         }}
       />

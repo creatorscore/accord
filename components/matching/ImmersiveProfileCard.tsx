@@ -10,6 +10,7 @@ import {
   Alert,
   Modal,
   Pressable,
+  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +26,7 @@ import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
 import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import { useSafeBlur } from '@/hooks/useSafeBlur';
+import { getTransformUrl } from '@/hooks/usePhotoBlur';
 
 const { width, height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.6;
@@ -46,7 +48,7 @@ interface Profile {
   bio?: string;
   occupation?: string;
   education?: string;
-  photos?: { url: string; is_primary: boolean }[];
+  photos?: { url: string; is_primary: boolean; blur_data_uri?: string | null }[];
   compatibility_score?: number;
   is_verified?: boolean;
   photo_verified?: boolean;
@@ -124,6 +126,7 @@ interface ImmersiveProfileCardProps {
   onBlock?: () => void; // Block user
   onReport?: () => void; // Report user
   currentProfileId?: string; // ID of the user viewing this profile (for screenshot tracking)
+  isAdmin?: boolean; // Admin bypasses photo blur
 }
 
 // Helper function to format array or string values for display
@@ -174,20 +177,16 @@ const PREFERENCE_LABELS: { [key: string]: string } = {
 };
 
 // Helper to convert database values to display labels
-const formatLabel = (value: string) => {
-  if (!value) return '';
-  if (typeof value !== 'string') return String(value);
-
-  // First try to get from mapping
-  if (PREFERENCE_LABELS[value]) {
-    return PREFERENCE_LABELS[value];
+const formatLabel = (value: any): string => {
+  try {
+    if (!value) return '';
+    if (Array.isArray(value)) return value.filter(Boolean).map(formatLabel).join(', ');
+    if (typeof value !== 'string') return String(value);
+    if (PREFERENCE_LABELS[value]) return PREFERENCE_LABELS[value];
+    return value.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  } catch {
+    return typeof value === 'string' ? value : '';
   }
-
-  // Fallback to Title Case conversion for unmapped values
-  return value
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
 };
 
 // Helper to format array fields and apply formatLabel to each item
@@ -261,14 +260,41 @@ export default function ImmersiveProfileCard({
   onBlock,
   onReport,
   currentProfileId,
+  isAdmin = false,
 }: ImmersiveProfileCardProps) {
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
 
-  // Safe blur hook - protects user privacy while preventing crashes
+  const shouldBlur = (profile.photo_blur_enabled || false) && !isAdmin;
+
+  // Legacy fallback blur (only used when transform URL can't be built)
   const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
-    shouldBlur: profile.photo_blur_enabled || false,
+    shouldBlur,
     blurIntensity: 20,
   });
+
+  // Two-layer blur: downsized transform URL + light native blurRadius
+  // Uses 800px width for large profile photos to avoid zoomed-in look
+  // Falls back to useSafeBlur overlay if URL doesn't match Supabase storage pattern
+  const BLUR_WIDTH = 800;
+
+  const getPhotoUri = (photo: { url: string; blur_data_uri?: string | null }) => {
+    if (!shouldBlur) return photo.url;
+    const transformUrl = photo.blur_data_uri || getTransformUrl(photo.url, BLUR_WIDTH);
+    return transformUrl || photo.url;
+  };
+
+  const getBlurRadius = (photo: { url: string; blur_data_uri?: string | null }) => {
+    if (!shouldBlur) return 0;
+    const hasTransform = !!(photo.blur_data_uri || getTransformUrl(photo.url, BLUR_WIDTH));
+    if (hasTransform) return Platform.OS === 'ios' ? 35 : 18;
+    return blurRadius;
+  };
+
+  const getShowOverlay = (photo: { url: string; blur_data_uri?: string | null }) => {
+    if (!shouldBlur) return false;
+    const hasTransform = !!(photo.blur_data_uri || getTransformUrl(photo.url, BLUR_WIDTH));
+    return hasTransform ? false : showBlurOverlay;
+  };
 
   const [isVoicePlaying, setIsVoicePlaying] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
@@ -281,7 +307,7 @@ export default function ImmersiveProfileCard({
   const [playbackDuration, setPlaybackDuration] = useState(profile.voice_intro_duration ? profile.voice_intro_duration * 1000 : 0);
 
   const photos = profile.photos || [];
-  const heroPhoto = photos[0]?.url || 'https://via.placeholder.com/400x600';
+  const heroPhoto = photos[0] ? getPhotoUri(photos[0]) : 'https://via.placeholder.com/400x600';
 
   // Pre-computed waveform bars - use simple static pattern to avoid main thread blocking
   // This prevents ANR on Android by avoiding trigonometric calculations during render
@@ -390,7 +416,7 @@ export default function ImmersiveProfileCard({
               source={{ uri: heroPhoto }}
               style={styles.headerAvatar}
               cachePolicy="memory-disk"
-              blurRadius={blurRadius}
+              blurRadius={photos[0] ? getBlurRadius(photos[0]) : blurRadius}
               onLoad={onImageLoad}
               onError={onImageError}
             />
@@ -427,7 +453,7 @@ export default function ImmersiveProfileCard({
         contentContainerStyle={styles.scrollContent}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
+          { useNativeDriver: true }
         )}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
@@ -440,14 +466,14 @@ export default function ImmersiveProfileCard({
             contentFit="cover"
             cachePolicy="memory-disk"
             transition={200}
-            blurRadius={blurRadius}
+            blurRadius={photos[0] ? getBlurRadius(photos[0]) : blurRadius}
             onLoad={onImageLoad}
             onError={onImageError}
           />
           {/* Android blur fallback - CSS overlay instead of RenderScript */}
-          {showBlurOverlay && (
+          {(photos[0] ? getShowOverlay(photos[0]) : showBlurOverlay) && (
             <View
-              style={[styles.heroImage, { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)' }]}
+              style={[styles.heroImage, { position: 'absolute', backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
               pointerEvents="none"
             />
           )}
@@ -466,10 +492,7 @@ export default function ImmersiveProfileCard({
           <View style={styles.heroInfo}>
             <View style={styles.heroNameRow}>
               <Text style={styles.heroName}>{profile.display_name}, {profile.age}</Text>
-              {profile.is_verified && (
-                <MaterialCommunityIcons name="check-decagram" size={28} color="#3B82F6" />
-              )}
-              {profile.photo_verified && (
+              {(profile.photo_verified || profile.is_verified) && (
                 <MaterialCommunityIcons name="check-decagram" size={28} color="#A08AB7" />
               )}
             </View>
@@ -607,18 +630,18 @@ export default function ImmersiveProfileCard({
           {photos[1] && (
             <View style={{ position: 'relative' }}>
               <Image
-                source={{ uri: photos[1].url }}
+                source={{ uri: getPhotoUri(photos[1]) }}
                 style={styles.storyPhoto}
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 transition={200}
-                blurRadius={blurRadius}
+                blurRadius={getBlurRadius(photos[1])}
                 onLoad={onImageLoad}
                 onError={onImageError}
               />
-              {showBlurOverlay && (
+              {getShowOverlay(photos[1]) && (
                 <View
-                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
                   pointerEvents="none"
                 />
               )}
@@ -690,18 +713,18 @@ export default function ImmersiveProfileCard({
               {photos[2] && (
                 <View style={{ position: 'relative' }}>
                   <Image
-                    source={{ uri: photos[2].url }}
+                    source={{ uri: getPhotoUri(photos[2]) }}
                     style={styles.promptPhoto}
                     contentFit="cover"
                     cachePolicy="memory-disk"
                     transition={200}
-                    blurRadius={blurRadius}
+                    blurRadius={getBlurRadius(photos[2])}
                     onLoad={onImageLoad}
                     onError={onImageError}
                   />
-                  {showBlurOverlay && (
+                  {getShowOverlay(photos[2]) && (
                     <View
-                      style={[styles.promptPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                      style={[styles.promptPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
                       pointerEvents="none"
                     />
                   )}
@@ -781,18 +804,18 @@ export default function ImmersiveProfileCard({
           {photos[3] && (
             <View style={{ position: 'relative' }}>
               <Image
-                source={{ uri: photos[3].url }}
+                source={{ uri: getPhotoUri(photos[3]) }}
                 style={styles.storyPhoto}
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 transition={200}
-                blurRadius={blurRadius}
+                blurRadius={getBlurRadius(photos[3])}
                 onLoad={onImageLoad}
                 onError={onImageError}
               />
-              {showBlurOverlay && (
+              {getShowOverlay(photos[3]) && (
                 <View
-                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
                   pointerEvents="none"
                 />
               )}
@@ -950,18 +973,18 @@ export default function ImmersiveProfileCard({
               {photos[4 + index] && (
                 <View style={{ position: 'relative' }}>
                   <Image
-                    source={{ uri: photos[4 + index].url }}
+                    source={{ uri: getPhotoUri(photos[4 + index]) }}
                     style={styles.promptPhoto}
                     contentFit="cover"
                     cachePolicy="memory-disk"
                     transition={200}
-                    blurRadius={blurRadius}
+                    blurRadius={getBlurRadius(photos[4 + index])}
                     onLoad={onImageLoad}
                     onError={onImageError}
                   />
-                  {showBlurOverlay && (
+                  {getShowOverlay(photos[4 + index]) && (
                     <View
-                      style={[styles.promptPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                      style={[styles.promptPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
                       pointerEvents="none"
                     />
                   )}
@@ -1007,18 +1030,18 @@ export default function ImmersiveProfileCard({
           {photos.slice(5).map((photo, index) => (
             <View key={index} style={{ position: 'relative' }}>
               <Image
-                source={{ uri: photo.url }}
+                source={{ uri: getPhotoUri(photo) }}
                 style={styles.storyPhoto}
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 transition={200}
-                blurRadius={blurRadius}
+                blurRadius={getBlurRadius(photo)}
                 onLoad={onImageLoad}
                 onError={onImageError}
               />
-              {showBlurOverlay && (
+              {getShowOverlay(photo) && (
                 <View
-                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
                   pointerEvents="none"
                 />
               )}
@@ -1063,15 +1086,10 @@ export default function ImmersiveProfileCard({
           <BlurView intensity={95} tint="light" style={styles.actionBlur}>
             <View style={styles.matchedActionContainer}>
               <TouchableOpacity onPress={onSendMessage} style={styles.messageButton}>
-                <LinearGradient
-                  colors={['#A08AB7', '#CDC2E5']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.messageButtonGradient}
-                >
+                <View style={styles.messageButtonInner}>
                   <Ionicons name="chatbubble" size={22} color="white" />
                   <Text style={styles.messageButtonText}>Send Message</Text>
-                </LinearGradient>
+                </View>
               </TouchableOpacity>
             </View>
           </BlurView>
@@ -1620,25 +1638,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   matchedActionContainer: {
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
     paddingHorizontal: 24,
   },
   messageButton: {
     borderRadius: 28,
     overflow: 'hidden',
-    shadowColor: '#A08AB7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
   },
-  messageButtonGradient: {
+  messageButtonInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
     paddingVertical: 18,
     paddingHorizontal: 32,
+    backgroundColor: '#1A1A1E',
   },
   messageButtonText: {
     fontSize: 18,

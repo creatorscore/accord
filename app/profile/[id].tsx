@@ -12,6 +12,7 @@ import { getCompatibilityBreakdown } from '@/lib/matching-algorithm';
 import { calculateDistance } from '@/lib/geolocation';
 import { formatHeight, HeightUnit } from '@/lib/height-utils';
 import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
+import MatchModal from '@/components/matching/MatchModal';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import { ProfileSkeleton } from '@/components/shared/SkeletonScreens';
@@ -201,6 +202,9 @@ export default function ProfileView() {
   const [hasRevealedPhotos, setHasRevealedPhotos] = useState(false); // Current user revealed to profile
   const [otherUserRevealed, setOtherUserRevealed] = useState(false); // Profile revealed to current user
   const [revealLoading, setRevealLoading] = useState(false);
+  const [currentUserPhoto, setCurrentUserPhoto] = useState<string | null>(null);
+  const [showMatchModal, setShowMatchModal] = useState(false);
+  const [matchModalMatchId, setMatchModalMatchId] = useState<string | null>(null);
 
   // Enable screenshot protection for this profile view
   useScreenCaptureProtection(true);
@@ -234,7 +238,13 @@ export default function ProfileView() {
       // Load current user's full profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          *,
+          photos (
+            url,
+            is_primary
+          )
+        `)
         .eq('user_id', user?.id)
         .single();
 
@@ -243,6 +253,9 @@ export default function ProfileView() {
       setCurrentProfileId(profileData.id);
       setCurrentProfile(profileData);
       setIsAdmin(profileData.is_admin === true); // Set admin status
+      // Get primary photo for match modal
+      const primaryPhoto = profileData.photos?.find((p: any) => p.is_primary)?.url || profileData.photos?.[0]?.url;
+      setCurrentUserPhoto(primaryPhoto || null);
 
       // Load current user's preferences for compatibility calculation
       const { data: prefsData, error: prefsError } = await supabase
@@ -624,12 +637,8 @@ export default function ProfileView() {
 
           if (updateError) throw updateError;
 
-          setTimeout(() => {
-            Alert.alert('🎉 It\'s a Match!', `You matched with ${profile?.display_name}!`, [
-              { text: 'Send Message', onPress: () => router.push(`/chat/${reactivatedMatch.id}`) },
-              { text: 'Keep Swiping', onPress: () => router.back() }
-            ]);
-          }, 500);
+          setMatchModalMatchId(reactivatedMatch.id);
+          setTimeout(() => setShowMatchModal(true), 500);
         } else {
           // Create new match
           const { data: newMatch, error: matchError } = await supabase.from('matches').insert({
@@ -643,12 +652,8 @@ export default function ProfileView() {
 
           if (matchError) throw matchError;
 
-          setTimeout(() => {
-            Alert.alert('🎉 It\'s a Match!', `You matched with ${profile?.display_name}!`, [
-              { text: 'Send Message', onPress: () => router.push(`/chat/${newMatch.id}`) },
-              { text: 'Keep Swiping', onPress: () => router.back() }
-            ]);
-          }, 500);
+          setMatchModalMatchId(newMatch.id);
+          setTimeout(() => setShowMatchModal(true), 500);
         }
       } else {
         // No mutual like yet
@@ -715,12 +720,8 @@ export default function ProfileView() {
 
         if (matchError) throw matchError;
 
-        setTimeout(() => {
-          Alert.alert('🎉 It\'s a Match!', `You matched with ${profile?.display_name}!`, [
-            { text: 'Send Message', onPress: () => router.push(`/chat/${newMatch.id}`) },
-            { text: 'Keep Swiping', onPress: () => router.back() }
-          ]);
-        }, 500);
+        setMatchModalMatchId(newMatch.id);
+        setTimeout(() => setShowMatchModal(true), 500);
       } else {
         setTimeout(() => {
           Alert.alert('💜 Obsessed!', `${profile?.display_name} will be notified that you're interested!`, [
@@ -998,6 +999,18 @@ export default function ProfileView() {
     );
   };
 
+  const handleMatchModalSendMessage = () => {
+    setShowMatchModal(false);
+    if (matchModalMatchId) {
+      router.push(`/chat/${matchModalMatchId}`);
+    }
+  };
+
+  const handleMatchModalClose = () => {
+    setShowMatchModal(false);
+    router.back();
+  };
+
   // Transform profile for DiscoveryProfileView
   const transformedProfile = {
     ...profile,
@@ -1187,6 +1200,21 @@ export default function ProfileView() {
             )}
           </View>
         </LinearGradient>
+      )}
+
+      {/* Match Modal */}
+      {profile && (
+        <MatchModal
+          visible={showMatchModal}
+          onClose={handleMatchModalClose}
+          onSendMessage={handleMatchModalSendMessage}
+          matchedProfile={{
+            display_name: profile.display_name,
+            photo_url: profile.photos?.find(p => p.is_primary)?.url || profile.photos?.[0]?.url,
+            compatibility_score: profile.compatibility_score,
+          }}
+          currentUserPhoto={currentUserPhoto || undefined}
+        />
       )}
     </View>
   );

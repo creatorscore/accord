@@ -185,24 +185,27 @@ export async function updateUserLocation(): Promise<{
 } | null> {
   try {
     const Location = await import('expo-location');
+    const { Platform } = await import('react-native');
 
     // Request permission
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      console.log('Location permission denied');
       return null;
     }
 
-    // Get current position with HIGHEST accuracy for dating app precision
-    // This is critical - we need accurate GPS coordinates for distance calculations
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Highest, // GPS-level accuracy
-      timeInterval: 5000,
-      distanceInterval: 0,
-    });
+    // Try getLastKnownPositionAsync first (instant, no GPS needed)
+    // This prevents the hang/crash on Android with getCurrentPositionAsync
+    let location = await Location.getLastKnownPositionAsync();
 
-    console.log('📍 Location accuracy:', location.coords.accuracy, 'meters');
-    console.log('📍 Coordinates:', location.coords.latitude, location.coords.longitude);
+    if (!location) {
+      // Fall back to getCurrentPositionAsync
+      // Use Balanced accuracy on Android (Highest can hang/crash on Samsung)
+      const accuracy = Platform.OS === 'android'
+        ? Location.Accuracy.Balanced
+        : Location.Accuracy.Highest;
+
+      location = await Location.getCurrentPositionAsync({ accuracy });
+    }
 
     // CRITICAL: Reject poor accuracy (iOS approximate location issue)
     // If accuracy > 100 meters, user likely has "Approximate Location" enabled

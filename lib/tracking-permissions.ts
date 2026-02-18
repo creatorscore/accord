@@ -33,8 +33,6 @@ export async function requestTrackingPermission(): Promise<TrackingStatus> {
     // Store the result
     await AsyncStorage.setItem(TRACKING_PERMISSION_KEY, status);
 
-    console.log(`📊 Tracking permission: ${status}`);
-
     return status;
   } catch (error) {
     console.error('Error requesting tracking permission:', error);
@@ -91,11 +89,9 @@ export async function initializeTracking(): Promise<void> {
     const shouldRequest = await shouldRequestTracking();
 
     if (shouldRequest) {
-      console.log('📊 Requesting tracking permission...');
       await requestTrackingPermission();
     } else {
-      const status = await getTrackingStatus();
-      console.log(`📊 Tracking status: ${status}`);
+      await getTrackingStatus();
     }
   } catch (error) {
     console.error('Error initializing tracking:', error);

@@ -1,14 +1,22 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, RefreshControl, TextInput, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, RefreshControl, TextInput, Modal, Image, Dimensions } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
+interface FlaggedPhoto {
+  url: string;
+  reason: string;
+  confidence: number;
+  labels: string[];
+}
+
 interface Appeal {
   id: string;
   banned_email: string | null;
+  banned_profile_id: string | null;
   ban_reason: string;
   is_permanent: boolean | null;
   expires_at: string | null;
@@ -30,6 +38,7 @@ interface Appeal {
   responder: {
     display_name: string;
   } | null;
+  flagged_photos: FlaggedPhoto[];
 }
 
 export default function AdminAppeals() {
@@ -87,6 +96,7 @@ export default function AdminAppeals() {
         .select(`
           id,
           banned_email,
+          banned_profile_id,
           ban_reason,
           is_permanent,
           expires_at,
@@ -117,6 +127,7 @@ export default function AdminAppeals() {
       const transformedAppeals: Appeal[] = (data || []).map((appeal: any) => ({
         id: appeal.id,
         banned_email: appeal.banned_email,
+        banned_profile_id: appeal.banned_profile_id,
         ban_reason: appeal.ban_reason,
         is_permanent: appeal.is_permanent,
         expires_at: appeal.expires_at,
@@ -131,7 +142,51 @@ export default function AdminAppeals() {
         banned_profile: Array.isArray(appeal.banned_profile) ? appeal.banned_profile[0] || null : appeal.banned_profile,
         banner: Array.isArray(appeal.banner) ? appeal.banner[0] || null : appeal.banner,
         responder: Array.isArray(appeal.responder) ? appeal.responder[0] || null : appeal.responder,
+        flagged_photos: [],
       }));
+
+      // Fetch flagged photos from moderation_logs for NSFW auto-bans
+      const profileIds = transformedAppeals
+        .filter(a => a.ban_reason?.includes('NSFW') || a.ban_reason?.includes('Explicit'))
+        .map(a => a.banned_profile_id)
+        .filter(Boolean);
+
+      if (profileIds.length > 0) {
+        const { data: moderationLogs } = await supabase
+          .from('moderation_logs')
+          .select('profile_id, reason, details')
+          .in('profile_id', profileIds)
+          .eq('action', 'photo_rejected')
+          .order('created_at', { ascending: false });
+
+        if (moderationLogs) {
+          const photosByProfile = new Map<string, FlaggedPhoto[]>();
+          for (const log of moderationLogs) {
+            const photos = photosByProfile.get(log.profile_id) || [];
+            const details = log.details as any;
+            if (details?.photo_url) {
+              // Avoid duplicates by URL
+              if (!photos.some(p => p.url === details.photo_url)) {
+                photos.push({
+                  url: details.photo_url,
+                  reason: log.reason || 'Explicit content',
+                  confidence: details?.highest_confidence || 0,
+                  labels: (details?.labels || [])
+                    .filter((l: any) => (l.Confidence || 0) >= 70)
+                    .map((l: any) => `${l.Name} (${Math.round(l.Confidence)}%)`),
+                });
+              }
+              photosByProfile.set(log.profile_id, photos);
+            }
+          }
+
+          for (const appeal of transformedAppeals) {
+            if (appeal.banned_profile_id && photosByProfile.has(appeal.banned_profile_id)) {
+              appeal.flagged_photos = photosByProfile.get(appeal.banned_profile_id) || [];
+            }
+          }
+        }
+      }
 
       setAppeals(transformedAppeals);
     } catch (error: any) {
@@ -380,6 +435,37 @@ export default function AdminAppeals() {
                   </View>
                 </View>
 
+                {/* Flagged photos for NSFW auto-bans */}
+                {appeal.flagged_photos.length > 0 && (
+                  <View style={styles.flaggedPhotosContainer}>
+                    <Text style={styles.flaggedPhotosLabel}>
+                      Flagged Photo{appeal.flagged_photos.length > 1 ? 's' : ''} ({appeal.flagged_photos.length})
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flaggedPhotosScroll}>
+                      {appeal.flagged_photos.map((photo, index) => (
+                        <View key={index} style={styles.flaggedPhotoCard}>
+                          <Image
+                            source={{ uri: photo.url }}
+                            style={styles.flaggedPhotoImage}
+                            resizeMode="cover"
+                          />
+                          <View style={styles.flaggedPhotoInfo}>
+                            <Text style={styles.flaggedPhotoConfidence}>
+                              {Math.round(photo.confidence)}% confidence
+                            </Text>
+                            {photo.labels.slice(0, 3).map((label, i) => (
+                              <Text key={i} style={styles.flaggedPhotoLabel}>{label}</Text>
+                            ))}
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                    <Text style={styles.flaggedPhotosHint}>
+                      Review the photo to determine if this is a false positive
+                    </Text>
+                  </View>
+                )}
+
                 {/* User message from ban (if any) */}
                 {appeal.user_message && (
                   <View style={styles.messageContainer}>
@@ -461,6 +547,21 @@ export default function AdminAppeals() {
                   </Text>
                 </View>
 
+                {/* Show flagged photo in modal for review */}
+                {selectedAppeal.flagged_photos.length > 0 && (
+                  <View style={styles.modalPhotoContainer}>
+                    <Text style={styles.modalPhotoLabel}>Flagged Photo:</Text>
+                    <Image
+                      source={{ uri: selectedAppeal.flagged_photos[0].url }}
+                      style={styles.modalPhotoImage}
+                      resizeMode="contain"
+                    />
+                    <Text style={styles.modalPhotoDetails}>
+                      {selectedAppeal.flagged_photos[0].labels.join(', ')}
+                    </Text>
+                  </View>
+                )}
+
                 <View style={styles.appealQuoteContainer}>
                   <Text style={styles.appealQuoteLabel}>Their appeal:</Text>
                   <Text style={styles.appealQuoteText}>"{selectedAppeal.appeal_message}"</Text>
@@ -480,6 +581,16 @@ export default function AdminAppeals() {
                 <View style={styles.templatesContainer}>
                   <Text style={styles.templatesLabel}>Quick responses:</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <TouchableOpacity
+                      style={styles.templateChip}
+                      onPress={() =>
+                        setResponseMessage(
+                          'After reviewing your photo, we determined this was a false positive by our automated system. We apologize for the inconvenience and have restored your account.'
+                        )
+                      }
+                    >
+                      <Text style={styles.templateChipText}>Approve - False Positive</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.templateChip}
                       onPress={() =>
@@ -889,5 +1000,80 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  flaggedPhotosContainer: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  flaggedPhotosLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
+    marginBottom: 8,
+  },
+  flaggedPhotosScroll: {
+    marginBottom: 8,
+  },
+  flaggedPhotoCard: {
+    marginRight: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  flaggedPhotoImage: {
+    width: 140,
+    height: 180,
+  },
+  flaggedPhotoInfo: {
+    padding: 8,
+    width: 140,
+  },
+  flaggedPhotoConfidence: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+    marginBottom: 4,
+  },
+  flaggedPhotoLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    lineHeight: 16,
+  },
+  flaggedPhotosHint: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  modalPhotoContainer: {
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  modalPhotoLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
+    padding: 12,
+    paddingBottom: 8,
+  },
+  modalPhotoImage: {
+    width: '100%',
+    height: 250,
+    backgroundColor: '#F3F4F6',
+  },
+  modalPhotoDetails: {
+    fontSize: 12,
+    color: '#6B7280',
+    padding: 12,
+    paddingTop: 8,
   },
 });

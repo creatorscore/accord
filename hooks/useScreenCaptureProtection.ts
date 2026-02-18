@@ -39,13 +39,10 @@ export function useScreenCaptureProtection(
       try {
         // In development mode: disable protection for easier testing
         if (__DEV__) {
-          console.log('⚠️ Screenshot protection DISABLED in development mode');
-
           // Still enable detection listener for testing in dev
           if (onScreenshot) {
             try {
               const subscription = ScreenCapture.addScreenshotListener(async () => {
-                console.log('📸 Screenshot detected (dev mode)');
                 try {
                   await onScreenshot();
                 } catch (error) {
@@ -62,8 +59,6 @@ export function useScreenCaptureProtection(
 
         // STEP 1: Enable react-native-capture-protection v2.x
         // This is the PRIMARY protection mechanism
-        console.log('🛡️ Enabling screen capture protection...');
-
         await CaptureProtection.prevent({
           screenshot: true,
           record: true,
@@ -71,12 +66,10 @@ export function useScreenCaptureProtection(
         });
 
         protectionEnabledRef.current = true;
-        console.log('✅ react-native-capture-protection v2 ENABLED');
 
         // STEP 2: Enable expo-screen-capture as backup
         try {
           await ScreenCapture.preventScreenCaptureAsync();
-          console.log('✅ expo-screen-capture backup enabled');
         } catch (e) {
           console.warn('expo-screen-capture not available:', e);
         }
@@ -87,21 +80,18 @@ export function useScreenCaptureProtection(
             // Use the library's built-in listener for capture events
             // CaptureEventType values: NONE=0, RECORDING=1, END_RECORDING=2, CAPTURED=3, APP_SWITCHING=4
             const captureListener = CaptureProtection.addListener((event: CaptureEventType) => {
-              console.log('📸 Capture event detected:', event);
               // CAPTURED (3) = screenshot was taken
               if (event === CaptureEventType.CAPTURED) {
                 onScreenshot();
               }
             });
             listenerRef.current = captureListener;
-            console.log('✅ Capture event listener added');
           } catch (e) {
             console.warn('Could not add capture listener:', e);
 
             // Fallback to expo-screen-capture listener
             if (Platform.OS === 'ios') {
               const subscription = ScreenCapture.addScreenshotListener(async () => {
-                console.log('📸 Screenshot detected via expo-screen-capture');
                 try {
                   await onScreenshot();
                 } catch (error) {
@@ -112,10 +102,6 @@ export function useScreenCaptureProtection(
             }
           }
         }
-
-        // Verify protection status
-        const status = await CaptureProtection.protectionStatus();
-        console.log('🛡️ Protection status:', status);
 
       } catch (error) {
         console.error('❌ CRITICAL: Failed to enable screenshot protection:', error);
@@ -157,7 +143,6 @@ export function useScreenCaptureProtection(
           }
 
           protectionEnabledRef.current = false;
-          console.log('✅ Screenshot protection disabled');
         } catch (error) {
           console.error('Error disabling screenshot protection:', error);
         }

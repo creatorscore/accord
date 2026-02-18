@@ -1,11 +1,9 @@
 /**
  * BlurOverlay Component
  *
- * CSS-based blur overlay for Android devices where native blurRadius
- * causes RenderScript SIGSEGV crashes.
- *
- * Uses a frosted glass effect with backdrop blur (where supported)
- * and falls back to a semi-transparent overlay with noise texture.
+ * Provides a privacy blur overlay for photos.
+ * iOS: Uses native BlurView for real gaussian blur.
+ * Android: Uses a frosted glass effect since RenderScript causes SIGSEGV crashes.
  */
 
 import React from 'react';
@@ -17,22 +15,8 @@ interface BlurOverlayProps {
   tint?: 'light' | 'dark' | 'default';
 }
 
-/**
- * Overlay component that provides blur effect on Android
- * without using RenderScript (which causes crashes)
- *
- * @example
- * ```tsx
- * <View style={styles.imageContainer}>
- *   <Image source={{ uri: photoUrl }} style={styles.image} />
- *   {showBlurOverlay && <BlurOverlay intensity={50} />}
- * </View>
- * ```
- */
-export function BlurOverlay({ intensity = 50, tint = 'light' }: BlurOverlayProps) {
-  // On iOS, we can use BlurView safely (it doesn't use RenderScript)
-  // On Android, expo-blur's BlurView already falls back to a translucent view,
-  // so we enhance it with additional styling for a better frosted glass effect
+export function BlurOverlay({ intensity = 50, tint = 'dark' }: BlurOverlayProps) {
+  // On iOS, use native BlurView (no RenderScript issues)
   if (Platform.OS === 'ios') {
     return (
       <BlurView
@@ -43,43 +27,30 @@ export function BlurOverlay({ intensity = 50, tint = 'light' }: BlurOverlayProps
     );
   }
 
-  // Android: Use layered semi-transparent overlays for frosted glass effect
-  // This avoids RenderScript entirely
-  const baseOpacity = Math.min(intensity / 100, 0.95);
-
+  // Android: Layered frosted glass effect without RenderScript
+  // Uses dark translucent layers to obscure photo details while
+  // looking like a blur rather than a white wash
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Base translucent layer */}
+      {/* Primary frosted layer */}
       <View
         style={[
           StyleSheet.absoluteFill,
-          {
-            backgroundColor: tint === 'dark'
-              ? `rgba(0, 0, 0, ${baseOpacity * 0.85})`
-              : `rgba(255, 255, 255, ${baseOpacity * 0.85})`,
-          },
+          { backgroundColor: 'rgba(20, 20, 22, 0.75)' },
         ]}
       />
-      {/* Secondary layer for depth */}
+      {/* Secondary diffusion layer */}
       <View
         style={[
           StyleSheet.absoluteFill,
-          {
-            backgroundColor: tint === 'dark'
-              ? `rgba(30, 30, 30, ${baseOpacity * 0.5})`
-              : `rgba(245, 245, 245, ${baseOpacity * 0.5})`,
-          },
+          { backgroundColor: 'rgba(40, 36, 50, 0.45)' },
         ]}
       />
-      {/* Subtle gradient overlay for more natural look */}
+      {/* Subtle lavender tint for brand consistency */}
       <View
         style={[
           StyleSheet.absoluteFill,
-          {
-            backgroundColor: tint === 'dark'
-              ? 'rgba(0, 0, 0, 0.1)'
-              : 'rgba(255, 255, 255, 0.1)',
-          },
+          { backgroundColor: 'rgba(165, 136, 184, 0.08)' },
         ]}
       />
     </View>

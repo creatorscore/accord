@@ -6,10 +6,9 @@
  * On iOS: Uses native blurRadius (smooth, performant)
  * On Android: Returns blurRadius=0 and showBlurOverlay=true to use CSS-based overlay
  *
- * This is necessary because Android's RenderScript (used by expo-image's blurRadius)
- * is deprecated and causes fatal crashes on Android 15/16, especially on:
- * - Samsung devices (both budget and flagship)
- * - Devices with buggy GPU drivers
+ * The proper blur on Android comes from server-side blur_data_uri thumbnails
+ * (tiny ~20px JPEGs that bilinear-interpolate into a natural blur).
+ * When blur_data_uri is available, neither blurRadius nor overlay is needed.
  *
  * Critical for user safety in Accord - users rely on photo blur for privacy.
  */
@@ -94,6 +93,7 @@ export function useSafeBlur({
 
   // On Android: NEVER use blurRadius - it uses RenderScript which crashes
   // Instead, return showBlurOverlay=true so components can render a CSS-based overlay
+  // The proper solution is server-side blur_data_uri (handled by usePhotoBlur)
   const isAndroid = Platform.OS === 'android';
 
   return {

@@ -714,8 +714,8 @@ export default function EditProfile() {
   const removePhoto = (index: number) => {
     // Count current active photos (not marked for deletion)
     const currentActivePhotos = photos.filter(p => !p.to_delete);
-    if (currentActivePhotos.length <= 2) {
-      Alert.alert('Minimum Photos Required', 'Your profile must have at least 2 photos. Add another photo before removing this one.');
+    if (currentActivePhotos.length <= 4) {
+      Alert.alert('Minimum Photos Required', 'Your profile must have at least 4 photos. Add another photo before removing this one.');
       return;
     }
 
@@ -985,8 +985,8 @@ export default function EditProfile() {
 
     // Count active photos (not marked for deletion)
     const activePhotos = photos.filter(p => !p.to_delete);
-    if (activePhotos.length < 2) {
-      Alert.alert('More Photos Needed', 'Your profile must have at least 2 photos');
+    if (activePhotos.length < 4) {
+      Alert.alert('More Photos Needed', 'Your profile must have at least 4 photos');
       return false;
     }
 

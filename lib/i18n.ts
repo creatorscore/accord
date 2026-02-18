@@ -131,8 +131,6 @@ export const syncLanguageToDatabase = async (
 
     if (error) {
       console.error('Error syncing language to database:', error);
-    } else {
-      console.log(`Language preference synced to database: ${languageCode}`);
     }
   } catch (error) {
     console.error('Error syncing language to database:', error);

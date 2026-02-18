@@ -14,8 +14,7 @@ import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import { getPrivateKey, decryptMessage } from '@/lib/encryption';
 import { useScreenProtection } from '@/hooks/useScreenProtection';
 import { useColorScheme } from '@/lib/useColorScheme';
-import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
-import { useSafeBlur } from '@/hooks/useSafeBlur';
+import { usePhotoBlur } from '@/hooks/usePhotoBlur';
 import { MessagesListSkeleton } from '@/components/shared/SkeletonScreens';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -26,7 +25,9 @@ interface Conversation {
     display_name: string;
     age: number;
     photo_url?: string;
+    photo_blur_data_uri?: string | null;
     is_verified?: boolean;
+    photo_verified?: boolean;
     encryption_public_key?: string;
     photo_blur_enabled?: boolean;
     is_revealed?: boolean;
@@ -55,7 +56,6 @@ export default function Messages() {
   const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
   const { colors, isDarkColorScheme } = useColorScheme();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
-  const unreadActivityCount = useUnreadActivityCount(currentProfileId);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -64,6 +64,7 @@ export default function Messages() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set()); // Set of match_ids where other user is typing
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Refs for typing indicator subscriptions
   const typingChannelsRef = useRef<Map<string, RealtimeChannel>>(new Map());
@@ -99,12 +100,13 @@ export default function Messages() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, is_admin')
         .eq('user_id', user?.id)
         .single();
 
       if (error) throw error;
       setCurrentProfileId(data.id);
+      setIsAdmin(data.is_admin || false);
     } catch (error: any) {
       console.error('Error loading profile:', error);
     }
@@ -181,12 +183,14 @@ export default function Messages() {
             display_name,
             age,
             is_verified,
+            photo_verified,
             encryption_public_key,
             photo_blur_enabled,
             photos (
               url,
               is_primary,
-              display_order
+              display_order,
+              blur_data_uri
             )
           `)
           .in('id', otherProfileIds),
@@ -275,7 +279,9 @@ export default function Messages() {
               display_name: profile?.display_name || 'Unknown',
               age: profile?.age || 0,
               photo_url: primaryPhoto?.url,
+              photo_blur_data_uri: primaryPhoto?.blur_data_uri,
               is_verified: profile?.is_verified,
+              photo_verified: profile?.photo_verified,
               encryption_public_key: profile?.encryption_public_key,
               photo_blur_enabled: profile?.photo_blur_enabled || false,
               is_revealed: isRevealed,
@@ -751,23 +757,20 @@ export default function Messages() {
     return t('messages.timeAgo.weeksAgo', { count: Math.floor(seconds / 604800) });
   };
 
-  // Separate ConversationCard component to use useSafeBlur hook
+  // Separate ConversationCard component to use usePhotoBlur hook
   const ConversationCard = ({ item, index }: { item: Conversation; index: number }) => {
     const hasUnread = item.unread_count > 0;
     const isTyping = typingUsers.has(item.match_id);
 
-    // Safe blur hook - protects user privacy while preventing crashes
-    const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
-      shouldBlur: (item.profile.photo_blur_enabled || false) && !item.profile.is_revealed,
+    // Photo blur - uses server-side data URI when available, falls back to legacy blur
+    const { imageUri, blurRadius, showBlurOverlay, onImageLoad, onImageError } = usePhotoBlur({
+      shouldBlur: (item.profile.photo_blur_enabled || false) && !item.profile.is_revealed && !isAdmin,
+      photoUrl: item.profile.photo_url || 'https://via.placeholder.com/64',
+      blurDataUri: item.profile.photo_blur_data_uri,
       blurIntensity: 30,
     });
 
     return (
-      <MotiView
-        from={{ opacity: 0, translateX: -20 }}
-        animate={{ opacity: 1, translateX: 0 }}
-        transition={{ type: 'timing', duration: 300, delay: index * 50 }}
-      >
         <TouchableOpacity
           style={[styles.conversationCard, { backgroundColor: colors.card }]}
           onPress={() => handleConversationPress(item)}
@@ -777,22 +780,22 @@ export default function Messages() {
           {/* Profile Photo */}
           <View style={styles.photoContainer}>
             <Image
-              source={{ uri: item.profile.photo_url || 'https://via.placeholder.com/64' }}
+              source={{ uri: imageUri }}
               style={[styles.photo, { backgroundColor: colors.muted }]}
               blurRadius={blurRadius}
               onLoad={onImageLoad}
               onError={onImageError}
             />
-            {/* Android blur fallback - CSS overlay instead of RenderScript */}
+            {/* Android blur fallback - dark frosted overlay instead of RenderScript */}
             {showBlurOverlay && (
               <View
-                style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(255,255,255,0.92)' }]}
+                style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
                 pointerEvents="none"
               />
             )}
-            {item.profile.is_verified && (
+            {(item.profile.is_verified || item.profile.photo_verified) && (
               <View style={[styles.verifiedBadge, { backgroundColor: colors.background }]}>
-                <MaterialCommunityIcons name="check-decagram" size={16} color={colors.info} />
+                <MaterialCommunityIcons name="check-decagram" size={16} color="#A08AB7" />
               </View>
             )}
             {hasUnread && <View style={styles.unreadDot} />}
@@ -883,7 +886,6 @@ export default function Messages() {
           {/* Chevron */}
           <MaterialCommunityIcons name="chevron-right" size={24} color={colors.grey3} />
         </TouchableOpacity>
-      </MotiView>
     );
   };
 
@@ -1018,26 +1020,6 @@ export default function Messages() {
           </Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {/* Activity Bell */}
-          <TouchableOpacity
-            onPress={() => router.push('/activity')}
-            style={[styles.activityButton, { backgroundColor: isPremium ? '#F5F0FF' : colors.muted }]}
-          >
-            <View style={{ position: 'relative' }}>
-              <MaterialCommunityIcons
-                name="bell-ring-outline"
-                size={22}
-                color="#A08AB7"
-              />
-              {unreadActivityCount > 0 && (
-                <View style={styles.activityBadge}>
-                  <Text style={styles.activityBadgeText}>
-                    {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
           {/* Archive Button */}
           <TouchableOpacity
             onPress={() => {
@@ -1050,7 +1032,7 @@ export default function Messages() {
             <MaterialCommunityIcons
               name={showArchived ? "inbox" : "archive"}
               size={24}
-              color={colors.primary}
+              color="#A08AB7"
             />
           </TouchableOpacity>
         </View>
@@ -1226,29 +1208,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: '#E4E4E7',
-  },
-  activityButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activityBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activityBadgeText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   archiveButton: {
     flexDirection: 'row',

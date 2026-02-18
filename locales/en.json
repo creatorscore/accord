@@ -297,8 +297,8 @@
     "connection": "{{count}} connection",
     "loadingMatches": "Loading your matches...",
     "noMatchesYet": "No matches yet",
-    "noMatchesText": "Keep swiping to find your perfect match!\nYour connections will appear here.",
-    "startSwiping": "Start Swiping",
+    "noMatchesText": "Keep browsing to find your perfect match!\nYour connections will appear here.",
+    "startSwiping": "Start Browsing",
     "seeWhoLikesYou": "See Who Likes You",
     "noNewLikes": "No new likes yet",
     "likesCount": "{{count}} {{likes}} liked you",
@@ -484,6 +484,7 @@
       "error": "Failed to sign out"
     },
     "verified": "Verified",
+    "notVerified": "Not verified",
     "yourIntro": "Your",
     "screenshotAlerts": "Screenshot Alerts",
     "blockContacts": "Block Contacts",
@@ -588,6 +589,12 @@
     "youMatchedWith": "You matched with {{name}}",
     "startConversation": "Start the conversation!",
     "sayHelloMessage": "You matched with {{name}}.\nStart the conversation!",
+    "youLikedPrompt": "You liked {{name}}'s prompt",
+    "youLikedPhoto": "You liked {{name}}'s photo",
+    "youLikedProfile": "You liked {{name}}'s profile",
+    "theyLikedPrompt": "{{name}} liked your prompt",
+    "theyLikedPhoto": "{{name}} liked your photo",
+    "theyLikedProfile": "{{name}} liked your profile",
     "inappropriateContent": "Inappropriate Content",
     "permissionRequired": "Permission Required",
     "microphonePermission": "Please enable microphone access to send voice messages.",
@@ -726,7 +733,7 @@
     "upgradeToPremium": "Upgrade to Premium to see who they are and match instantly",
     "seeWhoLikesYou": "See Who Likes You",
     "noLikesYet": "No Likes Yet",
-    "noLikesText": "When someone likes you, they'll appear here. Keep swiping!",
+    "noLikesText": "When someone likes you, they'll appear here. Keep browsing!",
     "itsAMatch": "It's a Match! 💜",
     "canStartChatting": "You can now start chatting!",
     "keepBrowsing": "Keep Browsing",
@@ -1000,6 +1007,10 @@
       "restoreFailedMessage": "Failed to restore purchases. Please try again later.",
       "developmentModeTitle": "Development Mode",
       "developmentModeMessage": "Subscription management is handled via the database in development mode.\n\nIn production, this will open your App Store or Play Store subscription settings.",
+      "cancelWarningTitle": "Are you sure?",
+      "cancelWarningMessage": "If you cancel, you'll lose access to:\n\n\u2022 Unlimited swipes (back to 5/day)\n\u2022 See who liked you\n\u2022 5 Super Likes per week\n\u2022 Voice messages\n\u2022 Read receipts\n\u2022 Advanced discovery filters\n\u2022 Rewind last swipe\n\u2022 Incognito mode\n\u2022 Weekly profile boost\n\nYour features stay active until your current billing period ends.",
+      "keepSubscription": "Keep Premium",
+      "continueToManage": "Manage Anyway",
       "couldNotOpenManagement": "Could not open subscription management",
       "notAvailableTitle": "Not Available",
       "promoCodeAndroidMessage": "Promo code redemption is only available on iOS devices. On Android, you can redeem codes directly in the Google Play Store.",
@@ -1059,7 +1070,7 @@
     },
     "swipesRefreshed": {
       "title": "Your swipes are back! \ud83c\udf89",
-      "body": "You have 15 new swipes to discover your perfect match. Start swiping now!"
+      "body": "You have 15 new swipes to discover your perfect match. Start browsing now!"
     },
     "reviews": {
       "readyTitle": "Time to Review! \u2b50",
@@ -1182,6 +1193,10 @@
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
     "obsessedTitle": "Obsessed!",
     "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!"
+    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "tooFarTitle": "Too Far Away",
+    "tooFarMessage": "This person's search preferences don't include your area.",
+    "globalSearchPremiumTitle": "Search Globally is Now Premium",
+    "globalSearchPremiumMessage": "Global search is now a premium feature. Your matches will be filtered by distance. Upgrade to continue matching worldwide."
   }
 }

@@ -26,7 +26,6 @@ if (Platform.OS !== 'web') {
     SpInAppUpdates = inAppUpdatesModule.default;
     IAUUpdateKind = inAppUpdatesModule.IAUUpdateKind;
   } catch (e) {
-    console.log('sp-react-native-in-app-updates not available');
   }
 }
 
@@ -99,7 +98,6 @@ export default function AppUpdateChecker() {
         .single();
 
       if (error || !data) {
-        console.log('No app version config found, trying native update check');
         // Fall back to native store check
         await checkNativeUpdate(false);
         return;
@@ -119,10 +117,8 @@ export default function AppUpdateChecker() {
             .single();
 
           if (!profile?.is_admin) {
-            console.log('Admin test update mode - skipping for non-admin');
             return; // Not an admin, skip update check
           }
-          console.log('Admin test update mode - showing update dialog');
         } else {
           return; // No user, skip
         }
@@ -164,7 +160,6 @@ export default function AppUpdateChecker() {
 
   const checkNativeUpdate = async (isForced: boolean): Promise<boolean> => {
     if (!inAppUpdates.current) {
-      console.log('Native in-app updates not available');
       return false;
     }
 
@@ -173,8 +168,6 @@ export default function AppUpdateChecker() {
       const result = await inAppUpdates.current.checkNeedsUpdate({
         curVersion: CURRENT_VERSION,
       });
-
-      console.log('Native update check result:', result);
 
       if (result.shouldUpdate) {
         // Show native update dialog

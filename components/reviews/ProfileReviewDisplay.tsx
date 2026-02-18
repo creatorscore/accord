@@ -110,23 +110,14 @@ export default function ProfileReviewDisplay({
 
       if (!response.ok) {
         // Edge function not deployed or other error - fail silently
-        console.log('Reviews edge function not available - hiding reviews section');
         setReviewData(null);
         setLoading(false);
         return;
       }
 
-      // Debug logging
-      if (result.aggregate_score) {
-        console.log(`[Reviews] Profile ${profileId}: ${result.aggregate_score.toFixed(1)} stars (${result.review_count} reviews)`);
-      } else {
-        console.log(`[Reviews] Profile ${profileId}: No reviews to display`);
-      }
-
       setReviewData(result);
     } catch (error) {
       // Fail silently if edge function not deployed
-      console.log('Reviews feature not available - edge function may not be deployed');
       setReviewData(null);
     } finally {
       setLoading(false);
@@ -161,10 +152,8 @@ export default function ProfileReviewDisplay({
 
   // Compact view (for profile cards in discovery)
   if (compact) {
-    // Debug logging for compact badge
     const scoreText = reviewData.aggregate_score.toFixed(1);
     const countText = `(${reviewData.review_count})`;
-    console.log(`[Reviews] Compact badge for ${profileId}: ${scoreText} ${countText}`);
 
     return (
       <View style={styles.compactContainer}>

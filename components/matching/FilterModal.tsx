@@ -98,6 +98,12 @@ export default function FilterModal({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [filters, setFilters] = useState<FilterOptions>(currentFilters);
+  // Local slider values to avoid re-render fighting with native gesture
+  const [localAgeMin, setLocalAgeMin] = useState(currentFilters.ageMin);
+  const [localAgeMax, setLocalAgeMax] = useState(currentFilters.ageMax);
+  const [localDistance, setLocalDistance] = useState(currentFilters.maxDistance);
+  const [localHeightMin, setLocalHeightMin] = useState(currentFilters.heightMin);
+  const [localHeightMax, setLocalHeightMax] = useState(currentFilters.heightMax);
   const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
     identity: false,
     physical: false,
@@ -107,10 +113,22 @@ export default function FilterModal({
 
   useEffect(() => {
     setFilters(currentFilters);
+    setLocalAgeMin(currentFilters.ageMin);
+    setLocalAgeMax(currentFilters.ageMax);
+    setLocalDistance(currentFilters.maxDistance);
+    setLocalHeightMin(currentFilters.heightMin);
+    setLocalHeightMax(currentFilters.heightMax);
   }, [currentFilters, visible]);
 
   const handleApply = () => {
-    onApply(filters);
+    onApply({
+      ...filters,
+      ageMin: localAgeMin,
+      ageMax: localAgeMax,
+      maxDistance: localDistance,
+      heightMin: localHeightMin,
+      heightMax: localHeightMax,
+    });
     onClose();
   };
 
@@ -144,6 +162,11 @@ export default function FilterModal({
       wantsChildren: null,
     };
     setFilters(defaultFilters);
+    setLocalAgeMin(defaultFilters.ageMin);
+    setLocalAgeMax(defaultFilters.ageMax);
+    setLocalDistance(defaultFilters.maxDistance);
+    setLocalHeightMin(defaultFilters.heightMin);
+    setLocalHeightMax(defaultFilters.heightMax);
   };
 
   const toggleArrayFilter = (array: string[], value: string) => {
@@ -274,27 +297,29 @@ export default function FilterModal({
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('filters.ageRange')}</Text>
             <View style={styles.rangeValues}>
-              <Text style={styles.rangeText}>{filters.ageMin}</Text>
-              <Text style={styles.rangeText}>{filters.ageMax}</Text>
+              <Text style={styles.rangeText}>{localAgeMin}</Text>
+              <Text style={styles.rangeText}>{localAgeMax}</Text>
             </View>
             <View style={styles.sliderContainer}>
+              <Text style={styles.sliderLabel}>Minimum</Text>
               <Slider
                 style={styles.slider}
                 minimumValue={18}
                 maximumValue={80}
                 step={1}
-                value={filters.ageMin}
-                onValueChange={(value) => setFilters({ ...filters, ageMin: Math.min(value, filters.ageMax - 1) })}
+                value={localAgeMin}
+                onValueChange={(value) => setLocalAgeMin(Math.min(Math.round(value), localAgeMax - 1))}
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
+              <Text style={styles.sliderLabel}>Maximum</Text>
               <Slider
                 style={styles.slider}
                 minimumValue={18}
                 maximumValue={80}
                 step={1}
-                value={filters.ageMax}
-                onValueChange={(value) => setFilters({ ...filters, ageMax: Math.max(value, filters.ageMin + 1) })}
+                value={localAgeMax}
+                onValueChange={(value) => setLocalAgeMax(Math.max(Math.round(value), localAgeMin + 1))}
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
@@ -304,14 +329,14 @@ export default function FilterModal({
           {/* Distance */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('filters.maxDistance')}</Text>
-            <Text style={styles.rangeText}>{t('filters.miles', { count: filters.maxDistance })}</Text>
+            <Text style={styles.rangeText}>{t('filters.miles', { count: localDistance })}</Text>
             <Slider
               style={styles.slider}
               minimumValue={5}
-              maximumValue={500}
+              maximumValue={1000}
               step={5}
-              value={filters.maxDistance}
-              onValueChange={(value) => setFilters({ ...filters, maxDistance: value })}
+              value={localDistance}
+              onValueChange={(value) => setLocalDistance(Math.round(value))}
               minimumTrackTintColor="#A08AB7"
               maximumTrackTintColor="#E5E7EB"
             />
@@ -418,32 +443,34 @@ export default function FilterModal({
             'Physical & Personality',
             'account-heart-outline',
             getSelectedCount([filters.zodiacSign, filters.personalityType, filters.loveLanguage]) +
-              (filters.heightMin !== 48 || filters.heightMax !== 84 ? 1 : 0),
+              (localHeightMin !== 48 || localHeightMax !== 84 ? 1 : 0),
             <>
               {renderSubsection('Height Range', (
                 <>
                   <View style={styles.rangeValues}>
-                    <Text style={styles.rangeText}>{inchesToFeetDisplay(filters.heightMin)}</Text>
-                    <Text style={styles.rangeText}>{inchesToFeetDisplay(filters.heightMax)}</Text>
+                    <Text style={styles.rangeText}>{inchesToFeetDisplay(localHeightMin)}</Text>
+                    <Text style={styles.rangeText}>{inchesToFeetDisplay(localHeightMax)}</Text>
                   </View>
                   <View style={styles.sliderContainer}>
+                    <Text style={styles.sliderLabel}>Minimum</Text>
                     <Slider
                       style={styles.slider}
                       minimumValue={48}
                       maximumValue={84}
                       step={1}
-                      value={filters.heightMin}
-                      onValueChange={(value) => setFilters({ ...filters, heightMin: Math.min(value, filters.heightMax - 1) })}
+                      value={localHeightMin}
+                      onValueChange={(value) => setLocalHeightMin(Math.min(Math.round(value), localHeightMax - 1))}
                       minimumTrackTintColor="#A08AB7"
                       maximumTrackTintColor="#E5E7EB"
                     />
+                    <Text style={styles.sliderLabel}>Maximum</Text>
                     <Slider
                       style={styles.slider}
                       minimumValue={48}
                       maximumValue={84}
                       step={1}
-                      value={filters.heightMax}
-                      onValueChange={(value) => setFilters({ ...filters, heightMax: Math.max(value, filters.heightMin + 1) })}
+                      value={localHeightMax}
+                      onValueChange={(value) => setLocalHeightMax(Math.max(Math.round(value), localHeightMin + 1))}
                       minimumTrackTintColor="#A08AB7"
                       maximumTrackTintColor="#E5E7EB"
                     />
@@ -614,6 +641,11 @@ const styles = StyleSheet.create({
   slider: {
     width: '100%',
     height: 40,
+  },
+  sliderLabel: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
   toggleSection: {
     flexDirection: 'row',

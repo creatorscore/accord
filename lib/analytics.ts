@@ -21,13 +21,8 @@ export const initializePostHog = async () => {
   // TODO: Re-enable __DEV__ check before production to prevent test data pollution
   if (!POSTHOG_API_KEY) {
     console.error('❌ PostHog not initialized: Missing EXPO_PUBLIC_POSTHOG_API_KEY');
-    console.log('Add to .env: EXPO_PUBLIC_POSTHOG_API_KEY=your_key_here');
     return null;
   }
-
-  console.log('🔄 Initializing PostHog...');
-  console.log('API Key:', POSTHOG_API_KEY.substring(0, 10) + '...');
-  console.log('Host:', POSTHOG_HOST);
 
   try {
     posthogClient = new PostHog(POSTHOG_API_KEY, {
@@ -38,16 +33,12 @@ export const initializePostHog = async () => {
       captureNativeAppLifecycleEvents: true,
     } as any);
 
-    console.log('✅ PostHog initialized successfully!');
-    console.log('PostHog client:', posthogClient ? 'Ready' : 'Failed');
-
     // Send test event to verify it's working
     if (posthogClient) {
       posthogClient.capture('posthog_initialized', {
         timestamp: new Date().toISOString(),
         environment: __DEV__ ? 'development' : 'production',
       });
-      console.log('📊 Test event sent to PostHog');
 
       // Flush events immediately to ensure they're sent
       posthogClient.flush();
@@ -66,16 +57,12 @@ export const initializePostHog = async () => {
 export const trackEvent = (eventName: string, properties?: Record<string, any>) => {
   if (!posthogClient) {
     console.warn(`⚠️  PostHog not initialized, event not sent: ${eventName}`);
-    if (__DEV__) {
-      console.log(`📊 Event (not sent): ${eventName}`, properties);
-    }
     return;
   }
 
   try {
     posthogClient.capture(eventName, properties);
     if (__DEV__) {
-      console.log(`✅ Event sent to PostHog: ${eventName}`, properties);
       // Flush in development to see events immediately
       posthogClient.flush();
     }
@@ -107,9 +94,6 @@ export const resetUser = () => {
  */
 export const trackScreen = (screenName: string, properties?: Record<string, any>) => {
   if (!posthogClient) {
-    if (__DEV__) {
-      console.log(`📱 Screen: ${screenName}`, properties);
-    }
     return;
   }
 

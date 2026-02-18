@@ -214,9 +214,6 @@ export default function AdminReports() {
         ? BAN_DURATIONS.find(d => d.hours === selectedDuration)?.label || `${selectedDuration}h`
         : 'Permanent';
 
-      console.log('🔍 Calling admin-ban-user Edge Function...');
-      console.log('🔍 Ban duration:', durationLabel);
-
       const { data: banResponse, error: banError } = await supabase.functions.invoke('admin-ban-user', {
         body: {
           banned_profile_id: banningReport.reported_profile_id,
@@ -239,8 +236,6 @@ export default function AdminReports() {
       if (!banResponse?.success) {
         throw new Error(`Ban operation failed: ${JSON.stringify(banResponse)}`);
       }
-
-      console.log('✅ User banned successfully:', banResponse);
 
       // Mark ALL pending reports for this profile as resolved
       await supabase
@@ -364,8 +359,6 @@ export default function AdminReports() {
         throw new Error(result.error || 'Failed to flag profile');
       }
 
-      console.log('✅ Photo review action result:', result);
-
       // Send push notification to the user
       try {
         await sendPhotoReviewNotification(
@@ -444,8 +437,6 @@ export default function AdminReports() {
       if (!response.ok) {
         throw new Error(result.error || 'Failed to require verification');
       }
-
-      console.log('✅ Verify identity action result:', result);
 
       // Send push notification to the user
       try {

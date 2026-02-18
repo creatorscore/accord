@@ -33,7 +33,7 @@ interface MatchCelebrationModalProps {
   } | null;
   currentUserPhoto?: string;
   onSendMessage: () => void;
-  onKeepSwiping: () => void;
+  onKeepSwiping: () => void; // kept for backwards compatibility
 }
 
 export default function MatchCelebrationModal({
@@ -157,7 +157,7 @@ export default function MatchCelebrationModal({
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.keepSwipingButton} onPress={onKeepSwiping}>
-              <Text style={styles.keepSwipingText}>Keep Swiping</Text>
+              <Text style={styles.keepSwipingText}>Keep Browsing</Text>
             </TouchableOpacity>
           </Animated.View>
         </LinearGradient>

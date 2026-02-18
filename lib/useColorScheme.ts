@@ -2,13 +2,11 @@
  * useColorScheme Hook
  *
  * Provides color scheme management with persistence and system sync.
- * Integrates with NativeWind and Android navigation bar.
  */
 
 import { useColorScheme as useNativewindColorScheme } from 'nativewind';
-import * as NavigationBar from 'expo-navigation-bar';
 import * as React from 'react';
-import { Platform, useColorScheme as useSystemColorScheme } from 'react-native';
+import { useColorScheme as useSystemColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, type ColorScheme, type ThemeColors } from '@/theme/colors';
 
@@ -47,9 +45,6 @@ export function useColorScheme() {
   React.useEffect(() => {
     if (preference === 'system' && systemColorScheme) {
       setNativewindColorScheme(systemColorScheme);
-      if (Platform.OS === 'android') {
-        setAndroidNavigationBar(systemColorScheme).catch(console.error);
-      }
     }
   }, [preference, systemColorScheme]);
 
@@ -75,15 +70,6 @@ export function useColorScheme() {
       await AsyncStorage.setItem(COLOR_SCHEME_KEY, actualScheme);
     } catch (error) {
       console.error('Failed to persist color scheme:', error);
-    }
-
-    // Update Android navigation bar
-    if (Platform.OS === 'android') {
-      try {
-        await setAndroidNavigationBar(actualScheme);
-      } catch (error) {
-        console.error('Failed to update Android navigation bar:', error);
-      }
     }
   }
 
@@ -161,10 +147,6 @@ export function useInitializeColorScheme() {
         // Resolve actual scheme
         const actualScheme = preference === 'system' ? (systemColorScheme ?? 'light') : preference;
         setColorScheme(actualScheme);
-
-        if (Platform.OS === 'android') {
-          await setAndroidNavigationBar(actualScheme);
-        }
       } catch (error) {
         console.error('Failed to load color scheme preference:', error);
         // Fall back to system preference
@@ -175,38 +157,6 @@ export function useInitializeColorScheme() {
 
     loadStoredPreference();
   }, []);
-}
-
-/**
- * Hook to sync Android navigation bar with current theme
- */
-export function useInitialAndroidBarSync() {
-  const { colorScheme } = useColorScheme();
-
-  React.useEffect(() => {
-    if (Platform.OS !== 'android') return;
-
-    setAndroidNavigationBar(colorScheme).catch((error) => {
-      console.error('Failed to sync Android navigation bar:', error);
-    });
-  }, [colorScheme]);
-}
-
-/**
- * Update Android navigation bar to match theme
- */
-async function setAndroidNavigationBar(colorScheme: ColorScheme) {
-  if (Platform.OS !== 'android') return;
-
-  const isDark = colorScheme === 'dark';
-
-  return Promise.all([
-    NavigationBar.setButtonStyleAsync(isDark ? 'light' : 'dark'),
-    NavigationBar.setPositionAsync('absolute'),
-    NavigationBar.setBackgroundColorAsync(
-      isDark ? 'rgba(10, 10, 11, 0.9)' : 'rgba(255, 255, 255, 0.9)'
-    ),
-  ]);
 }
 
 export default useColorScheme;

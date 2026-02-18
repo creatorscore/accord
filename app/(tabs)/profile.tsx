@@ -10,6 +10,7 @@ import {
   StatusBar,
   Linking,
   Modal,
+  Image,
   useWindowDimensions,
   Platform,
 } from 'react-native';
@@ -24,8 +25,6 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/lib/useColorScheme';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
-import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
-import ProfilePhotoCarousel from '@/components/profile/ProfilePhotoCarousel';
 import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
 
 interface ProfileData {
@@ -47,6 +46,7 @@ interface ProfileData {
   zodiac_sign?: string;
   personality_type?: string;
   is_verified: boolean;
+  photo_verified?: boolean;
   photos?: { url: string; is_primary?: boolean; display_order?: number; caption?: string }[];
   prompt_answers?: { prompt: string; answer: string }[];
   interests?: string[];
@@ -69,7 +69,6 @@ export default function Profile() {
   const isLandscape = width > height;
   const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const unreadActivityCount = useUnreadActivityCount(profile?.id || null);
   const [loading, setLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -100,7 +99,6 @@ export default function Profile() {
     try {
       // Safety check: ensure user is loaded before querying
       if (!user?.id) {
-        console.log('User not loaded yet, retrying...');
         setLoading(false);
         return;
       }
@@ -140,7 +138,8 @@ export default function Profile() {
           photos (
             url,
             is_primary,
-            display_order
+            display_order,
+            blur_data_uri
           )
         `)
         .eq('user_id', user.id)
@@ -149,7 +148,6 @@ export default function Profile() {
       if (error) {
         // If profile doesn't exist (PGRST116 = no rows), redirect to onboarding
         if (error.code === 'PGRST116') {
-          console.log('No profile found, redirecting to onboarding');
           router.replace('/(onboarding)/basic-info');
           return;
         }
@@ -252,33 +250,34 @@ export default function Profile() {
       <StatusBar barStyle={isDarkColorScheme ? "light-content" : "dark-content"} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Enhanced Photo Carousel */}
-        {profile?.photos && profile.photos.length > 0 ? (
-          <ProfilePhotoCarousel
-            profileId={profile.id}
-            photos={profile.photos}
-            name={profile.display_name}
-            age={profile.age}
-            isVerified={profile.is_verified}
-          />
-        ) : (
-          <View style={styles.placeholderHeader}>
-            <LinearGradient
-              colors={['#A08AB7', '#CDC2E5']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.placeholderGradient}
-            >
-              <View style={styles.placeholderPhotoContainer}>
-                <MaterialCommunityIcons name="camera-plus" size={40} color="white" />
-                <Text style={styles.placeholderText}>{t('profile.addPhotos')}</Text>
-              </View>
-              <Text style={styles.placeholderName}>
-                {profile?.display_name}, {profile?.age}
+        {/* Avatar Section */}
+        <View style={[styles.avatarSection, { paddingTop: insets.top + 32 }]}>
+          {profile?.photos && profile.photos.length > 0 ? (
+            <Image
+              source={{ uri: (profile.photos.find(p => p.is_primary) || profile.photos[0])?.url }}
+              style={styles.avatar}
+            />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Text style={styles.avatarInitials}>
+                {profile?.display_name?.charAt(0)?.toUpperCase() || '?'}
               </Text>
-            </LinearGradient>
+            </View>
+          )}
+          <Text style={[styles.profileName, { color: colors.foreground }]}>
+            {profile?.display_name}
+          </Text>
+          <View style={styles.verifiedRow}>
+            <MaterialCommunityIcons
+              name="check-decagram"
+              size={20}
+              color={(profile?.photo_verified || profile?.is_verified) ? '#A08AB7' : colors.mutedForeground}
+            />
+            <Text style={(profile?.photo_verified || profile?.is_verified) ? styles.verifiedText : [styles.unverifiedText, { color: colors.mutedForeground }]}>
+              {(profile?.photo_verified || profile?.is_verified) ? t('profile.verified') : t('profile.notVerified')}
+            </Text>
           </View>
-        )}
+        </View>
 
         {/* Profile Content */}
         <View style={styles.content}>
@@ -287,20 +286,13 @@ export default function Profile() {
             style={styles.editProfileButton}
             onPress={() => router.push('/settings/edit-profile')}
           >
-            <LinearGradient
-              colors={['#A08AB7', '#CDC2E5']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.editProfileGradient}
-            >
-              <MaterialCommunityIcons name="pencil" size={20} color="white" />
-              <Text style={styles.editProfileText}>{t('profile.editYourProfile')}</Text>
-            </LinearGradient>
+            <MaterialCommunityIcons name="pencil" size={20} color="white" />
+            <Text style={styles.editProfileText}>{t('profile.editYourProfile')}</Text>
           </TouchableOpacity>
 
           {/* Preview Profile Button */}
           <TouchableOpacity
-            style={[styles.previewProfileButton, { backgroundColor: colors.card }]}
+            style={styles.previewProfileButton}
             onPress={handlePreviewProfile}
           >
             <MaterialCommunityIcons name="eye-outline" size={20} color="#A08AB7" />
@@ -425,38 +417,9 @@ export default function Profile() {
           <View style={styles.menuSection}>
             <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Activity & Matching</Text>
 
-            {/* Activity Feed - Premium Feature */}
-            <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: isPremium ? '#F5F0FF' : colors.card, borderLeftWidth: isPremium ? 4 : 0, borderLeftColor: '#A08AB7' }]}
-              onPress={() => router.push('/activity')}
-            >
-              <View style={styles.menuItemLeft}>
-                <View style={{ position: 'relative' }}>
-                  <MaterialCommunityIcons name="bell-ring-outline" size={24} color="#A08AB7" />
-                  {unreadActivityCount > 0 && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>
-                        {unreadActivityCount > 99 ? '99+' : unreadActivityCount}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <View>
-                  <Text style={[styles.menuItemText, { color: '#A08AB7', fontWeight: '600' }]}>Activity</Text>
-                  {!isPremium && (
-                    <Text style={styles.menuItemSubtext}>Premium feature</Text>
-                  )}
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                {!isPremium && <MaterialCommunityIcons name="crown" size={16} color="#A08AB7" />}
-                <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
-              </View>
-            </TouchableOpacity>
-
             {/* Matching Preferences */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/settings/matching-preferences')}
             >
               <View style={styles.menuItemLeft}>
@@ -473,7 +436,7 @@ export default function Profile() {
 
             {/* Account & Privacy */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/settings/privacy')}
             >
               <View style={styles.menuItemLeft}>
@@ -485,7 +448,7 @@ export default function Profile() {
 
             {/* Notifications */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/settings/notifications')}
             >
               <View style={styles.menuItemLeft}>
@@ -497,7 +460,7 @@ export default function Profile() {
 
             {/* Language */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/settings/language')}
             >
               <View style={styles.menuItemLeft}>
@@ -509,7 +472,7 @@ export default function Profile() {
 
             {/* Appearance */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/settings/appearance')}
             >
               <View style={styles.menuItemLeft}>
@@ -526,7 +489,7 @@ export default function Profile() {
 
             {/* My Reviews */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/reviews/my-reviews')}
             >
               <View style={styles.menuItemLeft}>
@@ -538,7 +501,7 @@ export default function Profile() {
 
             {/* Review Settings */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/settings/review-settings')}
             >
               <View style={styles.menuItemLeft}>
@@ -555,7 +518,7 @@ export default function Profile() {
 
             {/* Safety Center */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/settings/safety-center')}
             >
               <View style={styles.menuItemLeft}>
@@ -567,7 +530,7 @@ export default function Profile() {
 
             {/* Photo Verification */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/settings/privacy')}
             >
               <View style={styles.menuItemLeft}>
@@ -579,7 +542,7 @@ export default function Profile() {
 
             {/* Blocked Users */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/settings/blocked-users')}
             >
               <View style={styles.menuItemLeft}>
@@ -591,7 +554,7 @@ export default function Profile() {
 
             {/* Block Contacts */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/settings/contact-blocking')}
             >
               <View style={styles.menuItemLeft}>
@@ -603,7 +566,7 @@ export default function Profile() {
 
             {/* Block Countries */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push('/settings/country-blocking')}
             >
               <View style={styles.menuItemLeft}>
@@ -619,7 +582,7 @@ export default function Profile() {
             <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Subscription</Text>
 
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: !isPremium ? '#F5F0FF' : colors.card, borderLeftWidth: !isPremium ? 4 : 0, borderLeftColor: '#A08AB7' }]}
+              style={[styles.menuItem, { backgroundColor: !isPremium ? '#F5F0FF' : colors.card, borderColor: !isPremium ? '#A08AB7' : colors.border, borderLeftWidth: !isPremium ? 4 : 0, borderLeftColor: '#A08AB7' }]}
               onPress={() => router.push('/settings/subscription')}
             >
               <View style={styles.menuItemLeft}>
@@ -641,7 +604,7 @@ export default function Profile() {
             <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Support</Text>
 
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={async () => {
                 try {
                   const mailtoUrl = 'mailto:hello@joinaccord.app?subject=Support Request&body=Hi Accord Team,\n\n';
@@ -678,7 +641,7 @@ export default function Profile() {
               <Text style={[styles.menuSectionTitle, { color: '#F59E0B' }]}>Admin Tools</Text>
 
               <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#FEF3C7', borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}
+                style={[styles.menuItem, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B', borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}
                 onPress={() => router.push('/admin/reports')}
               >
                 <View style={styles.menuItemLeft}>
@@ -692,7 +655,7 @@ export default function Profile() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#DBEAFE', borderLeftWidth: 4, borderLeftColor: '#3B82F6' }]}
+                style={[styles.menuItem, { backgroundColor: '#DBEAFE', borderColor: '#3B82F6', borderLeftWidth: 4, borderLeftColor: '#3B82F6' }]}
                 onPress={() => router.push('/admin/cost-monitoring')}
               >
                 <View style={styles.menuItemLeft}>
@@ -706,7 +669,7 @@ export default function Profile() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#F5F2F7', borderLeftWidth: 4, borderLeftColor: '#A08AB7' }]}
+                style={[styles.menuItem, { backgroundColor: '#F5F2F7', borderColor: '#A08AB7', borderLeftWidth: 4, borderLeftColor: '#A08AB7' }]}
                 onPress={() => router.push('/admin/push-notifications')}
               >
                 <View style={styles.menuItemLeft}>
@@ -720,7 +683,7 @@ export default function Profile() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#ECFDF5', borderLeftWidth: 4, borderLeftColor: '#10B981' }]}
+                style={[styles.menuItem, { backgroundColor: '#ECFDF5', borderColor: '#10B981', borderLeftWidth: 4, borderLeftColor: '#10B981' }]}
                 onPress={() => router.push('/admin/verification')}
               >
                 <View style={styles.menuItemLeft}>
@@ -734,7 +697,7 @@ export default function Profile() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#FEE2E2', borderLeftWidth: 4, borderLeftColor: '#EF4444' }]}
+                style={[styles.menuItem, { backgroundColor: '#FEE2E2', borderColor: '#EF4444', borderLeftWidth: 4, borderLeftColor: '#EF4444' }]}
                 onPress={() => router.push('/admin/photo-reviews')}
               >
                 <View style={styles.menuItemLeft}>
@@ -748,7 +711,7 @@ export default function Profile() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#FEF3C7', borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}
+                style={[styles.menuItem, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B', borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}
                 onPress={() => router.push('/(onboarding)/basic-info')}
               >
                 <View style={styles.menuItemLeft}>
@@ -768,7 +731,7 @@ export default function Profile() {
             <Text style={[styles.menuSectionTitle, { color: '#EF4444' }]}>{t('profile.dangerZone')}</Text>
 
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: '#FEE2E2', borderWidth: 1 }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: '#FEE2E2' }]}
               onPress={() => router.push('/settings/delete-account')}
             >
               <View style={styles.menuItemLeft}>
@@ -798,11 +761,11 @@ export default function Profile() {
 
       {/* Settings Button Overlay */}
       <TouchableOpacity
-        style={styles.settingsButtonOverlay}
+        style={[styles.settingsButtonOverlay, { top: insets.top + 12 }]}
         onPress={() => router.push('/settings/privacy')}
       >
-        <View style={styles.settingsButtonBackground}>
-          <MaterialCommunityIcons name="cog-outline" size={24} color="white" />
+        <View style={[styles.settingsButtonBackground, { backgroundColor: colors.muted }]}>
+          <MaterialCommunityIcons name="cog-outline" size={24} color={colors.mutedForeground} />
         </View>
       </TouchableOpacity>
 
@@ -858,60 +821,64 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 20,
   },
-  placeholderHeader: {
-    height: 520,
-  },
-  placeholderGradient: {
-    flex: 1,
-    justifyContent: 'center',
+  avatarSection: {
     alignItems: 'center',
-    paddingBottom: 40,
+    paddingBottom: 16,
   },
-  placeholderPhotoContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 12,
+  },
+  avatarFallback: {
+    backgroundColor: '#A08AB7',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
   },
-  placeholderText: {
-    color: 'white',
-    fontSize: 14,
-    marginTop: 8,
-  },
-  placeholderName: {
-    fontSize: 28,
+  avatarInitials: {
+    fontSize: 32,
     fontWeight: 'bold',
     color: 'white',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+  },
+  profileName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  verifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  verifiedText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#A08AB7',
+  },
+  unverifiedText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   settingsButtonOverlay: {
     position: 'absolute',
-    top: 50,
     right: 20,
   },
   settingsButtonBackground: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
   editProfileButton: {
-    marginVertical: 20,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  editProfileGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    marginVertical: 20,
+    borderRadius: 10,
+    backgroundColor: '#A08AB7',
     paddingVertical: 16,
   },
   editProfileText: {
@@ -925,15 +892,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 16,
-    borderRadius: 16,
-    borderWidth: 2,
+    borderRadius: 10,
+    borderWidth: 1.5,
     borderColor: '#A08AB7',
-    backgroundColor: 'white',
+    backgroundColor: 'transparent',
     marginBottom: 32,
   },
   previewProfileText: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontWeight: 'bold',
     color: '#A08AB7',
   },
   loadingContainer: {
@@ -944,19 +911,13 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    fontFamily: 'Inter',
     color: '#71717A',
   },
   premiumCard: {
     marginHorizontal: 20,
     marginBottom: 20,
-    borderRadius: 24,
+    borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
   },
   premiumGradient: {
     padding: 24,
@@ -1014,13 +975,8 @@ const styles = StyleSheet.create({
   upgradeCard: {
     marginHorizontal: 20,
     marginBottom: 20,
-    borderRadius: 24,
+    borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
   },
   upgradeGradient: {
     padding: 28,
@@ -1098,13 +1054,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    borderRadius: 16,
+    borderRadius: 10,
     marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    borderWidth: 1,
   },
   menuItemLeft: {
     flexDirection: 'row',
@@ -1121,23 +1073,6 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 1,
   },
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#EF4444',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  badgeText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
   adminSubtext: {
     fontSize: 12,
     color: '#92400E',
@@ -1150,8 +1085,8 @@ const styles = StyleSheet.create({
     gap: 8,
     marginHorizontal: 20,
     paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: 2,
+    borderRadius: 10,
+    borderWidth: 1.5,
     borderColor: '#FEE2E2',
     backgroundColor: '#FEF2F2',
     marginBottom: 16,

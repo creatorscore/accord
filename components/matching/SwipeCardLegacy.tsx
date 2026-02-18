@@ -8,7 +8,7 @@ import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
-import { useSafeBlur } from '@/hooks/useSafeBlur';
+import { usePhotoBlur } from '@/hooks/usePhotoBlur';
 import { formatDistance, DistanceUnit } from '@/lib/distance-utils';
 import { Image, normalizeImageProps } from '@/components/shared/ConditionalImage';
 
@@ -22,7 +22,7 @@ interface Profile {
   location_city?: string;
   location_state?: string;
   bio?: string;
-  photos?: { url: string; is_primary: boolean }[];
+  photos?: { url: string; is_primary: boolean; blur_data_uri?: string | null }[];
   compatibility_score?: number;
   is_verified?: boolean;
   photo_verified?: boolean;
@@ -75,12 +75,7 @@ export default function SwipeCard({
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
   const lastActiveText = getLastActiveText(profile.last_active_at, profile.hide_last_active);
 
-  // Safe blur hook - ensures privacy while preventing crashes
-  // On Android, blurRadius is 0 and showBlurOverlay is true to avoid RenderScript crashes
-  const { blurRadius, showBlurOverlay, onImageLoad, onImageError, resetBlur } = useSafeBlur({
-    shouldBlur: (profile.photo_blur_enabled || false) && !isAdmin,
-    blurIntensity: 30,
-  });
+  const shouldBlur = (profile.photo_blur_enabled || false) && !isAdmin;
 
   // Use React Native's built-in Animated API instead of Reanimated
   const pan = useRef(new RNAnimated.ValueXY()).current;
@@ -164,7 +159,6 @@ export default function SwipeCard({
 
   // Reset animation values when profile changes
   useEffect(() => {
-    console.log('🔄 SwipeCard: Profile changed to', profile.id, profile.display_name);
     pan.setValue({ x: 0, y: 0 });
     setCurrentPhotoIndex(0);
     setShowNavigationHints(!!(profile.photos && profile.photos.length > 1));
@@ -184,6 +178,18 @@ export default function SwipeCard({
 
   const allPhotos = profile.photos || [];
   const currentPhoto = allPhotos[currentPhotoIndex] || allPhotos[0] || { url: 'https://via.placeholder.com/400' };
+
+  // Two-layer blur: downsized transform + light native blur
+  // 800px width for full-card photos to avoid zoomed-in look
+  const photoBlur = usePhotoBlur({
+    shouldBlur,
+    photoUrl: currentPhoto?.url || 'https://via.placeholder.com/400',
+    blurDataUri: (currentPhoto as any)?.blur_data_uri,
+    transformWidth: 800,
+  });
+  const currentPhotoUri = photoBlur.imageUri;
+  const currentBlurRadius = photoBlur.blurRadius;
+  const currentShowOverlay = photoBlur.showBlurOverlay;
 
   const handlePreviousPhoto = () => {
     if (currentPhotoIndex > 0) {
@@ -292,10 +298,8 @@ export default function SwipeCard({
 
   const distance = formatDistance(profile.distance, distanceUnit, profile.hide_distance);
 
-  // Reset blur state when photo changes
-  useEffect(() => {
-    resetBlur();
-  }, [currentPhotoIndex, resetBlur]);
+  // Photo blur callbacks
+  const { onImageLoad, onImageError } = photoBlur;
 
   return (
     <RNAnimated.View
@@ -316,10 +320,10 @@ export default function SwipeCard({
         <View className="relative flex-1">
           <Image
             {...normalizeImageProps({
-              source: { uri: currentPhoto?.url || 'https://via.placeholder.com/400' },
+              source: { uri: currentPhotoUri },
               style: styles.cardImage,
               contentFit: 'cover',
-              blurRadius: blurRadius, // iOS only - Android uses overlay to prevent RenderScript crashes
+              blurRadius: currentBlurRadius, // iOS only - Android uses overlay or blur_data_uri
               // expo-image specific props for better performance
               cachePolicy: 'memory-disk',
               transition: 200,
@@ -330,9 +334,9 @@ export default function SwipeCard({
           />
 
           {/* Android blur fallback - CSS overlay instead of RenderScript */}
-          {showBlurOverlay && (
+          {currentShowOverlay && (
             <View
-              style={[styles.cardImage, { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)' }]}
+              style={[styles.cardImage, { position: 'absolute', backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
               pointerEvents="none"
             />
           )}
@@ -499,11 +503,8 @@ export default function SwipeCard({
               <Text className="text-white font-bold text-3xl">
                 {profile.display_name}, {profile.age}
               </Text>
-              {profile.is_verified && (
-                <MaterialCommunityIcons name="check-decagram" size={28} color="#3B82F6" />
-              )}
-              {profile.photo_verified && (
-                <MaterialCommunityIcons name="camera-account" size={28} color="#22c55e" />
+              {(profile.photo_verified || profile.is_verified) && (
+                <MaterialCommunityIcons name="check-decagram" size={28} color="#A08AB7" />
               )}
             </View>
 

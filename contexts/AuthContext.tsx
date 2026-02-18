@@ -96,7 +96,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           .maybeSingle();
 
         if (banData) {
-          console.log('🚨 USER IS BANNED - redirecting to banned screen');
           // Sign out the banned user
           await supabase.auth.signOut();
           // Redirect to banned screen with user info
@@ -129,9 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         // Always initialize encryption - this uses deterministic keys based on userId
         // So the same user gets the same keys on any device (iOS/Android)
-        console.log('🔐 Initializing deterministic encryption keys...');
         const publicKey = await initializeEncryption(user.id);
-        console.log('🔑 Derived public key:', publicKey.substring(0, 16) + '...');
 
         // Store public key in user's profile (use maybeSingle - profile might not exist yet)
         const { data: profile } = await supabase
@@ -147,12 +144,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           const currentDbKey = profile.encryption_public_key;
           const keysMatch = currentDbKey === publicKey;
 
-          if (!keysMatch) {
-            console.log('⚠️ Database key mismatch detected!');
-            console.log('   DB key:', currentDbKey ? currentDbKey.substring(0, 16) + '...' : 'NULL');
-            console.log('   Correct key:', publicKey.substring(0, 16) + '...');
-          }
-
           // Always update to ensure consistency across platforms
           const { error: updateError } = await supabase
             .from('profiles')
@@ -161,8 +152,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
           if (updateError) {
             console.error('❌ Failed to update encryption key:', updateError);
-          } else {
-            console.log('✅ Encryption public key synced to database');
           }
         }
       } catch (error) {
@@ -189,7 +178,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const now = Date.now();
       const minInterval = 5 * 60 * 1000; // 5 minutes
       if (now - lastLocationUpdate.current < minInterval) {
-        console.log('📍 Skipping location refresh - too recent');
         return;
       }
 
@@ -197,7 +185,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         // Check if we have permission
         const { status } = await Location.getForegroundPermissionsAsync();
         if (status !== 'granted') {
-          console.log('📍 Location permission not granted, skipping refresh');
           return;
         }
 
@@ -209,7 +196,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // Validate accuracy - reject if too inaccurate (> 500 meters for balanced)
         if (location.coords.accuracy && location.coords.accuracy > 500) {
-          console.log('📍 Location too inaccurate, skipping refresh');
           return;
         }
 
@@ -221,7 +207,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         const addressInfo = reverseGeocode[0];
         if (!addressInfo) {
-          console.log('📍 Could not reverse geocode location');
           return;
         }
 
@@ -237,7 +222,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           .maybeSingle();
 
         if (!profile) {
-          console.log('📍 No profile found, skipping location refresh');
           return;
         }
 
@@ -247,7 +231,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           const lonDiff = Math.abs(profile.longitude - location.coords.longitude);
           // Roughly 0.005 degrees = ~500 meters
           if (latDiff < 0.005 && lonDiff < 0.005) {
-            console.log('📍 Location unchanged, skipping update');
             lastLocationUpdate.current = now;
             return;
           }
@@ -269,7 +252,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         if (updateError) {
           console.error('❌ Failed to update location:', updateError);
         } else {
-          console.log('✅ Location refreshed:', city, state, country);
           lastLocationUpdate.current = now;
         }
       } catch (error) {
@@ -281,7 +263,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       // When app comes to foreground, refresh location
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        console.log('📱 App foregrounded - refreshing location');
         // Fix: Don't await - let it run in background to prevent ANR
         // GPS calls can take 5-10 seconds and will block Activity launch if awaited
         refreshLocation().catch(err => console.error('Background location refresh failed:', err));

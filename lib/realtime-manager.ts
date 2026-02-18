@@ -57,10 +57,6 @@ class RealtimeConnectionManager {
     userChannels.channels.push(channel);
     userChannels.lastActivity = Date.now();
 
-    console.log(
-      `User ${userId} now has ${userChannels.channels.length} active channels`
-    );
-
     return true;
   }
 
@@ -76,10 +72,6 @@ class RealtimeConnectionManager {
     if (index > -1) {
       userChannels.channels.splice(index, 1);
       userChannels.lastActivity = Date.now();
-
-      console.log(
-        `Unregistered channel for user ${userId}. ${userChannels.channels.length} remaining.`
-      );
 
       // Clean up user registry if no channels left
       if (userChannels.channels.length === 0) {
@@ -125,12 +117,6 @@ class RealtimeConnectionManager {
       const idleTime = now - data.lastActivity;
 
       if (idleTime > this.IDLE_TIMEOUT) {
-        console.log(
-          `Cleaning up idle connections for user ${userId} (idle for ${Math.round(
-            idleTime / 60000
-          )}min)`
-        );
-
         // Unsubscribe all channels for this user
         data.channels.forEach((channel) => {
           try {
@@ -149,9 +135,6 @@ class RealtimeConnectionManager {
       delete this.registry[userId];
     });
 
-    if (usersToCleanup.length > 0) {
-      console.log(`Cleaned up ${usersToCleanup.length} idle users`);
-    }
   }
 
   /**
@@ -181,14 +164,6 @@ class RealtimeConnectionManager {
    * Log connection statistics
    */
   private logStats(): void {
-    const totalChannels = this.getTotalChannelCount();
-    const totalUsers = Object.keys(this.registry).length;
-
-    console.log('📊 Realtime Stats:', {
-      totalUsers,
-      totalChannels,
-      avgChannelsPerUser: totalUsers > 0 ? (totalChannels / totalUsers).toFixed(2) : 0,
-    });
   }
 
   /**

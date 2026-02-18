@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { getOfferings, purchasePackage } from '@/lib/revenue-cat';
+import { getOfferings, purchasePackage, checkTrialEligibility, getTrialInfo, TrialInfo } from '@/lib/revenue-cat';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 
 interface PremiumPaywallProps {
@@ -120,6 +120,61 @@ export default function PremiumPaywall({
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'quarterly' | 'annual'>('monthly'); // Default to monthly (least commitment)
   const [isClosing, setIsClosing] = useState(false);
 
+  const [trialEligibility, setTrialEligibility] = useState<Record<string, { eligible: boolean; trialInfo: TrialInfo }>>({});
+
+  // Check trial eligibility when paywall becomes visible
+  useEffect(() => {
+    if (!visible || __DEV__) return;
+
+    let cancelled = false;
+
+    const fetchTrialEligibility = async () => {
+      try {
+        const offerings = await getOfferings();
+        if (!offerings || cancelled) return;
+        const eligibility = await checkTrialEligibility(offerings.availablePackages);
+        if (!cancelled) {
+          setTrialEligibility(eligibility);
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to check trial eligibility:', error);
+      }
+    };
+
+    fetchTrialEligibility();
+
+    return () => { cancelled = true; };
+  }, [visible]);
+
+  /**
+   * Get trial text for a given tier and billing period.
+   * Looks through eligibility data to find a matching product.
+   */
+  const getTrialTextForPlan = (tier: 'premium' | 'platinum', period: 'monthly' | 'quarterly' | 'annual'): { text: string | null; eligible: boolean } => {
+    for (const [productId, data] of Object.entries(trialEligibility)) {
+      const id = productId.toLowerCase();
+      const tierMatch = tier === 'platinum' ? id.includes('platinum') : id.includes('premium');
+      if (!tierMatch) continue;
+
+      const isMonthly = (id.includes('month') || id.includes('1m')) && !id.includes('3m') && !id.includes('3_month');
+      const isQuarterly = id.includes('quarter') || id.includes('3m') || id.includes('3_month');
+      const isAnnual = id.includes('annual') || id.includes('year') || id.includes('12m');
+
+      let periodMatch = false;
+      if (period === 'monthly') periodMatch = isMonthly && !isQuarterly;
+      else if (period === 'quarterly') periodMatch = isQuarterly;
+      else periodMatch = isAnnual;
+
+      if (periodMatch && data.eligible && data.trialInfo.trialText) {
+        return { text: data.trialInfo.trialText, eligible: true };
+      }
+      if (periodMatch) {
+        return { text: null, eligible: false };
+      }
+    }
+    return { text: null, eligible: false };
+  };
+
   const isPlatinum = variant === 'platinum';
   const features = isPlatinum ? PLATINUM_FEATURES : PREMIUM_FEATURES;
   const title = isPlatinum ? 'Accord Platinum' : 'Accord Premium';
@@ -169,29 +224,16 @@ export default function PremiumPaywall({
         return;
       }
 
-      // Log ALL available packages for debugging
-      console.log('📦 ALL Available Packages:', offerings.availablePackages.map(pkg => ({
-        identifier: pkg.identifier,
-        productId: pkg.product.identifier,
-        price: pkg.product.priceString,
-      })));
-
-      console.log('🔍 PremiumPaywall - Looking for:', { variant, selectedPlan, isPlatinum });
-
       // Get the package based on variant and selected plan
       // Use flexible pattern matching (same as subscription page)
       const pkg = offerings.availablePackages.find((p) => {
         const id = p.identifier.toLowerCase();
         const productId = p.product.identifier.toLowerCase();
 
-        console.log(`🔎 Checking package: ${p.identifier} (${productId})`);
-
         // Check tier (premium or platinum)
         const tierMatch = isPlatinum
           ? (id.includes('platinum') || productId.includes('platinum'))
           : (id.includes('premium') || productId.includes('premium'));
-
-        console.log(`  - Tier match (looking for ${isPlatinum ? 'platinum' : 'premium'}):`, tierMatch);
 
         // Check billing period with multiple patterns
         const isMonthly = id.includes('month') || productId.includes('month') || id.includes('1m') || productId.includes('1m');
@@ -206,15 +248,10 @@ export default function PremiumPaywall({
         } else {
           periodMatch = isAnnual;
         }
-        console.log(`  - Period match (looking for ${selectedPlan}):`, periodMatch, `(isMonthly: ${isMonthly}, isQuarterly: ${isQuarterly}, isAnnual: ${isAnnual})`);
-
         const matches = tierMatch && periodMatch;
-        console.log(`  - Overall match:`, matches);
 
         return matches;
       });
-
-      console.log('🎯 Found package:', pkg?.identifier);
 
       if (!pkg) {
         // Fallback: Try to find ANY premium package if exact match not found
@@ -225,7 +262,6 @@ export default function PremiumPaywall({
         });
 
         if (fallbackPkg) {
-          console.log('⚠️ Using fallback package:', fallbackPkg.identifier);
           Alert.alert(
             'Subscription Package',
             `Would you like to subscribe to ${fallbackPkg.product.title} for ${fallbackPkg.product.priceString}?`,
@@ -346,7 +382,6 @@ export default function PremiumPaywall({
               text: 'Copy Error',
               onPress: () => {
                 // Note: In production, you'd use Clipboard.setString(debugInfo)
-                console.log('Error to copy:', debugInfo);
               }
             },
             { text: 'OK' }
@@ -451,7 +486,12 @@ export default function PremiumPaywall({
                       <Text style={styles.mostPopularBadgeInlineText}>MOST POPULAR</Text>
                     </View>
                   </View>
-                  <Text style={styles.planRowSubtext}>$11.66/mo • 7-day free trial</Text>
+                  <Text style={styles.planRowSubtext}>
+                    {(() => {
+                      const trial = getTrialTextForPlan(isPlatinum ? 'platinum' : 'premium', 'quarterly');
+                      return trial.eligible ? `$11.66/mo • ${trial.text}` : '$11.66/mo';
+                    })()}
+                  </Text>
                 </View>
               </View>
               <View style={styles.planRowRight}>
@@ -479,7 +519,12 @@ export default function PremiumPaywall({
                       <Text style={styles.bestValueBadgeInlineText}>BEST VALUE</Text>
                     </View>
                   </View>
-                  <Text style={styles.planRowSubtext}>$10.00/mo • 7-day free trial</Text>
+                  <Text style={styles.planRowSubtext}>
+                    {(() => {
+                      const trial = getTrialTextForPlan(isPlatinum ? 'platinum' : 'premium', 'annual');
+                      return trial.eligible ? `$10.00/mo • ${trial.text}` : '$10.00/mo';
+                    })()}
+                  </Text>
                 </View>
               </View>
               <View style={styles.planRowRight}>
@@ -502,7 +547,12 @@ export default function PremiumPaywall({
                 </View>
                 <View style={styles.planRowInfo}>
                   <Text style={styles.planRowName}>Monthly</Text>
-                  <Text style={styles.planRowSubtext}>$14.99/mo • 7-day free trial</Text>
+                  <Text style={styles.planRowSubtext}>
+                    {(() => {
+                      const trial = getTrialTextForPlan(isPlatinum ? 'platinum' : 'premium', 'monthly');
+                      return trial.eligible ? `$14.99/mo • ${trial.text}` : '$14.99/mo';
+                    })()}
+                  </Text>
                 </View>
               </View>
               <View style={styles.planRowRight}>
@@ -543,13 +593,25 @@ export default function PremiumPaywall({
               {loading ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <>
-                  <Text style={styles.ctaButtonText}>Start 7-Day Free Trial</Text>
-                  <Text style={styles.ctaButtonSubtext}>
-                    Then {selectedPlan === 'monthly' ? monthlyPrice : selectedPlan === 'quarterly' ? quarterlyPrice : annualPrice}/
-                    {selectedPlan === 'monthly' ? 'mo' : selectedPlan === 'quarterly' ? '3 mo' : 'yr'}
-                  </Text>
-                </>
+                (() => {
+                  const trial = getTrialTextForPlan(isPlatinum ? 'platinum' : 'premium', selectedPlan);
+                  const price = selectedPlan === 'monthly' ? monthlyPrice : selectedPlan === 'quarterly' ? quarterlyPrice : annualPrice;
+                  const period = selectedPlan === 'monthly' ? 'mo' : selectedPlan === 'quarterly' ? '3 mo' : 'yr';
+                  return (
+                    <>
+                      <Text style={styles.ctaButtonText}>
+                        {trial.eligible && trial.text
+                          ? `Start ${trial.text.replace(/\b\w/g, (c) => c.toUpperCase())}`
+                          : 'Subscribe Now'}
+                      </Text>
+                      {trial.eligible && (
+                        <Text style={styles.ctaButtonSubtext}>
+                          Then {price}/{period}
+                        </Text>
+                      )}
+                    </>
+                  );
+                })()
               )}
             </View>
           </TouchableOpacity>

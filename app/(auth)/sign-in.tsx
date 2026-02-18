@@ -167,7 +167,6 @@ export default function SignIn() {
             return;
           }
         } catch (checkError) {
-          console.log('Could not check providers:', checkError);
         }
 
         // Fallback generic message
@@ -198,7 +197,6 @@ export default function SignIn() {
   const handleGoogleSignIn = async () => {
     // Synchronous check to prevent ANR from multiple rapid taps on slow devices
     if (isSigningIn.current) {
-      console.log('Sign-in already in progress, ignoring tap');
       return;
     }
     isSigningIn.current = true;
@@ -259,7 +257,6 @@ export default function SignIn() {
   const handleAppleSignIn = async () => {
     // Synchronous check to prevent ANR from multiple rapid taps on slow devices
     if (isSigningIn.current) {
-      console.log('Sign-in already in progress, ignoring tap');
       return;
     }
     isSigningIn.current = true;
