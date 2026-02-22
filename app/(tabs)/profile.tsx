@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/lib/useColorScheme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
 
@@ -74,6 +75,19 @@ export default function Profile() {
   const [showPreview, setShowPreview] = useState(false);
   const [preferences, setPreferences] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showActivityNewBadge, setShowActivityNewBadge] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('activity_center_seen').then(val => {
+      if (!val) setShowActivityNewBadge(true);
+    });
+  }, []);
+
+  const handleActivityPress = useCallback(() => {
+    setShowActivityNewBadge(false);
+    AsyncStorage.setItem('activity_center_seen', 'true');
+    router.push('/activity');
+  }, []);
 
   useEffect(() => {
     loadProfile();
@@ -342,6 +356,7 @@ export default function Profile() {
               {[
                 t('profile.unlimitedSwipes'),
                 t('profile.seeWhoLikesYou'),
+                t('profile.activityCenterFeature', 'Activity Center'),
                 isPlatinum ? t('profile.weeklyProfileBoost') : t('profile.superLikesPerWeek'),
                 isPlatinum ? t('profile.prioritySupport') : t('profile.voiceMessages'),
               ].map((benefit, i) => (
@@ -394,6 +409,7 @@ export default function Profile() {
                 {[
                   t('profile.unlimitedSwipes'),
                   t('profile.seeWhoLikesYou'),
+                  t('profile.activityCenterFeature', 'Activity Center'),
                   t('profile.advancedFilters'),
                   t('profile.readReceiptsAndVoice'),
                 ].map((feature, i) => (
@@ -416,6 +432,23 @@ export default function Profile() {
           {/* ===== ACTIVITY & MATCHING ===== */}
           <View style={styles.menuSection}>
             <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Activity & Matching</Text>
+
+            {/* Activity Center */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: isPremium ? '#F5F0FF' : colors.card, borderColor: isPremium ? '#A08AB7' : colors.border }]}
+              onPress={handleActivityPress}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="bell-ring-outline" size={24} color="#A08AB7" />
+                <Text style={[styles.menuItemText, { color: '#A08AB7', fontWeight: '600' }]}>{t('profile.activityCenter', 'Activity Center')}</Text>
+                {showActivityNewBadge && (
+                  <View style={styles.newBadge}>
+                    <Text style={styles.newBadgeText}>NEW</Text>
+                  </View>
+                )}
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
+            </TouchableOpacity>
 
             {/* Matching Preferences */}
             <TouchableOpacity
@@ -1067,6 +1100,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#111827',
+  },
+  newBadge: {
+    backgroundColor: '#10B981',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  newBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
   },
   menuItemSubtext: {
     fontSize: 11,

@@ -448,7 +448,7 @@
     "platinumMember": "Platinum Member",
     "enjoyingPremium": "Enjoying all Premium features",
     "enjoyingPlatinum": "Enjoying all Platinum features",
-    "unlimitedSwipes": "Unlimited swipes",
+    "unlimitedSwipes": "Unlimited likes",
     "seeWhoLikesYou": "See who likes you",
     "superLikesPerWeek": "5 Super Likes/week",
     "weeklyProfileBoost": "Weekly profile boost",
@@ -456,7 +456,7 @@
     "prioritySupport": "Priority support",
     "upgradeToPlatinum": "Upgrade to Platinum",
     "upgradeToPremium": "Upgrade to Premium",
-    "upgradeToPremiumSubtitle": "Get unlimited swipes, see who likes you, and more",
+    "upgradeToPremiumSubtitle": "Get unlimited likes, see who likes you, and more",
     "advancedFilters": "Advanced filters",
     "readReceiptsAndVoice": "Read receipts & voice messages",
     "unlockPremiumFeatures": "Unlock Premium Features",
@@ -959,7 +959,7 @@
     "subscribeToPremium": "Subscribe to Premium",
     "subscribeToPlatinum": "Subscribe to Platinum",
     "premiumIncludes": "Premium includes:",
-    "premiumFeaturesList": "• Unlimited swipes\n• See who liked you\n• 5 Super Likes/week\n• Voice messages\n• Read receipts\n• Advanced filters\n• Rewind",
+    "premiumFeaturesList": "• Unlimited likes\n• See who liked you\n• Access to Activity Center\n• 5 Super Likes/week\n• Voice messages\n• Read receipts\n• Advanced filters\n• Rewind",
     "everythingInPremiumPlus": "Everything in Premium, plus:",
     "platinumFeaturesList": "• Weekly profile boost\n• Background checks\n• Legal resources\n• Priority support",
     "platinumComingSoonMessage": "Stay tuned! Platinum tier launching soon.",
@@ -967,7 +967,7 @@
     "planNotAvailable": "{{plan}} {{period}} plan not available in RevenueCat",
     "premiumFeaturesTitle": "Premium Features",
     "features": {
-      "unlimitedSwipes": "Unlimited swipes",
+      "unlimitedSwipes": "Unlimited likes",
       "seeWhoLikedYou": "See who liked you",
       "superLikesPerWeek": "5 Super Likes per week",
       "voiceMessages": "Voice messages",
@@ -1008,7 +1008,7 @@
       "developmentModeTitle": "Development Mode",
       "developmentModeMessage": "Subscription management is handled via the database in development mode.\n\nIn production, this will open your App Store or Play Store subscription settings.",
       "cancelWarningTitle": "Are you sure?",
-      "cancelWarningMessage": "If you cancel, you'll lose access to:\n\n\u2022 Unlimited swipes (back to 5/day)\n\u2022 See who liked you\n\u2022 5 Super Likes per week\n\u2022 Voice messages\n\u2022 Read receipts\n\u2022 Advanced discovery filters\n\u2022 Rewind last swipe\n\u2022 Incognito mode\n\u2022 Weekly profile boost\n\nYour features stay active until your current billing period ends.",
+      "cancelWarningMessage": "If you cancel, you'll lose access to:\n\n\u2022 Unlimited likes (back to 5/day)\n\u2022 See who liked you\n\u2022 Access to Activity Center\n\u2022 5 Super Likes per week\n\u2022 Voice messages\n\u2022 Read receipts\n\u2022 Advanced discovery filters\n\u2022 Rewind last swipe\n\u2022 Incognito mode\n\u2022 Weekly profile boost\n\nYour features stay active until your current billing period ends.",
       "keepSubscription": "Keep Premium",
       "continueToManage": "Manage Anyway",
       "couldNotOpenManagement": "Could not open subscription management",
@@ -1093,6 +1093,19 @@
     "version": "Version {{version}}",
     "continue": "Let's Go!",
     "new": "NEW",
+    "v202": {
+      "headline": "Your Activity Center is here! See who's interested in you.",
+      "features": {
+        "activityCenter": {
+          "title": "Activity Center",
+          "description": "Track likes, matches, profile views, and more — all in one place. Find it on your Matches page or Profile tab."
+        },
+        "improvements": {
+          "title": "Bug Fixes & Improvements",
+          "description": "Performance improvements and stability fixes for a smoother experience"
+        }
+      }
+    },
     "v109": {
       "headline": "Stay connected with your Activity Center and improved location accuracy!",
       "features": {

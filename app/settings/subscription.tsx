@@ -608,6 +608,7 @@ export default function SubscriptionManagement() {
             {[
               { icon: 'infinity', text: t('subscriptionSettings.features.unlimitedSwipes'), tier: 'premium' },
               { icon: 'eye', text: t('subscriptionSettings.features.seeWhoLikedYou'), tier: 'premium' },
+              { icon: 'bell-ring-outline', text: t('subscriptionSettings.features.activityCenter', 'Activity Center'), tier: 'premium' },
               { icon: 'star', text: t('subscriptionSettings.features.superLikesPerWeek'), tier: 'premium' },
               { icon: 'microphone', text: t('subscriptionSettings.features.voiceMessages'), tier: 'premium' },
               { icon: 'check-all', text: t('subscriptionSettings.features.readReceipts'), tier: 'premium' },
