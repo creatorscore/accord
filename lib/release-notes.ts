@@ -28,6 +28,25 @@ export interface ReleaseNote {
 // Add new versions at the TOP of this array
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '2.0.2',
+    date: 'February 2026',
+    headlineKey: 'whatsNew.v202.headline',
+    features: [
+      {
+        icon: 'bell-ring',
+        titleKey: 'whatsNew.v202.features.activityCenter.title',
+        descriptionKey: 'whatsNew.v202.features.activityCenter.description',
+        isNew: true,
+        isPremium: true,
+      },
+      {
+        icon: 'bug-outline',
+        titleKey: 'whatsNew.v202.features.improvements.title',
+        descriptionKey: 'whatsNew.v202.features.improvements.description',
+      },
+    ],
+  },
+  {
     version: '1.1.0',
     date: 'December 2024',
     headlineKey: 'whatsNew.v109.headline',

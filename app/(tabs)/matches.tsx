@@ -16,7 +16,9 @@ import { isOnline, getLastActiveText } from '@/lib/online-status';
 import { realtimeManager } from '@/lib/realtime-manager';
 import { decryptMessage, getPrivateKey } from '@/lib/encryption';
 import { usePhotoBlur } from '@/hooks/usePhotoBlur';
+import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
 import { MatchesListSkeleton } from '@/components/shared/SkeletonScreens';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from '@/contexts/ToastContext';
 
 interface Match {
@@ -218,6 +220,7 @@ export default function Matches() {
   const isLandscape = width > height;
   const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const unreadActivityCount = useUnreadActivityCount(currentProfileId);
   const [matches, setMatches] = useState<Match[]>([]);
   const [likesCount, setLikesCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -225,6 +228,19 @@ export default function Matches() {
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [actionSheetMatch, setActionSheetMatch] = useState<Match | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showActivityNewBadge, setShowActivityNewBadge] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('activity_center_seen').then(val => {
+      if (!val) setShowActivityNewBadge(true);
+    });
+  }, []);
+
+  const handleActivityPress = useCallback(() => {
+    setShowActivityNewBadge(false);
+    AsyncStorage.setItem('activity_center_seen', 'true');
+    router.push('/activity');
+  }, []);
 
   useEffect(() => {
     loadCurrentProfile();
@@ -996,6 +1012,26 @@ export default function Matches() {
             <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('matches.title')}</Text>
             <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('matches.subtitle')}</Text>
           </View>
+          <TouchableOpacity
+            onPress={handleActivityPress}
+            style={[styles.activityButton, { backgroundColor: isPremium ? '#F5F0FF' : colors.muted }]}
+          >
+            <View style={{ position: 'relative' }}>
+              <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#A08AB7" />
+              {unreadActivityCount > 0 && (
+                <View style={styles.activityBadge}>
+                  <Text style={styles.activityBadgeText}>
+                    {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
+                  </Text>
+                </View>
+              )}
+              {showActivityNewBadge && unreadActivityCount === 0 && (
+                <View style={styles.newFeatureBadge}>
+                  <Text style={styles.newFeatureBadgeText}>NEW</Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
         </View>
 
         <MatchesListSkeleton />
@@ -1013,6 +1049,26 @@ export default function Matches() {
             <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('matches.title')}</Text>
             <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('matches.subtitle')}</Text>
           </View>
+          <TouchableOpacity
+            onPress={handleActivityPress}
+            style={[styles.activityButton, { backgroundColor: isPremium ? '#F5F0FF' : colors.muted }]}
+          >
+            <View style={{ position: 'relative' }}>
+              <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#A08AB7" />
+              {unreadActivityCount > 0 && (
+                <View style={styles.activityBadge}>
+                  <Text style={styles.activityBadgeText}>
+                    {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
+                  </Text>
+                </View>
+              )}
+              {showActivityNewBadge && unreadActivityCount === 0 && (
+                <View style={styles.newFeatureBadge}>
+                  <Text style={styles.newFeatureBadgeText}>NEW</Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.emptyContainer}>
@@ -1064,6 +1120,26 @@ export default function Matches() {
               : t('matches.connections', { count: matches.length })}
           </Text>
         </View>
+        <TouchableOpacity
+          onPress={handleActivityPress}
+          style={[styles.activityButton, { backgroundColor: isPremium ? '#F5F0FF' : colors.muted }]}
+        >
+          <View style={{ position: 'relative' }}>
+            <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#A08AB7" />
+            {unreadActivityCount > 0 && (
+              <View style={styles.activityBadge}>
+                <Text style={styles.activityBadgeText}>
+                  {unreadActivityCount > 9 ? '9+' : unreadActivityCount}
+                </Text>
+              </View>
+            )}
+            {showActivityNewBadge && unreadActivityCount === 0 && (
+              <View style={styles.newFeatureBadge}>
+                <Text style={styles.newFeatureBadgeText}>NEW</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Matches List */}
@@ -1524,5 +1600,42 @@ const styles = StyleSheet.create({
   },
   actionTextDanger: {
     color: '#EF4444',
+  },
+  activityButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  newFeatureBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -14,
+    backgroundColor: '#10B981',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  newFeatureBadgeText: {
+    color: 'white',
+    fontSize: 8,
+    fontWeight: '700',
   },
 });
