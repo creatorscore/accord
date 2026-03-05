@@ -137,7 +137,18 @@ const signInWithGoogleNative = async () => {
   // Note: nonce parameter in GoogleSignin.signIn() is only available in the PAID version
   // of react-native-google-signin. For the free version, we skip nonce validation.
   // See: https://github.com/react-native-google-signin/docs/blob/main/docs/api/index.mdx
-  const response = await GoogleSignin.signIn();
+  let response;
+  try {
+    response = await GoogleSignin.signIn();
+  } catch (e: any) {
+    // On Android, if the user backgrounds the app during Google Sign-In,
+    // a "Can not perform this action after onSaveInstanceState" error is thrown.
+    // This is a known Android fragment lifecycle issue — treat it as a cancellation.
+    if (e?.message?.includes?.('onSaveInstanceState')) {
+      return null;
+    }
+    throw e;
+  }
 
   if (isSuccessResponse(response)) {
     const { idToken } = response.data;
