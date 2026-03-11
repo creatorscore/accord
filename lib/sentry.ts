@@ -4,6 +4,21 @@ import Constants from 'expo-constants';
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
 
+// UUID pattern for redaction (prevents identifying users from breadcrumb URLs)
+const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+function redactUUIDs(value: string): string {
+  return value.replace(UUID_REGEX, '[REDACTED]');
+}
+
+// Identity fields that must never leak to error tracking — exposure = prosecution risk
+const SENSITIVE_IDENTITY_KEYS = [
+  'gender', 'sexual_orientation', 'ethnicity', 'religion', 'political_views',
+  'display_name', 'occupation', 'education', 'hometown', 'pronouns',
+  'latitude', 'longitude', 'location_city', 'location_state', 'location_country',
+  'bio', 'my_story', 'birth_date',
+];
+
 /**
  * Initialize Sentry for error tracking
  * Call this once when the app starts (in _layout.tsx)
@@ -129,29 +144,180 @@ export const initializeSentry = () => {
         }
 
         // Drop NativeEventEmitter null argument — deprecated RN modules on newer OS versions
-        if (errorType === 'Invariant Violation' &&
+        // Can appear as JS "Invariant Violation" or native C++ exception (N8facebook3jsi7JSErrorE)
+        if ((errorType === 'Invariant Violation' || errorType === 'C++ Exception') &&
             errorMessage.includes('NativeEventEmitter') &&
             errorMessage.includes('non-null argument')) {
           return null;
+        }
+
+        // Drop C++ JSI bridge crashes with no useful JS stack — native RN internals
+        // The type/message split varies: type may be "C++ Exception" with message containing the
+        // mangled name, OR type may be the mangled name itself (e.g. "N8facebook3jsi7JSErrorE")
+        const fullErrorStr = `${errorType}: ${errorMessage}`;
+        if ((fullErrorStr.includes('N8facebook3jsi7JSErrorE') || fullErrorStr.includes('jsi7JSError')) &&
+            (errorMessage === '(null)' || errorMessage === '' || fullErrorStr.includes('(null)'))) {
+          const frames = event.exception?.values?.[0]?.stacktrace?.frames || [];
+          const hasAppFrames = frames.some((f: any) => f.in_app === true && f.filename && !f.filename.includes('node_modules'));
+          if (!hasAppFrames) {
+            return null;
+          }
+        }
+
+        // Drop RenderScript crashes — Android blur effects on older/low-end devices, not actionable
+        // These can appear as errorType or errorMessage depending on the crash variant
+        if (errorType.includes('rsdScript') || errorType.includes('renderscript') ||
+            errorMessage.includes('rsdScriptSetGlobalVar') || errorMessage.includes('rsdScriptSetGlobalObj') ||
+            (errorType === 'SIGSEGV' && errorMessage.includes('RsdCpuScriptImpl'))) {
+          return null;
+        }
+
+        // Drop android::renderscript::ObjectBase crashes — RenderScript destructor/lock failures
+        if (errorType.includes('ObjectBase') && errorType.includes('renderscript')) {
+          return null;
+        }
+
+        // Drop OS watchdog terminations — device killed app for RAM pressure, not actionable
+        if (errorType === 'WatchdogTermination' || errorMessage.includes('The OS watchdog terminated')) {
+          return null;
+        }
+
+        // Drop Android SurfaceControl NPE — framework bug in view lifecycle
+        if (errorType === 'NullPointerException' && errorMessage.includes('SurfaceControl')) {
+          return null;
+        }
+
+        // Drop JSApplicationIllegalArgumentException for animated nodes —
+        // Fabric renderer race condition (addAnimatedEventToView, similar to connectAnimatedNodes)
+        if (errorType === 'JSApplicationIllegalArgumentException' &&
+            errorMessage.includes('addAnimatedEventToView')) {
+          return null;
+        }
+
+        // Drop native abort() crashes with no app frames — system/driver bugs
+        if (errorType === 'abort' || (errorType === 'SIGABRT' && errorMessage === 'abort')) {
+          const frames = event.exception?.values?.[0]?.stacktrace?.frames || [];
+          const hasAppFrames = frames.some((f: any) => f.in_app === true);
+          if (!hasAppFrames) {
+            return null;
+          }
+        }
+
+        // Drop Expo asset download failures — font/asset bundling issues on specific devices
+        if (errorMessage.includes('ExpoAsset.downloadAsync') ||
+            errorMessage.includes('Unable to download asset from url')) {
+          return null;
+        }
+
+        // Drop DeadSystemException — Android OS process died, app can't recover
+        if (errorType === 'DeadSystemRuntimeException' || errorMessage.includes('DeadSystemException')) {
+          return null;
+        }
+
+        // Drop NSInternalInconsistencyException — iOS UIKit internal assertion failures
+        if (errorType === 'NSInternalInconsistencyException') {
+          return null;
+        }
+
+        // Drop React Native ShadowNode destructor crashes — Fabric renderer internals
+        if (errorType.includes('ShadowNode') || errorType.includes('facebook::react::')) {
+          return null;
+        }
+
+        // Drop "navigate before Root Layout" — Expo Router timing race on cold start
+        if (errorMessage.includes('Attempted to navigate before mounting the Root Layout')) {
+          return null;
+        }
+
+        // Drop ExpoFontLoader crashes — font file empty/corrupt on budget devices (storage issue)
+        if (errorMessage.includes('ExpoFontLoader.loadAsync') || errorMessage.includes('Font file for')) {
+          return null;
+        }
+
+        // Drop RNCDatePicker Activity detachment — OS destroyed Activity while picker was open
+        if (errorMessage.includes('RNCDatePicker') && errorMessage.includes('not attached to an Activity')) {
+          return null;
+        }
+
+        // Drop IllegalStateException onSaveInstanceState — Android fragment lifecycle race
+        // errorType can be "IllegalStateException" (native) or just "Error" when bridged to JS
+        // via onunhandledrejection, so also check the message for the Java class name
+        if ((errorType.includes('IllegalStateException') || errorMessage.includes('IllegalStateException')) && errorMessage.includes('onSaveInstanceState')) {
+          return null;
+        }
+
+        // Drop JNI_OnLoad native crashes — library initialization failures, not actionable
+        if (errorType === 'JNI_OnLoad') {
+          return null;
+        }
+
+        // Drop C++ JSI bridge errors more broadly — check type directly
+        // Covers mangled C++ names like N8facebook3jsi*, facebook::react::*, etc.
+        if (errorType.includes('N8facebook') || errorType.includes('jsi7JSError') ||
+            errorType.includes('facebook::react')) {
+          const frames = event.exception?.values?.[0]?.stacktrace?.frames || [];
+          const hasAppFrames = frames.some((f: any) => f.in_app === true && f.filename && !f.filename.includes('node_modules'));
+          if (!hasAppFrames) {
+            return null;
+          }
         }
 
         // Remove potentially sensitive user data
         if (event.user) {
           delete event.user.email;
           delete event.user.ip_address;
+          delete event.user.username;
         }
 
-        // Filter out password fields from breadcrumbs
+        // Sanitize breadcrumbs — strip identity data, redact UUIDs, remove request/response bodies
         if (event.breadcrumbs) {
           event.breadcrumbs = event.breadcrumbs.map((breadcrumb: any) => {
+            // Redact UUIDs from navigation breadcrumbs (profile/chat URLs contain user IDs)
+            if (breadcrumb.category === 'navigation' || breadcrumb.category === 'route') {
+              if (breadcrumb.message) {
+                breadcrumb.message = redactUUIDs(breadcrumb.message);
+              }
+              if (breadcrumb.data) {
+                const sanitized = { ...breadcrumb.data };
+                for (const key of Object.keys(sanitized)) {
+                  if (typeof sanitized[key] === 'string') {
+                    sanitized[key] = redactUUIDs(sanitized[key]);
+                  }
+                }
+                breadcrumb.data = sanitized;
+              }
+            }
+
             if (breadcrumb.data) {
               const sanitized = { ...breadcrumb.data };
-              if ('password' in sanitized) delete sanitized.password;
-              if ('token' in sanitized) delete sanitized.token;
+
+              // Remove auth/credential fields
+              for (const key of ['password', 'token', 'authorization', 'cookie', 'secret', 'api_key', 'apiKey']) {
+                delete sanitized[key];
+              }
+
+              // Remove request/response bodies (may contain profile data with orientation/gender)
+              for (const key of ['request', 'response', 'body', 'requestBody', 'responseBody', 'request_body', 'response_body']) {
+                delete sanitized[key];
+              }
+
+              // Strip LGBTQ+ identity fields if they appear in breadcrumb data
+              for (const key of SENSITIVE_IDENTITY_KEYS) {
+                delete sanitized[key];
+              }
+
               breadcrumb.data = sanitized;
             }
+
             return breadcrumb;
           });
+        }
+
+        // Strip identity fields from event extras/contexts
+        if (event.extra) {
+          for (const key of SENSITIVE_IDENTITY_KEYS) {
+            delete event.extra[key];
+          }
         }
 
         return event;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -51,8 +51,15 @@ import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { checkMessagingVersionRequirement, getCurrentVersion } from '@/lib/version-check';
 import * as Linking from 'expo-linking';
+import * as Clipboard from 'expo-clipboard';
 import { usePhotoBlur } from '@/hooks/usePhotoBlur';
+import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
+import { getSignedUrl, getSignedUrls } from '@/lib/signed-urls';
+import { extractUrls, type LinkPreviewData } from '@/lib/link-preview';
 import EmojiPicker from 'rn-emoji-keyboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import SwipeableMessageBubble from '@/components/messaging/SwipeableMessageBubble';
 
 interface MessageReaction {
   id: string;
@@ -74,6 +81,16 @@ interface Message {
   media_url?: string;
   voice_duration?: number;
   reactions?: MessageReaction[];  // Reactions on this message
+  reply_to_message_id?: string | null;
+  reply_to_message?: {
+    id: string;
+    encrypted_content: string;
+    sender_profile_id: string;
+    content_type: string;
+    decrypted_content?: string;
+    media_url?: string;
+  } | null;
+  link_preview?: LinkPreviewData | null;
 }
 
 interface MatchProfile {
@@ -84,7 +101,6 @@ interface MatchProfile {
   photo_blur_data_uri?: string | null;
   is_verified?: boolean;
   photo_verified?: boolean;
-  occupation?: string;
   location_city?: string;
   compatibility_score?: number;
   distance?: number;
@@ -115,7 +131,11 @@ export default function Chat() {
   const { colors, isDarkColorScheme } = useColorScheme();
   const { showToast } = useToast();
 
+  // Memoize voice waveform heights to prevent re-render jitter
+  const voiceWaveHeights = useMemo(() => [...Array(20)].map(() => Math.random() * 20 + 10), []);
+
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const currentProfileIdRef = useRef<string | null>(null); // Ref for async callbacks (subscriptions)
   const [currentProfileName, setCurrentProfileName] = useState<string>('');
   const [matchProfile, setMatchProfile] = useState<MatchProfile | null>(null);
   const [matchStatus, setMatchStatus] = useState<MatchStatus | null>(null);
@@ -167,7 +187,7 @@ export default function Chat() {
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
 
   // Photo blur - uses server-side data URI when available, falls back to legacy blur
-  const { imageUri: matchPhotoUri, blurRadius, showBlurOverlay, onImageLoad, onImageError } = usePhotoBlur({
+  const { imageUri: matchPhotoUri, blurRadius, onImageLoad, onImageError } = usePhotoBlur({
     shouldBlur: matchProfilePhotoBlur && !otherUserRevealed && !isAdmin,
     photoUrl: matchProfile?.photo_url || 'https://via.placeholder.com/40',
     blurDataUri: matchProfile?.photo_blur_data_uri,
@@ -194,6 +214,23 @@ export default function Chat() {
   // Timestamp display state - which message is showing full timestamp
   const [expandedTimestampId, setExpandedTimestampId] = useState<string | null>(null);
 
+  // Reply state
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const textInputRef = useRef<TextInput>(null);
+
+  // Premium banner dismiss state
+  const [premiumBannerDismissed, setPremiumBannerDismissed] = useState(false);
+
+  // Search state
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResultIds, setSearchResultIds] = useState<string[]>([]);
+  const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
+  const searchInputRef = useRef<TextInput>(null);
+
+  // Track whether initial load completed (prevents useFocusEffect double-load)
+  const initialLoadDone = useRef(false);
+
   // Android layout fix - force re-layout after initial mount
   const [androidLayoutReady, setAndroidLayoutReady] = useState(Platform.OS !== 'android');
 
@@ -208,11 +245,30 @@ export default function Chat() {
       const result = await checkMessagingVersionRequirement();
       if (!result.allowed) {
         setVersionCheckPassed(false);
-        setVersionUpdateMessage(result.message || 'Please update your app to continue messaging.');
+        setVersionUpdateMessage(result.message || t('chat.version.updateRequired'));
         setShowUpdateModal(true);
       }
     };
     checkVersion();
+  }, []);
+
+  // Check if premium banner was recently dismissed (reshow after 4 days)
+  useEffect(() => {
+    if (isPremium) return;
+    AsyncStorage.getItem('premiumBannerDismissedAt').then((val) => {
+      if (val) {
+        const dismissed = new Date(val).getTime();
+        const fourDays = 4 * 24 * 60 * 60 * 1000;
+        if (Date.now() - dismissed < fourDays) {
+          setPremiumBannerDismissed(true);
+        }
+      }
+    });
+  }, [isPremium]);
+
+  const handleDismissPremiumBanner = useCallback(() => {
+    setPremiumBannerDismissed(true);
+    AsyncStorage.setItem('premiumBannerDismissedAt', new Date().toISOString());
   }, []);
 
   // Android layout fix - trigger re-layout after interactions complete
@@ -226,7 +282,353 @@ export default function Chat() {
   }, []);
 
   useEffect(() => {
-    loadCurrentProfile();
+    let cancelled = false;
+    let unsubMessages: (() => void) | null = null;
+    let unsubReactions: (() => void) | null = null;
+
+    const initChat = async () => {
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
+      try {
+        // ═══ Phase 1: All independent queries in parallel ═══
+        // Current profile, match data, messages, and encryption keys all start simultaneously
+        const [profileResult, matchResult, messagesResult, myPrivateKey, myLegacyPrivateKey] = await Promise.all([
+          supabase.from('profiles')
+            .select('id, display_name, photo_blur_enabled, is_admin')
+            .eq('user_id', user.id)
+            .single(),
+          supabase.from('matches')
+            .select('profile1_id, profile2_id, status, unmatched_by, unmatched_at, unmatch_reason, compatibility_score')
+            .eq('id', matchId)
+            .single(),
+          supabase.from('messages')
+            .select('*, reply_to:reply_to_message_id(id, encrypted_content, sender_profile_id, content_type, media_url)')
+            .eq('match_id', matchId)
+            .order('created_at', { ascending: false })
+            .limit(100),
+          getPrivateKey(user?.id || ''),
+          getLegacyPrivateKey(user?.id || ''),
+        ]);
+
+        if (cancelled) return;
+
+        // Extract current profile
+        if (profileResult.error) throw profileResult.error;
+        const myProfileId = profileResult.data.id;
+        currentProfileIdRef.current = myProfileId;
+        setCurrentProfileId(myProfileId);
+        setCurrentProfileName(profileResult.data.display_name);
+        setCurrentUserPhotoBlur(profileResult.data.photo_blur_enabled || false);
+        setIsAdmin(profileResult.data.is_admin || false);
+
+        // Process match data
+        if (matchResult.error) throw matchResult.error;
+        const matchData = matchResult.data;
+        setMatchStatus({
+          status: matchData.status,
+          unmatched_by: matchData.unmatched_by,
+          unmatched_at: matchData.unmatched_at,
+          unmatch_reason: matchData.unmatch_reason,
+        });
+
+        if (matchData.status !== 'active') {
+          setLoading(false);
+          return;
+        }
+
+        const otherProfileId = matchData.profile1_id === myProfileId
+          ? matchData.profile2_id
+          : matchData.profile1_id;
+
+        // Collect message IDs for reactions query
+        const messagesData = messagesResult.data || [];
+        const messageIds = messagesData.map((m: any) => m.id);
+
+        // ═══ Phase 2: Queries that need otherProfileId / messageIds ═══
+        // Ban check, other profile (with encryption key), location, reactions, photo reveals — all parallel
+        const [banResult, otherProfileResult, myLocationResult, reactionsResult, revealResults] = await Promise.all([
+          supabase.from('bans')
+            .select('id')
+            .eq('banned_profile_id', otherProfileId)
+            .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
+            .maybeSingle(),
+          supabase.from('profiles')
+            .select(`
+              id, display_name, age, is_verified, photo_verified,
+              location_city, latitude, longitude, last_active_at,
+              hide_last_active, photo_blur_enabled, encryption_public_key,
+              photos (url, storage_path, is_primary, display_order, blur_data_uri)
+            `)
+            .eq('id', otherProfileId)
+            .single(),
+          supabase.from('profiles')
+            .select('latitude, longitude')
+            .eq('id', myProfileId)
+            .single(),
+          messageIds.length > 0
+            ? supabase.from('message_reactions').select('*').in('message_id', messageIds)
+            : Promise.resolve({ data: [] as MessageReaction[] }),
+          Promise.all([
+            supabase.from('photo_reveals').select('id')
+              .eq('revealer_profile_id', myProfileId)
+              .eq('revealed_to_profile_id', otherProfileId)
+              .maybeSingle(),
+            supabase.from('photo_reveals').select('id')
+              .eq('revealer_profile_id', otherProfileId)
+              .eq('revealed_to_profile_id', myProfileId)
+              .maybeSingle(),
+          ]),
+        ]);
+
+        if (cancelled) return;
+
+        // ═══ Process ban check ═══
+        if (banResult.data) {
+          Alert.alert(
+            t('chat.unavailable.title'),
+            t('chat.unavailable.message'),
+            [{ text: 'OK', onPress: () => router.back() }]
+          );
+          setLoading(false);
+          return;
+        }
+
+        // ═══ Process match profile ═══
+        const profile = otherProfileResult.data;
+        if (otherProfileResult.error || !profile) throw otherProfileResult.error;
+
+        const photos = profile.photos?.sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
+        const primaryPhoto = photos?.find((p: any) => p.is_primary) || photos?.[0];
+
+        let signedPhotoUrl = primaryPhoto?.url;
+        if (primaryPhoto) {
+          const pathOrUrl = primaryPhoto.storage_path || primaryPhoto.url;
+          if (pathOrUrl) {
+            const signed = await getSignedUrl('profile-photos', pathOrUrl);
+            if (signed) signedPhotoUrl = signed;
+          }
+        }
+
+        let distance = null;
+        const currentUserData = myLocationResult.data;
+        if (profile.latitude && profile.longitude &&
+            currentUserData?.latitude && currentUserData?.longitude) {
+          const R = 3959;
+          const dLat = ((profile.latitude - currentUserData.latitude) * Math.PI) / 180;
+          const dLon = ((profile.longitude - currentUserData.longitude) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((currentUserData.latitude * Math.PI) / 180) *
+              Math.cos((profile.latitude * Math.PI) / 180) *
+              Math.sin(dLon / 2) *
+              Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          distance = Math.round(R * c);
+        }
+
+        setMatchProfile({
+          id: profile.id,
+          display_name: profile.display_name,
+          age: profile.age,
+          photo_url: signedPhotoUrl,
+          photo_blur_data_uri: primaryPhoto?.blur_data_uri,
+          is_verified: profile.is_verified,
+          photo_verified: profile.photo_verified,
+          location_city: profile.location_city,
+          compatibility_score: matchData.compatibility_score,
+          distance: distance ?? undefined,
+          last_active_at: profile.last_active_at,
+          hide_last_active: profile.hide_last_active,
+        });
+        setMatchProfilePhotoBlur(profile.photo_blur_enabled || false);
+
+        // Photo reveal status
+        setHasRevealedPhotos(!!revealResults[0].data);
+        setOtherUserRevealed(!!revealResults[1].data);
+
+        // Non-blocking: like intro
+        loadLikeIntro(otherProfileId, profile.display_name);
+
+        // ═══ Process messages ═══
+        const otherPublicKey = profile.encryption_public_key;
+
+        if (messagesData.length === 0) {
+          setMessages([]);
+          setLoading(false);
+          initialLoadDone.current = true;
+
+          // Set up subscriptions + mark as read even when no messages
+          unsubMessages = subscribeToMessages();
+          unsubReactions = subscribeToReactions();
+          supabase.from('messages')
+            .update({ read_at: new Date().toISOString() })
+            .eq('match_id', matchId)
+            .eq('receiver_profile_id', myProfileId)
+            .is('read_at', null)
+            .then(({ error: readError }) => { if (!readError) refreshUnreadCount(); });
+          return;
+        }
+
+        // Build reactions map
+        const { data: reactionsData } = reactionsResult;
+        const reactionsByMessage = new Map<string, MessageReaction[]>();
+        if (reactionsData) {
+          (reactionsData as MessageReaction[]).forEach((reaction) => {
+            const existing = reactionsByMessage.get(reaction.message_id) || [];
+            reactionsByMessage.set(reaction.message_id, [...existing, reaction]);
+          });
+        }
+
+        // Build messages in newest-first order (matches inverted FlatList)
+        const quickMessages: Message[] = messagesData.map((message: any) => {
+          const msg = message as Message;
+          let decryptedContent: string | undefined;
+
+          if (msg.content_type !== 'text') {
+            decryptedContent = undefined;
+          } else {
+            const content = msg.encrypted_content;
+            if (content && content.includes(':') && /^[A-Za-z0-9+/=]+:/.test(content)) {
+              decryptedContent = '\u00A0';
+            } else {
+              decryptedContent = content;
+            }
+          }
+
+          return {
+            ...msg,
+            decrypted_content: decryptedContent,
+            reactions: reactionsByMessage.get(message.id) || [],
+            reply_to_message_id: message.reply_to_message_id || null,
+            reply_to_message: message.reply_to || null,
+            link_preview: message.link_preview || null,
+          };
+        });
+
+        // Sign media URLs for image/voice messages
+        const signedMessages = await signMessageMediaUrls(quickMessages);
+
+        // Show UI immediately with plaintext + placeholders
+        setMessages(signedMessages);
+        setLoading(false);
+        initialLoadDone.current = true;
+
+        // Set up subscriptions
+        unsubMessages = subscribeToMessages();
+        unsubReactions = subscribeToReactions();
+
+        // Mark messages as read (non-blocking)
+        supabase.from('messages')
+          .update({ read_at: new Date().toISOString() })
+          .eq('match_id', matchId)
+          .eq('receiver_profile_id', myProfileId)
+          .is('read_at', null)
+          .then(({ error: readError }) => { if (!readError) refreshUnreadCount(); });
+
+        // PERFORMANCE: Defer decryption until after UI is responsive
+        InteractionManager.runAfterInteractions(async () => {
+          try {
+            if (!myPrivateKey && !myLegacyPrivateKey) return;
+            if (!otherPublicKey) return;
+
+            const needsDecryption = signedMessages.filter(
+              (m) => m.content_type === 'text' && m.encrypted_content.includes(':') && /^[A-Za-z0-9+/=]+:/.test(m.encrypted_content)
+            );
+
+            const decryptedMap = new Map<string, string>();
+            if (needsDecryption.length > 0) {
+              await Promise.all(
+                needsDecryption.map(async (msg) => {
+                  let decryptedContent: string | undefined;
+                  if (myPrivateKey) {
+                    try {
+                      const result = await decryptMessage(msg.encrypted_content, myPrivateKey, otherPublicKey);
+                      if (result !== '[Unable to decrypt message]') decryptedContent = result;
+                    } catch {}
+                  }
+                  if (!decryptedContent && myLegacyPrivateKey) {
+                    try {
+                      const result = await decryptMessage(msg.encrypted_content, myLegacyPrivateKey, otherPublicKey);
+                      if (result !== '[Unable to decrypt message]') decryptedContent = result;
+                    } catch {}
+                  }
+                  decryptedMap.set(msg.id, decryptedContent || t('chat.unableToDecrypt'));
+                })
+              );
+            }
+
+            // Decrypt reply_to_message content that isn't in the current batch
+            const replyDecryptedMap = new Map<string, string>();
+            const uniqueReplyEncrypted = new Map<string, string>();
+            for (const m of signedMessages) {
+              if (m.reply_to_message?.content_type === 'text' &&
+                  m.reply_to_message.encrypted_content?.includes(':') &&
+                  /^[A-Za-z0-9+/=]+:/.test(m.reply_to_message.encrypted_content) &&
+                  !decryptedMap.has(m.reply_to_message.id) &&
+                  !uniqueReplyEncrypted.has(m.reply_to_message.id)) {
+                uniqueReplyEncrypted.set(m.reply_to_message.id, m.reply_to_message.encrypted_content);
+              }
+            }
+            if (uniqueReplyEncrypted.size > 0) {
+              await Promise.all(
+                Array.from(uniqueReplyEncrypted.entries()).map(async ([replyId, encContent]) => {
+                  let decryptedContent: string | undefined;
+                  if (myPrivateKey) {
+                    try {
+                      const result = await decryptMessage(encContent, myPrivateKey, otherPublicKey);
+                      if (result !== '[Unable to decrypt message]') decryptedContent = result;
+                    } catch {}
+                  }
+                  if (!decryptedContent && myLegacyPrivateKey) {
+                    try {
+                      const result = await decryptMessage(encContent, myLegacyPrivateKey, otherPublicKey);
+                      if (result !== '[Unable to decrypt message]') decryptedContent = result;
+                    } catch {}
+                  }
+                  if (decryptedContent) replyDecryptedMap.set(replyId, decryptedContent);
+                })
+              );
+            }
+
+            // Check if anything needs patching
+            if (decryptedMap.size === 0 && replyDecryptedMap.size === 0) return;
+
+            setMessages((prev) => {
+              const allDecrypted = new Map(decryptedMap);
+              for (const m of prev) {
+                if (m.decrypted_content && !allDecrypted.has(m.id)) {
+                  allDecrypted.set(m.id, m.decrypted_content);
+                }
+              }
+              for (const [id, content] of replyDecryptedMap) {
+                if (!allDecrypted.has(id)) allDecrypted.set(id, content);
+              }
+              return prev.map((m) => {
+                const decrypted = decryptedMap.get(m.id);
+                const updated = decrypted ? { ...m, decrypted_content: decrypted } : m;
+                if (updated.reply_to_message?.id) {
+                  const replyDecrypted = allDecrypted.get(updated.reply_to_message.id);
+                  if (replyDecrypted && updated.reply_to_message.decrypted_content !== replyDecrypted) {
+                    return { ...updated, reply_to_message: { ...updated.reply_to_message, decrypted_content: replyDecrypted } };
+                  }
+                }
+                return updated;
+              });
+            });
+          } catch (error) {
+            console.error('Error decrypting messages:', error);
+          }
+        });
+      } catch (error: any) {
+        console.error('Error initializing chat:', error);
+        showToast({ type: 'error', title: t('common.error'), message: t('toast.chatLoadError') });
+        setLoading(false);
+      }
+    };
+
+    initChat();
     setupAudio();
 
     // Track keyboard visibility and height (for manual handling on both platforms)
@@ -246,9 +648,12 @@ export default function Chat() {
     );
 
     return () => {
+      cancelled = true;
       cleanupAudio();
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
+      unsubMessages?.();
+      unsubReactions?.();
       // Clean up all scroll timeouts
       scrollTimeoutRefs.current.forEach(clearTimeout);
       scrollTimeoutRefs.current = [];
@@ -258,37 +663,15 @@ export default function Chat() {
         autoStopRecordingTimeoutRef.current = null;
       }
     };
-  }, []);
+  }, [matchId]);
 
-  useEffect(() => {
-    if (currentProfileId && matchId) {
-      loadMatchProfile();
-      loadMessages();
-      const unsubscribeMessages = subscribeToMessages();
-      const unsubscribeReactions = subscribeToReactions();
-      markMessagesAsRead();
-
-      // Cleanup subscriptions when component unmounts or dependencies change
-      return () => {
-        if (unsubscribeMessages) {
-
-          unsubscribeMessages();
-        }
-        if (unsubscribeReactions) {
-
-          unsubscribeReactions();
-        }
-      };
-    }
-  }, [currentProfileId, matchId]);
-
-  // Reload messages when screen comes into focus (e.g., from notification tap)
-  // This ensures messages are fresh when navigating from a push notification
+  // Reload messages when screen regains focus (e.g., from notification tap)
+  // Skip the initial mount — initChat already handles that
   useFocusEffect(
     useCallback(() => {
-      if (currentProfileId && !loading) {
-
-        loadMessages();
+      if (initialLoadDone.current && currentProfileId && !loading) {
+        // Only mark as read on refocus — don't reload all messages.
+        // The realtime subscription handles new incoming messages.
         markMessagesAsRead();
       }
     }, [currentProfileId, loading])
@@ -301,10 +684,10 @@ export default function Chat() {
     }
   }, [isPremium, messages.length, loading, matchProfile]);
 
-  const setupAudio = async () => {
+  const setupAudio = async (forRecording = false) => {
     try {
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
+        allowsRecordingIOS: forRecording,
         playsInSilentModeIOS: true,
       });
     } catch (error) {
@@ -315,10 +698,14 @@ export default function Chat() {
   const cleanupAudio = async () => {
     if (recordingRef.current) {
       try {
-        await recordingRef.current.stopAndUnloadAsync();
+        const status = await recordingRef.current.getStatusAsync();
+        if (status.canRecord || status.isRecording) {
+          await recordingRef.current.stopAndUnloadAsync();
+        }
       } catch (error) {
-        console.error('Error cleaning up recording:', error);
+        // Already unloaded, ignore
       }
+      recordingRef.current = null;
     }
     if (soundRef.current) {
       try {
@@ -332,174 +719,8 @@ export default function Chat() {
     }
   };
 
-  const loadCurrentProfile = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, display_name, photo_blur_enabled, is_admin')
-        .eq('user_id', user?.id)
-        .single();
-
-      if (error) throw error;
-      setCurrentProfileId(data.id);
-      setCurrentProfileName(data.display_name);
-      setCurrentUserPhotoBlur(data.photo_blur_enabled || false);
-      setIsAdmin(data.is_admin || false);
-    } catch (error: any) {
-      console.error('Error loading profile:', error);
-    }
-  };
-
-  const loadMatchProfile = async () => {
-    try {
-
-
-      // Get match details including status and compatibility score in one query
-      const { data: matchData, error: matchError } = await supabase
-        .from('matches')
-        .select('profile1_id, profile2_id, status, unmatched_by, unmatched_at, unmatch_reason, compatibility_score')
-        .eq('id', matchId)
-        .single();
-
-
-
-      if (matchError) throw matchError;
-
-      // Store match status
-      setMatchStatus({
-        status: matchData.status,
-        unmatched_by: matchData.unmatched_by,
-        unmatched_at: matchData.unmatched_at,
-        unmatch_reason: matchData.unmatch_reason,
-      });
-
-      // If match is unmatched or blocked, stop here
-      if (matchData.status !== 'active') {
-
-        setLoading(false);
-        return;
-      }
-
-      // Determine other profile ID
-      const otherProfileId =
-        matchData.profile1_id === currentProfileId
-          ? matchData.profile2_id
-          : matchData.profile1_id;
-
-
-
-      // Run all remaining queries in parallel for better performance
-      const [banResult, profileResult, currentUserResult] = await Promise.all([
-        // Check if other user is banned
-        supabase
-          .from('bans')
-          .select('id')
-          .eq('banned_profile_id', otherProfileId)
-          .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
-          .maybeSingle(),
-        // Get profile details
-        supabase
-          .from('profiles')
-          .select(`
-            id,
-            display_name,
-            age,
-            is_verified,
-            photo_verified,
-            occupation,
-            location_city,
-            latitude,
-            longitude,
-            last_active_at,
-            hide_last_active,
-            photo_blur_enabled,
-            photos (
-              url,
-              is_primary,
-              display_order,
-              blur_data_uri
-            )
-          `)
-          .eq('id', otherProfileId)
-          .single(),
-        // Get current user's location for distance calculation
-        supabase
-          .from('profiles')
-          .select('latitude, longitude')
-          .eq('id', currentProfileId)
-          .single(),
-      ]);
-
-      // Check if other user is banned
-      if (banResult.data) {
-        Alert.alert(
-          'Chat Unavailable',
-          'This user is no longer available.',
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
-        setLoading(false);
-        return;
-      }
-
-      const profile = profileResult.data;
-      if (profileResult.error || !profile) throw profileResult.error;
-
-
-
-      const photos = profile.photos?.sort((a: any, b: any) => a.display_order - b.display_order);
-      const primaryPhoto = photos?.find((p: any) => p.is_primary) || photos?.[0];
-
-      // Calculate distance if both profiles have location
-      let distance = null;
-      const currentUserData = currentUserResult.data;
-      if (profile.latitude && profile.longitude &&
-          currentUserData?.latitude && currentUserData?.longitude) {
-        const R = 3959; // Earth's radius in miles
-        const dLat = ((profile.latitude - currentUserData.latitude) * Math.PI) / 180;
-        const dLon = ((profile.longitude - currentUserData.longitude) * Math.PI) / 180;
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos((currentUserData.latitude * Math.PI) / 180) *
-            Math.cos((profile.latitude * Math.PI) / 180) *
-            Math.sin(dLon / 2) *
-            Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        distance = Math.round(R * c);
-      }
-
-      const matchProfileData: MatchProfile = {
-        id: profile.id,
-        display_name: profile.display_name,
-        age: profile.age,
-        photo_url: primaryPhoto?.url,
-        photo_blur_data_uri: primaryPhoto?.blur_data_uri,
-        is_verified: profile.is_verified,
-        photo_verified: profile.photo_verified,
-        occupation: profile.occupation,
-        location_city: profile.location_city,
-        compatibility_score: matchData.compatibility_score,
-        distance: distance ?? undefined,
-        last_active_at: profile.last_active_at,
-        hide_last_active: profile.hide_last_active,
-      };
-
-
-      setMatchProfile(matchProfileData);
-      setMatchProfilePhotoBlur(profile.photo_blur_enabled || false);
-
-      // Load like intro context (async, non-blocking)
-      loadLikeIntro(otherProfileId, profile.display_name);
-
-      // Check photo reveal status (async, non-blocking)
-      checkPhotoRevealStatus(otherProfileId);
-    } catch (error: any) {
-      console.error('❌ Error loading match profile:', error);
-      showToast({ type: 'error', title: t('common.error'), message: t('toast.chatLoadError') });
-      router.back();
-    }
-  };
-
   const loadLikeIntro = async (otherProfileId: string, otherDisplayName: string) => {
+    const myProfileId = currentProfileIdRef.current || currentProfileId;
     try {
       // Find the like between these two profiles that has a message or liked_content
       // Check both directions (either user could have liked first)
@@ -507,8 +728,8 @@ export default function Chat() {
         .from('likes')
         .select('liker_profile_id, message, liked_content, created_at')
         .or(
-          `and(liker_profile_id.eq.${currentProfileId},liked_profile_id.eq.${otherProfileId}),` +
-          `and(liker_profile_id.eq.${otherProfileId},liked_profile_id.eq.${currentProfileId})`
+          `and(liker_profile_id.eq.${myProfileId},liked_profile_id.eq.${otherProfileId}),` +
+          `and(liker_profile_id.eq.${otherProfileId},liked_profile_id.eq.${myProfileId})`
         )
         .not('message', 'is', null)
         .order('created_at', { ascending: true })
@@ -520,8 +741,8 @@ export default function Chat() {
           .from('likes')
           .select('liker_profile_id, message, liked_content, created_at')
           .or(
-            `and(liker_profile_id.eq.${currentProfileId},liked_profile_id.eq.${otherProfileId}),` +
-            `and(liker_profile_id.eq.${otherProfileId},liked_profile_id.eq.${currentProfileId})`
+            `and(liker_profile_id.eq.${myProfileId},liked_profile_id.eq.${otherProfileId}),` +
+            `and(liker_profile_id.eq.${otherProfileId},liked_profile_id.eq.${myProfileId})`
           )
           .not('liked_content', 'is', null)
           .order('created_at', { ascending: true })
@@ -530,7 +751,7 @@ export default function Chat() {
         if (contentError || !contentLikes?.length) return;
 
         const like = contentLikes[0];
-        const isFromMe = like.liker_profile_id === currentProfileId;
+        const isFromMe = like.liker_profile_id === myProfileId;
         const parsedContent = like.liked_content ? (() => { try { return JSON.parse(like.liked_content); } catch { return null; } })() : null;
 
         // If it's just a photo like with no message, skip — not interesting enough for intro
@@ -540,11 +761,13 @@ export default function Chat() {
         if (parsedContent?.type === 'photo' && typeof parsedContent.index === 'number') {
           const { data: photos } = await supabase
             .from('photos')
-            .select('url')
-            .eq('profile_id', isFromMe ? otherProfileId : currentProfileId)
+            .select('url, storage_path')
+            .eq('profile_id', isFromMe ? otherProfileId : myProfileId)
             .order('display_order', { ascending: true });
           if (photos?.[parsedContent.index]) {
-            photoUrl = photos[parsedContent.index].url;
+            const photo = photos[parsedContent.index];
+            const signed = await getSignedUrl('profile-photos', photo.storage_path || photo.url);
+            photoUrl = signed || photo.url;
           }
         }
 
@@ -560,18 +783,20 @@ export default function Chat() {
       }
 
       const like = likes[0];
-      const isFromMe = like.liker_profile_id === currentProfileId;
+      const isFromMe = like.liker_profile_id === myProfileId;
       const parsedContent = like.liked_content ? (() => { try { return JSON.parse(like.liked_content); } catch { return null; } })() : null;
 
       let photoUrl: string | undefined;
       if (parsedContent?.type === 'photo' && typeof parsedContent.index === 'number') {
         const { data: photos } = await supabase
           .from('photos')
-          .select('url')
-          .eq('profile_id', isFromMe ? otherProfileId : currentProfileId)
+          .select('url, storage_path')
+          .eq('profile_id', isFromMe ? otherProfileId : myProfileId)
           .order('display_order', { ascending: true });
         if (photos?.[parsedContent.index]) {
-          photoUrl = photos[parsedContent.index].url;
+          const photo = photos[parsedContent.index];
+          const signed = await getSignedUrl('profile-photos', photo.storage_path || photo.url);
+          photoUrl = signed || photo.url;
         }
       }
 
@@ -589,69 +814,257 @@ export default function Chat() {
     }
   };
 
+  /**
+   * Batch-sign media_url for image/voice messages using the chat-media bucket.
+   * Messages without media or with text content_type are returned unchanged.
+   */
+  const signMessageMediaUrls = async (msgs: Message[]): Promise<Message[]> => {
+    // Collect indices and paths of messages that need signing
+    const mediaEntries: { idx: number; path: string }[] = [];
+    // Also collect reply-to image paths that need signing
+    const replyMediaEntries: { idx: number; path: string }[] = [];
+    for (let i = 0; i < msgs.length; i++) {
+      const m = msgs[i];
+      if (m.media_url && (m.content_type === 'image' || m.content_type === 'voice')) {
+        mediaEntries.push({ idx: i, path: m.media_url });
+      }
+      if (m.reply_to_message?.media_url && m.reply_to_message.content_type === 'image') {
+        replyMediaEntries.push({ idx: i, path: m.reply_to_message.media_url });
+      }
+    }
+    if (mediaEntries.length === 0 && replyMediaEntries.length === 0) return msgs;
+
+    // Sign all paths in a single batch
+    const allPaths = [
+      ...mediaEntries.map((e) => e.path),
+      ...replyMediaEntries.map((e) => e.path),
+    ];
+    const allSignedUrls = await getSignedUrls('chat-media', allPaths);
+
+    const result = [...msgs];
+    // Apply signed URLs to top-level media
+    for (let j = 0; j < mediaEntries.length; j++) {
+      const { idx } = mediaEntries[j];
+      if (allSignedUrls[j]) {
+        result[idx] = { ...result[idx], media_url: allSignedUrls[j]! };
+      }
+    }
+    // Apply signed URLs to reply-to media
+    const replyOffset = mediaEntries.length;
+    for (let j = 0; j < replyMediaEntries.length; j++) {
+      const { idx } = replyMediaEntries[j];
+      if (allSignedUrls[replyOffset + j]) {
+        result[idx] = {
+          ...result[idx],
+          reply_to_message: {
+            ...result[idx].reply_to_message!,
+            media_url: allSignedUrls[replyOffset + j]!,
+          },
+        };
+      }
+    }
+    return result;
+  };
+
   const loadMessages = async () => {
     try {
-
-
       // Fetch the most recent 100 messages (paginated to prevent RAM bloat)
       const MESSAGE_PAGE_SIZE = 100;
-      const messagesResult = await supabase
-        .from('messages')
-        .select('*')
-        .eq('match_id', matchId)
-        .order('created_at', { ascending: false })
-        .limit(MESSAGE_PAGE_SIZE);
 
-      // Fetch reactions only for the loaded messages
-      const messageIds = messagesResult.data?.map(m => m.id) || [];
-      const reactionsResult = messageIds.length > 0
-        ? await supabase
-            .from('message_reactions')
-            .select('*')
-            .in('message_id', messageIds)
-        : { data: [] };
+      // Fetch messages + keys in parallel (keys needed later for decryption)
+      const [messagesResult, myPrivateKey, myLegacyPrivateKey] = await Promise.all([
+        supabase
+          .from('messages')
+          .select('*, reply_to:reply_to_message_id(id, encrypted_content, sender_profile_id, content_type, media_url)')
+          .eq('match_id', matchId)
+          .order('created_at', { ascending: false })
+          .limit(MESSAGE_PAGE_SIZE),
+        getPrivateKey(user?.id || ''),
+        getLegacyPrivateKey(user?.id || ''),
+      ]);
 
       const { data, error } = messagesResult;
-      const { data: reactionsData } = reactionsResult;
-
-
 
       if (error) {
         console.error('ERROR LOADING MESSAGES:', error);
         throw error;
       }
 
+      if (!data || data.length === 0) {
+        setMessages([]);
+        return;
+      }
+
+      // Determine other profile ID from first message (use ref for async contexts)
+      const myId = currentProfileIdRef.current || currentProfileId;
+      const otherProfileId = data[0].sender_profile_id === myId
+        ? data[0].receiver_profile_id
+        : data[0].sender_profile_id;
+
+      // Fetch reactions + other profile's public key in parallel
+      const messageIds = data.map(m => m.id);
+      const [reactionsResult, otherProfileResult] = await Promise.all([
+        messageIds.length > 0
+          ? supabase
+              .from('message_reactions')
+              .select('*')
+              .in('message_id', messageIds)
+          : Promise.resolve({ data: [] as MessageReaction[] }),
+        supabase
+          .from('profiles')
+          .select('encryption_public_key')
+          .eq('id', otherProfileId)
+          .single(),
+      ]);
+
+      const { data: reactionsData } = reactionsResult;
+      const otherPublicKey = otherProfileResult.data?.encryption_public_key;
+
       // Create a map of reactions by message ID
       const reactionsByMessage = new Map<string, MessageReaction[]>();
       if (reactionsData) {
-        reactionsData.forEach((reaction: MessageReaction) => {
+        (reactionsData as MessageReaction[]).forEach((reaction) => {
           const existing = reactionsByMessage.get(reaction.message_id) || [];
           reactionsByMessage.set(reaction.message_id, [...existing, reaction]);
         });
       }
 
-      // Decrypt messages and attach reactions (reverse to ascending order)
-      if (data && data.length > 0) {
-        const chronological = data.reverse(); // was fetched desc, flip to asc
+      // Build messages in newest-first order (matches inverted FlatList)
+      const quickMessages: Message[] = data.map((message) => {
+        const msg = message as Message;
+        let decryptedContent: string | undefined;
 
-        const decryptedMessages = await Promise.all(
-          chronological.map(async (message) => {
-            const decrypted = await decryptSingleMessage(message as Message);
-            return {
-              ...decrypted,
-              reactions: reactionsByMessage.get(message.id) || []
-            };
-          })
-        );
-        setMessages(decryptedMessages);
+        if (msg.content_type !== 'text') {
+          // Non-text messages don't need decryption
+          decryptedContent = undefined;
+        } else {
+          const content = msg.encrypted_content;
+          if (content && content.includes(':') && /^[A-Za-z0-9+/=]+:/.test(content)) {
+            // Looks encrypted — use invisible placeholder, decryption fills in real text
+            decryptedContent = '\u00A0';
+          } else {
+            // Plaintext — use directly
+            decryptedContent = content;
+          }
+        }
 
-      } else {
-        setMessages([]);
-      }
+        return {
+          ...msg,
+          decrypted_content: decryptedContent,
+          reactions: reactionsByMessage.get(message.id) || [],
+          reply_to_message_id: (message as any).reply_to_message_id || null,
+          reply_to_message: (message as any).reply_to || null,
+          link_preview: (message as any).link_preview || null,
+        };
+      });
+
+      // Sign media URLs for image/voice messages (private bucket)
+      const signedMessages = await signMessageMediaUrls(quickMessages);
+
+      // Show UI immediately with plaintext + placeholders
+      setMessages(signedMessages);
+      setLoading(false);
+      setRefreshing(false);
+
+      // PERFORMANCE: Defer decryption until after UI is responsive
+      InteractionManager.runAfterInteractions(async () => {
+        try {
+          if (!myPrivateKey && !myLegacyPrivateKey) return;
+          if (!otherPublicKey) return;
+
+          // Only decrypt messages that still show placeholders
+          const needsDecryption = signedMessages.filter(
+            (m) => m.content_type === 'text' && m.encrypted_content.includes(':') && /^[A-Za-z0-9+/=]+:/.test(m.encrypted_content)
+          );
+
+          const decryptedMap = new Map<string, string>();
+          if (needsDecryption.length > 0) {
+            await Promise.all(
+              needsDecryption.map(async (msg) => {
+                let decryptedContent: string | undefined;
+                if (myPrivateKey) {
+                  try {
+                    const result = await decryptMessage(msg.encrypted_content, myPrivateKey, otherPublicKey);
+                    if (result !== '[Unable to decrypt message]') decryptedContent = result;
+                  } catch {}
+                }
+                if (!decryptedContent && myLegacyPrivateKey) {
+                  try {
+                    const result = await decryptMessage(msg.encrypted_content, myLegacyPrivateKey, otherPublicKey);
+                    if (result !== '[Unable to decrypt message]') decryptedContent = result;
+                  } catch {}
+                }
+                decryptedMap.set(msg.id, decryptedContent || t('chat.unableToDecrypt'));
+              })
+            );
+          }
+
+          // Decrypt reply_to_message content that isn't in the current batch
+          const replyDecryptedMap = new Map<string, string>();
+          const uniqueReplyEncrypted = new Map<string, string>();
+          for (const m of signedMessages) {
+            if (m.reply_to_message?.content_type === 'text' &&
+                m.reply_to_message.encrypted_content?.includes(':') &&
+                /^[A-Za-z0-9+/=]+:/.test(m.reply_to_message.encrypted_content) &&
+                !decryptedMap.has(m.reply_to_message.id) &&
+                !uniqueReplyEncrypted.has(m.reply_to_message.id)) {
+              uniqueReplyEncrypted.set(m.reply_to_message.id, m.reply_to_message.encrypted_content);
+            }
+          }
+          if (uniqueReplyEncrypted.size > 0) {
+            await Promise.all(
+              Array.from(uniqueReplyEncrypted.entries()).map(async ([replyId, encContent]) => {
+                let decryptedContent: string | undefined;
+                if (myPrivateKey) {
+                  try {
+                    const result = await decryptMessage(encContent, myPrivateKey, otherPublicKey);
+                    if (result !== '[Unable to decrypt message]') decryptedContent = result;
+                  } catch {}
+                }
+                if (!decryptedContent && myLegacyPrivateKey) {
+                  try {
+                    const result = await decryptMessage(encContent, myLegacyPrivateKey, otherPublicKey);
+                    if (result !== '[Unable to decrypt message]') decryptedContent = result;
+                  } catch {}
+                }
+                if (decryptedContent) replyDecryptedMap.set(replyId, decryptedContent);
+              })
+            );
+          }
+
+          // Check if anything needs patching
+          if (decryptedMap.size === 0 && replyDecryptedMap.size === 0) return;
+
+          // Batch-update all decrypted messages at once
+          setMessages((prev) => {
+            const allDecrypted = new Map(decryptedMap);
+            for (const m of prev) {
+              if (m.decrypted_content && !allDecrypted.has(m.id)) {
+                allDecrypted.set(m.id, m.decrypted_content);
+              }
+            }
+            for (const [id, content] of replyDecryptedMap) {
+              if (!allDecrypted.has(id)) allDecrypted.set(id, content);
+            }
+            return prev.map((m) => {
+              const decrypted = decryptedMap.get(m.id);
+              const updated = decrypted ? { ...m, decrypted_content: decrypted } : m;
+              if (updated.reply_to_message?.id) {
+                const replyDecrypted = allDecrypted.get(updated.reply_to_message.id);
+                if (replyDecrypted && updated.reply_to_message.decrypted_content !== replyDecrypted) {
+                  return { ...updated, reply_to_message: { ...updated.reply_to_message, decrypted_content: replyDecrypted } };
+                }
+              }
+              return updated;
+            });
+          });
+        } catch (error) {
+          console.error('Error decrypting messages:', error);
+        }
+      });
     } catch (error: any) {
       console.error('CATCH Error loading messages:', error);
       showToast({ type: 'error', title: t('common.error'), message: t('toast.messagesLoadError') });
-    } finally {
       setLoading(false);
       setRefreshing(false);
     }
@@ -676,7 +1089,15 @@ export default function Chat() {
         async (payload) => {
           // Decrypt the new message before adding to state
           const newMessage = payload.new as Message;
-          const decryptedMessage = await decryptSingleMessage(newMessage);
+          let decryptedMessage = await decryptSingleMessage(newMessage);
+
+          // Sign media URL for image/voice messages (private bucket)
+          if (decryptedMessage.media_url && (decryptedMessage.content_type === 'image' || decryptedMessage.content_type === 'voice')) {
+            const signedUrl = await getSignedUrl('chat-media', decryptedMessage.media_url);
+            if (signedUrl) {
+              decryptedMessage = { ...decryptedMessage, media_url: signedUrl };
+            }
+          }
 
           setMessages((prev) => {
             // Check if message already exists to avoid duplicates
@@ -686,11 +1107,27 @@ export default function Chat() {
               return prev;
             }
 
-            return [...prev, { ...decryptedMessage, reactions: [] }];
+            // Look up reply-to message from local state
+            let replyToMessage = null;
+            if (decryptedMessage.reply_to_message_id) {
+              const referencedMsg = prev.find(m => m.id === decryptedMessage.reply_to_message_id);
+              if (referencedMsg) {
+                replyToMessage = {
+                  id: referencedMsg.id,
+                  encrypted_content: referencedMsg.encrypted_content,
+                  sender_profile_id: referencedMsg.sender_profile_id,
+                  content_type: referencedMsg.content_type,
+                  decrypted_content: referencedMsg.decrypted_content,
+                  media_url: referencedMsg.media_url,
+                };
+              }
+            }
+
+            return [{ ...decryptedMessage, reactions: [], reply_to_message: replyToMessage }, ...prev];
           });
 
-          // Mark as read if message is for current user
-          if (newMessage.receiver_profile_id === currentProfileId) {
+          // Mark as read if message is for current user (use ref for async callbacks)
+          if (newMessage.receiver_profile_id === (currentProfileIdRef.current || currentProfileId)) {
             markMessageAsRead(newMessage.id);
           }
         }
@@ -841,14 +1278,15 @@ export default function Chat() {
   }, [isPremium, currentProfileId, matchId]);
 
   const markMessagesAsRead = async () => {
-    if (!currentProfileId) return;
+    const profileId = currentProfileIdRef.current || currentProfileId;
+    if (!profileId) return;
 
     try {
       const { error } = await supabase
         .from('messages')
         .update({ read_at: new Date().toISOString() })
         .eq('match_id', matchId)
-        .eq('receiver_profile_id', currentProfileId)
+        .eq('receiver_profile_id', profileId)
         .is('read_at', null);
 
       if (!error) {
@@ -912,8 +1350,8 @@ export default function Chat() {
         return { ...message, decrypted_content: t('chat.unableToDecrypt') };
       }
 
-      // Determine if I'm the sender or recipient
-      const iAmSender = message.sender_profile_id === currentProfileId;
+      // Determine if I'm the sender or recipient (use ref for async subscription callbacks)
+      const iAmSender = message.sender_profile_id === (currentProfileIdRef.current || currentProfileId);
 
       // Get the OTHER person's public key (the one we need for ECDH)
       // If I'm the sender, I need the recipient's public key
@@ -1049,14 +1487,16 @@ export default function Chat() {
 
           } catch (encryptError: any) {
             console.warn('⚠️ Encryption failed, sending as plain text:', encryptError.message);
-            // Fall back to plain text
             encryptedContent = messageContent;
+            showToast({ type: 'info', title: t('chat.encryption.sentWithout'), message: t('chat.encryption.restartToEnable') });
           }
         } else {
           console.warn('⚠️ Recipient encryption keys not found, sending as plain text');
+          showToast({ type: 'info', title: t('chat.encryption.sentWithout'), message: t('chat.encryption.restartToEnable') });
         }
       } else {
         console.warn('⚠️ Sender encryption keys not found, sending as plain text');
+        showToast({ type: 'info', title: t('chat.encryption.sentWithout'), message: t('chat.encryption.restartToEnable') });
       }
 
       // Send message (encrypted if possible, plain text otherwise)
@@ -1066,6 +1506,7 @@ export default function Chat() {
         receiver_profile_id: matchProfile.id,
         encrypted_content: encryptedContent,
         content_type: 'text',
+        ...(replyingTo ? { reply_to_message_id: replyingTo.id } : {}),
       }).select();
 
 
@@ -1096,8 +1537,30 @@ export default function Chat() {
       if (data && data[0]) {
 
         // Replace encrypted content with plain text for display (since we just sent it)
-        const displayMessage = { ...data[0], encrypted_content: messageContent } as Message;
-        setMessages((prev) => [...prev, displayMessage]);
+        const displayMessage = {
+          ...data[0],
+          encrypted_content: messageContent,
+          decrypted_content: messageContent,
+          reply_to_message_id: replyingTo?.id || null,
+          reply_to_message: replyingTo ? {
+            id: replyingTo.id,
+            encrypted_content: replyingTo.encrypted_content,
+            sender_profile_id: replyingTo.sender_profile_id,
+            content_type: replyingTo.content_type,
+            decrypted_content: replyingTo.decrypted_content,
+            media_url: replyingTo.media_url,
+          } : null,
+        } as Message;
+        setMessages((prev) => [displayMessage, ...prev]);
+
+        // Clear reply state
+        setReplyingTo(null);
+
+        // Fetch link preview non-blocking if message contains URLs
+        const urls = extractUrls(messageContent);
+        if (urls.length > 0) {
+          fetchAndStoreLinkPreview(data[0].id, urls[0]);
+        }
       }
 
       // Send push notification to recipient (skip in Expo Go)
@@ -1126,8 +1589,11 @@ export default function Chat() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true, // Enable photo editing/cropping
-        aspect: [4, 3], // Standard photo aspect ratio
+        // Disable cropping on Android — the native canhub/cropper crashes with
+        // FileNotFoundException on low-end devices with limited storage.
+        // iOS uses its own stable UIImagePickerController so cropping is safe there.
+        allowsEditing: Platform.OS === 'ios',
+        aspect: [4, 3],
         quality: 0.8,
         exif: false, // Don't include EXIF data for privacy
       });
@@ -1140,7 +1606,7 @@ export default function Chat() {
           // Validate image before processing
           const validation = await validateImage(selectedUri);
           if (!validation.isValid) {
-            showToast({ type: 'error', title: t('toast.invalidImage'), message: validation.error || 'Please select a different photo' });
+            showToast({ type: 'error', title: t('toast.invalidImage'), message: validation.error || t('chat.chatPhoto.selectDifferent') });
             setSending(false);
             return;
           }
@@ -1158,8 +1624,8 @@ export default function Chat() {
           const fileName = `${matchId}_${Date.now()}.jpg`;
           const filePath = `chat-images/${fileName}`;
 
-          // Convert to ArrayBuffer using optimized utility
-          const arrayBuffer = await uriToArrayBuffer(optimized.uri);
+          // Convert to ArrayBuffer (pass original URI for re-optimization fallback)
+          const arrayBuffer = await uriToArrayBuffer(optimized.uri, selectedUri);
 
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from('chat-media')
@@ -1170,10 +1636,8 @@ export default function Chat() {
 
           if (uploadError) throw uploadError;
 
-          // Get public URL
-          const { data: { publicUrl } } = supabase.storage
-            .from('chat-media')
-            .getPublicUrl(filePath);
+          // Store the storage path (buckets are private, URLs are signed on demand)
+          const mediaStoragePath = filePath;
 
           // Send image message
 
@@ -1184,9 +1648,9 @@ export default function Chat() {
               match_id: matchId,
               sender_profile_id: currentProfileId,
               receiver_profile_id: matchProfile.id,
-              encrypted_content: '[Photo]',
+              encrypted_content: t('chat.photo'),
               content_type: 'image',
-              media_url: publicUrl,
+              media_url: mediaStoragePath,
             })
             .select()
             .single();
@@ -1198,9 +1662,15 @@ export default function Chat() {
 
           // Run NSFW moderation check on chat photos (non-blocking)
           try {
+            // Generate signed URL for moderation (buckets are private)
+            const { data: signedData } = await supabase.storage
+              .from('chat-media')
+              .createSignedUrl(filePath, 600);
+            const signedUrl = signedData?.signedUrl || '';
+
             const { data: moderationResult } = await supabase.functions.invoke('moderate-photo', {
               body: {
-                photo_url: publicUrl,
+                photo_url: signedUrl,
                 profile_id: currentProfileId,
               },
             });
@@ -1209,36 +1679,23 @@ export default function Chat() {
               // Delete the message and media
               await supabase.from('messages').delete().eq('id', insertedMessage?.id);
               await supabase.storage.from('chat-media').remove([filePath]);
-              Alert.alert('Photo Rejected', 'This photo contains inappropriate content and cannot be sent.');
+              Alert.alert(t('chat.chatPhoto.rejectedTitle'), t('chat.chatPhoto.rejectedMessage'));
               return;
             }
           } catch (moderationError) {
             console.error('Chat photo moderation check failed:', moderationError);
           }
 
-          // Add message to local state immediately (realtime will handle duplicates)
+          // Add message to local state immediately with signed URL
           if (insertedMessage) {
+            const signedMediaUrl = await getSignedUrl('chat-media', filePath);
+            const displayMessage = { ...insertedMessage, media_url: signedMediaUrl || insertedMessage.media_url } as Message;
 
             setMessages((prev) => {
-              // Force a new array reference for React to detect the change
-              const newMessages = [...prev, insertedMessage as Message];
-
-              return newMessages;
+              const exists = prev.some(m => m.id === displayMessage.id);
+              if (exists) return prev;
+              return [displayMessage, ...prev];
             });
-
-            // Force FlatList to scroll to bottom after state update
-            // Store timeout refs for cleanup on unmount
-            const scrollTimeout1 = setTimeout(() => {
-
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-            scrollTimeoutRefs.current.push(scrollTimeout1);
-
-            // Try again after a bit longer in case the render hasn't completed
-            const scrollTimeout2 = setTimeout(() => {
-              flatListRef.current?.scrollToEnd({ animated: false });
-            }, 500);
-            scrollTimeoutRefs.current.push(scrollTimeout2);
           }
 
           // Send push notification (skip in Expo Go)
@@ -1246,7 +1703,7 @@ export default function Chat() {
             await sendMessageNotification(
               matchProfile.id,
               currentProfileName,
-              '📷 Sent a photo',
+              `📷 ${t('chat.chatNotification.sentPhoto')}`,
               matchId as string
             );
           } catch (notifError) {
@@ -1281,6 +1738,9 @@ export default function Chat() {
         showToast({ type: 'error', title: t('chat.permissionRequired'), message: t('chat.microphonePermission') });
         return;
       }
+
+      // Switch to recording mode (enables microphone input on iOS)
+      await setupAudio(true);
 
       // Start recording
       const recording = new Audio.Recording();
@@ -1411,29 +1871,38 @@ export default function Chat() {
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('chat-media')
         .upload(filePath, arrayBuffer, {
-          contentType: 'audio/m4a',
+          contentType: 'audio/mp4',
           upsert: false,
         });
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('chat-media')
-        .getPublicUrl(filePath);
+      // Store the storage path (buckets are private, URLs are signed on demand)
+      const mediaStoragePath = filePath;
 
       // Send voice message
-      const { error: messageError } = await supabase.from('messages').insert({
+      const { data: insertedVoice, error: messageError } = await supabase.from('messages').insert({
         match_id: matchId,
         sender_profile_id: currentProfileId,
         receiver_profile_id: matchProfile.id,
-        encrypted_content: '[Voice Message]',
+        encrypted_content: t('chat.voiceMessage'),
         content_type: 'voice',
-        media_url: publicUrl,
+        media_url: mediaStoragePath,
         voice_duration: duration,
-      });
+      }).select().single();
 
       if (messageError) throw messageError;
+
+      // Add to local state with signed URL
+      if (insertedVoice) {
+        const signedUrl = await getSignedUrl('chat-media', mediaStoragePath);
+        const displayMessage = { ...insertedVoice, media_url: signedUrl || mediaStoragePath } as Message;
+        setMessages((prev) => {
+          const exists = prev.some(m => m.id === displayMessage.id);
+          if (exists) return prev;
+          return [displayMessage, ...prev];
+        });
+      }
 
       // Prevent match expiration if this is the first message
       if (messages.length === 0) {
@@ -1448,7 +1917,7 @@ export default function Chat() {
         await sendMessageNotification(
           matchProfile.id,
           currentProfileName,
-          '🎤 Sent a voice message',
+          `🎤 ${t('chat.chatNotification.sentVoice')}`,
           matchId as string
         );
       } catch (notifError) {
@@ -1459,7 +1928,7 @@ export default function Chat() {
       if (error?.code === 'P0001' && error?.message?.includes('Premium subscription')) {
         Alert.alert(
           t('subscription.upgradeToPremium'),
-          'Voice messages are a Premium feature. Upgrade to send voice messages.',
+          t('chat.premiumFeature.voiceMessagesMessage'),
           [
             { text: t('common.cancel'), style: 'cancel' },
             { text: t('common.upgrade'), onPress: () => router.push('/settings/subscription') },
@@ -1489,9 +1958,15 @@ export default function Chat() {
         return;
       }
 
+      // Switch to playback mode (routes audio to main speaker instead of earpiece)
+      await setupAudio(false);
+
+      // Re-sign the URL in case it expired (cache will return instantly if still valid)
+      const signedUrl = await getSignedUrl('chat-media', message.media_url) || message.media_url;
+
       // Load and play new sound
       const { sound } = await Audio.Sound.createAsync(
-        { uri: message.media_url },
+        { uri: signedUrl },
         { shouldPlay: true },
         (status) => {
           if (status.isLoaded && status.didJustFinish) {
@@ -1505,34 +1980,6 @@ export default function Chat() {
     } catch (error: any) {
       console.error('Error playing voice message:', error);
       showToast({ type: 'error', title: t('common.error'), message: t('chat.playVoiceError') });
-    }
-  };
-
-  const checkPhotoRevealStatus = async (otherProfileId: string) => {
-    if (!currentProfileId) return;
-
-    try {
-      // Check if current user has revealed photos to this profile
-      const { data: myReveal } = await supabase
-        .from('photo_reveals')
-        .select('id')
-        .eq('revealer_profile_id', currentProfileId)
-        .eq('revealed_to_profile_id', otherProfileId)
-        .maybeSingle();
-
-      setHasRevealedPhotos(!!myReveal);
-
-      // Check if other user has revealed photos to current user
-      const { data: theirReveal } = await supabase
-        .from('photo_reveals')
-        .select('id')
-        .eq('revealer_profile_id', otherProfileId)
-        .eq('revealed_to_profile_id', currentProfileId)
-        .maybeSingle();
-
-      setOtherUserRevealed(!!theirReveal);
-    } catch (error: any) {
-      console.error('Error checking photo reveal status:', error);
     }
   };
 
@@ -1609,7 +2056,7 @@ export default function Chat() {
         .update({ status: 'blocked' })
         .eq('id', matchId);
 
-      Alert.alert(t('chat.blocked'), `You have blocked ${matchProfile.display_name}`, [
+      Alert.alert(t('chat.blocked'), t('chat.blockedConfirmation', { name: matchProfile.display_name }), [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (error) {
@@ -1677,57 +2124,101 @@ export default function Chat() {
     );
   };
 
+  const handleCopyMessage = async (message: Message) => {
+    const textToCopy = message.decrypted_content || message.encrypted_content;
+    await Clipboard.setStringAsync(textToCopy);
+    showToast({ type: 'success', title: t('chat.messageCopied'), message: '' });
+  };
+
+  // Get reply preview text — used by both renderMessage and reply preview bar
+  const getReplyPreviewText = (replyMsg: Message['reply_to_message']) => {
+    if (!replyMsg) return '';
+    if (replyMsg.content_type === 'image') return t('chat.photo');
+    if (replyMsg.content_type === 'voice') return t('chat.voiceMessage');
+    const text = replyMsg.decrypted_content;
+    if (text && text.trim() && text !== '\u00A0') return text;
+    const enc = replyMsg.encrypted_content;
+    if (enc && !enc.includes(':')) return enc;
+    return '...';
+  };
+
+  const handleReplyTo = (message: Message) => {
+    setReplyingTo(message);
+    textInputRef.current?.focus();
+  };
+
+  const scrollToMessage = (messageId: string) => {
+    const index = messages.findIndex(m => m.id === messageId);
+    if (index !== -1) {
+      flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+      // Briefly highlight the message
+      setExpandedTimestampId(messageId);
+      setTimeout(() => setExpandedTimestampId(null), 2000);
+    }
+  };
+
   const handleMessageLongPress = (message: Message, event?: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const isMine = message.sender_profile_id === currentProfileId;
+    const isTextMessage = message.content_type === 'text';
+
+    const buttons: any[] = [];
+
+    // Reply (free for all)
+    buttons.push({
+      text: t('chat.reply'),
+      onPress: () => handleReplyTo(message),
+    });
+
+    // Copy (only for text messages, free for all)
+    if (isTextMessage) {
+      buttons.push({
+        text: t('chat.copyMessage'),
+        onPress: () => handleCopyMessage(message),
+      });
+    }
 
     if (isMine) {
-      // For own messages, show delete option (premium only)
-      setSelectedMessage(message);
-      if (!isPremium) {
-        Alert.alert(
-          'Premium Feature',
-          'Delete messages you\'ve sent! Upgrade to Premium to unlock message deletion.',
-          [
-            { text: 'Maybe Later', style: 'cancel' },
-            {
-              text: 'Upgrade',
-              onPress: () => setShowPaywall(true),
-            },
-          ]
-        );
-        return;
-      }
-      Alert.alert(
-        t('chat.messageOptions'),
-        'What would you like to do?',
-        [
-          {
-            text: t('chat.deleteMessage'),
-            style: 'destructive',
-            onPress: () => handleDeleteMessage(message),
-          },
-          { text: t('common.cancel'), style: 'cancel' },
-        ]
-      );
+      // Delete (premium)
+      buttons.push({
+        text: t('chat.deleteMessage'),
+        style: 'destructive' as const,
+        onPress: () => {
+          if (!isPremium) {
+            setShowPaywall(true);
+            return;
+          }
+          handleDeleteMessage(message);
+        },
+      });
     } else {
-      // For received messages, show reaction picker (premium only)
-      if (!isPremium) {
-        Alert.alert(
-          'Premium Feature',
-          'React to messages with emojis! Upgrade to Premium to unlock message reactions.',
-          [
-            { text: 'Maybe Later', style: 'cancel' },
-            {
-              text: 'Upgrade',
-              onPress: () => router.push('/settings/subscription'),
-            },
-          ]
-        );
-        return;
-      }
-      setReactionTargetMessage(message);
-      setShowReactionPicker(true);
+      // React (premium)
+      buttons.push({
+        text: t('chat.react'),
+        onPress: () => {
+          if (!isPremium) {
+            Alert.alert(
+              t('chat.premiumFeature.featureTitle'),
+              t('chat.premiumFeature.reactionsMessage'),
+              [
+                { text: t('common.maybeLater'), style: 'cancel' },
+                {
+                  text: t('common.upgrade'),
+                  onPress: () => router.push('/settings/subscription'),
+                },
+              ]
+            );
+            return;
+          }
+          setReactionTargetMessage(message);
+          setShowReactionPicker(true);
+        },
+      });
     }
+
+    buttons.push({ text: t('common.cancel'), style: 'cancel' as const });
+
+    Alert.alert(t('chat.messageOptions'), undefined, buttons, { cancelable: true });
   };
 
   // Handle adding/removing a reaction to a message
@@ -1818,7 +2309,7 @@ export default function Chat() {
           if (reactionTargetMessage.sender_profile_id !== currentProfileId) {
             sendReactionNotification(
               reactionTargetMessage.sender_profile_id,
-              currentProfileName || 'Someone',
+              currentProfileName || t('common.someone'),
               emoji,
               matchId as string
             );
@@ -1851,19 +2342,98 @@ export default function Chat() {
     setShowIntroMessages(false);
   };
 
+  // Fetch link preview via edge function and update message in DB + local state
+  const fetchAndStoreLinkPreview = async (messageId: string, url: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-link-preview', {
+        body: { url },
+      });
+      if (error || !data?.title) return;
+
+      const preview: LinkPreviewData = {
+        url: data.url || url,
+        title: data.title,
+        description: data.description || undefined,
+        image: data.image || undefined,
+      };
+
+      // Update in database
+      await supabase
+        .from('messages')
+        .update({ link_preview: preview })
+        .eq('id', messageId);
+
+      // Update local state
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, link_preview: preview } : m))
+      );
+    } catch {
+      // Non-critical, silently fail
+    }
+  };
+
+  // Search within conversation
+  const handleSearchToggle = () => {
+    if (isSearching) {
+      setIsSearching(false);
+      setSearchQuery('');
+      setSearchResultIds([]);
+      setCurrentSearchIndex(0);
+    } else {
+      setIsSearching(true);
+      setTimeout(() => searchInputRef.current?.focus(), 100);
+    }
+  };
+
+  const handleSearchQueryChange = (query: string) => {
+    setSearchQuery(query);
+    if (query.length < 2) {
+      setSearchResultIds([]);
+      setCurrentSearchIndex(0);
+      return;
+    }
+    const lowerQuery = query.toLowerCase();
+    const results = messages
+      .filter((m) => {
+        const text = m.decrypted_content || m.encrypted_content;
+        return text.toLowerCase().includes(lowerQuery);
+      })
+      .map((m) => m.id);
+    setSearchResultIds(results);
+    setCurrentSearchIndex(results.length > 0 ? 0 : 0);
+    // Scroll to first result
+    if (results.length > 0) {
+      scrollToMessage(results[0]);
+    }
+  };
+
+  const handleSearchNext = () => {
+    if (searchResultIds.length === 0) return;
+    const next = (currentSearchIndex + 1) % searchResultIds.length;
+    setCurrentSearchIndex(next);
+    scrollToMessage(searchResultIds[next]);
+  };
+
+  const handleSearchPrev = () => {
+    if (searchResultIds.length === 0) return;
+    const prev = (currentSearchIndex - 1 + searchResultIds.length) % searchResultIds.length;
+    setCurrentSearchIndex(prev);
+    scrollToMessage(searchResultIds[prev]);
+  };
+
   const showActionMenu = () => {
     if (!matchProfile) return;
     Alert.alert(
       matchProfile.display_name,
-      'Choose an action',
+      t('chat.messageActions.chooseAction'),
       [
         {
-          text: 'Report',
+          text: t('chat.messageActions.report'),
           onPress: () => setShowReportModal(true),
           style: 'destructive',
         },
         {
-          text: 'Block',
+          text: t('chat.messageActions.block'),
           onPress: () => setShowBlockModal(true),
           style: 'destructive',
         },
@@ -1906,12 +2476,14 @@ export default function Chat() {
     });
   };
 
-  const handleMessagePress = (messageId: string) => {
+  const messageKeyExtractor = useCallback((item: Message) => item.id, []);
+
+  const handleMessagePress = useCallback((messageId: string) => {
     // Toggle full timestamp display
     setExpandedTimestampId(prev => prev === messageId ? null : messageId);
-  };
+  }, []);
 
-  const renderMessage = ({ item, index }: { item: Message; index: number }) => {
+  const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     if (!item) {
       console.error('NULL ITEM in renderMessage');
       return null;
@@ -1919,8 +2491,44 @@ export default function Chat() {
 
     const isMine = item.sender_profile_id === currentProfileId;
     const isTimestampExpanded = expandedTimestampId === item.id;
+    const isSearchHighlighted = searchResultIds.includes(item.id);
+    const isCurrentSearchResult = searchResultIds[currentSearchIndex] === item.id;
 
-    return (
+    // Resolve reply sender name
+    const getReplyAuthorName = (replyMsg: Message['reply_to_message']) => {
+      if (!replyMsg) return '';
+      if (replyMsg.sender_profile_id === currentProfileId) return t('chat.you');
+      return matchProfile?.display_name || '';
+    };
+
+    // getReplyPreviewText is defined at component level (used by both renderMessage and reply preview bar)
+
+    const quotedReplyBlock = item.reply_to_message ? (
+      <TouchableOpacity
+        onPress={() => scrollToMessage(item.reply_to_message!.id)}
+        activeOpacity={0.7}
+        style={[styles.quotedReply, isMine ? styles.quotedReplyMine : { backgroundColor: isDarkColorScheme ? '#2A2433' : '#EDE8F3' }]}
+      >
+        <View style={[styles.quotedReplyAccent, isMine && styles.quotedReplyAccentMine]} />
+        <View style={styles.quotedReplyBody}>
+          <Text style={[styles.quotedReplyAuthor, isMine && styles.quotedReplyAuthorMine]}>
+            {getReplyAuthorName(item.reply_to_message)}
+          </Text>
+          <Text style={[styles.quotedReplyText, isMine && styles.quotedReplyTextMine]} numberOfLines={2}>
+            {getReplyPreviewText(item.reply_to_message)}
+          </Text>
+        </View>
+        {item.reply_to_message.content_type === 'image' && item.reply_to_message.media_url && (
+          <Image
+            source={{ uri: item.reply_to_message.media_url }}
+            style={styles.quotedReplyImage}
+            resizeMode="cover"
+          />
+        )}
+      </TouchableOpacity>
+    ) : null;
+
+    const messageBubbleContent = (
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={() => handleMessagePress(item.id)}
@@ -1939,11 +2547,21 @@ export default function Chat() {
           style={[styles.messageRow, isMine && styles.messageRowMine]}
         >
         {/* Message Bubble */}
-        <View style={[styles.messageBubble, isMine ? styles.messageBubbleMine : [styles.messageBubbleTheirs, { backgroundColor: colors.card }]]}>
+        <View style={[
+          styles.messageBubble,
+          isMine ? styles.messageBubbleMine : [styles.messageBubbleTheirs, { backgroundColor: colors.card }],
+          isSearchHighlighted && styles.searchHighlightedBubble,
+          isCurrentSearchResult && styles.searchCurrentBubble,
+        ]}>
           {item.content_type === 'image' && item.media_url ? (
             // Image message
             <TouchableOpacity
-              onPress={() => setViewingImageUrl(item.media_url || null)}
+              onPress={async () => {
+                if (!item.media_url) return;
+                // Re-sign in case the URL expired (cache returns instantly if still valid)
+                const signedUrl = await getSignedUrl('chat-media', item.media_url) || item.media_url;
+                setViewingImageUrl(signedUrl);
+              }}
               activeOpacity={0.9}
             >
               {isMine ? (
@@ -1990,6 +2608,7 @@ export default function Chat() {
                   end={{ x: 1, y: 1 }}
                   style={styles.voiceMessageBubble}
                 >
+                  {quotedReplyBlock}
                   <View style={styles.voiceMessageContent}>
                     <MaterialCommunityIcons
                       name={playingVoiceId === item.id ? "pause-circle" : "play-circle"}
@@ -1998,40 +2617,43 @@ export default function Chat() {
                     />
                     <View style={styles.voiceMessageInfo}>
                       <View style={styles.voiceWaveform}>
-                        {[...Array(20)].map((_, i) => (
+                        {voiceWaveHeights.map((h, i) => (
                           <View
                             key={i}
                             style={[
                               styles.voiceWaveBar,
                               {
-                                height: Math.random() * 20 + 10,
+                                height: h,
                                 backgroundColor: 'rgba(255,255,255,0.6)',
                               },
                             ]}
                           />
                         ))}
                       </View>
-                      <Text style={styles.voiceDuration}>
-                        {item.voice_duration ? `${Math.floor(item.voice_duration / 60)}:${String(item.voice_duration % 60).padStart(2, '0')}` : '0:00'}
-                      </Text>
+                      <View style={styles.voiceFooterRow}>
+                        <Text style={styles.voiceDuration}>
+                          {item.voice_duration ? `${Math.floor(item.voice_duration / 60)}:${String(item.voice_duration % 60).padStart(2, '0')}` : '0:00'}
+                        </Text>
+                        <View style={styles.inlineTimeStamp}>
+                          <Text style={[styles.messageTime, styles.messageTimeMine, { marginTop: 0 }]}>
+                            {getTimeDisplay(item.created_at)}
+                          </Text>
+                          {isPremium && (
+                            <MaterialCommunityIcons
+                              name={item.read_at ? "check-all" : "check"}
+                              size={12}
+                              color={item.read_at ? "#60A5FA" : "rgba(255,255,255,0.7)"}
+                              style={styles.readReceipt}
+                            />
+                          )}
+                        </View>
+                      </View>
                     </View>
-                  </View>
-                  <View style={styles.messageFooter}>
-                    <Text style={[styles.messageTime, styles.messageTimeMine]}>
-                      {getTimeDisplay(item.created_at)}
-                    </Text>
-                    {isPremium && (
-                      <MaterialCommunityIcons
-                        name={item.read_at ? "check-all" : "check"}
-                        size={12}
-                        color={item.read_at ? "#60A5FA" : "rgba(255,255,255,0.7)"}
-                        style={styles.readReceipt}
-                      />
-                    )}
                   </View>
                 </LinearGradient>
               ) : (
                 <View style={styles.voiceMessageBubbleTheirs}>
+                  {quotedReplyBlock}
                   <View style={styles.voiceMessageContent}>
                     <MaterialCommunityIcons
                       name={playingVoiceId === item.id ? "pause-circle" : "play-circle"}
@@ -2040,27 +2662,29 @@ export default function Chat() {
                     />
                     <View style={styles.voiceMessageInfo}>
                       <View style={styles.voiceWaveform}>
-                        {[...Array(20)].map((_, i) => (
+                        {voiceWaveHeights.map((h, i) => (
                           <View
                             key={i}
                             style={[
                               styles.voiceWaveBar,
                               {
-                                height: Math.random() * 20 + 10,
+                                height: h,
                                 backgroundColor: '#D1D5DB',
                               },
                             ]}
                           />
                         ))}
                       </View>
-                      <Text style={styles.voiceDurationTheirs}>
-                        {item.voice_duration ? `${Math.floor(item.voice_duration / 60)}:${String(item.voice_duration % 60).padStart(2, '0')}` : '0:00'}
-                      </Text>
+                      <View style={styles.voiceFooterRow}>
+                        <Text style={styles.voiceDurationTheirs}>
+                          {item.voice_duration ? `${Math.floor(item.voice_duration / 60)}:${String(item.voice_duration % 60).padStart(2, '0')}` : '0:00'}
+                        </Text>
+                        <Text style={[styles.messageTime, { marginTop: 0 }]}>
+                          {getTimeDisplay(item.created_at)}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                  <Text style={styles.messageTime}>
-                    {getTimeDisplay(item.created_at)}
-                  </Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -2074,27 +2698,77 @@ export default function Chat() {
                   end={{ x: 1, y: 1 }}
                   style={styles.messageBubbleGradient}
                 >
+                  {quotedReplyBlock}
+                  {/* Link Preview */}
+                  {item.link_preview && (
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(item.link_preview!.url)}
+                      activeOpacity={0.8}
+                      style={styles.linkPreviewMine}
+                    >
+                      {item.link_preview.image && (
+                        <Image source={{ uri: item.link_preview.image }} style={styles.linkPreviewImage} resizeMode="cover" />
+                      )}
+                      <View style={styles.linkPreviewTextContainer}>
+                        <Text style={styles.linkPreviewTitleMine} numberOfLines={2}>{item.link_preview.title}</Text>
+                        {item.link_preview.description && (
+                          <Text style={styles.linkPreviewDescMine} numberOfLines={2}>{item.link_preview.description}</Text>
+                        )}
+                        <Text style={styles.linkPreviewHostMine} numberOfLines={1}>
+                          {new URL(item.link_preview.url).hostname}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
                   <Text style={styles.messageTextMine}>{item.decrypted_content || item.encrypted_content}</Text>
-                  <View style={styles.messageFooter}>
-                    <Text style={[styles.messageTime, styles.messageTimeMine]}>
-                      {getTimeDisplay(item.created_at)}
-                    </Text>
-                    {isPremium && (
-                      <MaterialCommunityIcons
-                        name={item.read_at ? "check-all" : "check"}
-                        size={14}
-                        color={item.read_at ? "#60A5FA" : "rgba(255,255,255,0.7)"}
-                        style={styles.readReceipt}
-                      />
-                    )}
+                  <View style={styles.bubbleFooter}>
+                    <View style={styles.inlineTimeStamp}>
+                      <Text style={[styles.messageTime, styles.messageTimeMine]}>
+                        {getTimeDisplay(item.created_at)}
+                      </Text>
+                      {isPremium && (
+                        <MaterialCommunityIcons
+                          name={item.read_at ? "check-all" : "check"}
+                          size={14}
+                          color={item.read_at ? "#60A5FA" : "rgba(255,255,255,0.7)"}
+                          style={styles.readReceipt}
+                        />
+                      )}
+                    </View>
                   </View>
                 </LinearGradient>
               ) : (
                 <>
+                  {quotedReplyBlock}
+                  {/* Link Preview */}
+                  {item.link_preview && (
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(item.link_preview!.url)}
+                      activeOpacity={0.8}
+                      style={[styles.linkPreviewTheirs, { borderColor: colors.border }]}
+                    >
+                      {item.link_preview.image && (
+                        <Image source={{ uri: item.link_preview.image }} style={styles.linkPreviewImage} resizeMode="cover" />
+                      )}
+                      <View style={styles.linkPreviewTextContainer}>
+                        <Text style={[styles.linkPreviewTitleTheirs, { color: colors.foreground }]} numberOfLines={2}>{item.link_preview.title}</Text>
+                        {item.link_preview.description && (
+                          <Text style={[styles.linkPreviewDescTheirs, { color: colors.mutedForeground }]} numberOfLines={2}>{item.link_preview.description}</Text>
+                        )}
+                        <Text style={[styles.linkPreviewHostTheirs, { color: colors.mutedForeground }]} numberOfLines={1}>
+                          {new URL(item.link_preview.url).hostname}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
                   <Text style={[styles.messageTextTheirs, { color: colors.foreground }]}>{item.decrypted_content || item.encrypted_content}</Text>
-                  <Text style={[styles.messageTime, { color: colors.mutedForeground }]}>
-                    {getTimeDisplay(item.created_at)}
-                  </Text>
+                  <View style={styles.bubbleFooter}>
+                    <View style={styles.inlineTimeStamp}>
+                      <Text style={[styles.messageTime, { color: colors.mutedForeground }]}>
+                        {getTimeDisplay(item.created_at)}
+                      </Text>
+                    </View>
+                  </View>
                 </>
               )}
             </>
@@ -2117,11 +2791,17 @@ export default function Chat() {
       </View>
       </TouchableOpacity>
     );
-  };
+
+    return (
+      <SwipeableMessageBubble onReply={() => handleReplyTo(item)}>
+        {messageBubbleContent}
+      </SwipeableMessageBubble>
+    );
+  }, [currentProfileId, expandedTimestampId, searchResultIds, currentSearchIndex, matchProfile, colors, isDarkColorScheme, isPremium, playingVoiceId, voiceWaveHeights, handleMessagePress, t]);
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <ChatSkeleton />
       </View>
     );
@@ -2228,20 +2908,13 @@ export default function Chat() {
           onPress={() => router.push(`/profile/${matchProfile?.id}`)}
         >
           <View style={{ position: 'relative' }}>
-            <Image
+            <SafeBlurImage
               source={{ uri: matchPhotoUri }}
               style={styles.headerAvatar}
               blurRadius={blurRadius}
               onLoad={onImageLoad}
               onError={onImageError}
             />
-            {/* Android blur fallback - CSS overlay instead of RenderScript */}
-            {showBlurOverlay && (
-              <View
-                style={[styles.headerAvatar, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-                pointerEvents="none"
-              />
-            )}
           </View>
           <View style={styles.headerInfo}>
             <View style={styles.headerNameRow}>
@@ -2294,6 +2967,18 @@ export default function Chat() {
         </TouchableOpacity>
 
         <View style={styles.headerRight}>
+          {/* Search button */}
+          <TouchableOpacity
+            onPress={handleSearchToggle}
+            style={[styles.revealButton, { backgroundColor: isDarkColorScheme ? '#2D2D30' : '#F5F2F7' }]}
+          >
+            <MaterialCommunityIcons
+              name={isSearching ? "close" : "magnify"}
+              size={22}
+              color="#A08AB7"
+            />
+          </TouchableOpacity>
+
           {/* Photo Reveal Button - Only show if current user has photo blur enabled */}
           {currentUserPhotoBlur && (
             <TouchableOpacity
@@ -2323,28 +3008,47 @@ export default function Chat() {
         </View>
       </View>
 
-      {/* Premium Upsell Banner */}
-      {!isPremium && messages.length >= 3 && (
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => setShowPaywall(true)}
-          style={styles.premiumBanner}
-        >
-          <LinearGradient
-            colors={['#A08AB7', '#CDC2E5']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.premiumBannerGradient}
-          >
-            <View style={styles.premiumBannerContent}>
-              <MaterialCommunityIcons name="crown" size={20} color="#FFD700" />
-              <Text style={styles.premiumBannerText}>
-                {t('chat.unlockFeatures')}
-              </Text>
+      {/* Premium Upsell Banner — swipe to dismiss */}
+      {!isPremium && !premiumBannerDismissed && messages.length >= 3 && (
+        <ReanimatedSwipeable
+          friction={2}
+          leftThreshold={60}
+          rightThreshold={60}
+          overshootLeft={false}
+          overshootRight={false}
+          onSwipeableOpen={handleDismissPremiumBanner}
+          renderLeftActions={() => (
+            <View style={styles.bannerSwipeHint}>
+              <MaterialCommunityIcons name="close" size={18} color="#9CA3AF" />
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={20} color="rgba(255,255,255,0.8)" />
-          </LinearGradient>
-        </TouchableOpacity>
+          )}
+          renderRightActions={() => (
+            <View style={styles.bannerSwipeHint}>
+              <MaterialCommunityIcons name="close" size={18} color="#9CA3AF" />
+            </View>
+          )}
+        >
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => setShowPaywall(true)}
+            style={styles.premiumBanner}
+          >
+            <LinearGradient
+              colors={['#A08AB7', '#CDC2E5']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.premiumBannerGradient}
+            >
+              <View style={styles.premiumBannerContent}>
+                <MaterialCommunityIcons name="crown" size={20} color="#FFD700" />
+                <Text style={styles.premiumBannerText}>
+                  {t('chat.unlockFeatures')}
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color="rgba(255,255,255,0.8)" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </ReanimatedSwipeable>
       )}
 
       {/* Review Prompt Banner */}
@@ -2363,22 +3067,68 @@ export default function Chat() {
         />
       )}
 
+      {/* Search Bar */}
+      {isSearching && (
+        <View style={[styles.searchBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={handleSearchToggle} style={styles.searchBackButton}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color={colors.foreground} />
+          </TouchableOpacity>
+          <View style={[styles.searchInputWrapper, { backgroundColor: isDarkColorScheme ? '#2D2D30' : '#F3F4F6' }]}>
+            <MaterialCommunityIcons name="magnify" size={18} color={colors.mutedForeground} />
+            <TextInput
+              ref={searchInputRef}
+              style={[styles.searchInput, { color: colors.foreground }]}
+              placeholder={t('chat.searchMessages')}
+              placeholderTextColor={colors.mutedForeground}
+              value={searchQuery}
+              onChangeText={handleSearchQueryChange}
+              autoFocus
+              returnKeyType="search"
+            />
+          </View>
+          {searchResultIds.length > 0 && (
+            <View style={styles.searchNav}>
+              <Text style={[styles.searchCount, { color: colors.mutedForeground }]}>
+                {currentSearchIndex + 1}/{searchResultIds.length}
+              </Text>
+              <TouchableOpacity onPress={handleSearchPrev} style={styles.searchNavButton}>
+                <MaterialCommunityIcons name="chevron-up" size={22} color="#A08AB7" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSearchNext} style={styles.searchNavButton}>
+                <MaterialCommunityIcons name="chevron-down" size={22} color="#A08AB7" />
+              </TouchableOpacity>
+            </View>
+          )}
+          {searchQuery.length >= 2 && searchResultIds.length === 0 && (
+            <Text style={[styles.searchCount, { color: colors.mutedForeground }]}>
+              {t('chat.noResults')}
+            </Text>
+          )}
+        </View>
+      )}
+
       {/* Messages List */}
       <FlatList
         ref={flatListRef}
         data={messages}
         renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
+        keyExtractor={messageKeyExtractor}
+        inverted={true}
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.messagesList, { paddingBottom: 16, paddingRight: rightSafeArea }]}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        contentContainerStyle={[styles.messagesList, rightSafeArea > 0 && { paddingRight: 12 + rightSafeArea }]}
         showsVerticalScrollIndicator={false}
         initialNumToRender={20}
         maxToRenderPerBatch={10}
         windowSize={11}
         removeClippedSubviews={true}
         updateCellsBatchingPeriod={50}
+        onScrollToIndexFailed={(info) => {
+          // Fallback: scroll to closest visible offset then retry
+          flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+          }, 200);
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -2387,7 +3137,7 @@ export default function Chat() {
             colors={['#A08AB7']}
           />
         }
-        ListHeaderComponent={likeIntro ? (
+        ListFooterComponent={likeIntro ? (
           <MotiView
             from={{ opacity: 0, translateY: 10 }}
             animate={{ opacity: 1, translateY: 0 }}
@@ -2477,11 +3227,42 @@ export default function Chat() {
           matchName={matchProfile?.display_name || ''}
           compatibilityScore={matchProfile?.compatibility_score}
           distance={matchProfile?.distance}
-          occupation={matchProfile?.occupation}
           city={matchProfile?.location_city}
           onSelectMessage={handleSelectMessage}
           onClose={() => setShowIntroMessages(false)}
         />
+      )}
+
+      {/* Reply Preview Bar */}
+      {replyingTo && (
+        <View style={[styles.replyPreviewBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+          <View style={styles.replyPreviewBorder} />
+          <View style={styles.replyPreviewContent}>
+            <Text style={[styles.replyPreviewAuthor, { color: '#A08AB7' }]}>
+              {replyingTo.sender_profile_id === currentProfileId ? t('chat.you') : matchProfile?.display_name}
+            </Text>
+            <Text style={[styles.replyPreviewText, { color: colors.mutedForeground }]} numberOfLines={1}>
+              {getReplyPreviewText({
+                id: replyingTo.id,
+                encrypted_content: replyingTo.encrypted_content,
+                sender_profile_id: replyingTo.sender_profile_id,
+                content_type: replyingTo.content_type,
+                decrypted_content: replyingTo.decrypted_content,
+                media_url: replyingTo.media_url,
+              })}
+            </Text>
+          </View>
+          {replyingTo.content_type === 'image' && replyingTo.media_url && (
+            <Image
+              source={{ uri: replyingTo.media_url }}
+              style={styles.replyPreviewImage}
+              resizeMode="cover"
+            />
+          )}
+          <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyPreviewClose}>
+            <MaterialCommunityIcons name="close" size={20} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Input Bar */}
@@ -2537,7 +3318,7 @@ export default function Chat() {
             borderTopColor: colors.border
           }]}>
           <TouchableOpacity style={[styles.imageButton, { backgroundColor: isDarkColorScheme ? '#2D2D30' : '#F3F4F6' }]} onPress={handleImagePick} disabled={sending}>
-            <MaterialCommunityIcons name="image-outline" size={24} color={sending ? colors.mutedForeground : "#A08AB7"} />
+            <MaterialCommunityIcons name="image-outline" size={22} color={sending ? colors.mutedForeground : "#A08AB7"} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -2546,11 +3327,12 @@ export default function Chat() {
             onLongPress={handleVoiceRecordStart}
             disabled={sending}
           >
-            <MaterialCommunityIcons name="microphone" size={24} color={sending ? colors.mutedForeground : "#A08AB7"} />
+            <MaterialCommunityIcons name="microphone" size={22} color={sending ? colors.mutedForeground : "#A08AB7"} />
           </TouchableOpacity>
 
           <View style={[styles.inputWrapper, { backgroundColor: isDarkColorScheme ? '#2D2D30' : '#F3F4F6' }]}>
             <TextInput
+              ref={textInputRef}
               style={[styles.input, { color: colors.foreground }]}
               placeholder={t('chat.typeMessage')}
               placeholderTextColor={colors.mutedForeground}
@@ -2910,6 +3692,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
+  bannerSwipeHint: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 48,
+  },
   messagesList: {
     paddingHorizontal: 12,
     paddingVertical: 16,
@@ -2936,11 +3723,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomLeftRadius: 4,
     padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    // iOS: subtle shadow. Android: skip elevation to avoid GPU overdraw per-message during scroll.
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+      android: {},
+    }),
   },
   messageBubbleGradient: {
     padding: 12,
@@ -2949,16 +3736,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#fff',
     lineHeight: 20,
+    flexShrink: 1,
   },
   messageTextTheirs: {
     fontSize: 15,
     color: '#111827',
     lineHeight: 20,
+    flexShrink: 1,
   },
   messageTime: {
     fontSize: 11,
     color: '#9CA3AF',
-    marginTop: 4,
   },
   messageTimeMine: {
     color: 'rgba(255,255,255,0.8)',
@@ -2967,6 +3755,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  inlineTextRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  bubbleFooter: {
+    alignSelf: 'flex-end',
+    marginTop: 2,
+  },
+  inlineTimeStamp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  voiceFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   readReceipt: {
     marginLeft: 2,
@@ -3072,36 +3879,38 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    padding: 12,
-    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 6,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
   },
   imageButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
+    borderRadius: 18,
     backgroundColor: '#F3F4F6',
   },
   voiceButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
+    borderRadius: 18,
     backgroundColor: '#F3F4F6',
   },
   inputWrapper: {
     flex: 1,
     backgroundColor: '#F3F4F6',
     borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    minHeight: 40,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    minHeight: 36,
     maxHeight: 100,
+    justifyContent: 'center',
   },
   input: {
     fontSize: 15,
@@ -3109,17 +3918,17 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     overflow: 'hidden',
   },
   sendButtonDisabled: {
     opacity: 0.5,
   },
   sendButtonGradient: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3137,17 +3946,19 @@ const styles = StyleSheet.create({
   },
   // Voice message styles
   voiceMessageBubble: {
-    padding: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     minWidth: 200,
   },
   voiceMessageBubbleTheirs: {
-    padding: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     minWidth: 200,
   },
   voiceMessageContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   voiceMessageInfo: {
     flex: 1,
@@ -3156,8 +3967,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    height: 30,
-    marginBottom: 4,
+    height: 28,
+    marginBottom: 2,
   },
   voiceWaveBar: {
     width: 3,
@@ -3441,5 +4252,191 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.1)',
     borderStyle: 'dashed',
+  },
+  // Reply preview bar styles
+  replyPreviewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    gap: 8,
+  },
+  replyPreviewBorder: {
+    width: 3,
+    backgroundColor: '#A08AB7',
+    borderRadius: 2,
+    alignSelf: 'stretch',
+  },
+  replyPreviewContent: {
+    flex: 1,
+  },
+  replyPreviewAuthor: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  replyPreviewText: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  replyPreviewImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  replyPreviewClose: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Quoted reply in bubble styles (WhatsApp-style)
+  quotedReply: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    marginTop: -4,
+    marginHorizontal: -4,
+    marginBottom: 6,
+    overflow: 'hidden',
+    minWidth: 200,
+  },
+  quotedReplyMine: {
+    backgroundColor: '#8B73A8',
+  },
+  quotedReplyAccent: {
+    width: 4,
+    backgroundColor: '#A08AB7',
+  },
+  quotedReplyAccentMine: {
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  quotedReplyBody: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  quotedReplyAuthor: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#A08AB7',
+    marginBottom: 2,
+  },
+  quotedReplyAuthorMine: {
+    color: 'rgba(255,255,255,0.95)',
+  },
+  quotedReplyText: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 19,
+  },
+  quotedReplyTextMine: {
+    color: 'rgba(255,255,255,0.7)',
+  },
+  quotedReplyImage: {
+    width: 54,
+    height: 54,
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
+  },
+  // Search bar styles
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  searchBackButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 2,
+  },
+  searchNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  searchCount: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginHorizontal: 4,
+  },
+  searchNavButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchHighlightedBubble: {
+    borderWidth: 1.5,
+    borderColor: 'rgba(160, 138, 183, 0.4)',
+  },
+  searchCurrentBubble: {
+    borderWidth: 2,
+    borderColor: '#A08AB7',
+  },
+  // Link preview styles
+  linkPreviewMine: {
+    marginTop: 8,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  linkPreviewTheirs: {
+    marginTop: 8,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  linkPreviewImage: {
+    width: '100%',
+    height: 120,
+  },
+  linkPreviewTextContainer: {
+    padding: 8,
+  },
+  linkPreviewTitleMine: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  linkPreviewDescMine: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+  },
+  linkPreviewHostMine: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 4,
+  },
+  linkPreviewTitleTheirs: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  linkPreviewDescTheirs: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  linkPreviewHostTheirs: {
+    fontSize: 11,
+    marginTop: 4,
   },
 });
