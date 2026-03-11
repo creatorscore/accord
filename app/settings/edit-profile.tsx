@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,15 +23,20 @@ import { MotiView } from 'moti';
 import { Audio } from 'expo-av';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
+import { signPhotoUrls, getSignedUrl, extractStoragePath } from '@/lib/signed-urls';
 import { useAuth } from '@/contexts/AuthContext';
-import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri } from '@/lib/image-optimization';
+import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri, cleanupOptimizedImages } from '@/lib/image-optimization';
 import { HeightUnit, cmToInches, inchesToCm } from '@/lib/height-utils';
 import { openAppSettings } from '@/lib/open-settings';
 import { validateContent } from '@/lib/content-moderation';
+import { HOBBY_OPTIONS, getHobbyIcon, isPredefinedHobby, normalizeHobbies, DEFAULT_HOBBY_ICON } from '@/lib/hobby-options';
+import { useTranslation } from 'react-i18next';
+import { PROMPT_KEYS } from '@/lib/prompt-options';
 
 interface Photo {
   id?: string;
   url: string;
+  originalUri?: string; // Original source URI for re-optimization fallback
   storage_path?: string;
   is_primary: boolean;
   display_order: number;
@@ -46,24 +51,7 @@ interface PromptAnswer {
   answer: string;
 }
 
-const GENDERS = [
-  'Man',
-  'Woman',
-  'Non-binary',
-  'Trans Man',
-  'Trans Woman',
-  'Genderfluid',
-  'Genderqueer',
-  'Agender',
-  'Bigender',
-  'Two-Spirit',
-  'Intersex',
-  'Demigender',
-  'Neutrois',
-  'Questioning',
-  'Prefer not to say',
-  'Other',
-];
+const GENDERS = ['Man', 'Woman', 'Non-binary'];
 
 const ORIENTATIONS = [
   'Lesbian',
@@ -87,7 +75,7 @@ const ORIENTATIONS = [
 ];
 
 // Genders that are considered "men only" - straight men are not allowed on the platform
-const MEN_ONLY_GENDERS = ['Man', 'Trans Man'];
+const MEN_ONLY_GENDERS = ['Man'];
 
 // Helper function to get available orientations based on gender
 // Straight men are not allowed - only show "Straight" if user is NOT exclusively male-identifying
@@ -196,28 +184,7 @@ const COMMON_LANGUAGES = [
   'Other',
 ];
 
-const HOBBY_OPTIONS = [
-  '🎨 Art & Design',
-  '📚 Reading',
-  '✈️ Travel',
-  '🎵 Music',
-  '🏃 Fitness',
-  '🎮 Gaming',
-  '🍳 Cooking',
-  '📸 Photography',
-  '🧘 Yoga',
-  '🎭 Theater',
-  '🌱 Gardening',
-  '🎬 Film',
-  '💻 Tech',
-  '✍️ Writing',
-  '🐕 Pets',
-  '🎪 Live Events',
-  '🏕️ Outdoors',
-  '🎨 Crafts',
-  '🍷 Wine Tasting',
-  '☕ Coffee',
-];
+// Hobby options imported from shared config
 
 const PRIMARY_REASONS = [
   { value: 'financial', label: 'Financial Stability' },
@@ -283,28 +250,7 @@ const PETS_OPTIONS = [
   { value: 'dont_like', label: "Don't Like" },
 ];
 
-const PROMPT_OPTIONS = [
-  "My ideal lavender marriage looks like...",
-  "I'm looking for someone who...",
-  "The best partnership includes...",
-  "A perfect Sunday with my partner would be...",
-  "Together we could...",
-  "I need a partner who understands...",
-  "My ideal living situation is...",
-  "Financial goals I want us to share...",
-  "The most important thing in our arrangement...",
-  "I can offer my partner...",
-  "Deal breakers for me are...",
-  "My vision for our future includes...",
-  "What makes me a great partner is...",
-  "I'm passionate about...",
-  "Green flags I'm looking for...",
-  "A fun fact about me...",
-  "My love language is...",
-  "I'm secretly really good at...",
-  "The key to my heart is...",
-  "My guilty pleasure is...",
-];
+// PROMPT_OPTIONS is now derived from i18n keys inside the component via useMemo
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -347,6 +293,9 @@ function calculateZodiac(birthDate: Date): string {
 
 export default function EditProfile() {
   const { user } = useAuth();
+  const { t } = useTranslation();
+  const PROMPT_OPTIONS = useMemo(() => PROMPT_KEYS.map(key => t(`prompts.${key}`)), [t]);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -362,13 +311,13 @@ export default function EditProfile() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   const [age, setAge] = useState('');
-  const [bio, setBio] = useState('');
-  const [occupation, setOccupation] = useState('');
-  const [education, setEducation] = useState('');
-  const [hometown, setHometown] = useState('');
   const [locationCity, setLocationCity] = useState('');
   const [locationState, setLocationState] = useState('');
   const [refreshingLocation, setRefreshingLocation] = useState(false);
+  const [hometown, setHometown] = useState('');
+  const [occupation, setOccupation] = useState('');
+  const [education, setEducation] = useState('');
+
   const [gender, setGender] = useState<string[]>([]);
   const [pronouns, setPronouns] = useState('');
   const [ethnicity, setEthnicity] = useState<string[]>([]);
@@ -398,6 +347,7 @@ export default function EditProfile() {
   const [religion, setReligion] = useState('');
   const [politicalViews, setPoliticalViews] = useState('');
   const [voiceIntroUrl, setVoiceIntroUrl] = useState<string | null>(null);
+  const [voiceIntroStoragePath, setVoiceIntroStoragePath] = useState<string | null>(null);
   const [voiceIntroPrompt, setVoiceIntroPrompt] = useState<string>('');
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -438,9 +388,6 @@ export default function EditProfile() {
           display_name,
           birth_date,
           age,
-          bio,
-          occupation,
-          education,
           location_city,
           location_state,
           gender,
@@ -458,10 +405,12 @@ export default function EditProfile() {
           languages_spoken,
           religion,
           political_views,
+          hometown,
+          occupation,
+          education,
           voice_intro_url,
           voice_intro_duration,
-          voice_intro_prompt,
-          hometown
+          voice_intro_prompt
         `)
         .eq('user_id', user?.id)
         .single();
@@ -483,12 +432,11 @@ export default function EditProfile() {
           setSelectedYear(date.getFullYear());
         }
         setAge(profileData.age?.toString() || '');
-        setBio(profileData.bio || '');
-        setOccupation(profileData.occupation || '');
-        setEducation(profileData.education || '');
-        setHometown(profileData.hometown || '');
         setLocationCity(profileData.location_city || '');
         setLocationState(profileData.location_state || '');
+        setHometown(profileData.hometown || '');
+        setOccupation(profileData.occupation || '');
+        setEducation(profileData.education || '');
 
         setGender(profileData.gender || []);
         setPronouns(profileData.pronouns || '');
@@ -525,7 +473,8 @@ export default function EditProfile() {
             .order('display_order', { ascending: true });
 
           if (photosData) {
-            setPhotos(photosData);
+            const signedPhotos = await signPhotoUrls(photosData);
+            setPhotos(signedPhotos);
           }
         } catch (photoError) {
           console.warn('Error loading photos:', photoError);
@@ -549,7 +498,7 @@ export default function EditProfile() {
         }
 
         if (profileData.hobbies && Array.isArray(profileData.hobbies)) {
-          setHobbies(profileData.hobbies);
+          setHobbies(normalizeHobbies(profileData.hobbies));
         } else {
           setHobbies([]);
         }
@@ -568,7 +517,10 @@ export default function EditProfile() {
         setPoliticalViews(profileData.political_views || '');
 
         if (profileData.voice_intro_url) {
-          setVoiceIntroUrl(profileData.voice_intro_url);
+          // Keep the raw storage path for saving back to DB
+          setVoiceIntroStoragePath(extractStoragePath(profileData.voice_intro_url, 'voice-intros'));
+          const signedVoice = await getSignedUrl('voice-intros', profileData.voice_intro_url);
+          setVoiceIntroUrl(signedVoice || profileData.voice_intro_url);
           setVoiceDuration(profileData.voice_intro_duration || 0);
         }
         setVoiceIntroPrompt(profileData.voice_intro_prompt || '');
@@ -649,65 +601,77 @@ export default function EditProfile() {
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [3, 4],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      const selectedUri = result.assets[0].uri;
-
-      // Validate image before processing
-      const validation = await validateImage(selectedUri);
-      if (!validation.isValid) {
-        Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
-        return;
-      }
-
-      // Optimize image with compression
-      const { optimized } = await optimizeImage(selectedUri, {
-        generateThumbnail: true,
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        // Disable cropping on Android — native canhub/cropper crashes on low-end devices
+        allowsEditing: Platform.OS === 'ios',
+        aspect: [3, 4],
+        quality: 0.8,
       });
 
-      // Generate hash and blur thumbnail in parallel
-      const [contentHash, blurDataUri] = await Promise.all([
-        generateImageHash(optimized.uri),
-        generateBlurDataUri(optimized.uri).catch(() => undefined),
-      ]);
+      if (!result.canceled && result.assets[0]) {
+        const selectedUri = result.assets[0].uri;
 
-      // Check for duplicate in current selection (local check)
-      const isDuplicateLocal = photos.some(p => !p.to_delete && p.contentHash === contentHash);
-      if (isDuplicateLocal) {
-        Alert.alert('Duplicate Photo', 'You have already selected this photo. Please choose a different one.');
-        return;
-      }
+        try {
+          // Validate image before processing
+          const validation = await validateImage(selectedUri);
+          if (!validation.isValid) {
+            Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
+            return;
+          }
 
-      // Check for duplicate in database (already uploaded photos)
-      if (profileId) {
-        const { data: existingPhoto } = await supabase
-          .from('photos')
-          .select('id')
-          .eq('profile_id', profileId)
-          .eq('content_hash', contentHash)
-          .maybeSingle();
+          // Optimize image with compression
+          const { optimized } = await optimizeImage(selectedUri, {
+            generateThumbnail: true,
+          });
 
-        if (existingPhoto) {
-          Alert.alert('Duplicate Photo', 'You have already uploaded this photo. Please choose a different one.');
-          return;
+          // Generate hash and blur thumbnail in parallel
+          const [contentHash, blurDataUri] = await Promise.all([
+            generateImageHash(optimized.uri),
+            generateBlurDataUri(optimized.uri).catch(() => undefined),
+          ]);
+
+          // Check for duplicate in current selection (local check)
+          const isDuplicateLocal = photos.some(p => !p.to_delete && p.contentHash === contentHash);
+          if (isDuplicateLocal) {
+            Alert.alert('Duplicate Photo', 'You have already selected this photo. Please choose a different one.');
+            return;
+          }
+
+          // Check for duplicate in database (already uploaded photos)
+          if (profileId) {
+            const { data: existingPhoto } = await supabase
+              .from('photos')
+              .select('id')
+              .eq('profile_id', profileId)
+              .eq('content_hash', contentHash)
+              .maybeSingle();
+
+            if (existingPhoto) {
+              Alert.alert('Duplicate Photo', 'You have already uploaded this photo. Please choose a different one.');
+              return;
+            }
+          }
+
+          const newPhoto: Photo = {
+            url: optimized.uri,
+            originalUri: selectedUri,
+            is_primary: activePhotos.length === 0,
+            display_order: activePhotos.length,
+            is_new: true,
+            contentHash,
+            blurDataUri,
+          };
+          setPhotos([...photos, newPhoto]);
+        } catch (error) {
+          console.error('Error processing image:', error);
+          Alert.alert('Error', 'Failed to process the selected photo. Please try again.');
         }
       }
-
-      const newPhoto: Photo = {
-        url: optimized.uri,
-        is_primary: activePhotos.length === 0,
-        display_order: activePhotos.length,
-        is_new: true,
-        contentHash,
-        blurDataUri,
-      };
-      setPhotos([...photos, newPhoto]);
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to open photo library. Please try again.');
     }
   };
 
@@ -1051,10 +1015,6 @@ export default function EditProfile() {
         birth_date: birthDate.toISOString().split('T')[0], // Store as YYYY-MM-DD
         age: calculatedAge,
         zodiac_sign: calculatedZodiac,
-        bio,
-        occupation,
-        education,
-        hometown,
         // NOTE: location_city and location_state are NOT included here
         // Location can only be updated via GPS refresh button (no manual editing)
         gender: gender.length > 0 ? gender : null,
@@ -1074,9 +1034,12 @@ export default function EditProfile() {
         hobbies: hobbies.length > 0 ? hobbies : null,
         love_language: loveLanguage ? [loveLanguage] : null,
         languages_spoken: languagesSpoken.length > 0 ? languagesSpoken : null,
+        hometown: hometown || null,
+        occupation: occupation || null,
+        education: education || null,
         religion: religion || null,
         political_views: politicalViews || null,
-        voice_intro_url: voiceIntroUrl,
+        voice_intro_url: voiceIntroStoragePath || voiceIntroUrl,
         voice_intro_prompt: voiceIntroPrompt || null,
         // NOTE: photo_review_required is NOT cleared here - only admins can clear it
         // after reviewing the user's updated photos. This prevents users from bypassing
@@ -1099,7 +1062,7 @@ export default function EditProfile() {
         const isStillStraightMan = (() => {
           const genderArr = gender.length > 0 ? gender : [];
           const orientationArr = sexualOrientation.length > 0 ? sexualOrientation : [];
-          const menOnlyGenders = ['Man', 'Trans Man'];
+          const menOnlyGenders = ['Man'];
           const isExclusivelyMale = genderArr.length > 0 &&
             genderArr.every(g => menOnlyGenders.includes(g));
           return isExclusivelyMale && orientationArr.includes('Straight');
@@ -1137,36 +1100,36 @@ export default function EditProfile() {
       const photosToUpload = photos.filter(p => p.is_new && !p.to_delete);
       const photosToUpdate = photos.filter(p => !p.is_new && !p.to_delete && p.id);
 
-      // Delete photos from storage and database
-      for (const photo of photosToDelete) {
-        if (photo.storage_path && !photo.storage_path.startsWith('file://')) {
-          // Only delete from storage if it's a valid storage path
-          const { error: storageError } = await supabase.storage
-            .from('profile-photos')
-            .remove([photo.storage_path]);
+      // Delete photos from storage and database in parallel
+      if (photosToDelete.length > 0) {
+        // Batch storage deletions
+        const storagePaths = photosToDelete
+          .filter(p => p.storage_path && !p.storage_path.startsWith('file://'))
+          .map(p => p.storage_path!);
+        const storageDeletePromise = storagePaths.length > 0
+          ? supabase.storage.from('profile-photos').remove(storagePaths)
+          : Promise.resolve({ error: null });
 
-          if (storageError) console.error('Error deleting from storage:', storageError);
-        }
-
-        const { error: dbError } = await supabase
+        // Batch DB deletions
+        const photoIds = photosToDelete.map(p => p.id!);
+        const dbDeletePromise = supabase
           .from('photos')
           .delete()
-          .eq('id', photo.id);
+          .in('id', photoIds);
 
-        if (dbError) console.error('Error deleting photo from database:', dbError);
+        const [storageResult, dbResult] = await Promise.all([storageDeletePromise, dbDeletePromise]);
+        if (storageResult.error) console.error('Error deleting from storage:', storageResult.error);
+        if (dbResult.error) console.error('Error deleting photos from database:', dbResult.error);
       }
 
-      // Upload new photos to Supabase Storage
-      for (const photo of photosToUpload) {
+      // Upload new photos in parallel (each photo: convert -> upload -> sign -> insert -> moderate)
+      await Promise.all(photosToUpload.map(async (photo, idx) => {
         try {
-          // Get file extension
-          const fileExt = 'jpg'; // Always use jpg since we optimized as JPEG
-          const fileName = `${finalProfileId}/${Date.now()}_${photo.display_order}.${fileExt}`;
+          const fileExt = 'jpg';
+          const fileName = `${finalProfileId}/${Date.now()}_${idx}_${photo.display_order}.${fileExt}`;
 
-          // Convert optimized image to ArrayBuffer
-          const arrayBuffer = await uriToArrayBuffer(photo.url);
+          const arrayBuffer = await uriToArrayBuffer(photo.url, photo.originalUri);
 
-          // Upload to Supabase Storage
           const { error: uploadError } = await supabase.storage
             .from('profile-photos')
             .upload(fileName, arrayBuffer, {
@@ -1176,67 +1139,64 @@ export default function EditProfile() {
 
           if (uploadError) {
             console.error('Upload error:', uploadError);
-            continue;
+            return;
           }
 
-          // Get public URL
-          const { data: { publicUrl } } = supabase.storage
-            .from('profile-photos')
-            .getPublicUrl(fileName);
-
-          // Insert photo record into database with content hash for duplicate detection
-          const { data: photoData, error: insertError } = await supabase
-            .from('photos')
-            .insert({
-              profile_id: finalProfileId,
-              url: publicUrl,
-              storage_path: fileName,
-              is_primary: photo.is_primary,
-              display_order: photo.display_order,
-              content_hash: photo.contentHash,
-              blur_data_uri: photo.blurDataUri || null,
-              moderation_status: 'pending', // Start as pending until moderation completes
-            })
-            .select('id')
-            .single();
+          // Generate signed URL for moderation + insert DB record in parallel
+          const [{ data: signedData }, { data: photoData, error: insertError }] = await Promise.all([
+            supabase.storage.from('profile-photos').createSignedUrl(fileName, 600),
+            supabase
+              .from('photos')
+              .insert({
+                profile_id: finalProfileId,
+                url: fileName,
+                storage_path: fileName,
+                is_primary: photo.is_primary,
+                display_order: photo.display_order,
+                content_hash: photo.contentHash,
+                blur_data_uri: photo.blurDataUri || null,
+                moderation_status: 'pending',
+              })
+              .select('id')
+              .single(),
+          ]);
 
           if (insertError) {
             console.error('Error inserting photo record:', insertError);
-          } else {
-            // Run NSFW moderation check - BLOCKING
-            // This uses AWS Rekognition to detect explicit content
-            try {
-              const { data: moderationResult, error: moderationError } = await supabase.functions.invoke('moderate-photo', {
-                body: {
-                  photo_url: publicUrl,
-                  photo_id: photoData?.id,
-                  profile_id: finalProfileId,
-                },
-              });
+            return;
+          }
 
-              if (moderationError) {
-                console.error('Moderation service error:', moderationError);
-              }
+          // Run NSFW moderation check
+          const signedUrl = signedData?.signedUrl || '';
+          try {
+            const { data: moderationResult, error: moderationError } = await supabase.functions.invoke('moderate-photo', {
+              body: {
+                photo_url: signedUrl,
+                photo_id: photoData?.id,
+                profile_id: finalProfileId,
+              },
+            });
 
-              // If photo was rejected for explicit or suggestive content, alert user
-              // Keep the file in storage and DB record (marked rejected) for admin review
-              if (moderationResult?.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
-                Alert.alert(
-                  'Photo Rejected',
-                  'This photo contains inappropriate content and cannot be uploaded. Please choose a different photo.'
-                );
-              }
-            } catch (moderationError: any) {
-              console.error('Moderation check failed:', moderationError);
+            if (moderationError) {
+              console.error('Moderation service error:', moderationError);
             }
+
+            if (moderationResult?.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
+              Alert.alert(
+                'Photo Rejected',
+                'This photo contains inappropriate content and cannot be uploaded. Please choose a different photo.'
+              );
+            }
+          } catch (moderationError: any) {
+            console.error('Moderation check failed:', moderationError);
           }
         } catch (error) {
           console.error('Error uploading photo:', error);
         }
-      }
+      }));
 
-      // Update existing photo order and primary status
-      for (const photo of photosToUpdate) {
+      // Update existing photo order and primary status in parallel
+      await Promise.all(photosToUpdate.map(async (photo) => {
         const { error } = await supabase
           .from('photos')
           .update({
@@ -1246,7 +1206,7 @@ export default function EditProfile() {
           .eq('id', photo.id);
 
         if (error) console.error('Error updating photo:', error);
-      }
+      }));
 
       // Upload voice intro if it's a new local file
       let finalVoiceIntroUrl = voiceIntroUrl;
@@ -1270,18 +1230,15 @@ export default function EditProfile() {
           if (uploadError) {
             console.error('Voice upload error:', uploadError);
           } else {
-            // Get public URL
-            const { data: { publicUrl } } = supabase.storage
-              .from('voice-intros')
-              .getPublicUrl(fileName);
+            // Store the path within the bucket (buckets are private, URLs are signed on demand)
+            const voiceStoragePath = fileName;
+            finalVoiceIntroUrl = voiceStoragePath;
 
-            finalVoiceIntroUrl = publicUrl;
-
-            // Update the profile with the public URL and duration
+            // Update the profile with the storage path and duration
             await supabase
               .from('profiles')
               .update({
-                voice_intro_url: publicUrl,
+                voice_intro_url: voiceStoragePath,
                 voice_intro_duration: finalVoiceDuration
               })
               .eq('id', finalProfileId);
@@ -1312,7 +1269,7 @@ export default function EditProfile() {
           age_max: parseInt(ageMax) || 45,
           max_distance_miles: parseInt(maxDistance) || 50,
           willing_to_relocate: willingToRelocate,
-          gender_preference: genderPreference.length > 0 ? genderPreference : null,
+          gender_preference: genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary', 'Trans Woman', 'Genderfluid', 'Bigender', 'Other'],
           dealbreakers: dealbreakers.length > 0 ? dealbreakers : null,
           must_haves: mustHaves.length > 0 ? mustHaves : null,
         };
@@ -1330,6 +1287,9 @@ export default function EditProfile() {
           // Don't fail the whole save if preferences fail
         }
       }
+
+      // Clean up persisted optimized images
+      cleanupOptimizedImages().catch(() => {});
 
       if (!skipAlert) {
         Alert.alert(
@@ -1611,6 +1571,36 @@ export default function EditProfile() {
           </Modal>
 
           <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Hometown</Text>
+            <TextInput
+              style={styles.input}
+              value={hometown}
+              onChangeText={setHometown}
+              placeholder="Where are you from?"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Occupation</Text>
+            <TextInput
+              style={styles.input}
+              value={occupation}
+              onChangeText={setOccupation}
+              placeholder="What do you do?"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Education</Text>
+            <TextInput
+              style={styles.input}
+              value={education}
+              onChangeText={setEducation}
+              placeholder="Where did you study?"
+              placeholderTextColor="#9CA3AF"
+            />
           </View>
 
           <View style={styles.inputGroup}>
@@ -1835,57 +1825,9 @@ export default function EditProfile() {
           </View>
         </View>
 
-        {/* Bio Section */}
+        {/* About You Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>About You</Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Bio</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={bio}
-              onChangeText={setBio}
-              placeholder="Tell your story..."
-              placeholderTextColor="#9CA3AF"
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Occupation</Text>
-            <TextInput
-              style={styles.input}
-              value={occupation}
-              onChangeText={setOccupation}
-              placeholder="What do you do?"
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Education</Text>
-            <TextInput
-              style={styles.input}
-              value={education}
-              onChangeText={setEducation}
-              placeholder="Your education"
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Hometown</Text>
-            <TextInput
-              style={styles.input}
-              value={hometown}
-              onChangeText={setHometown}
-              placeholder="e.g., Los Angeles, CA"
-              placeholderTextColor="#9CA3AF"
-              maxLength={100}
-            />
-          </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Love Language</Text>
@@ -2003,40 +1945,49 @@ export default function EditProfile() {
 
           {/* Predefined Hobby Options */}
           <View style={styles.interestsContainer}>
-            {HOBBY_OPTIONS.map((hobby) => (
-              <TouchableOpacity
-                key={hobby}
-                style={[
-                  styles.optionChip,
-                  hobbies.includes(hobby) && styles.optionChipSelected,
-                ]}
-                onPress={() => toggleHobby(hobby)}
-              >
-                <Text
+            {HOBBY_OPTIONS.map((option) => {
+              const selected = hobbies.includes(option.value);
+              return (
+                <TouchableOpacity
+                  key={option.value}
                   style={[
-                    styles.optionChipText,
-                    hobbies.includes(hobby) && styles.optionChipTextSelected,
+                    styles.optionChip,
+                    selected && styles.optionChipSelected,
                   ]}
+                  onPress={() => toggleHobby(option.value)}
                 >
-                  {hobby}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <MaterialCommunityIcons
+                    name={option.icon as any}
+                    size={16}
+                    color={selected ? '#FFFFFF' : '#6B7280'}
+                  />
+                  <Text
+                    style={[
+                      styles.optionChipText,
+                      selected && styles.optionChipTextSelected,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* Selected/Custom Hobbies */}
-          {hobbies.some(h => !HOBBY_OPTIONS.includes(h)) && (
+          {hobbies.some(h => !isPredefinedHobby(h)) && (
             <>
               <Text style={[styles.sectionSubtitle, { marginTop: 16, marginBottom: 8 }]}>Custom Hobbies</Text>
               <View style={styles.interestsContainer}>
                 {hobbies
-                  .filter(h => !HOBBY_OPTIONS.includes(h))
+                  .filter(h => !isPredefinedHobby(h))
                   .map((hobby, index) => (
                     <TouchableOpacity
                       key={index}
                       style={styles.interestChip}
                       onPress={() => setHobbies(hobbies.filter((h) => h !== hobby))}
                     >
+                      <MaterialCommunityIcons name={DEFAULT_HOBBY_ICON as any} size={14} color="#A08AB7" />
                       <Text style={styles.interestText}>{hobby}</Text>
                       <MaterialCommunityIcons name="close" size={16} color="#A08AB7" />
                     </TouchableOpacity>
@@ -2752,10 +2703,6 @@ export default function EditProfile() {
             const previewData = {
               display_name: displayName,
               age: calculatedAge,
-              bio,
-              occupation,
-              education,
-              hometown,
               // Location is read-only - set via GPS only
               location_city: locationCity,
               location_state: locationState,
@@ -2779,7 +2726,7 @@ export default function EditProfile() {
                 tv_shows: favoriteTvShows.split(',').map(s => s.trim()).filter(Boolean),
               },
               hobbies,
-              voice_intro_url: voiceIntroUrl,
+              voice_intro_url: voiceIntroStoragePath || voiceIntroUrl,
               voice_intro_duration: voiceDuration,
               voice_intro_prompt: voiceIntroPrompt || null,
               is_verified: false,
@@ -2795,7 +2742,7 @@ export default function EditProfile() {
                 age_max: parseInt(ageMax) || 45,
                 max_distance_miles: parseInt(maxDistance) || 50,
                 willing_to_relocate: willingToRelocate,
-                gender_preference: Array.isArray(genderPreference) ? genderPreference : [],
+                gender_preference: Array.isArray(genderPreference) && genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary', 'Trans Woman', 'Genderfluid', 'Bigender', 'Other'],
                 dealbreakers: Array.isArray(dealbreakers) ? dealbreakers : [],
                 must_haves: Array.isArray(mustHaves) ? mustHaves : [],
                 lifestyle_preferences: {
@@ -3098,6 +3045,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   optionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,

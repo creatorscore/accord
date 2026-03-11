@@ -197,9 +197,8 @@ export default function SignUp() {
         setTimeout(() => {
           router.replace('/');
         }, 500);
-      } else {
-        Alert.alert(t('common.error'), 'Google sign-in was cancelled or failed');
       }
+      // null result means user cancelled or backgrounded — silently do nothing
     } catch (error: any) {
       if (error.message !== 'User cancelled') {
         Alert.alert(t('common.error'), error.message || 'Failed to sign up with Google');
