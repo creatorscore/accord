@@ -45,7 +45,7 @@ function generatePhotoVerificationEmail(recipientName: string, isIdentityRequire
             <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px;">
               <!-- Header -->
               <tr>
-                <td style="background: linear-gradient(135deg, #9B87CE 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
+                <td style="background: linear-gradient(135deg, #A08AB7 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
                   <div style="font-size: 56px; line-height: 1;">📸</div>
                   <h1 style="color: white; margin: 15px 0 0 0; font-size: 24px; font-weight: 700;">${title}</h1>
                 </td>
@@ -72,7 +72,7 @@ function generatePhotoVerificationEmail(recipientName: string, isIdentityRequire
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                           <tr>
                             <td align="center">
-                              <a href="https://joinaccord.app" style="background: linear-gradient(135deg, #9B87CE 0%, #B8A9DD 100%); color: white; text-decoration: none; padding: 16px 40px; border-radius: 30px; font-weight: 600; font-size: 16px; display: inline-block;">Open Accord</a>
+                              <a href="https://joinaccord.app" style="background: linear-gradient(135deg, #A08AB7 0%, #B8A9DD 100%); color: white; text-decoration: none; padding: 16px 40px; border-radius: 30px; font-weight: 600; font-size: 16px; display: inline-block;">Open Accord</a>
                             </td>
                           </tr>
                         </table>

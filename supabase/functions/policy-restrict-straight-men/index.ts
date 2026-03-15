@@ -259,7 +259,7 @@ function generateEmailHtml(displayName: string): string {
         <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
           <!-- Header -->
           <tr>
-            <td style="background: linear-gradient(135deg, #9B87CE 0%, #B8A9DD 100%); padding: 40px 40px 30px; text-align: center;">
+            <td style="background: linear-gradient(135deg, #A08AB7 0%, #B8A9DD 100%); padding: 40px 40px 30px; text-align: center;">
               <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">Accord</h1>
               <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0; font-size: 14px;">Meaningful Connections for the LGBTQ+ Community</p>
             </td>
@@ -300,7 +300,7 @@ function generateEmailHtml(displayName: string): string {
               </div>
 
               <p style="color: #4a4a4a; font-size: 16px; line-height: 1.6; margin: 25px 0;">
-                We understand this may be disappointing. If you have questions, please contact us at <a href="mailto:hello@joinaccord.app" style="color: #9B87CE;">hello@joinaccord.app</a>.
+                We understand this may be disappointing. If you have questions, please contact us at <a href="mailto:hello@joinaccord.app" style="color: #A08AB7;">hello@joinaccord.app</a>.
               </p>
 
               <p style="color: #4a4a4a; font-size: 16px; line-height: 1.6; margin: 0;">
@@ -320,7 +320,7 @@ function generateEmailHtml(displayName: string): string {
                 &copy; ${new Date().getFullYear()} Accord. All rights reserved.
               </p>
               <p style="color: #999999; font-size: 12px; margin: 10px 0 0;">
-                Questions? Contact <a href="mailto:hello@joinaccord.app" style="color: #9B87CE;">hello@joinaccord.app</a>
+                Questions? Contact <a href="mailto:hello@joinaccord.app" style="color: #A08AB7;">hello@joinaccord.app</a>
               </p>
             </td>
           </tr>

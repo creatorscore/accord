@@ -31,7 +31,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000', // Solid black - appears in screenshots
     // Alternative options:
-    // backgroundColor: '#9B87CE', // Accord purple
+    // backgroundColor: '#A08AB7', // Accord purple
     // Or add logo/branding here
   },
 });

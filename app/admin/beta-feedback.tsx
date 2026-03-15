@@ -234,7 +234,7 @@ export default function BetaFeedbackAdmin() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
         <Text style={styles.loadingText}>Loading feedback...</Text>
       </View>
     );
@@ -249,7 +249,7 @@ export default function BetaFeedbackAdmin() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Beta Feedback ({filteredFeedback.length})</Text>
         <TouchableOpacity onPress={loadFeedback} style={styles.refreshButton}>
-          <Ionicons name="refresh" size={24} color="#9B87CE" />
+          <Ionicons name="refresh" size={24} color="#A08AB7" />
         </TouchableOpacity>
       </View>
 
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   filterChipActive: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
   },
   filterText: {
     fontSize: 14,
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   actionChipActive: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
   },
   actionChipText: {
     fontSize: 12,

@@ -570,14 +570,14 @@ export default function AdminReports() {
       case 'dismissed':
         return '#6B7280';
       default:
-        return '#9B87CE';
+        return '#A08AB7';
     }
   };
 
   if (loading && !refreshing) {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+        <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
           </TouchableOpacity>
@@ -586,7 +586,7 @@ export default function AdminReports() {
         </LinearGradient>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
         </View>
       </View>
     );
@@ -598,7 +598,7 @@ export default function AdminReports() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+      <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
@@ -644,7 +644,7 @@ export default function AdminReports() {
       <ScrollView
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#9B87CE" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#A08AB7" />
         }
       >
         {reports.length === 0 ? (
@@ -700,7 +700,7 @@ export default function AdminReports() {
                   </ScrollView>
                   {report.reason === 'blackmail' && (
                     <View style={styles.watermarkHint}>
-                      <MaterialCommunityIcons name="water" size={14} color="#9B87CE" />
+                      <MaterialCommunityIcons name="water" size={14} color="#A08AB7" />
                       <Text style={styles.watermarkHintText}>
                         Look for watermarks in corners showing user ID + timestamp
                       </Text>
@@ -726,7 +726,7 @@ export default function AdminReports() {
                     onPress={() => viewProfile(report.reporter_profile_id)}
                   >
                     <Text style={styles.profileName}>{report.reporter_name}</Text>
-                    <MaterialCommunityIcons name="chevron-right" size={16} color="#9B87CE" />
+                    <MaterialCommunityIcons name="chevron-right" size={16} color="#A08AB7" />
                   </TouchableOpacity>
                 </View>
                 <View style={styles.profileRow}>
@@ -968,7 +968,7 @@ export default function AdminReports() {
             <ScrollView style={styles.historyModalContent} showsVerticalScrollIndicator={false}>
               {loadingHistory ? (
                 <View style={styles.historyLoadingContainer}>
-                  <ActivityIndicator size="large" color="#9B87CE" />
+                  <ActivityIndicator size="large" color="#A08AB7" />
                 </View>
               ) : pastReports.length === 0 ? (
                 <View style={styles.historyEmptyState}>
@@ -1088,7 +1088,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterTabActive: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
   },
   filterTabText: {
     fontSize: 14,
@@ -1193,7 +1193,7 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   actionsContainer: {
     flexDirection: 'row',
@@ -1378,7 +1378,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   durationOptionSelected: {
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
     backgroundColor: '#F3F0F7',
   },
   durationOptionPermanent: {
@@ -1391,14 +1391,14 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
   durationLabelSelected: {
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   durationDesc: {
     fontSize: 12,
     color: '#9CA3AF',
   },
   durationDescSelected: {
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   messageInput: {
     borderWidth: 1,
@@ -1625,7 +1625,7 @@ const styles = StyleSheet.create({
   historyModalCloseButton: {
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     alignItems: 'center',
   },
   historyModalCloseButtonText: {

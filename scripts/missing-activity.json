@@ -1,0 +1,46 @@
+{
+  "profile": {
+    "activityCenter": "Activity Center",
+    "activityCenterFeature": "Activity Center"
+  },
+  "activity": {
+    "item": {
+      "likeReceived": "{{name}} liked your profile",
+      "likeReceivedDeleted": "A user who liked you has left Accord",
+      "likeReceivedSubtitle": "Tap to see their profile",
+      "superLikeReceived": "{{name}} Super Liked you!",
+      "superLikeReceivedDeleted": "A user who Super Liked you has left Accord",
+      "superLikeReceivedSubtitle": "They really like you!",
+      "likeSent": "You liked {{name}}",
+      "likeSentDeleted": "You liked a user who has left Accord",
+      "likeSentSubtitle": "Waiting for them to like you back",
+      "superLikeSent": "You Super Liked {{name}}",
+      "superLikeSentDeleted": "You Super Liked a user who has left Accord",
+      "superLikeSentSubtitle": "Waiting for them to like you back",
+      "matched": "You matched with {{name}}!",
+      "matchedDeleted": "A former match has left Accord",
+      "matchedSubtitle": "Tap to start chatting",
+      "matchedDeletedSubtitle": "This conversation is no longer available",
+      "messageReceived": "New message from {{name}}",
+      "messageReceivedDeleted": "Message from a user who has left Accord",
+      "messageReceivedDeletedSubtitle": "This conversation is no longer available",
+      "newMessage": "New message",
+      "reviewReceived": "You received a {{rating}}-star review",
+      "reviewReceivedGeneric": "You received a new review",
+      "profileView": "{{name}} viewed your profile",
+      "profileViewDeleted": "A user who viewed your profile has left Accord",
+      "profileViewMultiple": "{{count}} people viewed your profile",
+      "verificationApproved": "Your profile is now verified!",
+      "verificationApprovedSubtitle": "You now have a verified badge",
+      "someone": "Someone",
+      "defaultName": "someone"
+    },
+    "time": {
+      "justNow": "Just now",
+      "minutesAgo": "{{count}}m ago",
+      "hoursAgo": "{{count}}h ago",
+      "yesterday": "Yesterday",
+      "daysAgo": "{{count}}d ago"
+    }
+  }
+}

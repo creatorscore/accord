@@ -244,7 +244,7 @@ export default function ReportUserModal({
                   <MaterialCommunityIcons
                     name={reason.icon as any}
                     size={24}
-                    color={selectedReason === reason.id ? '#9B87CE' : '#6B7280'}
+                    color={selectedReason === reason.id ? '#A08AB7' : '#6B7280'}
                   />
                 </View>
                 <View style={styles.reasonContent}>
@@ -260,7 +260,7 @@ export default function ReportUserModal({
                   <MaterialCommunityIcons
                     name="check-circle"
                     size={24}
-                    color="#9B87CE"
+                    color="#A08AB7"
                   />
                 )}
               </TouchableOpacity>
@@ -279,10 +279,10 @@ export default function ReportUserModal({
                     disabled={loading || uploadingPhoto}
                   >
                     {uploadingPhoto ? (
-                      <ActivityIndicator size="small" color="#9B87CE" />
+                      <ActivityIndicator size="small" color="#A08AB7" />
                     ) : (
                       <>
-                        <MaterialCommunityIcons name="camera-plus" size={20} color="#9B87CE" />
+                        <MaterialCommunityIcons name="camera-plus" size={20} color="#A08AB7" />
                         <Text style={styles.uploadButtonText}>{t('moderation.report.upload')}</Text>
                       </>
                     )}
@@ -349,7 +349,7 @@ export default function ReportUserModal({
 
             {/* Privacy Notice */}
             <View style={styles.noticeBox}>
-              <MaterialCommunityIcons name="shield-check" size={20} color="#9B87CE" />
+              <MaterialCommunityIcons name="shield-check" size={20} color="#A08AB7" />
               <Text style={styles.noticeText}>
                 {t('moderation.report.privacyNotice')}
               </Text>
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   reasonCardSelected: {
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
     backgroundColor: '#F3E8FF',
   },
   reasonIcon: {
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   reasonLabelSelected: {
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   reasonDescription: {
     fontSize: 13,
@@ -536,7 +536,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     borderRadius: 12,
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     alignItems: 'center',
   },
   submitButtonDisabled: {
@@ -566,12 +566,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3E8FF',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
   },
   uploadButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   evidenceInfo: {
     flexDirection: 'row',

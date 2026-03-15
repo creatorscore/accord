@@ -114,7 +114,7 @@ export default function Index() {
   if (loading || checking) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0A0A0B' }}>
-        <ActivityIndicator size="large" color="#A78BFA" />
+        <ActivityIndicator size="large" color="#A08AB7" />
       </View>
     );
   }
@@ -134,7 +134,7 @@ export default function Index() {
   // Flow: basic-info(1) → personality(2) → photos(3) → interests(5) → prompts(6)
   //       → voice-intro(7) → marriage-prefs(8) → matching-prefs(8) → notifications(9)
   const onboardingRouteMap: Record<number, string> = {
-    0: '/(onboarding)/basic-info',           // Not started
+    0: '/(onboarding)/welcome-info',         // Not started — show lavender marriage explanation
     1: '/(onboarding)/personality',           // basic-info done → next is personality
     2: '/(onboarding)/photos',               // personality done → next is photos
     3: '/(onboarding)/interests',            // photos done → next is interests

@@ -9,6 +9,7 @@ import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 
 interface ActivityItemProps {
   activity: ActivityItemType;
+  isAdmin?: boolean;
   onPress?: () => void;
   onUnmatch?: (activity: ActivityItemType) => void;
 }
@@ -45,7 +46,7 @@ function getRoute(activity: ActivityItemType): string | null {
   return null;
 }
 
-export default function ActivityItem({ activity, onPress, onUnmatch }: ActivityItemProps) {
+export default function ActivityItem({ activity, isAdmin, onPress, onUnmatch }: ActivityItemProps) {
   const { t } = useTranslation();
   const config = ACTIVITY_STYLE[activity.activity_type];
   if (!config) return null;
@@ -151,8 +152,9 @@ export default function ActivityItem({ activity, onPress, onUnmatch }: ActivityI
     activity.actor?.photos?.[0]?.url;
 
   // Safe blur hook - protects actor privacy while preventing crashes
+  // Admin can see unblurred photos for moderation purposes
   const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
-    shouldBlur: (activity.actor as any)?.photo_blur_enabled || false,
+    shouldBlur: ((activity.actor as any)?.photo_blur_enabled || false) && !isAdmin,
     blurIntensity: 20,
   });
 

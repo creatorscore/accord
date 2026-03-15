@@ -84,7 +84,7 @@ export default function GenderConfirmationModal() {
       <View style={styles.overlay}>
         <Animated.View entering={FadeInUp.duration(400).springify()} style={styles.container}>
           <LinearGradient
-            colors={['#9B87CE', '#B8A9DD']}
+            colors={['#A08AB7', '#B8A9DD']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.header}
@@ -199,8 +199,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chipSelected: {
-    backgroundColor: '#9B87CE',
-    borderColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
+    borderColor: '#A08AB7',
   },
   chipText: {
     fontSize: 15,
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   confirmButton: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     paddingVertical: 14,
     borderRadius: 24,
     alignItems: 'center',

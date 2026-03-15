@@ -79,7 +79,7 @@ function generateOnboardingEmail(
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 20px 0;">
       <tr>
         <td style="background: #E5E7EB; border-radius: 10px; height: 12px; overflow: hidden;">
-          <div style="background: linear-gradient(135deg, #9B87CE 0%, #A08AB7 100%); width: ${progressPercent}%; height: 12px; border-radius: 10px;"></div>
+          <div style="background: linear-gradient(135deg, #A08AB7 0%, #A08AB7 100%); width: ${progressPercent}%; height: 12px; border-radius: 10px;"></div>
         </td>
       </tr>
       <tr>
@@ -142,7 +142,7 @@ function generateOnboardingEmail(
 
               <!-- Header -->
               <tr>
-                <td style="background: linear-gradient(135deg, #9B87CE 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
+                <td style="background: linear-gradient(135deg, #A08AB7 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
                   <div style="font-size: 56px; line-height: 1;">${template.emoji}</div>
                   <h1 style="color: white; margin: 15px 0 0 0; font-size: 28px; font-weight: 700; line-height: 1.2;">${template.headline}</h1>
                   <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px; line-height: 1.4;">${template.subheadline}</p>
@@ -215,7 +215,7 @@ function generateOnboardingEmail(
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
                           Accord - Safe Connections for Meaningful Partnerships<br>
-                          <a href="https://joinaccord.app" style="color: #9B87CE; text-decoration: none;">joinaccord.app</a>
+                          <a href="https://joinaccord.app" style="color: #A08AB7; text-decoration: none;">joinaccord.app</a>
                         </p>
                       </td>
                     </tr>

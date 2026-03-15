@@ -254,7 +254,7 @@ export default function ContentModeration() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#F9FAFB', alignItems: 'center', justifyContent: 'center' }}>
-        <MaterialCommunityIcons name="loading" size={32} color="#9B87CE" />
+        <MaterialCommunityIcons name="loading" size={32} color="#A08AB7" />
         <Text style={{ color: '#6B7280', marginTop: 16 }}>Loading reports...</Text>
       </View>
     );
@@ -319,7 +319,7 @@ export default function ContentModeration() {
                   paddingVertical: 8,
                   paddingHorizontal: 16,
                   borderRadius: 20,
-                  backgroundColor: filter === status ? '#9B87CE' : '#F3F4F6',
+                  backgroundColor: filter === status ? '#A08AB7' : '#F3F4F6',
                 }}
               >
                 <Text style={{
@@ -343,7 +343,7 @@ export default function ContentModeration() {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 20 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#9B87CE" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#A08AB7" />
         }
       >
         {filteredReports.length === 0 ? (

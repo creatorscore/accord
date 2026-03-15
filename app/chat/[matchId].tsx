@@ -1464,39 +1464,22 @@ export default function Chat() {
 
       let encryptedContent = messageContent; // Default to plain text
 
-      // Try to encrypt the message
+      // PERFORMANCE: Use cached keys — don't fetch per message.
+      // senderPrivateKey and otherPublicKey are already loaded at chat init.
       const senderPrivateKey = await getPrivateKey(user.id);
+      const recipientPublicKey = matchProfile.encryption_public_key;
 
-      if (senderPrivateKey) {
-        // Get recipient's public key for encryption
-        const { data: recipientProfile } = await supabase
-          .from('profiles')
-          .select('encryption_public_key')
-          .eq('id', matchProfile.id)
-          .single();
-
-        if (recipientProfile?.encryption_public_key) {
-          // Both parties have keys - encrypt the message
-
-          try {
-            encryptedContent = await encryptMessage(
-              messageContent,
-              senderPrivateKey,
-              recipientProfile.encryption_public_key
-            );
-
-          } catch (encryptError: any) {
-            console.warn('⚠️ Encryption failed, sending as plain text:', encryptError.message);
-            encryptedContent = messageContent;
-            showToast({ type: 'info', title: t('chat.encryption.sentWithout'), message: t('chat.encryption.restartToEnable') });
-          }
-        } else {
-          console.warn('⚠️ Recipient encryption keys not found, sending as plain text');
-          showToast({ type: 'info', title: t('chat.encryption.sentWithout'), message: t('chat.encryption.restartToEnable') });
+      if (senderPrivateKey && recipientPublicKey) {
+        try {
+          encryptedContent = await encryptMessage(
+            messageContent,
+            senderPrivateKey,
+            recipientPublicKey
+          );
+        } catch (encryptError: any) {
+          console.warn('⚠️ Encryption failed, sending as plain text:', encryptError.message);
+          encryptedContent = messageContent;
         }
-      } else {
-        console.warn('⚠️ Sender encryption keys not found, sending as plain text');
-        showToast({ type: 'info', title: t('chat.encryption.sentWithout'), message: t('chat.encryption.restartToEnable') });
       }
 
       // Send message (encrypted if possible, plain text otherwise)
@@ -1563,17 +1546,13 @@ export default function Chat() {
         }
       }
 
-      // Send push notification to recipient (skip in Expo Go)
-      try {
-        await sendMessageNotification(
-          matchProfile.id,
-          currentProfileName,
-          messageContent,
-          matchId as string
-        );
-      } catch (notifError) {
-
-      }
+      // Send push notification to recipient (non-blocking — don't wait for it)
+      sendMessageNotification(
+        matchProfile.id,
+        currentProfileName,
+        messageContent,
+        matchId as string
+      ).catch(() => {});
     } catch (error: any) {
       console.error('Error sending message:', error);
       setNewMessage(messageContent); // Restore message on error

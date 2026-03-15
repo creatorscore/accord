@@ -71,7 +71,7 @@ function generateMatchEmail(recipientName: string, matchName: string): { html: s
 
               <!-- Header -->
               <tr>
-                <td style="background: linear-gradient(135deg, #9B87CE 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
+                <td style="background: linear-gradient(135deg, #A08AB7 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
                   <div style="font-size: 56px; line-height: 1;">💜</div>
                   <h1 style="color: white; margin: 15px 0 0 0; font-size: 28px; font-weight: 700; line-height: 1.2;">It's a Match!</h1>
                 </td>
@@ -86,7 +86,7 @@ function generateMatchEmail(recipientName: string, matchName: string): { html: s
                         <p style="font-size: 18px; margin: 0 0 20px 0; color: #333; line-height: 1.5;">Hi ${recipientName}!</p>
 
                         <p style="font-size: 16px; margin: 0 0 25px 0; color: #555; line-height: 1.6;">
-                          Great news! You and <strong style="color: #9B87CE;">${matchName}</strong> have matched on Accord.
+                          Great news! You and <strong style="color: #A08AB7;">${matchName}</strong> have matched on Accord.
                           This could be the beginning of something meaningful.
                         </p>
 
@@ -135,7 +135,7 @@ function generateMatchEmail(recipientName: string, matchName: string): { html: s
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
                           Accord - Safe Connections for Meaningful Partnerships<br>
-                          <a href="https://joinaccord.app" style="color: #9B87CE; text-decoration: none;">joinaccord.app</a>
+                          <a href="https://joinaccord.app" style="color: #A08AB7; text-decoration: none;">joinaccord.app</a>
                         </p>
                       </td>
                     </tr>

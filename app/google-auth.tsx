@@ -20,7 +20,7 @@ export default function GoogleAuthCallback() {
 
   return (
     <View className="flex-1 bg-cream items-center justify-center">
-      <ActivityIndicator size="large" color="#9B87CE" />
+      <ActivityIndicator size="large" color="#A08AB7" />
       <Text className="text-gray-600 mt-4 text-lg">Completing sign in...</Text>
     </View>
   );

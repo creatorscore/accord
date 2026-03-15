@@ -74,7 +74,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading || checkingProfile) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
       </View>
     );
   }

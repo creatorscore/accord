@@ -81,23 +81,14 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // SECURITY: Verify the caller is authenticated and owns the profile
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user: callerUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !callerUser) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired token' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-      );
-    }
+    // SECURITY: JWT is already verified by Supabase gateway (verify_jwt: true).
+    // Use a user-scoped client to verify profile ownership through RLS.
+    const authHeader = req.headers.get('Authorization') || '';
+    const supabaseUser = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
 
     // Get request body
     const { photo_url, storage_path, photo_id, profile_id } = await req.json();
@@ -109,14 +100,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify the caller owns the profile being moderated (or is admin)
-    const { data: callerProfile } = await supabaseAdmin
+    // Verify the caller owns the profile (RLS ensures only own profile is returned)
+    const { data: callerProfile } = await supabaseUser
       .from('profiles')
-      .select('id, is_admin')
-      .eq('user_id', callerUser.id)
+      .select('id')
+      .eq('id', profile_id)
       .maybeSingle();
 
-    if (!callerProfile || (callerProfile.id !== profile_id && !callerProfile.is_admin)) {
+    if (!callerProfile) {
       return new Response(
         JSON.stringify({ error: 'Not authorized to moderate this profile' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }

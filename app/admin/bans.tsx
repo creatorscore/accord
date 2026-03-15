@@ -567,7 +567,7 @@ export default function AdminBans() {
   if (loading && !refreshing) {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+        <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
           </TouchableOpacity>
@@ -576,7 +576,7 @@ export default function AdminBans() {
         </LinearGradient>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
         </View>
       </View>
     );
@@ -588,7 +588,7 @@ export default function AdminBans() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+      <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
@@ -628,7 +628,7 @@ export default function AdminBans() {
         style={styles.content}
         contentContainerStyle={bans.length === 0 ? { flex: 1 } : undefined}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#9B87CE" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#A08AB7" />
         }
         initialNumToRender={5}
         maxToRenderPerBatch={5}
@@ -883,7 +883,7 @@ export default function AdminBans() {
                         )}
                       </View>
                     </View>
-                    <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
+                    <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
                   </TouchableOpacity>
                 );
               })}
