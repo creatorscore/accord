@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, TextInput, Platform, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, StyleSheet, TextInput, useColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,27 +9,27 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
+import { getGlobalStep } from '@/lib/onboarding-steps';
 import { openAppSettings } from '@/lib/open-settings';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
+import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
 
-// Suggested prompts for voice intro
-const VOICE_PROMPTS = [
-  "A story I love to tell...",
-  "My hot take is...",
-  "The way to my heart is...",
-  "I'm looking for someone who...",
-  "Something that always makes me laugh...",
-  "My perfect Sunday looks like...",
-  "I get way too excited about...",
-  "The best trip I ever took...",
-];
+const VOICE_PROMPT_KEYS = [
+  'prompt1', 'prompt2', 'prompt3', 'prompt4',
+  'prompt5', 'prompt6', 'prompt7', 'prompt8',
+] as const;
 
 export default function VoiceIntro() {
   const router = useRouter();
   const { user } = useAuth();
   const { showToast } = useToast();
   const { t } = useTranslation();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const VOICE_PROMPTS = VOICE_PROMPT_KEYS.map(key => t(`onboarding.voiceIntro.${key}`));
+
   const [profileId, setProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -43,8 +43,6 @@ export default function VoiceIntro() {
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Audio playback state
   const [isPlaying, setIsPlaying] = useState(false);
 
   const formatTime = (seconds: number) => {
@@ -56,9 +54,7 @@ export default function VoiceIntro() {
   useEffect(() => {
     loadProfile();
     setupAudio();
-
     return () => {
-      // Cleanup
       liveWaveformRef.current?.stopRecord();
       staticWaveformRef.current?.stopPlayer();
     };
@@ -87,15 +83,11 @@ export default function VoiceIntro() {
 
       if (data) {
         setProfileId(data.id);
-        // Pre-fill with existing voice intro if available
         if (data.voice_intro_url) {
           setRecordingUri(data.voice_intro_url);
-          if (data.voice_intro_duration) {
-            setRecordingDuration(data.voice_intro_duration);
-          }
+          if (data.voice_intro_duration) setRecordingDuration(data.voice_intro_duration);
         }
         if (data.voice_intro_prompt) {
-          // Check if it's a predefined prompt or custom
           if (VOICE_PROMPTS.includes(data.voice_intro_prompt)) {
             setSelectedPrompt(data.voice_intro_prompt);
           } else {
@@ -111,20 +103,15 @@ export default function VoiceIntro() {
 
   const startRecording = async () => {
     try {
-      // Request permissions
       const { status, canAskAgain } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
         if (!canAskAgain) {
-          // Permission was previously denied and user chose "Don't ask again"
           Alert.alert(
-            'Microphone Permission Required',
-            'To record a voice intro, please enable microphone access in your device settings.',
+            t('onboarding.voiceIntro.micPermissionTitle'),
+            t('onboarding.voiceIntro.micPermissionMessage'),
             [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Open Settings',
-                onPress: () => openAppSettings(),
-              },
+              { text: t('common.cancel'), style: 'cancel' },
+              { text: t('common.openSettings'), onPress: () => openAppSettings() },
             ]
           );
         } else {
@@ -136,16 +123,14 @@ export default function VoiceIntro() {
       setIsRecording(true);
       setRecordingDuration(0);
 
-      // Start the waveform recorder
-      const path = await liveWaveformRef.current?.startRecord({
-        encoder: 0, // AAC
+      await liveWaveformRef.current?.startRecord({
+        encoder: 0,
         sampleRate: 44100,
         bitRate: 128000,
         fileNameFormat: `voice_intro_${Date.now()}.m4a`,
         useLegacy: false,
       });
 
-      // Update duration every second with max 30 seconds
       timerIntervalRef.current = setInterval(() => {
         setRecordingDuration((prev) => {
           if (prev >= 30) {
@@ -155,7 +140,6 @@ export default function VoiceIntro() {
           return prev + 1;
         });
       }, 1000);
-
     } catch (error: any) {
       showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.recordingFailed') });
       setIsRecording(false);
@@ -164,12 +148,10 @@ export default function VoiceIntro() {
 
   const stopRecording = async () => {
     try {
-      // Clear the timer interval
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
       }
-
       setIsRecording(false);
       const path = await liveWaveformRef.current?.stopRecord();
       if (path) {
@@ -182,9 +164,7 @@ export default function VoiceIntro() {
   };
 
   const handleRecorderStateChange = (state: RecorderState) => {
-    if (state === RecorderState.stopped) {
-      setIsRecording(false);
-    }
+    if (state === RecorderState.stopped) setIsRecording(false);
   };
 
   const handlePlayerStateChange = (state: PlayerState) => {
@@ -193,7 +173,6 @@ export default function VoiceIntro() {
 
   const togglePlayback = async () => {
     if (!recordingUri) return;
-
     try {
       if (isPlaying) {
         await staticWaveformRef.current?.pausePlayer();
@@ -222,17 +201,14 @@ export default function VoiceIntro() {
     try {
       setLoading(true);
 
-      // If there's a new local recording, upload it
       if (recordingUri && isNewRecording) {
         const fileExt = 'm4a';
         const fileName = `${profileId}/voice-intro.${fileExt}`;
 
-        // Read file as base64 using legacy API
         const base64 = await FileSystem.readAsStringAsync(recordingUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        // Upload to Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from('voice-intros')
           .upload(fileName, decode(base64), {
@@ -242,19 +218,12 @@ export default function VoiceIntro() {
 
         if (uploadError) throw uploadError;
 
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('voice-intros')
-          .getPublicUrl(fileName);
-
-        // Get the final prompt (custom or selected)
         const finalPrompt = showCustomInput ? customPrompt.trim() : selectedPrompt;
 
-        // Update profile with voice intro URL and prompt
         const { error: dbError } = await supabase
           .from('profiles')
           .update({
-            voice_intro_url: publicUrl,
+            voice_intro_url: fileName,
             voice_intro_duration: recordingDuration,
             voice_intro_prompt: finalPrompt || null,
             onboarding_step: 7,
@@ -263,7 +232,6 @@ export default function VoiceIntro() {
 
         if (dbError) throw dbError;
       } else if (recordingUri && !isNewRecording) {
-        // Existing voice intro — just update the prompt and step
         const finalPrompt = showCustomInput ? customPrompt.trim() : selectedPrompt;
         await supabase
           .from('profiles')
@@ -273,7 +241,6 @@ export default function VoiceIntro() {
           })
           .eq('id', profileId);
       } else {
-        // Skip voice intro
         await supabase
           .from('profiles')
           .update({ onboarding_step: 7 })
@@ -289,284 +256,261 @@ export default function VoiceIntro() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-pink-50 dark:bg-gray-900">
-      <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
-        {/* Progress */}
-        <View className="mb-8">
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 6 of 7</Text>
-            <Text className="text-sm text-lavender-500 dark:text-lavender-400 font-bold">86%</Text>
-          </View>
-          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <View
-              className="h-3 bg-lavender-500 dark:bg-lavender-400 rounded-full"
-              style={{ width: '86%' }}
-            />
-          </View>
-        </View>
-
-        {/* Header */}
-        <View className="mb-8 items-center">
-          <Text className="text-5xl mb-4">🎙️</Text>
-          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3 text-center">
-            Add your voice
-          </Text>
-          <Text className="text-gray-600 dark:text-gray-400 text-lg text-center">
-            Record a 30-second introduction to stand out
-          </Text>
-        </View>
-
-        {/* Prompt Selection */}
-        <View className="mb-6">
-          <Text className="text-lg font-bold text-gray-900 dark:text-white mb-3">
-            Choose a prompt to answer:
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {VOICE_PROMPTS.map((prompt) => (
+    <OnboardingLayout
+      currentStep={getGlobalStep('voice-intro', 0)}
+      title={t('onboarding.voiceIntro.title')}
+      subtitle={t('onboarding.voiceIntro.subtitle')}
+      onBack={() => goToPreviousOnboardingStep('/(onboarding)/voice-intro')}
+      onContinue={handleContinue}
+      onSkip={undefined}
+      continueDisabled={loading || isRecording}
+      continueLabel={loading ? t('common.saving') : recordingUri ? t('common.continue') : t('common.skipForNow')}
+      currentRoute="/(onboarding)/voice-intro"
+    >
+      {/* Prompt Selection */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: isDark ? '#F5F5F7' : '#1F2937' }]}>
+          {t('onboarding.voiceIntro.choosePrompt')}
+        </Text>
+        <View>
+          {VOICE_PROMPTS.map((prompt, i) => {
+            const selected = selectedPrompt === prompt && !showCustomInput;
+            return (
               <TouchableOpacity
                 key={prompt}
-                onPress={() => {
-                  setSelectedPrompt(prompt);
-                  setShowCustomInput(false);
-                }}
-                className={`px-4 py-2 rounded-full border-2 ${
-                  selectedPrompt === prompt && !showCustomInput
-                    ? 'bg-lavender-500 dark:bg-lavender-500 border-lavender-500 dark:border-lavender-500'
-                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600'
-                }`}
+                onPress={() => { setSelectedPrompt(prompt); setShowCustomInput(false); }}
+                style={[styles.optionRow, i < VOICE_PROMPTS.length && { marginBottom: 4 }]}
+                activeOpacity={0.7}
               >
-                <Text
-                  className={`text-sm ${
-                    selectedPrompt === prompt && !showCustomInput
-                      ? 'text-white dark:text-white font-semibold'
-                      : 'text-gray-700 dark:text-gray-300'
-                  }`}
-                >
+                <Text style={[styles.optionRowText, { color: selected ? '#A08AB7' : isDark ? '#D1D5DB' : '#374151' }]}>
                   {prompt}
                 </Text>
+                {selected && (
+                  <MaterialCommunityIcons name="check" size={22} color="#A08AB7" />
+                )}
               </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              onPress={() => {
-                setShowCustomInput(true);
-                setSelectedPrompt('');
-              }}
-              className={`px-4 py-2 rounded-full border-2 ${
-                showCustomInput
-                  ? 'bg-lavender-500 dark:bg-lavender-500 border-lavender-500 dark:border-lavender-500'
-                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600'
-              }`}
-            >
-              <Text
-                className={`text-sm ${
-                  showCustomInput ? 'text-white dark:text-white font-semibold' : 'text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                ✨ Write my own
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Custom Prompt Input */}
-          {showCustomInput && (
-            <View className="mt-4">
-              <TextInput
-                className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white"
-                placeholder="Type your own prompt..."
-                placeholderTextColor="#9CA3AF"
-                value={customPrompt}
-                onChangeText={setCustomPrompt}
-                maxLength={100}
-              />
-              <Text className="text-gray-500 dark:text-gray-400 text-xs mt-1 text-right">
-                {customPrompt.length}/100
-              </Text>
-            </View>
-          )}
+            );
+          })}
+          <TouchableOpacity
+            onPress={() => { setShowCustomInput(true); setSelectedPrompt(''); }}
+            style={[styles.optionRow, { marginBottom: 4 }]}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.optionRowText, { color: showCustomInput ? '#A08AB7' : isDark ? '#D1D5DB' : '#374151' }]}>
+              {t('onboarding.voiceIntro.writeMyOwn')}
+            </Text>
+            {showCustomInput && (
+              <MaterialCommunityIcons name="check" size={22} color="#A08AB7" />
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* Recording Interface */}
-        <View className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-600 mb-8">
-          {!recordingUri ? (
-            <View className="items-center">
-              {/* Selected Prompt Display */}
-              {(selectedPrompt || customPrompt) && (
-                <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-6 text-center">
-                  "{showCustomInput ? customPrompt : selectedPrompt}"
-                </Text>
-              )}
+        {showCustomInput && (
+          <View style={styles.customPromptContainer}>
+            <TextInput
+              style={[styles.customInput, {
+                backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+                color: isDark ? '#F5F5F7' : '#1A1A2E',
+              }]}
+              placeholder={t('onboarding.voiceIntro.customPlaceholder')}
+              placeholderTextColor="#9CA3AF"
+              value={customPrompt}
+              onChangeText={setCustomPrompt}
+              maxLength={100}
+            />
+            <Text style={[styles.charCount, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
+              {customPrompt.length}/100
+            </Text>
+          </View>
+        )}
+      </View>
 
-              {/* Live Recording Waveform (hidden when not recording) */}
-              {isRecording && (
-                <View style={styles.liveWaveformContainer}>
-                  <Waveform
-                    ref={liveWaveformRef}
-                    mode="live"
-                    candleSpace={2}
-                    candleWidth={4}
-                    waveColor="#A08AB7"
-                    onRecorderStateChange={handleRecorderStateChange}
-                    containerStyle={styles.liveWaveform}
-                  />
-                </View>
-              )}
+      {/* Recording Interface */}
+      <View style={[styles.recordingCard, { backgroundColor: isDark ? '#1C1C2E' : '#FFFFFF' }]}>
+        {!recordingUri ? (
+          <View style={styles.recordingContent}>
+            {(selectedPrompt || customPrompt) && (
+              <Text style={[styles.selectedPromptText, { color: isDark ? '#F5F5F7' : '#1F2937' }]}>
+                "{showCustomInput ? customPrompt : selectedPrompt}"
+              </Text>
+            )}
 
-              {/* Recording Button */}
-              <TouchableOpacity
-                className={`w-32 h-32 rounded-full items-center justify-center ${
-                  isRecording
-                    ? 'bg-red-500 dark:bg-red-600'
-                    : 'bg-lavender-500 dark:bg-lavender-500'
-                }`}
-                onPress={isRecording ? stopRecording : startRecording}
-                disabled={loading}
-              >
-                <MaterialCommunityIcons
-                  name={isRecording ? 'stop' : 'microphone'}
-                  size={60}
-                  color="white"
+            {isRecording && (
+              <View style={[styles.liveWaveformContainer, { backgroundColor: isDark ? '#0F0F1A' : '#F5F5F5' }]}>
+                <Waveform
+                  ref={liveWaveformRef}
+                  mode="live"
+                  candleSpace={2}
+                  candleWidth={4}
+                  waveColor="#A08AB7"
+                  onRecorderStateChange={handleRecorderStateChange}
+                  containerStyle={styles.liveWaveform}
                 />
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.recordButton, { backgroundColor: isRecording ? '#EF4444' : '#A08AB7' }]}
+              onPress={isRecording ? stopRecording : startRecording}
+              disabled={loading}
+            >
+              <MaterialCommunityIcons name={isRecording ? 'stop' : 'microphone'} size={60} color="white" />
+            </TouchableOpacity>
+
+            <Text style={[styles.timerText, { color: isDark ? '#F5F5F7' : '#1F2937' }]}>
+              {recordingDuration}s / 30s
+            </Text>
+
+            <Text style={[styles.recordingHint, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+              {isRecording ? t('onboarding.voiceIntro.recordingHint') : t('onboarding.voiceIntro.tapToRecord')}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.playbackContent}>
+            <Text style={[styles.promptText, { color: isDark ? '#F5F5F7' : '#1F2937' }]}>
+              {showCustomInput ? customPrompt : selectedPrompt || t('onboarding.voiceIntro.yourVoiceIntro')}
+            </Text>
+
+            <View style={[styles.playerContainer, { backgroundColor: isDark ? '#0F0F1A' : '#F5F5F5' }]}>
+              <TouchableOpacity style={styles.playButton} onPress={togglePlayback} activeOpacity={0.7}>
+                <MaterialCommunityIcons name={isPlaying ? "pause" : "play"} size={20} color="white" />
               </TouchableOpacity>
 
-              {/* Timer */}
-              <Text className="text-3xl font-bold text-gray-900 dark:text-white mt-6">
-                {recordingDuration}s / 30s
-              </Text>
-
-              <Text className="text-gray-600 dark:text-gray-400 mt-4 text-center">
-                {isRecording
-                  ? 'Recording... Tap to stop'
-                  : 'Tap the microphone to start recording'}
-              </Text>
-            </View>
-          ) : (
-            <View className="items-center w-full">
-              {/* Prompt Display */}
-              <Text style={styles.promptText}>
-                {showCustomInput ? customPrompt : selectedPrompt || 'Your voice intro'}
-              </Text>
-
-              {/* Audio Player with Real Waveform */}
-              <View style={styles.playerContainer}>
-                {/* Play/Pause Button */}
-                <TouchableOpacity
-                  style={styles.playButton}
-                  onPress={togglePlayback}
-                  activeOpacity={0.7}
-                >
-                  <MaterialCommunityIcons
-                    name={isPlaying ? "pause" : "play"}
-                    size={20}
-                    color="white"
-                  />
-                </TouchableOpacity>
-
-                {/* Static Waveform for Playback */}
-                <View style={styles.waveformContainer}>
-                  <Waveform
-                    ref={staticWaveformRef}
-                    mode="static"
-                    path={recordingUri}
-                    candleSpace={2}
-                    candleWidth={3}
-                    waveColor="#EBE6F2"
-                    scrubColor="#A08AB7"
-                    onPlayerStateChange={handlePlayerStateChange}
-                    containerStyle={styles.waveform}
-                  />
-                </View>
-
-                {/* Duration */}
-                <Text style={styles.duration}>
-                  {formatTime(recordingDuration)}
-                </Text>
+              <View style={styles.waveformContainer}>
+                <Waveform
+                  ref={staticWaveformRef}
+                  mode="static"
+                  path={recordingUri}
+                  candleSpace={2}
+                  candleWidth={3}
+                  waveColor="#EBE6F2"
+                  scrubColor="#A08AB7"
+                  onPlayerStateChange={handlePlayerStateChange}
+                  containerStyle={styles.waveform}
+                />
               </View>
 
-              {/* Delete Button */}
-              <TouchableOpacity
-                className="flex-row items-center gap-2 mt-4 py-3 px-6 rounded-full bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700"
-                onPress={deleteRecording}
-              >
-                <MaterialCommunityIcons name="delete" size={20} color="#EF4444" />
-                <Text className="text-red-500 dark:text-red-400 font-semibold">Delete & Re-record</Text>
-              </TouchableOpacity>
+              <Text style={[styles.duration, { color: isDark ? '#9CA3AF' : '#71717A' }]}>
+                {formatTime(recordingDuration)}
+              </Text>
             </View>
-          )}
-        </View>
 
-        {/* Tips */}
-        <View className="bg-pink-50 dark:bg-pink-900/30 border-2 border-pink-200 dark:border-pink-700 rounded-3xl p-5 mb-8">
-          <View className="flex-row items-center mb-3">
-            <MaterialCommunityIcons name="lightbulb-on" size={24} color="#CDC2E5" />
-            <Text className="text-pink-900 dark:text-pink-300 font-bold text-lg ml-2">Recording Tips</Text>
+            <TouchableOpacity
+              style={[styles.deleteButton, { backgroundColor: isDark ? 'rgba(127,29,29,0.3)' : '#FEF2F2' }]}
+              onPress={deleteRecording}
+            >
+              <MaterialCommunityIcons name="delete" size={20} color="#EF4444" />
+              <Text style={[styles.deleteButtonText, { color: isDark ? '#FCA5A5' : '#EF4444' }]}>{t('onboarding.voiceIntro.deleteRerecord')}</Text>
+            </TouchableOpacity>
           </View>
-          <Text className="text-pink-800 dark:text-pink-300 text-sm mb-2">
-            🎤 Find a quiet space with minimal background noise
-          </Text>
-          <Text className="text-pink-800 dark:text-pink-300 text-sm mb-2">
-            💬 Introduce yourself, share what you're looking for
-          </Text>
-          <Text className="text-pink-800 dark:text-pink-300 text-sm mb-2">
-            ✨ Be authentic - your voice shows personality!
-          </Text>
-          <Text className="text-pink-800 dark:text-pink-300 text-sm">
-            🌈 Profiles with voice intros get 3x more matches
-          </Text>
-        </View>
-
-        {/* Buttons */}
-        <View className="flex-row gap-3">
-          <TouchableOpacity
-            className="flex-1 py-4 rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-            onPress={() => goToPreviousOnboardingStep('/(onboarding)/voice-intro')}
-            disabled={loading || isRecording}
-          >
-            <Text className="text-gray-700 dark:text-gray-300 text-center font-bold text-lg">Back</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className={`flex-1 py-4 rounded-full ${
-              loading || isRecording
-                ? 'bg-gray-400 dark:bg-gray-600'
-                : 'bg-lavender-500 dark:bg-lavender-500'
-            }`}
-            onPress={handleContinue}
-            disabled={loading || isRecording}
-          >
-            <Text className="text-white dark:text-white text-center font-bold text-lg">
-              {loading ? 'Saving...' : recordingUri ? 'Continue' : 'Skip for now'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        )}
       </View>
-    </ScrollView>
+
+      {/* Tips */}
+      <View style={[styles.tipsCard, { backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA' }]}>
+        <View style={styles.tipsHeader}>
+          <MaterialCommunityIcons name="lightbulb-on" size={22} color="#A08AB7" />
+          <Text style={[styles.tipsTitle, { color: isDark ? '#E5E7EB' : '#1F2937' }]}>{t('onboarding.voiceIntro.tipsTitle')}</Text>
+        </View>
+        <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboarding.voiceIntro.tip1')}</Text>
+        <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboarding.voiceIntro.tip2')}</Text>
+        <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboarding.voiceIntro.tip3')}</Text>
+        <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboarding.voiceIntro.tip4')}</Text>
+      </View>
+    </OnboardingLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  promptText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1F2937',
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
     marginBottom: 12,
+  },
+  optionRow: {
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  optionRowText: {
+    fontSize: 15,
+    fontWeight: '500',
+    flex: 1,
+    marginRight: 12,
+  },
+  customPromptContainer: {
+    marginTop: 16,
+  },
+  customInput: {
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+  },
+  charCount: {
+    fontSize: 12,
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  recordingCard: {
+    borderRadius: 24,
+    padding: 32,
+    marginBottom: 24,
+  },
+  recordingContent: {
+    alignItems: 'center',
+  },
+  selectedPromptText: {
+    fontSize: 17,
+    fontWeight: '600',
+    marginBottom: 24,
     textAlign: 'center',
   },
   liveWaveformContainer: {
     width: '100%',
     height: 60,
     marginBottom: 20,
-    backgroundColor: '#F5F5F5',
     borderRadius: 12,
     overflow: 'hidden',
   },
   liveWaveform: {
     height: 60,
   },
+  recordButton: {
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerText: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginTop: 24,
+  },
+  recordingHint: {
+    marginTop: 16,
+    textAlign: 'center',
+    fontSize: 15,
+  },
+  playbackContent: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  promptText: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
   playerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#F5F5F5',
     borderRadius: 28,
     paddingVertical: 8,
     paddingHorizontal: 8,
@@ -592,13 +536,39 @@ const styles = StyleSheet.create({
   duration: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#71717A',
     minWidth: 36,
   },
-})
-
-// Note: StyleSheet colors are static and cannot dynamically respond to dark mode.
-// For dynamic dark mode support on inline styles, consider using:
-// - useColorScheme() from 'react-native' to detect theme
-// - useAppState() or similar hooks to update colors dynamically
-// - Or migrate these to TailwindCSS classes where possible
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 100,
+  },
+  deleteButtonText: {
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  tipsCard: {
+    borderRadius: 20,
+    padding: 20,
+  },
+  tipsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  tipsTitle: {
+    fontWeight: '700',
+    fontSize: 17,
+  },
+  tipItem: {
+    fontSize: 14,
+    marginBottom: 6,
+    lineHeight: 20,
+    paddingLeft: 4,
+  },
+});

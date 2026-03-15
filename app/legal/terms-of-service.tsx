@@ -236,7 +236,7 @@ export default function TermsOfService() {
           <Text style={styles.paragraph}>
             Questions about these Terms?
             {'\n\n'}Email: legal@joinaccord.app
-            {'\n'}Mail: Accord Legal Team, [Your Address]
+            {'\n'}Mail: Accord Legal Team
           </Text>
 
           <View style={styles.footer}>

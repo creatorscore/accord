@@ -15,7 +15,8 @@ const AWS_REGION = Deno.env.get('AWS_REGION') || 'us-east-1';
 
 // Moderation thresholds
 const NSFW_CONFIDENCE_THRESHOLD = 70; // Auto-reject if confidence > 70%
-const AUTO_BAN_THRESHOLD = 90; // Auto-ban user if confidence > 90%
+const ADMIN_REVIEW_THRESHOLD = 90; // Flag for admin review if confidence 90-97%
+const AUTO_BAN_THRESHOLD = 97; // Auto-ban user if confidence > 97%
 
 // Labels that indicate explicit/NSFW content
 const EXPLICIT_LABELS = [
@@ -60,7 +61,11 @@ Deno.serve(async (req) => {
         if (profile_id) {
           await supabaseAdmin
             .from('profiles')
-            .update({ photo_review_required: true })
+            .update({
+              photo_review_required: true,
+              photo_review_reason: 'AWS credentials not configured — photo could not be auto-moderated',
+              photo_review_requested_at: new Date().toISOString(),
+            })
             .eq('id', profile_id);
         }
       } catch (_e) { /* ignore parse errors */ }
@@ -76,21 +81,75 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get request body
-    const { photo_url, photo_id, profile_id } = await req.json();
-
-    if (!photo_url || !profile_id) {
+    // SECURITY: Verify the caller is authenticated and owns the profile
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Missing photo_url or profile_id' }),
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user: callerUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !callerUser) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired token' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+
+    // Get request body
+    const { photo_url, storage_path, photo_id, profile_id } = await req.json();
+
+    if ((!photo_url && !storage_path) || !profile_id) {
+      return new Response(
+        JSON.stringify({ error: 'Missing photo_url/storage_path or profile_id' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
+    // Verify the caller owns the profile being moderated (or is admin)
+    const { data: callerProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('id, is_admin')
+      .eq('user_id', callerUser.id)
+      .maybeSingle();
+
+    if (!callerProfile || (callerProfile.id !== profile_id && !callerProfile.is_admin)) {
+      return new Response(
+        JSON.stringify({ error: 'Not authorized to moderate this profile' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+      );
+    }
+
     console.log(`🔍 Moderating photo for profile ${profile_id}`);
-    console.log(`  - Photo URL: ${photo_url.substring(0, 100)}...`);
+
+    // Generate a signed URL from storage_path if provided (needed for private buckets)
+    let fetchUrl = photo_url;
+    if (storage_path) {
+      const { data: signedData, error: signError } = await supabaseAdmin.storage
+        .from('profile-photos')
+        .createSignedUrl(storage_path, 300);
+
+      if (signError || !signedData?.signedUrl) {
+        console.error('Failed to create signed URL:', signError);
+        if (!photo_url) {
+          return new Response(
+            JSON.stringify({ error: 'Failed to create signed URL for photo', approved: false, reason: 'needs_review' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+          );
+        }
+        // Fall back to photo_url if signing fails
+      } else {
+        fetchUrl = signedData.signedUrl;
+      }
+    }
+
+    console.log(`  - Photo source: ${storage_path ? 'signed URL from storage_path' : 'direct photo_url'}`);
 
     // Download the photo
-    const photoResponse = await fetch(photo_url);
+    const photoResponse = await fetch(fetchUrl);
     if (!photoResponse.ok) {
       throw new Error(`Failed to fetch photo: ${photoResponse.status}`);
     }
@@ -168,10 +227,13 @@ Deno.serve(async (req) => {
       }
 
       // Flag user's profile for review
+      const reviewReason = `Explicit content detected: ${flaggedLabels.join(', ')}`;
       await supabaseAdmin
         .from('profiles')
         .update({
           photo_review_required: true,
+          photo_review_reason: reviewReason,
+          photo_review_requested_at: new Date().toISOString(),
         })
         .eq('id', profile_id);
 
@@ -190,6 +252,25 @@ Deno.serve(async (req) => {
           },
         });
 
+      // Flag for admin review if confidence is in the review band (90-97%)
+      if (highestExplicitConfidence >= ADMIN_REVIEW_THRESHOLD && highestExplicitConfidence < AUTO_BAN_THRESHOLD) {
+        console.log('⚠️ ADMIN REVIEW BAND - Flagging for manual review');
+
+        await supabaseAdmin
+          .from('moderation_logs')
+          .insert({
+            profile_id,
+            action: 'photo_admin_review',
+            reason: `High confidence NSFW (${Math.round(highestExplicitConfidence)}%) — requires admin review: ${flaggedLabels.join(', ')}`,
+            details: {
+              photo_url,
+              photo_id,
+              labels: moderationResult.ModerationLabels,
+              highest_confidence: highestExplicitConfidence,
+            },
+          });
+      }
+
       // Auto-ban if very high confidence explicit content
       if (highestExplicitConfidence >= AUTO_BAN_THRESHOLD) {
         console.log('🚨🚨 AUTO-BAN TRIGGERED - Very high confidence NSFW');
@@ -199,7 +280,7 @@ Deno.serve(async (req) => {
           .from('profiles')
           .select('user_id')
           .eq('id', profile_id)
-          .single();
+          .maybeSingle();
 
         if (profile?.user_id) {
           // Check if already banned

@@ -324,7 +324,7 @@ export default function NotificationSettings() {
               {renderToggle(t('notificationSettings.push.newLikes'), t('notificationSettings.push.newLikesDesc'), 'push_new_like', 'star', '#F59E0B')}
               {renderToggle(t('notificationSettings.push.swipesRefreshed'), t('notificationSettings.push.swipesRefreshedDesc'), 'push_swipes_refreshed', 'refresh', '#10B981')}
               {renderToggle(t('notificationSettings.push.profileViews'), t('notificationSettings.push.profileViewsDesc'), 'push_profile_views', 'eye', '#6366F1', false, true)}
-              {renderToggle(t('notificationSettings.push.reviewReminders'), t('notificationSettings.push.reviewRemindersDesc'), 'push_review_reminders', 'clipboard-check', '#8B5CF6')}
+              {renderToggle(t('notificationSettings.push.reviewReminders'), t('notificationSettings.push.reviewRemindersDesc'), 'push_review_reminders', 'clipboard-check', '#A08AB7')}
               {renderToggle(t('notificationSettings.push.safetyAlerts'), t('notificationSettings.push.safetyAlertsDesc'), 'push_safety_alerts', 'shield-check', '#EF4444', false)}
             </View>
           </View>

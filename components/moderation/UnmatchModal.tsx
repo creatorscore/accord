@@ -72,11 +72,11 @@ export default function UnmatchModal({
 
       // Show success message
       Alert.alert(
-        t('unmatch.successTitle', 'Unmatched'),
-        t('unmatch.successMessage', `You've unmatched with ${matchedProfileName}`),
+        t('moderation.unmatch.successTitle'),
+        t('moderation.unmatch.successMessage', { name: matchedProfileName }),
         [
           {
-            text: t('common.ok', 'OK'),
+            text: t('common.ok'),
             onPress: () => {
               // Call success callback (usually navigates back)
               if (onUnmatchSuccess) {
@@ -89,8 +89,8 @@ export default function UnmatchModal({
     } catch (error: any) {
       console.error('Error unmatching:', error);
       Alert.alert(
-        t('common.error', 'Error'),
-        error.message || t('unmatch.errorMessage', 'Failed to unmatch. Please try again.')
+        t('common.error'),
+        error.message || t('moderation.unmatch.errorMessage')
       );
     } finally {
       setLoading(false);
@@ -113,27 +113,19 @@ export default function UnmatchModal({
 
           {/* Title */}
           <Text style={styles.title}>
-            {t('unmatch.title', 'Unmatch with {{name}}?', { name: matchedProfileName })}
+            {t('moderation.unmatch.title', { name: matchedProfileName })}
           </Text>
 
           {/* Description */}
           <Text style={styles.description}>
-            {t(
-              'unmatch.description',
-              'This will end your conversation with {{name}}. You may see each other in discovery again.',
-              { name: matchedProfileName }
-            )}
+            {t('moderation.unmatch.description', { name: matchedProfileName })}
           </Text>
 
           {/* Info box */}
           <View style={styles.infoBox}>
             <MaterialCommunityIcons name="information" size={20} color="#6B7280" />
             <Text style={styles.infoText}>
-              {t(
-                'unmatch.privacy',
-                '{{name}} won\'t be notified that you unmatched',
-                { name: matchedProfileName }
-              )}
+              {t('moderation.unmatch.privacy', { name: matchedProfileName })}
             </Text>
           </View>
 
@@ -145,7 +137,7 @@ export default function UnmatchModal({
               disabled={loading}
             >
               <Text style={styles.cancelButtonText}>
-                {t('common.cancel', 'Cancel')}
+                {t('common.cancel')}
               </Text>
             </TouchableOpacity>
 
@@ -158,7 +150,7 @@ export default function UnmatchModal({
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.unmatchButtonText}>
-                  {t('unmatch.button', 'Unmatch')}
+                  {t('moderation.unmatch.button')}
                 </Text>
               )}
             </TouchableOpacity>
@@ -167,7 +159,7 @@ export default function UnmatchModal({
           {/* Alternative: Block instead */}
           <TouchableOpacity style={styles.alternativeAction} onPress={onClose}>
             <Text style={styles.alternativeText}>
-              {t('unmatch.needToBlock', 'Need to block instead?')}
+              {t('moderation.unmatch.needToBlock')}
             </Text>
           </TouchableOpacity>
         </Pressable>

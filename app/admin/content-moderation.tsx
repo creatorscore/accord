@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { signPhotoUrls } from '@/lib/signed-urls';
 import { formatDistanceToNow } from 'date-fns';
 
 interface Report {
@@ -19,13 +20,13 @@ interface Report {
   reporter: {
     id: string;
     display_name: string;
-    photos: { url: string; is_primary: boolean }[];
+    photos: { url: string; is_primary: boolean; storage_path?: string | null }[];
   };
   reported: {
     id: string;
     display_name: string;
     user_id: string;
-    photos: { url: string; is_primary: boolean }[];
+    photos: { url: string; is_primary: boolean; storage_path?: string | null }[];
   };
 }
 
@@ -75,13 +76,13 @@ export default function ContentModeration() {
           reporter:reporter_profile_id (
             id,
             display_name,
-            photos (url, is_primary, blur_data_uri)
+            photos (url, storage_path, is_primary, blur_data_uri)
           ),
           reported:reported_profile_id (
             id,
             display_name,
             user_id,
-            photos (url, is_primary, blur_data_uri)
+            photos (url, storage_path, is_primary, blur_data_uri)
           )
         `)
         .order('created_at', { ascending: false });
@@ -95,7 +96,35 @@ export default function ContentModeration() {
 
       if (error) throw error;
 
-      setReports(data as Report[] || []);
+      // Sign all photo URLs for private storage buckets
+      const reports = data as Report[] || [];
+      const allPhotos: { storage_path?: string | null; url?: string | null }[] = [];
+      const photoMap: { reportIdx: number; field: 'reporter' | 'reported'; photoIdx: number }[] = [];
+
+      for (let i = 0; i < reports.length; i++) {
+        for (const field of ['reporter', 'reported'] as const) {
+          const photos = reports[i][field]?.photos || [];
+          for (let j = 0; j < photos.length; j++) {
+            photoMap.push({ reportIdx: i, field, photoIdx: j });
+            allPhotos.push(photos[j]);
+          }
+        }
+      }
+
+      if (allPhotos.length > 0) {
+        const signed = await signPhotoUrls(allPhotos);
+        for (let k = 0; k < photoMap.length; k++) {
+          const { reportIdx, field, photoIdx } = photoMap[k];
+          if (signed[k]?.url) {
+            reports[reportIdx][field].photos[photoIdx] = {
+              ...reports[reportIdx][field].photos[photoIdx],
+              url: signed[k].url as string,
+            };
+          }
+        }
+      }
+
+      setReports(reports);
     } catch (error) {
       console.error('Error loading reports:', error);
     } finally {

@@ -17,6 +17,7 @@ import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
@@ -34,6 +35,7 @@ interface PrivacySettings {
 }
 
 export default function PrivacySettings() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
   const { scrollTo } = useLocalSearchParams<{ scrollTo?: string }>();
@@ -97,7 +99,7 @@ export default function PrivacySettings() {
       }
     } catch (error: any) {
       console.error('Error loading privacy settings:', error);
-      Alert.alert('Error', 'Failed to load privacy settings');
+      Alert.alert(t('common.error'), t('privacySettings.alerts.loadError'));
     } finally {
       setLoading(false);
     }
@@ -141,7 +143,7 @@ export default function PrivacySettings() {
       if (error?.code === 'P0001' && error?.message?.includes('Premium')) {
         setShowPaywall(true);
       } else {
-        Alert.alert('Error', 'Failed to update privacy setting. Please try again.');
+        Alert.alert(t('common.error'), t('privacySettings.alerts.updateError'));
       }
     } finally {
       setSaving(false);
@@ -154,8 +156,8 @@ export default function PrivacySettings() {
       const location = await updateUserLocation();
       if (!location) {
         Alert.alert(
-          'Permission Denied',
-          'Location permission is required to update your location. You can enable it in your device settings.'
+          t('privacySettings.alerts.permissionDenied'),
+          t('privacySettings.alerts.permissionDeniedMessage')
         );
         return;
       }
@@ -163,12 +165,12 @@ export default function PrivacySettings() {
       // Check if location accuracy is too low (approximate location enabled)
       if (location.error === 'approximate_location') {
         Alert.alert(
-          'Precise Location Required',
-          `Location accuracy is too low (${Math.round(location.accuracy || 0)} meters). Please enable "Precise Location" for Accord in your iPhone Settings:\n\n1. Open Settings\n2. Scroll to Accord\n3. Tap Location\n4. Enable "Precise Location"\n\nThis ensures accurate distance calculations for matching.`,
+          t('privacySettings.alerts.preciseLocationRequired'),
+          t('privacySettings.alerts.preciseLocationMessage', { accuracy: Math.round(location.accuracy || 0) }),
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: t('common.cancel'), style: 'cancel' },
             {
-              text: 'Open Settings',
+              text: t('privacySettings.alerts.openSettings'),
               onPress: () => openAppSettings()
             }
           ]
@@ -200,14 +202,14 @@ export default function PrivacySettings() {
       }
 
       Alert.alert(
-        'Success',
+        t('common.success'),
         location.city
-          ? `Location updated to ${location.city}${location.state ? ', ' + location.state : ''}`
-          : `Your location has been updated!`
+          ? t('privacySettings.alerts.locationSuccess', { location: `${location.city}${location.state ? ', ' + location.state : ''}` })
+          : t('privacySettings.alerts.locationSuccessGeneric')
       );
     } catch (error: any) {
       console.error('Error updating location:', error);
-      Alert.alert('Error', 'Failed to update location. Please try again.');
+      Alert.alert(t('common.error'), t('privacySettings.alerts.locationError'));
     } finally {
       setUpdatingLocation(false);
     }
@@ -250,10 +252,10 @@ export default function PrivacySettings() {
       setCityResults([]);
       setShowCitySearch(false);
 
-      Alert.alert('Success', `Location updated to ${city.displayName}`);
+      Alert.alert(t('common.success'), t('privacySettings.alerts.locationSuccess', { location: city.displayName }));
     } catch (error: any) {
       console.error('Error setting city location:', error);
-      Alert.alert('Error', 'Failed to update location. Please try again.');
+      Alert.alert(t('common.error'), t('privacySettings.alerts.locationError'));
     } finally {
       setSavingCity(false);
     }
@@ -299,7 +301,7 @@ export default function PrivacySettings() {
           </View>
           <Text style={styles.settingDescription}>
             {description}
-            {isLocked && ' Requires Premium.'}
+            {isLocked && t('privacySettings.incognitoMode.requiresPremium')}
           </Text>
         </View>
         <Switch
@@ -320,12 +322,12 @@ export default function PrivacySettings() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Privacy Settings</Text>
+          <Text style={styles.headerTitle}>{t('privacySettings.title')}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#A08AB7" />
-          <Text style={styles.loadingText}>Loading settings...</Text>
+          <Text style={styles.loadingText}>{t('privacySettings.loading')}</Text>
         </View>
       </View>
     );
@@ -338,7 +340,7 @@ export default function PrivacySettings() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Privacy Settings</Text>
+        <Text style={styles.headerTitle}>{t('privacySettings.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -355,9 +357,9 @@ export default function PrivacySettings() {
         >
           <MaterialCommunityIcons name="shield-lock-outline" size={24} color="#3B82F6" />
           <View style={styles.infoBannerContent}>
-            <Text style={styles.infoBannerTitle}>Your Privacy Matters</Text>
+            <Text style={styles.infoBannerTitle}>{t('privacySettings.infoBannerTitle')}</Text>
             <Text style={styles.infoBannerText}>
-              Control how others see you on Accord. Changes take effect immediately.
+              {t('privacySettings.infoBannerText')}
             </Text>
           </View>
         </LinearGradient>
@@ -365,20 +367,20 @@ export default function PrivacySettings() {
 
       {/* Profile Visibility */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Profile Visibility</Text>
+        <Text style={styles.sectionTitle}>{t('privacySettings.sections.profileVisibility')}</Text>
 
         <SettingRow
           icon="image-off-outline"
-          title="Photo Blur"
-          description="Blur your photos until you match with someone"
+          title={t('privacySettings.photoBlur.title')}
+          description={t('privacySettings.photoBlur.description')}
           value={settings.photo_blur_enabled}
           onValueChange={(value) => updateSetting('photo_blur_enabled', value)}
         />
 
         <SettingRow
           icon="incognito"
-          title="Incognito Mode"
-          description="Hide your profile from discovery. Only matched users can see you."
+          title={t('privacySettings.incognitoMode.title')}
+          description={t('privacySettings.incognitoMode.description')}
           value={settings.incognito_mode}
           onValueChange={(value) => updateSetting('incognito_mode', value)}
           premium
@@ -391,7 +393,7 @@ export default function PrivacySettings() {
         style={styles.section}
         onLayout={(event) => setVerificationSectionY(event.nativeEvent.layout.y)}
       >
-        <Text style={styles.sectionTitle}>Verification</Text>
+        <Text style={styles.sectionTitle}>{t('privacySettings.sections.verification')}</Text>
         <View style={{ paddingHorizontal: 20 }}>
           <PhotoVerificationCard />
         </View>
@@ -399,20 +401,20 @@ export default function PrivacySettings() {
 
       {/* Activity Privacy */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Activity Privacy</Text>
+        <Text style={styles.sectionTitle}>{t('privacySettings.sections.activityPrivacy')}</Text>
 
         <SettingRow
           icon="clock-outline"
-          title="Hide Last Active"
-          description="Don't show when you were last active on Accord"
+          title={t('privacySettings.hideLastActive.title')}
+          description={t('privacySettings.hideLastActive.description')}
           value={settings.hide_last_active}
           onValueChange={(value) => updateSetting('hide_last_active', value)}
         />
 
         <SettingRow
           icon="map-marker-off-outline"
-          title="Hide Exact Distance"
-          description="Show city/country only, hide precise distance from others"
+          title={t('privacySettings.hideDistance.title')}
+          description={t('privacySettings.hideDistance.description')}
           value={settings.hide_distance}
           onValueChange={(value) => updateSetting('hide_distance', value)}
         />
@@ -422,7 +424,7 @@ export default function PrivacySettings() {
           <View style={styles.warningCard}>
             <MaterialCommunityIcons name="information" size={20} color="#F97316" />
             <Text style={styles.warningText}>
-              Others will see your city/country but not your exact distance. You can still filter matches by distance.
+              {t('privacySettings.hideDistance.warning')}
             </Text>
           </View>
         )}
@@ -430,7 +432,7 @@ export default function PrivacySettings() {
 
       {/* Location Settings - always show */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Location</Text>
+        <Text style={styles.sectionTitle}>{t('privacySettings.sections.location')}</Text>
 
         <MotiView
             from={{ opacity: 0, translateY: 10 }}
@@ -443,13 +445,13 @@ export default function PrivacySettings() {
               <MaterialCommunityIcons name="map-marker" size={24} color="#A08AB7" />
             </View>
             <View style={styles.locationContent}>
-              <Text style={styles.settingTitle}>Update Location</Text>
+              <Text style={styles.settingTitle}>{t('privacySettings.location.title')}</Text>
               <Text style={styles.settingDescription}>
-                Use GPS or search for your city to set your location
+                {t('privacySettings.location.description')}
               </Text>
               {currentLocation && (
                 <Text style={styles.currentLocationText}>
-                  Current: {currentLocation}
+                  {t('privacySettings.location.current', { location: currentLocation })}
                 </Text>
               )}
             </View>
@@ -474,7 +476,7 @@ export default function PrivacySettings() {
                     size={18}
                     color="#fff"
                   />
-                  <Text style={styles.updateLocationButtonText}>Use GPS</Text>
+                  <Text style={styles.updateLocationButtonText}>{t('privacySettings.location.useGps')}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -501,7 +503,7 @@ export default function PrivacySettings() {
                 styles.searchCityButtonText,
                 showCitySearch && { color: '#fff' },
               ]}>
-                Search City
+                {t('privacySettings.location.searchCity')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -510,7 +512,7 @@ export default function PrivacySettings() {
             <View style={styles.citySearchContainer}>
               <TextInput
                 style={styles.citySearchInput}
-                placeholder="Search city or country..."
+                placeholder={t('privacySettings.location.searchPlaceholder')}
                 placeholderTextColor="#9CA3AF"
                 value={cityQuery}
                 onChangeText={handleCitySearch}
@@ -539,7 +541,7 @@ export default function PrivacySettings() {
                 </View>
               )}
               {cityQuery.length >= 2 && cityResults.length === 0 && !savingCity && (
-                <Text style={styles.noResultsText}>No cities found</Text>
+                <Text style={styles.noResultsText}>{t('privacySettings.location.noCitiesFound')}</Text>
               )}
             </View>
           )}
@@ -548,24 +550,24 @@ export default function PrivacySettings() {
 
       {/* Privacy Tips */}
       <View style={styles.tipsSection}>
-        <Text style={styles.tipsTitle}>Privacy Tips</Text>
+        <Text style={styles.tipsTitle}>{t('privacySettings.tips.title')}</Text>
 
         {[
           {
             icon: 'shield-check',
-            text: 'All messages are end-to-end encrypted by default',
+            text: t('privacySettings.tips.encrypted'),
           },
           {
             icon: 'eye-off',
-            text: 'Blocked users cannot see your profile or message you',
+            text: t('privacySettings.tips.blocked'),
           },
           {
             icon: 'lock',
-            text: 'Your real name and contact info are never shared',
+            text: t('privacySettings.tips.namePrivacy'),
           },
           {
             icon: 'delete',
-            text: 'You can delete your account and data at any time',
+            text: t('privacySettings.tips.deleteAccount'),
           },
         ].map((tip, i) => (
           <View key={i} style={styles.tipRow}>
@@ -582,7 +584,7 @@ export default function PrivacySettings() {
           onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}
         >
           <MaterialCommunityIcons name="shield-lock-outline" size={20} color="#A08AB7" />
-          <Text style={styles.learnMoreText}>Privacy Policy</Text>
+          <Text style={styles.learnMoreText}>{t('privacySettings.legal.privacyPolicy')}</Text>
           <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
         </TouchableOpacity>
 
@@ -591,7 +593,7 @@ export default function PrivacySettings() {
           onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}
         >
           <MaterialCommunityIcons name="file-document-outline" size={20} color="#A08AB7" />
-          <Text style={styles.learnMoreText}>Terms of Service</Text>
+          <Text style={styles.learnMoreText}>{t('privacySettings.legal.termsOfService')}</Text>
           <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
         </TouchableOpacity>
       </View>

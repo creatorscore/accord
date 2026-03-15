@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { signPhotoUrls } from '@/lib/signed-urls';
 import { formatDistanceToNow } from 'date-fns';
 
 interface PhotoReviewUser {
@@ -15,7 +16,7 @@ interface PhotoReviewUser {
   photo_review_requested_at: string | null;
   photo_verification_status: string | null;
   is_active: boolean;
-  photos: { url: string; is_primary: boolean; display_order: number }[];
+  photos: { url: string; is_primary: boolean; display_order: number; storage_path?: string | null; blur_data_uri?: string | null }[];
 }
 
 export default function AdminPhotoReviews() {
@@ -74,14 +75,38 @@ export default function AdminPhotoReviews() {
           photo_review_requested_at,
           photo_verification_status,
           is_active,
-          photos (url, is_primary, display_order, blur_data_uri)
+          photos (url, storage_path, is_primary, display_order, blur_data_uri)
         `)
         .eq('photo_review_required', true)
         .order('photo_review_requested_at', { ascending: false });
 
       if (error) throw error;
 
-      setUsers(data || []);
+      // Batch sign ALL photos across ALL users at once (1 RPC call)
+      const usersData = data || [];
+      const allPhotos: PhotoReviewUser['photos'][number][] = [];
+      const photoOffsets: number[] = [];
+      for (const user of usersData) {
+        photoOffsets.push(allPhotos.length);
+        if (user.photos?.length) {
+          allPhotos.push(...user.photos);
+        }
+      }
+      if (allPhotos.length > 0) {
+        const signedPhotos = await signPhotoUrls(allPhotos);
+        for (let i = 0; i < usersData.length; i++) {
+          const start = photoOffsets[i];
+          const count = usersData[i].photos?.length || 0;
+          if (count > 0) {
+            usersData[i] = {
+              ...usersData[i],
+              photos: signedPhotos.slice(start, start + count) as typeof usersData[number]['photos'],
+            };
+          }
+        }
+      }
+
+      setUsers(usersData);
     } catch (error: any) {
       console.error('Error loading photo review users:', error);
       Alert.alert('Error', 'Failed to load users pending photo review.');

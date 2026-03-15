@@ -9,8 +9,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
 import { usePhotoBlur } from '@/hooks/usePhotoBlur';
+import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 import { formatDistance, DistanceUnit } from '@/lib/distance-utils';
 import { Image, normalizeImageProps } from '@/components/shared/ConditionalImage';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.3;
@@ -21,12 +23,10 @@ interface Profile {
   age: number;
   location_city?: string;
   location_state?: string;
-  bio?: string;
   photos?: { url: string; is_primary: boolean; blur_data_uri?: string | null }[];
   compatibility_score?: number;
   is_verified?: boolean;
   photo_verified?: boolean;
-  occupation?: string;
   distance?: number;
   photo_blur_enabled?: boolean;
   hide_distance?: boolean;
@@ -44,8 +44,8 @@ interface SwipeCardProps {
   isAdmin?: boolean;
 }
 
-// Helper function to format last active time
-const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boolean | undefined): string | null => {
+// Helper function to format last active time with i18n support
+const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boolean | undefined, t: (key: string, opts?: any) => string): string | null => {
   if (hideLastActive || !lastActiveAt) return null;
 
   const lastActive = new Date(lastActiveAt);
@@ -55,11 +55,11 @@ const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boo
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffMins < 5) return 'Active now';
-  if (diffMins < 60) return `Active ${diffMins}m ago`;
-  if (diffHours < 24) return `Active ${diffHours}h ago`;
-  if (diffDays === 1) return 'Active yesterday';
-  if (diffDays < 7) return `Active ${diffDays}d ago`;
+  if (diffMins < 5) return t('profileCard.activity.activeNow');
+  if (diffMins < 60) return t('profileCard.activity.minutesAgo', { count: diffMins });
+  if (diffHours < 24) return t('profileCard.activity.hoursAgo', { count: diffHours });
+  if (diffDays === 1) return t('profileCard.activity.yesterday');
+  if (diffDays < 7) return t('profileCard.activity.daysAgo', { count: diffDays });
   return null;
 };
 
@@ -72,8 +72,9 @@ export default function SwipeCard({
   distanceUnit = 'miles',
   isAdmin = false,
 }: SwipeCardProps) {
+  const { t } = useTranslation();
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
-  const lastActiveText = getLastActiveText(profile.last_active_at, profile.hide_last_active);
+  const lastActiveText = getLastActiveText(profile.last_active_at, profile.hide_last_active, t);
 
   const shouldBlur = (profile.photo_blur_enabled || false) && !isAdmin;
 
@@ -189,7 +190,6 @@ export default function SwipeCard({
   });
   const currentPhotoUri = photoBlur.imageUri;
   const currentBlurRadius = photoBlur.blurRadius;
-  const currentShowOverlay = photoBlur.showBlurOverlay;
 
   const handlePreviousPhoto = () => {
     if (currentPhotoIndex > 0) {
@@ -318,28 +318,16 @@ export default function SwipeCard({
       <View className="flex-1 bg-white rounded-3xl shadow-2xl overflow-hidden">
         {/* Main Photo */}
         <View className="relative flex-1">
-          <Image
-            {...normalizeImageProps({
-              source: { uri: currentPhotoUri },
-              style: styles.cardImage,
-              contentFit: 'cover',
-              blurRadius: currentBlurRadius, // iOS only - Android uses overlay or blur_data_uri
-              // expo-image specific props for better performance
-              cachePolicy: 'memory-disk',
-              transition: 200,
-              placeholder: { blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' },
-              onLoad: onImageLoad,
-              onError: onImageError,
-            })}
+          <SafeBlurImage
+            source={{ uri: currentPhotoUri }}
+            style={styles.cardImage}
+            contentFit="cover"
+            blurRadius={currentBlurRadius}
+            cachePolicy="memory-disk"
+            transition={200}
+            onLoad={onImageLoad}
+            onError={onImageError}
           />
-
-          {/* Android blur fallback - CSS overlay instead of RenderScript */}
-          {currentShowOverlay && (
-            <View
-              style={[styles.cardImage, { position: 'absolute', backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-              pointerEvents="none"
-            />
-          )}
 
           {/* Dynamic Watermark - prevents screenshot sharing by embedding viewer ID */}
           {watermarkReady && (
@@ -458,7 +446,7 @@ export default function SwipeCard({
               { opacity: likeOpacity },
             ]}
           >
-            <Text className="text-white font-black text-3xl">LIKE</Text>
+            <Text className="text-white font-black text-3xl">{t('discover.swipe.like')}</Text>
           </RNAnimated.View>
 
           <RNAnimated.View
@@ -467,7 +455,7 @@ export default function SwipeCard({
               { opacity: nopeOpacity },
             ]}
           >
-            <Text className="text-white font-black text-3xl">NOPE</Text>
+            <Text className="text-white font-black text-3xl">{t('discover.swipe.nope')}</Text>
           </RNAnimated.View>
 
           <RNAnimated.View
@@ -477,7 +465,7 @@ export default function SwipeCard({
             ]}
           >
             <View className="bg-lavender-500 px-8 py-4 rounded-2xl border-4 border-white">
-              <Text className="text-white font-black text-3xl">OBSESSED</Text>
+              <Text className="text-white font-black text-3xl">{t('discover.swipe.obsessed')}</Text>
             </View>
           </RNAnimated.View>
 
@@ -510,15 +498,9 @@ export default function SwipeCard({
 
             {lastActiveText && (
               <View className="flex-row items-center gap-1 mb-2">
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: lastActiveText === 'Active now' ? '#22c55e' : '#A08AB7' }} />
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: lastActiveText === t('profileCard.activity.activeNow') ? '#22c55e' : '#A08AB7' }} />
                 <Text className="text-white/80 text-sm">{lastActiveText}</Text>
               </View>
-            )}
-
-            {profile.occupation && (
-              <Text className="text-white/90 text-lg mb-1">
-                {profile.occupation}
-              </Text>
             )}
 
             {(distance !== undefined && distance !== null) && (
@@ -531,7 +513,7 @@ export default function SwipeCard({
               <View className="flex-row items-center gap-2 mb-3">
                 <View className="bg-lavender-500 px-3 py-1 rounded-full">
                   <Text className="text-white font-bold text-sm">
-                    {profile.compatibility_score}% Match
+                    {t('discover.card.matchPercent', { score: profile.compatibility_score })}
                   </Text>
                 </View>
               </View>
@@ -594,7 +576,7 @@ export default function SwipeCard({
                     textAlign: 'center',
                   }}
                 >
-                  Browse Photos
+                  {t('discover.tutorial.browsePhotos')}
                 </Text>
                 <Text
                   style={{
@@ -605,7 +587,7 @@ export default function SwipeCard({
                     marginBottom: 20,
                   }}
                 >
-                  Tap the left or right side of the photo to see more pictures. Tap the center to view their full profile.
+                  {t('discover.tutorial.instructions')}
                 </Text>
 
                 {/* Visual Guide */}
@@ -634,7 +616,7 @@ export default function SwipeCard({
                         marginTop: 4,
                       }}
                     >
-                      Previous
+                      {t('discover.tutorial.previous')}
                     </Text>
                   </View>
 
@@ -655,7 +637,7 @@ export default function SwipeCard({
                         marginTop: 4,
                       }}
                     >
-                      Profile
+                      {t('discover.tutorial.profile')}
                     </Text>
                   </View>
 
@@ -676,7 +658,7 @@ export default function SwipeCard({
                         marginTop: 4,
                       }}
                     >
-                      Next
+                      {t('discover.tutorial.next')}
                     </Text>
                   </View>
                 </View>
@@ -699,7 +681,7 @@ export default function SwipeCard({
                       textAlign: 'center',
                     }}
                   >
-                    Got it!
+                    {t('discover.tutorial.gotIt')}
                   </Text>
                 </TouchableOpacity>
               </View>

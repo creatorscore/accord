@@ -2,6 +2,13 @@ import { useEffect, useRef } from 'react';
 import { CaptureProtection, CaptureEventType } from 'react-native-capture-protection';
 import * as ScreenCapture from 'expo-screen-capture';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
+// Use explicit environment check instead of __DEV__ which may be true in dev-client/TestFlight builds.
+// Screenshot protection must ALWAYS be active in production — this is life-or-death for users in hostile regions.
+const IS_PRODUCTION = Constants.expoConfig?.extra?.environment === 'production' ||
+  process.env.EXPO_PUBLIC_ENVIRONMENT === 'production' ||
+  (!__DEV__ && !Constants.expoConfig?.extra?.environment);
 
 /**
  * Hook to protect against screenshots and provide detection callbacks
@@ -37,9 +44,9 @@ export function useScreenCaptureProtection(
     // Enable protection asynchronously
     const enableProtection = async () => {
       try {
-        // In development mode: disable protection for easier testing
-        if (__DEV__) {
-          // Still enable detection listener for testing in dev
+        // Only skip protection in non-production builds (explicit check, not __DEV__)
+        if (!IS_PRODUCTION) {
+          // Still enable detection listener for testing
           if (onScreenshot) {
             try {
               const subscription = ScreenCapture.addScreenshotListener(async () => {
@@ -89,8 +96,8 @@ export function useScreenCaptureProtection(
           } catch (e) {
             console.warn('Could not add capture listener:', e);
 
-            // Fallback to expo-screen-capture listener
-            if (Platform.OS === 'ios') {
+            // Fallback to expo-screen-capture listener (iOS + Android)
+            try {
               const subscription = ScreenCapture.addScreenshotListener(async () => {
                 try {
                   await onScreenshot();
@@ -99,6 +106,8 @@ export function useScreenCaptureProtection(
                 }
               });
               listenerRef.current = subscription;
+            } catch (fallbackError) {
+              console.warn('Fallback screenshot listener not available:', fallbackError);
             }
           }
         }
@@ -124,8 +133,8 @@ export function useScreenCaptureProtection(
             listenerRef.current = null;
           }
 
-          // Skip disabling in dev mode (nothing was enabled)
-          if (__DEV__ || !protectionEnabledRef.current) {
+          // Skip disabling in non-production mode (nothing was enabled)
+          if (!IS_PRODUCTION || !protectionEnabledRef.current) {
             return;
           }
 
@@ -143,8 +152,9 @@ export function useScreenCaptureProtection(
           }
 
           protectionEnabledRef.current = false;
-        } catch (error) {
-          console.error('Error disabling screenshot protection:', error);
+        } catch (_) {
+          // Expected on low-RAM devices where OS destroys Activity before cleanup runs
+          // Silenced to avoid polluting Sentry breadcrumbs
         }
       };
       disableProtection();

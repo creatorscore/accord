@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
+import { getSignedUrls } from '@/lib/signed-urls';
 import StarRating from '@/components/reviews/StarRating';
 import ReviewSubmissionModal from '@/components/reviews/ReviewSubmissionModal';
 
@@ -109,7 +110,7 @@ export default function MyReviewsScreen() {
           reviewer:profiles!reviews_reviewer_id_fkey(
             display_name,
             photo_blur_enabled,
-            photos(url, is_primary, blur_data_uri)
+            photos(url, storage_path, is_primary, blur_data_uri)
           )
         `)
         .eq('reviewee_id', profile.id)
@@ -122,33 +123,49 @@ export default function MyReviewsScreen() {
         return;
       }
 
-      // Get match data for each review
-      const reviewsWithMatchData = await Promise.all(
-        (reviewsData || []).map(async (review: any) => {
-          const { data: matchData } = await supabase
+      // Batch fetch match data for all reviews in one query
+      const reviews = reviewsData || [];
+      const matchIds = [...new Set(reviews.map((r: any) => r.match_id).filter(Boolean))];
+      const { data: matchesData } = matchIds.length > 0
+        ? await supabase
             .from('matches')
-            .select('matched_at, compatibility_score')
-            .eq('id', review.match_id)
-            .single();
+            .select('id, matched_at, compatibility_score')
+            .in('id', matchIds)
+        : { data: [] };
+      const matchesMap = new Map((matchesData || []).map(m => [m.id, m]));
 
-          const primaryPhoto = review.reviewer.photos?.find((p: any) => p.is_primary) || review.reviewer.photos?.[0];
-          // Respect reviewer's photo_blur_enabled privacy setting
-          const reviewerBlurEnabled = review.reviewer.photo_blur_enabled || false;
-          const photoUrl = reviewerBlurEnabled && primaryPhoto?.blur_data_uri
-            ? primaryPhoto.blur_data_uri
-            : primaryPhoto?.url;
+      // Batch sign all reviewer photo URLs at once
+      const photoEntries = reviews.map((review: any) => {
+        const primaryPhoto = review.reviewer.photos?.find((p: any) => p.is_primary) || review.reviewer.photos?.[0];
+        const reviewerBlurEnabled = review.reviewer.photo_blur_enabled || false;
+        const isBlurUri = reviewerBlurEnabled && primaryPhoto?.blur_data_uri;
+        const photoUrl = isBlurUri ? primaryPhoto.blur_data_uri : primaryPhoto?.url;
+        const needsSigning = photoUrl && !photoUrl.startsWith('data:');
+        return { primaryPhoto, photoUrl, needsSigning, signingPath: needsSigning ? (primaryPhoto?.storage_path || photoUrl) : '' };
+      });
 
-          return {
-            ...review,
-            reviewer_name: review.reviewer.display_name,
-            reviewer_photo_url: photoUrl,
-            match_date: matchData?.matched_at,
-            compatibility_score: matchData?.compatibility_score,
-          };
-        })
-      );
+      const pathsToSign = photoEntries.filter(e => e.needsSigning).map(e => e.signingPath);
+      const signedUrls = pathsToSign.length > 0
+        ? await getSignedUrls('profile-photos', pathsToSign)
+        : [];
+      let signIdx = 0;
 
-      const formattedReviews = reviewsWithMatchData;
+      const formattedReviews = reviews.map((review: any, i: number) => {
+        const entry = photoEntries[i];
+        let finalPhotoUrl = entry.photoUrl;
+        if (entry.needsSigning) {
+          finalPhotoUrl = signedUrls[signIdx] || entry.photoUrl;
+          signIdx++;
+        }
+        const matchData = matchesMap.get(review.match_id);
+        return {
+          ...review,
+          reviewer_name: review.reviewer.display_name,
+          reviewer_photo_url: finalPhotoUrl,
+          match_date: matchData?.matched_at,
+          compatibility_score: matchData?.compatibility_score,
+        };
+      });
 
       setReviews(formattedReviews);
 
@@ -169,12 +186,12 @@ export default function MyReviewsScreen() {
             profile1:profiles!matches_profile1_id_fkey(
               display_name,
               photo_blur_enabled,
-              photos(url, is_primary, blur_data_uri)
+              photos(url, storage_path, is_primary, blur_data_uri)
             ),
             profile2:profiles!matches_profile2_id_fkey(
               display_name,
               photo_blur_enabled,
-              photos(url, is_primary, blur_data_uri)
+              photos(url, storage_path, is_primary, blur_data_uri)
             )
           )
         `)
@@ -182,24 +199,41 @@ export default function MyReviewsScreen() {
         .eq('reviews_revealed', false)
         .gt('window_expires_at', new Date().toISOString());
 
-      const formattedPending = (promptsData || []).map((prompt: any) => {
+      // Batch sign all pending review photo URLs at once
+      const prompts = promptsData || [];
+      const pendingPhotoEntries = prompts.map((prompt: any) => {
+        const isProfile1 = prompt.profile1_id === profile.id;
+        const otherProfile = isProfile1 ? prompt.match.profile2 : prompt.match.profile1;
+        const primaryPhoto = otherProfile.photos?.find((p: any) => p.is_primary) || otherProfile.photos?.[0];
+        const otherBlurEnabled = otherProfile.photo_blur_enabled || false;
+        const isBlurUri = otherBlurEnabled && primaryPhoto?.blur_data_uri;
+        const photoUrl = isBlurUri ? primaryPhoto.blur_data_uri : primaryPhoto?.url;
+        const needsSigning = photoUrl && !photoUrl.startsWith('data:');
+        return { primaryPhoto, photoUrl, needsSigning, signingPath: needsSigning ? (primaryPhoto?.storage_path || photoUrl) : '' };
+      });
+
+      const pendingPathsToSign = pendingPhotoEntries.filter(e => e.needsSigning).map(e => e.signingPath);
+      const pendingSignedUrls = pendingPathsToSign.length > 0
+        ? await getSignedUrls('profile-photos', pendingPathsToSign)
+        : [];
+      let pendingSignIdx = 0;
+
+      const formattedPending = prompts.map((prompt: any, i: number) => {
         const isProfile1 = prompt.profile1_id === profile.id;
         const otherProfileId = isProfile1 ? prompt.profile2_id : prompt.profile1_id;
         const otherProfile = isProfile1 ? prompt.match.profile2 : prompt.match.profile1;
-
-        const primaryPhoto = otherProfile.photos?.find((p: any) => p.is_primary) || otherProfile.photos?.[0];
-        // Respect the other user's photo_blur_enabled privacy setting
-        const otherBlurEnabled = otherProfile.photo_blur_enabled || false;
-        const photoUrl = otherBlurEnabled && primaryPhoto?.blur_data_uri
-          ? primaryPhoto.blur_data_uri
-          : primaryPhoto?.url;
-
+        const entry = pendingPhotoEntries[i];
+        let finalPhotoUrl = entry.photoUrl;
+        if (entry.needsSigning) {
+          finalPhotoUrl = pendingSignedUrls[pendingSignIdx] || entry.photoUrl;
+          pendingSignIdx++;
+        }
         return {
           match_id: prompt.match_id,
           window_expires_at: prompt.window_expires_at,
           other_profile_name: otherProfile.display_name,
           other_profile_id: otherProfileId,
-          other_profile_photo_url: photoUrl,
+          other_profile_photo_url: finalPhotoUrl,
           has_submitted: isProfile1 ? prompt.profile1_reviewed : prompt.profile2_reviewed,
           other_has_submitted: isProfile1 ? prompt.profile2_reviewed : prompt.profile1_reviewed,
           match_date: prompt.match.matched_at,

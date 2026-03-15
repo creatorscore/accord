@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Modal, Alert, Pressable, InteractionManager, useWindowDimensions, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,9 @@ import { isOnline, getLastActiveText } from '@/lib/online-status';
 import { realtimeManager } from '@/lib/realtime-manager';
 import { decryptMessage, getPrivateKey } from '@/lib/encryption';
 import { usePhotoBlur } from '@/hooks/usePhotoBlur';
+import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 import { useUnreadActivityCount } from '@/hooks/useActivityFeed';
+import { signPhotoUrls } from '@/lib/signed-urls';
 import { MatchesListSkeleton } from '@/components/shared/SkeletonScreens';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from '@/contexts/ToastContext';
@@ -27,7 +29,7 @@ interface Match {
     id: string;
     display_name: string;
     age: number;
-    photos?: { url: string; is_primary: boolean; blur_data_uri?: string | null }[];
+    photos?: { url: string; is_primary: boolean; blur_data_uri?: string | null; storage_path?: string | null }[];
     is_verified?: boolean;
     photo_verified?: boolean;
     last_active_at?: string | null;
@@ -108,7 +110,7 @@ const MatchCard = memo(function MatchCard({ item, currentProfileId, colors, onPr
   const lastActiveText = getLastActiveText(item.profile.last_active_at || null, item.profile.hide_last_active);
   const expirationInfo = getExpirationInfoStatic(item);
 
-  const { imageUri, blurRadius, showBlurOverlay, onImageLoad, onImageError } = usePhotoBlur({
+  const { imageUri, blurRadius, onImageLoad, onImageError } = usePhotoBlur({
     shouldBlur: (item.profile.photo_blur_enabled || false) && !item.profile.is_revealed && !isAdmin,
     photoUrl: primaryPhoto?.url || 'https://via.placeholder.com/80',
     blurDataUri: primaryPhoto?.blur_data_uri,
@@ -124,19 +126,13 @@ const MatchCard = memo(function MatchCard({ item, currentProfileId, colors, onPr
     >
       {/* Profile Photo */}
       <View style={styles.photoContainer}>
-        <Image
+        <SafeBlurImage
           source={{ uri: imageUri }}
           style={styles.photo}
           blurRadius={blurRadius}
           onLoad={onImageLoad}
           onError={onImageError}
         />
-        {showBlurOverlay && (
-          <View
-            style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-            pointerEvents="none"
-          />
-        )}
         {(item.profile.is_verified || item.profile.photo_verified) && (
           <View style={[styles.verifiedBadge, { backgroundColor: colors.card }]}>
             <MaterialCommunityIcons name="check-decagram" size={18} color="#A08AB7" />
@@ -220,6 +216,7 @@ export default function Matches() {
   const isLandscape = width > height;
   const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const currentProfileIdRef = useRef<string | null>(null);
   const unreadActivityCount = useUnreadActivityCount(currentProfileId);
   const [matches, setMatches] = useState<Match[]>([]);
   const [likesCount, setLikesCount] = useState(0);
@@ -228,6 +225,7 @@ export default function Matches() {
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [actionSheetMatch, setActionSheetMatch] = useState<Match | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [myEncryptionPublicKey, setMyEncryptionPublicKey] = useState<string | null>(null);
   const [showActivityNewBadge, setShowActivityNewBadge] = useState(false);
 
   useEffect(() => {
@@ -243,61 +241,74 @@ export default function Matches() {
   }, []);
 
   useEffect(() => {
-    loadCurrentProfile();
+    let cancelled = false;
+
+    const initialize = async () => {
+      try {
+        // Phase 1: Profile query + bans query in parallel (bans don't need profileId)
+        const [profileResult, bansResult] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, is_admin, encryption_public_key')
+            .eq('user_id', user?.id)
+            .single(),
+          supabase
+            .from('bans')
+            .select('banned_profile_id')
+            .not('banned_profile_id', 'is', null)
+            .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString()),
+        ]);
+
+        if (cancelled) return;
+        if (profileResult.error) throw profileResult.error;
+
+        const myProfileId = profileResult.data.id;
+        currentProfileIdRef.current = myProfileId;
+        setCurrentProfileId(myProfileId);
+        setIsAdmin(profileResult.data.is_admin || false);
+        setMyEncryptionPublicKey(profileResult.data.encryption_public_key || null);
+
+        // Fire likes count non-blocking (doesn't need to finish before matches load)
+        loadLikesCount();
+
+        // Phase 2: Load matches with pre-fetched bans data
+        await loadMatchesWithId(myProfileId, bansResult.data);
+
+        if (cancelled) return;
+
+        // Set up subscriptions after data is loaded
+        const unsubscribe = subscribeToMatches();
+        cleanupRef.current = unsubscribe || null;
+      } catch (error: any) {
+        console.error('Error initializing matches:', error);
+        setLoading(false);
+      }
+    };
+
+    const cleanupRef = { current: null as (() => void) | null };
+    initialize();
+
+    return () => {
+      cancelled = true;
+      if (cleanupRef.current) {
+        cleanupRef.current();
+      }
+    };
   }, []);
 
-  useEffect(() => {
-    if (currentProfileId) {
-      loadMatches();
-      loadLikesCount();
-      const unsubscribe = subscribeToMatches();
-      return () => {
-        if (unsubscribe) {
-          unsubscribe();
-        }
-      };
-    }
-  }, [currentProfileId]);
-
-  const loadCurrentProfile = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, is_admin')
-        .eq('user_id', user?.id)
-        .single();
-
-      if (error) throw error;
-      setCurrentProfileId(data.id);
-      setIsAdmin(data.is_admin || false);
-    } catch (error: any) {
-      console.error('Error loading profile:', error);
-    }
-  };
-
   // Decrypt message previews for all matches
-  const decryptMessagePreviews = async (matchesList: Match[]): Promise<Match[]> => {
+  // Accepts an optional pre-fetched privateKey to avoid re-fetching from keychain
+  const decryptMessagePreviews = async (matchesList: Match[], prefetchedPrivateKey?: string | null): Promise<Match[]> => {
     if (!user?.id) return matchesList;
 
     try {
-      // Get current user's private key
-      const myPrivateKey = await getPrivateKey(user.id);
+      // Use pre-fetched key if available, otherwise fetch from keychain
+      const myPrivateKey = prefetchedPrivateKey ?? await getPrivateKey(user.id);
       if (!myPrivateKey) {
         return matchesList;
       }
 
-      // Get current user's public key for messages they sent
-      const { data: myProfile } = await supabase
-        .from('profiles')
-        .select('encryption_public_key')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (!myProfile) {
-        return matchesList;
-      }
-
-      const myPublicKey = myProfile?.encryption_public_key;
+      const profileId = currentProfileIdRef.current || currentProfileId;
 
       // Decrypt each message preview
       const decryptedMatches = await Promise.all(
@@ -307,9 +318,6 @@ export default function Matches() {
           }
 
           try {
-            // Determine if I sent this message or received it
-            const iAmSender = match.last_message.sender_profile_id === currentProfileId;
-
             // For ECDH: we need the OTHER person's public key
             // If I sent it, I need their public key (match.profile.encryption_public_key)
             // If they sent it, I also need their public key
@@ -341,61 +349,72 @@ export default function Matches() {
     }
   };
 
-  const loadMatches = async () => {
+  // Core match loading logic - accepts profileId directly to avoid waterfall
+  // Pre-fetched bans data can be passed from initialization to avoid duplicate query
+  const loadMatchesWithId = async (profileId: string, prefetchedBans?: any[] | null) => {
     try {
-      if (!currentProfileId) return;
+      // Phase 1: Matches + blocks in parallel (bans already fetched if from init)
+      const phase1Queries: PromiseLike<any>[] = [
+        // Get all matches for current user (limit to most recent 50 for performance)
+        supabase
+          .from('matches')
+          .select(`
+            id,
+            profile1_id,
+            profile2_id,
+            compatibility_score,
+            matched_at,
+            status,
+            expires_at,
+            first_message_sent_at
+          `)
+          .or(`profile1_id.eq.${profileId},profile2_id.eq.${profileId}`)
+          .eq('status', 'active')
+          .order('matched_at', { ascending: false })
+          .limit(50),
+        // SAFETY: Filter out blocked users (bidirectional)
+        supabase
+          .from('blocks')
+          .select('blocked_profile_id')
+          .eq('blocker_profile_id', profileId),
+        supabase
+          .from('blocks')
+          .select('blocker_profile_id')
+          .eq('blocked_profile_id', profileId),
+      ];
 
-      // PERFORMANCE: Limit initial matches to prevent ANR on low-end devices
-      // Get all matches for current user (limit to most recent 50 for performance)
-      const { data: matchesData, error: matchesError } = await supabase
-        .from('matches')
-        .select(`
-          id,
-          profile1_id,
-          profile2_id,
-          compatibility_score,
-          matched_at,
-          status,
-          expires_at,
-          first_message_sent_at
-        `)
-        .or(`profile1_id.eq.${currentProfileId},profile2_id.eq.${currentProfileId}`)
-        .eq('status', 'active')
-        .order('matched_at', { ascending: false })
-        .limit(50);  // Limit to 50 most recent matches for performance
+      // Only query bans if not pre-fetched
+      if (!prefetchedBans) {
+        phase1Queries.push(
+          supabase
+            .from('bans')
+            .select('banned_profile_id')
+            .not('banned_profile_id', 'is', null)
+            .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
+        );
+      }
+
+      const phase1Results = await Promise.all(phase1Queries);
+
+      const { data: matchesData, error: matchesError } = phase1Results[0];
+      const { data: blockedByMe } = phase1Results[1];
+      const { data: blockedMe } = phase1Results[2];
+      const bannedUsers = prefetchedBans ?? phase1Results[3]?.data;
 
       if (matchesError) throw matchesError;
 
-      // SAFETY: Filter out blocked users (bidirectional)
-      const { data: blockedByMe } = await supabase
-        .from('blocks')
-        .select('blocked_profile_id')
-        .eq('blocker_profile_id', currentProfileId);
-
-      const { data: blockedMe } = await supabase
-        .from('blocks')
-        .select('blocker_profile_id')
-        .eq('blocked_profile_id', currentProfileId);
-
       const blockedProfileIds = new Set([
-        ...(blockedByMe?.map(b => b.blocked_profile_id) || []),
-        ...(blockedMe?.map(b => b.blocker_profile_id) || [])
+        ...(blockedByMe?.map((b: any) => b.blocked_profile_id) || []),
+        ...(blockedMe?.map((b: any) => b.blocker_profile_id) || [])
       ]);
 
-      // CRITICAL SAFETY: Filter out banned users
-      const { data: bannedUsers } = await supabase
-        .from('bans')
-        .select('banned_profile_id')
-        .not('banned_profile_id', 'is', null)
-        .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
-
       const bannedProfileIds = new Set(
-        bannedUsers?.map(b => b.banned_profile_id).filter(Boolean) || []
+        bannedUsers?.map((b: any) => b.banned_profile_id).filter(Boolean) || []
       );
 
       // Filter out matches with blocked OR banned users
-      const filteredMatches = (matchesData || []).filter(match => {
-        const otherProfileId = match.profile1_id === currentProfileId
+      const filteredMatches = (matchesData || []).filter((match: any) => {
+        const otherProfileId = match.profile1_id === profileId
           ? match.profile2_id
           : match.profile1_id;
         return !blockedProfileIds.has(otherProfileId) && !bannedProfileIds.has(otherProfileId);
@@ -403,10 +422,10 @@ export default function Matches() {
 
       // PERFORMANCE OPTIMIZATION: Batch all queries to prevent ANR on low-end devices
       // Get all other profile IDs and match IDs
-      const otherProfileIds = filteredMatches.map(match =>
-        match.profile1_id === currentProfileId ? match.profile2_id : match.profile1_id
+      const otherProfileIds = filteredMatches.map((match: any) =>
+        match.profile1_id === profileId ? match.profile2_id : match.profile1_id
       );
-      const matchIds = filteredMatches.map(match => match.id);
+      const matchIds = filteredMatches.map((match: any) => match.id);
 
       if (matchIds.length === 0) {
         setMatches([]);
@@ -415,8 +434,8 @@ export default function Matches() {
         return;
       }
 
-      // Batch fetch ALL data in parallel (4 queries total instead of 4N)
-      const [profilesResult, messagesResult, unreadCountsResult, revealsResult] = await Promise.all([
+      // Phase 2: Batch fetch ALL data in parallel (profiles, messages, unread, reveals + private key)
+      const [profilesResult, messagesResult, unreadCountsResult, revealsResult, myPrivateKey] = await Promise.all([
         // Get all profiles at once
         supabase
           .from('profiles')
@@ -432,61 +451,50 @@ export default function Matches() {
             encryption_public_key,
             photos (
               url,
+              storage_path,
               is_primary,
               display_order,
               blur_data_uri
             )
           `)
           .in('id', otherProfileIds),
-        // Get last message for each match using a single query
-        supabase
-          .from('messages')
-          .select('match_id, encrypted_content, created_at, sender_profile_id, read_at')
-          .in('match_id', matchIds)
-          .order('created_at', { ascending: false }),
-        // Get unread counts for all matches at once
-        supabase
-          .from('messages')
-          .select('match_id', { count: 'exact' })
-          .in('match_id', matchIds)
-          .eq('receiver_profile_id', currentProfileId)
-          .is('read_at', null),
+        // PERFORMANCE: Use RPCs that return only last message per match + grouped unread counts
+        // instead of fetching ALL messages across all matches
+        supabase.rpc('get_last_messages', { p_match_ids: matchIds }),
+        supabase.rpc('get_unread_counts', { p_match_ids: matchIds, p_profile_id: profileId }),
         // Get photo reveals for all profiles at once
         supabase
           .from('photo_reveals')
           .select('revealer_profile_id')
           .in('revealer_profile_id', otherProfileIds)
-          .eq('revealed_to_profile_id', currentProfileId),
+          .eq('revealed_to_profile_id', profileId),
+        // Pre-fetch private key for decryption (runs in parallel with DB queries)
+        user?.id ? getPrivateKey(user.id) : Promise.resolve(null),
       ]);
 
       // Create lookup maps for O(1) access
       const profilesMap = new Map(
-        (profilesResult.data || []).map(p => [p.id, p])
+        (profilesResult.data || []).map((p: any) => [p.id, p])
       );
 
-      // Get last message per match (first occurrence since sorted desc)
-      const lastMessagesMap = new Map<string, any>();
-      for (const msg of messagesResult.data || []) {
-        if (!lastMessagesMap.has(msg.match_id)) {
-          lastMessagesMap.set(msg.match_id, msg);
-        }
-      }
+      // RPC returns one row per match (DISTINCT ON), so direct map
+      const lastMessagesMap = new Map<string, any>(
+        (messagesResult.data || []).map((msg: any) => [msg.match_id, msg])
+      );
 
-      // Count unread messages per match
-      const unreadCountsMap = new Map<string, number>();
-      for (const msg of unreadCountsResult.data || []) {
-        const current = unreadCountsMap.get(msg.match_id) || 0;
-        unreadCountsMap.set(msg.match_id, current + 1);
-      }
+      // RPC returns grouped counts, so direct map
+      const unreadCountsMap = new Map<string, number>(
+        (unreadCountsResult.data || []).map((row: any) => [row.match_id, Number(row.unread_count)])
+      );
 
       // Create set of revealed profile IDs
       const revealedProfileIds = new Set(
-        revealsResult.data?.map(r => r.revealer_profile_id) || []
+        revealsResult.data?.map((r: any) => r.revealer_profile_id) || []
       );
 
       // Build matches array using lookup maps
-      const validMatches = filteredMatches.map((match) => {
-        const otherProfileId = match.profile1_id === currentProfileId
+      const validMatches = filteredMatches.map((match: any) => {
+        const otherProfileId = match.profile1_id === profileId
           ? match.profile2_id
           : match.profile1_id;
 
@@ -509,7 +517,7 @@ export default function Matches() {
             hide_last_active: profile.hide_last_active,
             photo_blur_enabled: profile.photo_blur_enabled,
             encryption_public_key: profile.encryption_public_key,
-            photos: profile?.photos?.sort((a: any, b: any) => a.display_order - b.display_order),
+            photos: profile?.photos?.sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0)),
             is_revealed: isRevealed,
           },
           compatibility_score: match.compatibility_score,
@@ -519,7 +527,7 @@ export default function Matches() {
           last_message: lastMessage || undefined,
           unread_count: unreadCount,
         };
-      }).filter(m => m !== null) as Match[];
+      }).filter((m: any) => m !== null) as Match[];
 
       // Filter out expired matches
       const now = new Date();
@@ -535,6 +543,32 @@ export default function Matches() {
         return expiresAt > now;
       });
 
+      // Sign photo URLs for private storage buckets
+      const allPhotosToSign: { storage_path?: string | null; url?: string | null }[] = [];
+      const photoOffsets: number[] = [];
+      for (const match of activeMatches) {
+        photoOffsets.push(allPhotosToSign.length);
+        if (match.profile.photos?.length) {
+          allPhotosToSign.push(...match.profile.photos);
+        }
+      }
+      if (allPhotosToSign.length > 0) {
+        const signedPhotos = await signPhotoUrls(allPhotosToSign);
+        for (let i = 0; i < activeMatches.length; i++) {
+          const start = photoOffsets[i];
+          const count = activeMatches[i].profile.photos?.length || 0;
+          if (count > 0) {
+            activeMatches[i] = {
+              ...activeMatches[i],
+              profile: {
+                ...activeMatches[i].profile,
+                photos: signedPhotos.slice(start, start + count) as any,
+              },
+            };
+          }
+        }
+      }
+
       // Show matches immediately without decryption for faster UI
       setMatches(activeMatches);
       setLoading(false);
@@ -544,7 +578,7 @@ export default function Matches() {
       // This prevents ANR on low-end devices by not blocking main thread
       InteractionManager.runAfterInteractions(async () => {
         try {
-          const matchesWithDecryptedPreviews = await decryptMessagePreviews(activeMatches);
+          const matchesWithDecryptedPreviews = await decryptMessagePreviews(activeMatches, myPrivateKey);
           setMatches(matchesWithDecryptedPreviews);
         } catch (error) {
           console.error('Error decrypting message previews:', error);
@@ -559,9 +593,17 @@ export default function Matches() {
     }
   };
 
+  // Standalone loadMatches for refresh/subscription callbacks - reads profileId from ref/state
+  const loadMatches = async () => {
+    const profileId = currentProfileIdRef.current || currentProfileId;
+    if (!profileId) return;
+    await loadMatchesWithId(profileId);
+  };
+
   const loadLikesCount = async () => {
     try {
-      if (!currentProfileId) return;
+      const profileId = currentProfileIdRef.current || currentProfileId;
+      if (!profileId) return;
 
       // Use server-side RPC that counts unmatched likes (excludes matched, passed, blocked, banned)
       // This is also secure: free users get the count without seeing WHO liked them
@@ -575,7 +617,8 @@ export default function Matches() {
   };
 
   const subscribeToMatches = () => {
-    if (!currentProfileId) return;
+    const profileId = currentProfileIdRef.current || currentProfileId;
+    if (!profileId) return;
 
     // Subscribe to new matches (with realtime manager for cost protection)
     const matchesChannel = supabase
@@ -586,7 +629,7 @@ export default function Matches() {
           event: 'INSERT',
           schema: 'public',
           table: 'matches',
-          filter: `profile1_id=eq.${currentProfileId}`,
+          filter: `profile1_id=eq.${profileId}`,
         },
         () => {
           loadMatches();
@@ -599,7 +642,7 @@ export default function Matches() {
           event: 'INSERT',
           schema: 'public',
           table: 'matches',
-          filter: `profile2_id=eq.${currentProfileId}`,
+          filter: `profile2_id=eq.${profileId}`,
         },
         () => {
           loadMatches();
@@ -608,15 +651,16 @@ export default function Matches() {
       )
       .subscribe();
 
-    // Subscribe to new messages (for last message updates)
+    // Subscribe to new messages (for last message updates) — scoped to this user
     const messagesChannel = supabase
-      .channel('messages-changes')
+      .channel(`messages-changes-${profileId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
+          filter: `receiver_profile_id=eq.${profileId}`,
         },
         () => {
           loadMatches();
@@ -633,7 +677,7 @@ export default function Matches() {
           event: 'INSERT',
           schema: 'public',
           table: 'likes',
-          filter: `liked_profile_id=eq.${currentProfileId}`,
+          filter: `liked_profile_id=eq.${profileId}`,
         },
         () => {
           loadLikesCount();
@@ -642,15 +686,15 @@ export default function Matches() {
       .subscribe();
 
     // Register channels with realtime manager for cost protection
-    realtimeManager.registerChannel(currentProfileId, matchesChannel);
-    realtimeManager.registerChannel(currentProfileId, messagesChannel);
-    realtimeManager.registerChannel(currentProfileId, likesChannel);
+    realtimeManager.registerChannel(profileId, matchesChannel);
+    realtimeManager.registerChannel(profileId, messagesChannel);
+    realtimeManager.registerChannel(profileId, likesChannel);
 
     return () => {
       // Unregister and cleanup
-      realtimeManager.unregisterChannel(currentProfileId, matchesChannel);
-      realtimeManager.unregisterChannel(currentProfileId, messagesChannel);
-      realtimeManager.unregisterChannel(currentProfileId, likesChannel);
+      realtimeManager.unregisterChannel(profileId, matchesChannel);
+      realtimeManager.unregisterChannel(profileId, messagesChannel);
+      realtimeManager.unregisterChannel(profileId, likesChannel);
 
       matchesChannel.unsubscribe();
       messagesChannel.unsubscribe();
@@ -962,12 +1006,12 @@ export default function Matches() {
                 </Text>
               ) : (
                 <View style={styles.likesBlurContainer}>
-                  <BlurView intensity={20} tint="dark" style={styles.likesBlur}>
+                  <SafeBlurView intensity={20} tint="dark" style={styles.likesBlur}>
                     <MaterialCommunityIcons name="lock" size={16} color="white" />
                     <Text style={styles.likesBlurText}>
                       {likesCount > 0 ? t('matches.upgradeTo', { count: likesCount }) : t('matches.upgradeToSee')}
                     </Text>
-                  </BlurView>
+                  </SafeBlurView>
                   <MaterialCommunityIcons name="crown" size={16} color="#FFD700" style={styles.premiumIcon} />
                 </View>
               )}
@@ -987,6 +1031,8 @@ export default function Matches() {
       {renderLikesCard()}
     </>
   ), [matches, likesCount, isPremium, t]);
+
+  const matchKeyExtractor = useCallback((item: Match) => item.id, []);
 
   const renderMatch = useCallback(({ item }: { item: Match }) => {
     return (
@@ -1146,7 +1192,7 @@ export default function Matches() {
       <FlatList
         data={matches}
         renderItem={renderMatch}
-        keyExtractor={(item) => item.id}
+        keyExtractor={matchKeyExtractor}
         ListHeaderComponent={listHeader}
         contentContainerStyle={styles.listContent}
         refreshControl={
@@ -1366,11 +1412,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     gap: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    // Use border instead of elevation on Android to avoid GPU overdraw during scroll
+    ...(Platform.OS === 'android'
+      ? { borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' }
+      : { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 }),
   },
   photoContainer: {
     position: 'relative',
@@ -1388,11 +1433,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 10,
     padding: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    ...(Platform.OS === 'android'
+      ? { borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }
+      : { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 }),
   },
   unreadDot: {
     position: 'absolute',

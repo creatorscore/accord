@@ -88,7 +88,7 @@ serve(async (req) => {
     }
 
     // Filter to only exclusively male-identifying users
-    const menOnlyGenders = ['Man', 'Trans Man'];
+    const menOnlyGenders = ['Man'];
     const targetProfiles = (straightMen || []).filter(profile => {
       if (!profile.gender || !Array.isArray(profile.gender)) return false;
       // Check if ALL genders are male-identifying

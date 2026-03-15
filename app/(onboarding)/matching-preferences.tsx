@@ -1,38 +1,37 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, StyleSheet, useColorScheme } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNotifications } from '@/contexts/NotificationContext';
 import { supabase } from '@/lib/supabase';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
+import { getGlobalStep } from '@/lib/onboarding-steps';
 import { formatDistanceSlider, DistanceUnit } from '@/lib/distance-utils';
-import { registerForPushNotifications, savePushToken, ensurePushTokenSaved } from '@/lib/notifications';
 import Slider from '@react-native-community/slider';
+import * as Haptics from 'expo-haptics';
+import { GENDER_PREF_OPTIONS, expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
+import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
+import OnboardingChips from '@/components/onboarding/OnboardingChips';
+import { useOnboardingDraft } from '@/hooks/useOnboardingDraft';
 
-const GENDER_OPTIONS = [
-  'Man',
-  'Woman',
-  'Non-binary',
-  'Trans Man',
-  'Trans Woman',
-  'Genderfluid',
-  'Genderqueer',
-  'Agender',
-  'Bigender',
-  'Two-Spirit',
-  'Intersex',
-  'Demigender',
-  'Neutrois',
-  'Questioning',
-  'Prefer not to say',
-  'Other',
-];
+interface MatchingPrefsDraft {
+  ageMin: number;
+  ageMax: number;
+  maxDistance: number;
+  distanceUnit: string;
+  willingToRelocate: boolean;
+  genderPreference: string[];
+}
 
 export default function MatchingPreferences() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
-  // Get push token from NotificationContext (already registered on login)
-  const { pushToken: contextPushToken, notificationsEnabled: contextNotificationsEnabled } = useNotifications();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const [subStep, setSubStep] = useState(0);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -42,17 +41,8 @@ export default function MatchingPreferences() {
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('miles');
   const [willingToRelocate, setWillingToRelocate] = useState(false);
   const [genderPreference, setGenderPreference] = useState<string[]>([]);
-  // Use context values as initial state, allow local override if user enables here
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [notificationToken, setNotificationToken] = useState<string | null>(null);
 
-  // Sync with context on mount
-  useEffect(() => {
-    if (contextPushToken) {
-      setNotificationToken(contextPushToken);
-      setNotificationsEnabled(true);
-    }
-  }, [contextPushToken]);
+  const { loadDraft, saveDraft, clearDraft } = useOnboardingDraft<MatchingPrefsDraft>(user?.id, 'matching-preferences');
 
   useEffect(() => {
     loadProfile();
@@ -71,7 +61,6 @@ export default function MatchingPreferences() {
       if (data) {
         setProfileId(data.id);
 
-        // Load existing preferences
         const { data: prefs, error: prefsError } = await supabase
           .from('preferences')
           .select('age_min, age_max, max_distance_miles, distance_unit, willing_to_relocate, gender_preference')
@@ -83,7 +72,6 @@ export default function MatchingPreferences() {
         }
 
         if (prefs) {
-          // Pre-fill form with existing data
           if (prefs.age_min) setAgeMin(prefs.age_min);
           if (prefs.age_max) setAgeMax(prefs.age_max);
           if (prefs.max_distance_miles) setMaxDistance(prefs.max_distance_miles);
@@ -92,387 +80,299 @@ export default function MatchingPreferences() {
             setWillingToRelocate(prefs.willing_to_relocate);
           }
           if (prefs.gender_preference) {
-            setGenderPreference(Array.isArray(prefs.gender_preference) ? prefs.gender_preference : [prefs.gender_preference]);
+            const raw = Array.isArray(prefs.gender_preference) ? prefs.gender_preference : [prefs.gender_preference];
+            setGenderPreference(collapseGenderPreference(raw));
           }
         }
+      }
+
+      // Overlay draft on top of DB data
+      const draft = await loadDraft();
+      if (draft) {
+        const d = draft.data;
+        if (d.ageMin) setAgeMin(d.ageMin);
+        if (d.ageMax) setAgeMax(d.ageMax);
+        if (d.maxDistance) setMaxDistance(d.maxDistance);
+        if (d.distanceUnit) setDistanceUnit(d.distanceUnit as DistanceUnit);
+        if (d.willingToRelocate !== undefined) setWillingToRelocate(d.willingToRelocate);
+        if (d.genderPreference?.length) setGenderPreference(d.genderPreference);
+        setSubStep(draft.subStep);
       }
     } catch (error: any) {
       console.error('Error loading profile:', error);
     }
   };
 
-  const toggleGenderPreference = (gender: string) => {
-    if (genderPreference.includes(gender)) {
-      setGenderPreference(genderPreference.filter((g) => g !== gender));
-    } else {
-      setGenderPreference([...genderPreference, gender]);
-    }
-  };
-
-  const handleEnableNotifications = async () => {
-    try {
-      const token = await registerForPushNotifications();
-      if (token) {
-        setNotificationToken(token);
-        setNotificationsEnabled(true);
-        Alert.alert(
-          'Notifications Enabled! 🎉',
-          'You\'ll now receive updates about matches, messages, and activity.'
-        );
-      } else {
-        Alert.alert(
-          'Notifications Not Available',
-          'Notifications require a physical device. You can enable them later in Settings.'
-        );
-      }
-    } catch (error: any) {
-      console.error('Error enabling notifications:', error);
-      Alert.alert(
-        'Permission Denied',
-        'Please enable notifications in your device settings to receive match alerts.'
-      );
-    }
-  };
-
-  const handleFinish = async () => {
+  const handleSaveAndContinue = async () => {
     if (genderPreference.length === 0) {
-      Alert.alert('Required', 'Please select at least one gender preference');
+      Alert.alert(t('common.required'), t('onboarding.matchingPreferences.selectGenderPreference'));
       return;
     }
 
     if (!profileId) {
-      Alert.alert('Error', 'Profile not found. Please start over.');
+      Alert.alert(t('common.error'), t('onboarding.common.profileNotFound'));
       return;
     }
 
     try {
       setLoading(true);
 
-      // Verify user has at least 2 photos before completing profile
-      const { data: photos, error: photosError } = await supabase
-        .from('photos')
-        .select('id')
-        .eq('profile_id', profileId);
-
-      if (photosError) throw photosError;
-
-      if (!photos || photos.length < 2) {
-        Alert.alert(
-          'Photos Required',
-          'Please add at least 2 photos to complete your profile.',
-          [{ text: 'OK', onPress: () => router.push('/(onboarding)/add-photos') }]
-        );
-        setLoading(false);
-        return;
-      }
-
-      // Update preferences
       const { error: prefsError } = await supabase
         .from('preferences')
-        .update({
+        .upsert({
+          profile_id: profileId,
           age_min: ageMin,
           age_max: ageMax,
           max_distance_miles: maxDistance,
           distance_unit: distanceUnit,
           willing_to_relocate: willingToRelocate,
-          gender_preference: genderPreference,
-        })
-        .eq('profile_id', profileId);
+          gender_preference: expandGenderPreference(genderPreference),
+        }, { onConflict: 'profile_id' });
 
       if (prefsError) throw prefsError;
 
-      // Mark profile as complete
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
-          profile_complete: true,
           onboarding_step: 8,
         })
         .eq('id', profileId);
 
       if (profileError) throw profileError;
 
-      // ALWAYS try to save push token at end of onboarding
-      // This is critical for Android users who might have skipped the notification prompt
-      if (user?.id) {
-        try {
-          // First, try to use existing token (from context or local state)
-          let tokenToSave = notificationToken || contextPushToken;
-
-          // If no token exists, try to register one now
-          if (!tokenToSave) {
-            tokenToSave = await registerForPushNotifications();
-          }
-
-          if (tokenToSave) {
-            // Use ensurePushTokenSaved which handles both profiles and device_tokens tables
-            const saved = await ensurePushTokenSaved(user.id, tokenToSave);
-            if (!saved) {
-              console.warn('Push token save returned false - will retry via NotificationContext');
-            }
-          }
-        } catch (pushError) {
-          console.warn('Push notification save failed:', pushError);
-          // Don't block onboarding completion for push notification failures
-        }
-      }
-
-      // Navigate to main app
-      router.replace('/(tabs)/discover');
+      await clearDraft();
+      router.push('/(onboarding)/notifications');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save preferences');
+      Alert.alert(t('common.error'), error.message || t('onboarding.matchingPreferences.saveError'));
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <ScrollView className="flex-1 bg-white dark:bg-gray-900">
-      <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
-        {/* Progress */}
-        <View className="mb-8">
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 8 of 8</Text>
-            <Text className="text-sm text-lavender-500 font-bold">100%</Text>
-          </View>
-          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <View
-              className="h-3 bg-lavender-500 rounded-full"
-              style={{ width: '100%' }}
-            />
-          </View>
-        </View>
+  const buildDraftSnapshot = (): MatchingPrefsDraft => ({
+    ageMin, ageMax, maxDistance, distanceUnit, willingToRelocate, genderPreference,
+  });
 
-        {/* Header */}
-        <View className="mb-8">
-          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
-            Find your match 🔍
-          </Text>
-          <Text className="text-gray-600 dark:text-gray-400 text-lg">
-            Set your preferences to find compatible partners
-          </Text>
-        </View>
+  const handleBack = () => {
+    if (subStep === 0) {
+      goToPreviousOnboardingStep('/(onboarding)/matching-preferences');
+    } else {
+      const prevStep = subStep - 1;
+      saveDraft(prevStep, buildDraftSnapshot());
+      setSubStep(prevStep);
+    }
+  };
 
-        {/* Form */}
-        <View className="space-y-8">
-          {/* Age Range */}
+  const handleContinue = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (subStep < 2) {
+      const nextStep = subStep + 1;
+      saveDraft(nextStep, buildDraftSnapshot());
+      setSubStep(nextStep);
+    } else {
+      handleSaveAndContinue();
+    }
+  };
+
+  const getStepConfig = () => {
+    switch (subStep) {
+      case 0: return { title: t('onboarding.matchingPreferences.ageTitle'), subtitle: t('onboarding.matchingPreferences.ageSubtitle') };
+      case 1: return { title: t('onboarding.matchingPreferences.distanceTitle'), subtitle: t('onboarding.matchingPreferences.distanceSubtitle') };
+      case 2: return { title: t('onboarding.matchingPreferences.genderTitle'), subtitle: t('onboarding.matchingPreferences.genderSubtitle') };
+      default: return { title: "", subtitle: "" };
+    }
+  };
+
+  const { title, subtitle } = getStepConfig();
+
+  const renderContent = () => {
+    switch (subStep) {
+      case 0:
+        return (
           <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Age Range: {ageMin} - {ageMax}
+            <Text style={[styles.rangeLabel, { color: isDark ? '#F5F5F7' : '#1F2937' }]}>
+              {t('onboarding.matchingPreferences.lookingForAges', { min: ageMin, max: ageMax })}
             </Text>
-            <View className="space-y-4">
-              <View>
-                <Text className="text-xs text-gray-600 dark:text-gray-400 mb-2">Minimum Age: {ageMin}</Text>
-                <Slider
-                  minimumValue={18}
-                  maximumValue={80}
-                  step={1}
-                  value={ageMin}
-                  onValueChange={setAgeMin}
-                  minimumTrackTintColor="#A08AB7"
-                  maximumTrackTintColor="#D1D5DB"
-                />
-              </View>
-              <View>
-                <Text className="text-xs text-gray-600 dark:text-gray-400 mb-2">Maximum Age: {ageMax}</Text>
-                <Slider
-                  minimumValue={18}
-                  maximumValue={80}
-                  step={1}
-                  value={ageMax}
-                  onValueChange={setAgeMax}
-                  minimumTrackTintColor="#A08AB7"
-                  maximumTrackTintColor="#D1D5DB"
-                />
-              </View>
+
+            <View style={styles.sliderSection}>
+              <Text style={[styles.sliderLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>{t('onboarding.matchingPreferences.minAge', { age: ageMin })}</Text>
+              <Slider
+                minimumValue={18}
+                maximumValue={80}
+                step={1}
+                value={ageMin}
+                onValueChange={setAgeMin}
+                minimumTrackTintColor="#A08AB7"
+                maximumTrackTintColor={isDark ? '#374151' : '#D1D5DB'}
+                thumbTintColor="#A08AB7"
+              />
+            </View>
+
+            <View style={styles.sliderSection}>
+              <Text style={[styles.sliderLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>{t('onboarding.matchingPreferences.maxAge', { age: ageMax })}</Text>
+              <Slider
+                minimumValue={18}
+                maximumValue={80}
+                step={1}
+                value={ageMax}
+                onValueChange={setAgeMax}
+                minimumTrackTintColor="#A08AB7"
+                maximumTrackTintColor={isDark ? '#374151' : '#D1D5DB'}
+                thumbTintColor="#A08AB7"
+              />
             </View>
           </View>
+        );
 
-          {/* Distance Unit Toggle */}
+      case 1:
+        return (
           <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Distance Unit
-            </Text>
-            <View className="flex-row gap-2">
-              <TouchableOpacity
-                className={`flex-1 py-3 rounded-xl border ${
-                  distanceUnit === 'miles'
-                    ? 'bg-lavender-500 border-lavender-500'
-                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                }`}
-                onPress={() => setDistanceUnit('miles')}
-              >
-                <Text
-                  className={`text-center font-medium ${
-                    distanceUnit === 'miles' ? 'text-white' : 'text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  Miles
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className={`flex-1 py-3 rounded-xl border ${
-                  distanceUnit === 'km'
-                    ? 'bg-lavender-500 border-lavender-500'
-                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                }`}
-                onPress={() => setDistanceUnit('km')}
-              >
-                <Text
-                  className={`text-center font-medium ${
-                    distanceUnit === 'km' ? 'text-white' : 'text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  Kilometers
-                </Text>
-              </TouchableOpacity>
+            {/* Distance Unit Toggle */}
+            <View style={styles.unitToggle}>
+              {[
+                { value: 'miles' as DistanceUnit, label: t('onboarding.matchingPreferences.miles') },
+                { value: 'km' as DistanceUnit, label: t('onboarding.matchingPreferences.kilometers') },
+              ].map((option, i) => {
+                const selected = distanceUnit === option.value;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[styles.optionRow, i < 1 && { marginBottom: 4 }]}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setDistanceUnit(option.value); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.optionRowText, { color: selected ? '#A08AB7' : isDark ? '#E5E7EB' : '#374151' }]}>
+                      {option.label}
+                    </Text>
+                    {selected && (
+                      <MaterialCommunityIcons name="check" size={22} color="#A08AB7" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          </View>
 
-          {/* Distance */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Maximum Distance: {formatDistanceSlider(maxDistance, distanceUnit)}
-            </Text>
-            <Slider
-              minimumValue={10}
-              maximumValue={500}
-              step={10}
-              value={maxDistance}
-              onValueChange={setMaxDistance}
-              minimumTrackTintColor="#A08AB7"
-              maximumTrackTintColor="#D1D5DB"
-            />
-          </View>
-
-          {/* Willing to Relocate */}
-          <View>
-            <TouchableOpacity
-              className="flex-row items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800 rounded-xl"
-              onPress={() => setWillingToRelocate(!willingToRelocate)}
-            >
-              <Text className="text-gray-700 dark:text-gray-300 font-medium">
-                Willing to relocate for the right match
+            {/* Distance Slider */}
+            <View style={styles.sliderSection}>
+              <Text style={[styles.sliderLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                {t('onboarding.matchingPreferences.maxDistance', { distance: formatDistanceSlider(maxDistance, distanceUnit) })}
               </Text>
-              <View
-                className={`w-12 h-7 rounded-full ${
-                  willingToRelocate ? 'bg-lavender-500' : 'bg-gray-300 dark:bg-gray-600'
-                }`}
-              >
-                <View
-                  className={`w-5 h-5 rounded-full bg-white mt-1 ${
-                    willingToRelocate ? 'ml-6' : 'ml-1'
-                  }`}
-                />
+              <Slider
+                minimumValue={10}
+                maximumValue={1000}
+                step={10}
+                value={maxDistance}
+                onValueChange={setMaxDistance}
+                minimumTrackTintColor="#A08AB7"
+                maximumTrackTintColor={isDark ? '#374151' : '#D1D5DB'}
+                thumbTintColor="#A08AB7"
+              />
+            </View>
+
+            {/* Willing to Relocate */}
+            <TouchableOpacity
+              style={[styles.relocateRow, { backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA' }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setWillingToRelocate(!willingToRelocate); }}
+            >
+              <Text style={[styles.relocateText, { color: isDark ? '#E5E7EB' : '#374151' }]}>
+                {t('onboarding.matchingPreferences.willingToRelocate')}
+              </Text>
+              <View style={[styles.toggle, { backgroundColor: willingToRelocate ? '#A08AB7' : isDark ? '#374151' : '#D1D5DB' }]}>
+                <View style={[styles.toggleThumb, { marginLeft: willingToRelocate ? 18 : 2 }]} />
               </View>
             </TouchableOpacity>
           </View>
+        );
 
-          {/* Gender Preference */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Interested in (select all that apply)
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {GENDER_OPTIONS.map((gender) => (
-                <TouchableOpacity
-                  key={gender}
-                  className={`px-4 py-2 rounded-full border ${
-                    genderPreference.includes(gender)
-                      ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => toggleGenderPreference(gender)}
-                >
-                  <Text
-                    className={`${
-                      genderPreference.includes(gender)
-                        ? 'text-white'
-                        : 'text-gray-700 dark:text-gray-300'
-                    } font-medium`}
-                  >
-                    {gender}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Notification Permission */}
-          <View className="mt-6">
-            <View className={`border-2 rounded-2xl p-5 ${
-              (notificationsEnabled || contextNotificationsEnabled) ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500' : 'bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-            }`}>
-              <View className="flex-row items-center mb-3">
-                <Text className="text-2xl mr-2">🔔</Text>
-                <Text className="text-xl font-bold text-gray-900 dark:text-white flex-1">
-                  Stay in the Loop
-                </Text>
-                {(notificationsEnabled || contextNotificationsEnabled) && (
-                  <View className="bg-lavender-500 px-3 py-1 rounded-full">
-                    <Text className="text-white text-xs font-bold">Enabled</Text>
-                  </View>
-                )}
-              </View>
-              <Text className="text-gray-700 dark:text-gray-300 mb-4 leading-6">
-                Get instant alerts when you match, receive messages, or someone likes your profile. Don't miss your perfect match!
-              </Text>
-              {!(notificationsEnabled || contextNotificationsEnabled) ? (
-                <TouchableOpacity
-                  className="bg-lavender-500 py-4 rounded-xl"
-                  onPress={handleEnableNotifications}
-                >
-                  <Text className="text-white text-center font-semibold text-base">
-                    Enable Notifications
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <View className="flex-row items-center justify-center py-2">
-                  <Text className="text-lavender-700 dark:text-lavender-400 font-semibold">✓ You're all set!</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Success Message */}
-        <View className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-2xl p-4 my-8">
-          <Text className="text-green-900 dark:text-green-300 font-semibold mb-2">Almost There!</Text>
-          <Text className="text-green-800 dark:text-green-400 text-sm">
-            You're all set to start finding compatible partners. You can always update your
-            preferences later in Settings.
-          </Text>
-        </View>
-
-        {/* Buttons */}
-        <View className="flex-row gap-3">
-          <TouchableOpacity
-            className="flex-1 py-4 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-            onPress={() => goToPreviousOnboardingStep('/(onboarding)/matching-preferences')}
-            disabled={loading}
-          >
-            <Text className="text-gray-700 dark:text-gray-300 text-center font-semibold text-lg">Back</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className={`flex-1 py-4 rounded-full ${
-              loading || genderPreference.length === 0 ? 'bg-gray-400 dark:bg-gray-600' : 'bg-lavender-500'
-            }`}
-            style={{
-              borderRadius: 9999,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingVertical: 16,
+      case 2:
+        return (
+          <OnboardingChips
+            options={GENDER_PREF_OPTIONS.map(g => ({ label: g, value: g }))}
+            value={genderPreference}
+            onChange={(selected) => {
+              const lastSelected = selected[selected.length - 1];
+              if (lastSelected === 'Everyone') {
+                setGenderPreference(['Everyone']);
+              } else {
+                setGenderPreference(selected.filter((s: string) => s !== 'Everyone'));
+              }
             }}
-            onPress={handleFinish}
-            disabled={loading || genderPreference.length === 0}
-          >
-            <Text className="text-white text-center font-semibold text-lg">
-              {loading ? 'Finishing...' : 'Start Matching!'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScrollView>
+            multiSelect
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <OnboardingLayout
+      currentStep={getGlobalStep('matching-preferences', subStep)}
+      title={title}
+      subtitle={subtitle}
+      onBack={handleBack}
+      onContinue={handleContinue}
+      continueDisabled={loading || (subStep === 2 && genderPreference.length === 0)}
+      continueLabel={t('common.continue')}
+      currentRoute="/(onboarding)/matching-preferences"
+    >
+      {renderContent()}
+    </OnboardingLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  rangeLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  sliderSection: {
+    marginBottom: 24,
+  },
+  sliderLabel: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  unitToggle: {
+    marginBottom: 24,
+  },
+  optionRow: {
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  optionRowText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  relocateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 14,
+  },
+  relocateText: {
+    fontSize: 15,
+    fontWeight: '500',
+    flex: 1,
+    marginRight: 12,
+  },
+  toggle: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+  },
+  toggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+  },
+});

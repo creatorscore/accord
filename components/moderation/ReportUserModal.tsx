@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { optimizeImage, uriToArrayBuffer } from '@/lib/image-optimization';
+import { useTranslation } from 'react-i18next';
 
 interface ReportUserModalProps {
   visible: boolean;
@@ -27,62 +28,16 @@ interface ReportUserModalProps {
   reportedProfileName: string;
 }
 
-const REPORT_REASONS = [
-  {
-    id: 'blackmail',
-    label: 'Blackmail / Screenshot Sharing',
-    icon: 'shield-alert',
-    description: 'Someone shared your watermarked profile screenshot',
-    requiresEvidence: true,
-  },
-  {
-    id: 'inappropriate_content',
-    label: 'Inappropriate Content',
-    icon: 'alert-circle',
-    description: 'Photos, bio, or messages contain inappropriate content',
-  },
-  {
-    id: 'harassment',
-    label: 'Harassment',
-    icon: 'account-alert',
-    description: 'Threatening, harassing, or bullying behavior',
-  },
-  {
-    id: 'fake_profile',
-    label: 'Fake Profile',
-    icon: 'account-remove',
-    description: 'Profile appears to be fake or impersonating someone',
-  },
-  {
-    id: 'scam',
-    label: 'Scam or Fraud',
-    icon: 'cash-remove',
-    description: 'Asking for money or appears to be a scam',
-  },
-  {
-    id: 'spam',
-    label: 'Spam',
-    icon: 'message-alert',
-    description: 'Sending spam or promotional messages',
-  },
-  {
-    id: 'underage',
-    label: 'Underage User',
-    icon: 'shield-alert',
-    description: 'User appears to be under 18',
-  },
-  {
-    id: 'hate_speech',
-    label: 'Hate Speech',
-    icon: 'thumb-down',
-    description: 'Discriminatory or hateful language',
-  },
-  {
-    id: 'other',
-    label: 'Other',
-    icon: 'dots-horizontal',
-    description: 'Other reason not listed above',
-  },
+const REPORT_REASON_IDS = [
+  { id: 'blackmail', icon: 'shield-alert', labelKey: 'blackmail', descKey: 'blackmailDescription', requiresEvidence: true },
+  { id: 'inappropriate_content', icon: 'alert-circle', labelKey: 'inappropriateContent', descKey: 'inappropriateContentDescription' },
+  { id: 'harassment', icon: 'account-alert', labelKey: 'harassment', descKey: 'harassmentDescription' },
+  { id: 'fake_profile', icon: 'account-remove', labelKey: 'fakeProfile', descKey: 'fakeProfileDescription' },
+  { id: 'scam', icon: 'cash-remove', labelKey: 'scam', descKey: 'scamDescription' },
+  { id: 'spam', icon: 'message-alert', labelKey: 'spam', descKey: 'spamDescription' },
+  { id: 'underage', icon: 'shield-alert', labelKey: 'underage', descKey: 'underageDescription' },
+  { id: 'hate_speech', icon: 'thumb-down', labelKey: 'hateSpeech', descKey: 'hateSpeechDescription' },
+  { id: 'other', icon: 'dots-horizontal', labelKey: 'other', descKey: 'otherDescription' },
 ];
 
 export default function ReportUserModal({
@@ -91,6 +46,7 @@ export default function ReportUserModal({
   reportedProfileId,
   reportedProfileName,
 }: ReportUserModalProps) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
@@ -103,7 +59,7 @@ export default function ReportUserModal({
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please allow access to your photo library to upload evidence.');
+        Alert.alert(t('moderation.report.permissionRequired'), t('moderation.report.permissionMessage'));
         return;
       }
 
@@ -139,14 +95,11 @@ export default function ReportUserModal({
 
             if (uploadError) throw uploadError;
 
-            const { data: { publicUrl } } = supabase.storage
-              .from('reports')
-              .getPublicUrl(filePath);
-
-            uploadedUrls.push(publicUrl);
+            // Store the storage path (buckets are private)
+            uploadedUrls.push(filePath);
           } catch (error: any) {
             console.error('Error uploading photo:', error);
-            Alert.alert('Upload Failed', 'Failed to upload one or more photos. Please try again.');
+            Alert.alert(t('moderation.report.uploadFailed'), t('moderation.report.uploadFailedMessage'));
           }
         }
 
@@ -155,7 +108,7 @@ export default function ReportUserModal({
       }
     } catch (error: any) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to select photos. Please try again.');
+      Alert.alert(t('common.error'), t('moderation.report.selectPhotoError'));
       setUploadingPhoto(false);
     }
   };
@@ -166,31 +119,31 @@ export default function ReportUserModal({
 
   const handleSubmit = async () => {
     if (!selectedReason) {
-      Alert.alert('Error', 'Please select a reason for reporting');
+      Alert.alert(t('common.error'), t('moderation.report.selectReasonError'));
       return;
     }
 
     // Require explanation for all reports
     if (!details.trim() || details.trim().length < 20) {
       Alert.alert(
-        'Explanation Required',
-        'Please provide a detailed explanation (at least 20 characters) of why you are reporting this user.'
+        t('moderation.report.explanationRequired'),
+        t('moderation.report.explanationRequiredMessage')
       );
       return;
     }
 
     // Check if blackmail report requires evidence
-    const reason = REPORT_REASONS.find(r => r.id === selectedReason);
+    const reason = REPORT_REASON_IDS.find(r => r.id === selectedReason);
     if (reason?.requiresEvidence && evidencePhotos.length === 0) {
       Alert.alert(
-        'Evidence Required',
-        'Blackmail reports require screenshot evidence. Please upload at least one photo showing the watermark.'
+        t('moderation.report.evidenceRequired'),
+        t('moderation.report.evidenceRequiredMessage')
       );
       return;
     }
 
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to report a user');
+      Alert.alert(t('common.error'), t('moderation.report.mustBeLoggedIn'));
       return;
     }
 
@@ -221,11 +174,11 @@ export default function ReportUserModal({
       if (reportError) throw reportError;
 
       Alert.alert(
-        'Report Submitted',
-        'Thank you for helping keep Accord safe. Our moderation team will review this report.',
+        t('moderation.report.submitted'),
+        t('moderation.report.submittedMessage'),
         [
           {
-            text: 'OK',
+            text: t('common.ok'),
             onPress: () => {
               setSelectedReason(null);
               setDetails('');
@@ -237,7 +190,7 @@ export default function ReportUserModal({
       );
     } catch (error: any) {
       console.error('Error submitting report:', error);
-      Alert.alert('Error', 'Failed to submit report. Please try again.');
+      Alert.alert(t('common.error'), t('moderation.report.submitError'));
     } finally {
       setLoading(false);
     }
@@ -266,7 +219,7 @@ export default function ReportUserModal({
           <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Report {reportedProfileName}</Text>
+            <Text style={styles.title}>{t('moderation.report.title', { name: reportedProfileName })}</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
             </TouchableOpacity>
@@ -274,11 +227,11 @@ export default function ReportUserModal({
 
           <ScrollView style={styles.content}>
             <Text style={styles.subtitle}>
-              Please select the reason you're reporting this user:
+              {t('moderation.report.subtitle')}
             </Text>
 
             {/* Report Reasons */}
-            {REPORT_REASONS.map((reason) => (
+            {REPORT_REASON_IDS.map((reason) => (
               <TouchableOpacity
                 key={reason.id}
                 style={[
@@ -299,9 +252,9 @@ export default function ReportUserModal({
                     styles.reasonLabel,
                     selectedReason === reason.id && styles.reasonLabelSelected
                   ]}>
-                    {reason.label}
+                    {t(`moderation.report.reasons.${reason.labelKey}`)}
                   </Text>
-                  <Text style={styles.reasonDescription}>{reason.description}</Text>
+                  <Text style={styles.reasonDescription}>{t(`moderation.report.reasons.${reason.descKey}`)}</Text>
                 </View>
                 {selectedReason === reason.id && (
                   <MaterialCommunityIcons
@@ -318,7 +271,7 @@ export default function ReportUserModal({
               <View style={styles.evidenceSection}>
                 <View style={styles.evidenceHeader}>
                   <Text style={styles.detailsLabel}>
-                    Evidence Photos <Text style={{ color: '#EF4444' }}>*</Text>
+                    {t('moderation.report.evidencePhotos')} <Text style={{ color: '#EF4444' }}>*</Text>
                   </Text>
                   <TouchableOpacity
                     style={styles.uploadButton}
@@ -330,7 +283,7 @@ export default function ReportUserModal({
                     ) : (
                       <>
                         <MaterialCommunityIcons name="camera-plus" size={20} color="#9B87CE" />
-                        <Text style={styles.uploadButtonText}>Upload</Text>
+                        <Text style={styles.uploadButtonText}>{t('moderation.report.upload')}</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -339,7 +292,7 @@ export default function ReportUserModal({
                 <View style={styles.evidenceInfo}>
                   <MaterialCommunityIcons name="information" size={16} color="#3B82F6" />
                   <Text style={styles.evidenceInfoText}>
-                    Upload screenshots showing your profile with watermark visible. Look for faint text in corners showing user ID and timestamp.
+                    {t('moderation.report.evidenceInfo')}
                   </Text>
                 </View>
 
@@ -364,17 +317,17 @@ export default function ReportUserModal({
             {/* Additional Details */}
             <View style={styles.detailsSection}>
               <Text style={styles.detailsLabel}>
-                Explain why you're reporting <Text style={{ color: '#EF4444' }}>*</Text>
+                {t('moderation.report.explainWhy')} <Text style={{ color: '#EF4444' }}>*</Text>
               </Text>
               <Text style={styles.detailsHint}>
-                Please describe the specific behavior or content that violates our guidelines.
+                {t('moderation.report.explainHint')}
               </Text>
               <TextInput
                 style={[
                   styles.detailsInput,
                   details.trim().length > 0 && details.trim().length < 20 && styles.detailsInputError
                 ]}
-                placeholder="What did this user do? Be specific - include dates, messages, or behavior details..."
+                placeholder={t('moderation.report.explainPlaceholder')}
                 value={details}
                 onChangeText={setDetails}
                 multiline
@@ -387,7 +340,9 @@ export default function ReportUserModal({
                   styles.characterCount,
                   details.trim().length > 0 && details.trim().length < 20 && { color: '#EF4444' }
                 ]}>
-                  {details.trim().length < 20 ? `${20 - details.trim().length} more characters needed` : `${details.length}/500`}
+                  {details.trim().length < 20
+                    ? t('moderation.report.charsNeeded', { count: 20 - details.trim().length })
+                    : t('moderation.report.charsCount', { count: details.length })}
                 </Text>
               </View>
             </View>
@@ -396,7 +351,7 @@ export default function ReportUserModal({
             <View style={styles.noticeBox}>
               <MaterialCommunityIcons name="shield-check" size={20} color="#9B87CE" />
               <Text style={styles.noticeText}>
-                Your report is anonymous. The reported user will not be notified.
+                {t('moderation.report.privacyNotice')}
               </Text>
             </View>
           </ScrollView>
@@ -408,7 +363,7 @@ export default function ReportUserModal({
               onPress={handleClose}
               disabled={loading}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -422,7 +377,7 @@ export default function ReportUserModal({
               {loading ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text style={styles.submitButtonText}>Submit Report</Text>
+                <Text style={styles.submitButtonText}>{t('moderation.report.submitReport')}</Text>
               )}
             </TouchableOpacity>
           </View>

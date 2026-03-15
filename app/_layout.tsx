@@ -1,7 +1,7 @@
 // Import WebCrypto polyfill FIRST (enables crypto.subtle in React Native)
 import 'expo-standard-web-crypto';
 
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { I18nManager, Platform, processColor, View, AppState } from 'react-native';
@@ -22,7 +22,8 @@ import { ActivityTracker } from '@/components/shared/ActivityTracker';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { loadSavedLanguage, isRTL, isI18nReady } from '@/lib/i18n';
 import { initializeSentry } from '@/lib/sentry';
-import { initializePostHog, trackAppLifecycle } from '@/lib/analytics';
+import { getPostHogClient, trackAppLifecycle, flushPostHog } from '@/lib/analytics';
+import { PostHogProvider } from 'posthog-react-native';
 import { configureGoogleSignIn } from '@/lib/auth-providers';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import { useColorScheme, useInitializeColorScheme } from '@/lib/useColorScheme';
@@ -38,6 +39,7 @@ import '../global.css';
 const ScreenCaptureOverlay = lazy(() => import('@/components/shared/ScreenCaptureOverlay').then(m => ({ default: m.ScreenCaptureOverlay })));
 const AppUpdateChecker = lazy(() => import('@/components/AppUpdateChecker'));
 const WhatsNewModal = lazy(() => import('@/components/WhatsNewModal'));
+const GenderConfirmationModal = lazy(() => import('@/components/GenderConfirmationModal'));
 
 // Prevent splash screen from hiding until fonts are loaded
 SplashScreenExpo.preventAutoHideAsync();
@@ -51,7 +53,13 @@ SplashScreenExpo.preventAutoHideAsync();
  */
 function BottomBarBackground() {
   const insets = useSafeAreaInsets();
-  if (insets.bottom === 0) return null;
+  // On Android, always render with a fallback height even when insets.bottom is 0
+  // (e.g. 3-button nav or initial render). This prevents the white React Navigation
+  // background from bleeding through the transparent system nav bar.
+  const height = Platform.OS === 'android'
+    ? Math.max(insets.bottom, 48)
+    : insets.bottom;
+  if (height === 0) return null;
   return (
     <View
       style={{
@@ -59,9 +67,10 @@ function BottomBarBackground() {
         bottom: 0,
         left: 0,
         right: 0,
-        height: insets.bottom,
+        height,
         backgroundColor: '#0A0A0B',
         zIndex: 9999,
+        elevation: 9999, // Native z-ordering on Android (zIndex is JS-only)
       }}
       pointerEvents="none"
     />
@@ -77,6 +86,9 @@ export default function RootLayout() {
   // i18n is now initialized synchronously at module load - no blocking!
   const [i18nInitialized, setI18nInitialized] = useState(isI18nReady());
   const [splashAnimationDone, setSplashAnimationDone] = useState(false);
+
+  // Initialize PostHog client synchronously (memoized so it's created once)
+  const posthogClient = useMemo(() => getPostHogClient(), []);
 
   // Load custom fonts (Plus Jakarta Sans + Inter)
   const [fontsLoaded, fontError] = useFonts(fontAssets);
@@ -97,11 +109,9 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  // Force Android navigation bar to dark (#0A0A0B) on EVERY foreground event.
-  // The native plugin only sets this in onCreate(), but Android resets to transparent
-  // on onResume() because react-native-edge-to-edge's theme enforces transparency.
-  // We bypass expo-navigation-bar's JS guard (which blocks calls when edge-to-edge
-  // is enabled) by calling the native module directly.
+  // Force Android navigation bar to dark (#0A0A0B) on mount, foreground, AND
+  // color scheme changes. react-native-edge-to-edge may reset the nav bar color
+  // when the theme changes, so we must re-apply on every colorScheme transition.
   useEffect(() => {
     const setAndroidNavBarDark = () => {
       if (Platform.OS !== 'android') return;
@@ -116,18 +126,21 @@ export default function RootLayout() {
       }
     };
 
-    // Apply immediately on mount
+    // Apply immediately on mount and on every colorScheme change
     setAndroidNavBarDark();
 
     // Re-apply every time the app comes back to foreground
+    // Also flush PostHog events when app goes to background
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         setAndroidNavBarDark();
+      } else if (state === 'background') {
+        flushPostHog();
       }
     });
 
     return () => subscription.remove();
-  }, []);
+  }, [colorScheme]);
 
   useEffect(() => {
     // PERFORMANCE: All initialization is now non-blocking for faster cold start
@@ -155,15 +168,10 @@ export default function RootLayout() {
       }
     }).catch(console.error);
 
-    // Initialize analytics in background (don't await)
-    initializePostHog().catch(err => {
-      console.error('PostHog initialization error:', err);
-    });
-
     // Configure Google Sign-In for native authentication
     configureGoogleSignIn();
 
-    // Track app lifecycle in background
+    // Track app lifecycle (PostHog client is created synchronously by getPostHogClient)
     AsyncStorage.getItem('has_launched_before').then(hasLaunchedBefore => {
       const isFirstLaunch = !hasLaunchedBefore;
 
@@ -196,6 +204,7 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0A0A0B' }} onLayout={onLayoutRootView}>
+        <PostHogProvider client={posthogClient} autocapture>
         <BottomSheetModalProvider>
         <ThemeProvider value={NAV_THEME[colorScheme]}>
             <AuthProvider>
@@ -233,6 +242,13 @@ export default function RootLayout() {
                           </Suspense>
                         )}
 
+                        {/* One-time gender confirmation for migrated users */}
+                        {!showSplash && (
+                          <Suspense fallback={null}>
+                            <GenderConfirmationModal />
+                          </Suspense>
+                        )}
+
                         {/* Overlay splash screen while initializing */}
                         {showSplash && (
                           <SplashScreen onFinish={() => setSplashAnimationDone(true)} />
@@ -256,6 +272,7 @@ export default function RootLayout() {
             </AuthProvider>
         </ThemeProvider>
         </BottomSheetModalProvider>
+        </PostHogProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>
   );

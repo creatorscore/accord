@@ -20,7 +20,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import { SafeBlurView } from '@/components/shared/SafeBlurView';
 
 const { width, height } = Dimensions.get('window');
 
@@ -106,7 +106,7 @@ export default function MatchCelebrationModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <BlurView intensity={30} style={styles.container}>
+      <SafeBlurView intensity={30} style={styles.container}>
         <LinearGradient
           colors={['rgba(160, 138, 183, 0.95)', 'rgba(128, 100, 162, 0.95)']}
           style={styles.gradient}
@@ -161,7 +161,7 @@ export default function MatchCelebrationModal({
             </TouchableOpacity>
           </Animated.View>
         </LinearGradient>
-      </BlurView>
+      </SafeBlurView>
     </Modal>
   );
 }

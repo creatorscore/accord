@@ -224,6 +224,16 @@ export const initializeSentry = () => {
           return null;
         }
 
+        // Drop Yoga layout engine native crashes — facebook::yoga::Node internal errors
+        if (errorType.includes('facebook::yoga::')) {
+          return null;
+        }
+
+        // Drop iOS slider/EventEmitter EXC_BAD_ACCESS — native RN component crash
+        if (errorType === 'EXC_BAD_ACCESS' && errorMessage.includes('sliderTouchEnd')) {
+          return null;
+        }
+
         // Drop "navigate before Root Layout" — Expo Router timing race on cold start
         if (errorMessage.includes('Attempted to navigate before mounting the Root Layout')) {
           return null;
@@ -232,6 +242,35 @@ export const initializeSentry = () => {
         // Drop ExpoFontLoader crashes — font file empty/corrupt on budget devices (storage issue)
         if (errorMessage.includes('ExpoFontLoader.loadAsync') || errorMessage.includes('Font file for')) {
           return null;
+        }
+
+        // Drop PostHog file I/O errors — analytics persistence failure on low-end devices
+        // PostHog SDK writes .posthog-rn.json via ExponentFileSystem; EIO on budget devices
+        if (errorMessage.includes('ExponentFileSystem.writeAsStringAsync') &&
+            errorMessage.includes('.posthog')) {
+          return null;
+        }
+
+        // Drop Glide CallbackException — image loader native crash, not actionable from JS
+        if (errorType === 'CallbackException' && errorMessage.includes('non-Glide code')) {
+          return null;
+        }
+
+        // Drop FileNotFoundException in BitmapCroppingWorkerJob — expo-image-picker native crop crash
+        // Happens on low-storage devices when the crop output file can't be written
+        if (errorType === 'FileNotFoundException' &&
+            (errorMessage.includes('open failed: ENOENT') || errorMessage.includes('open failed: EIO'))) {
+          const allFrames = (event.exception?.values || []).flatMap(
+            (v: any) => v?.stacktrace?.frames || []
+          );
+          const isCropCrash = allFrames.some(
+            (f: any) => f.function?.includes?.('BitmapCroppingWorkerJob') ||
+                         f.function?.includes?.('writeBitmapToUri') ||
+                         f.module?.includes?.('canhub.cropper')
+          );
+          if (isCropCrash) {
+            return null;
+          }
         }
 
         // Drop RNCDatePicker Activity detachment — OS destroyed Activity while picker was open

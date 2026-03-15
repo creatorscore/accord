@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import { MotiView } from 'moti';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -194,7 +194,7 @@ export default function ProfileBoostModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <BlurView intensity={40} tint="dark" style={styles.container}>
+      <SafeBlurView intensity={40} tint="dark" style={styles.container}>
         <View style={styles.modalContent}>
           <LinearGradient colors={['#FFD700', '#FFA500']} style={styles.header}>
             {/* Close Button */}
@@ -300,7 +300,7 @@ export default function ProfileBoostModal({
             </TouchableOpacity>
           </View>
         </View>
-      </BlurView>
+      </SafeBlurView>
     </Modal>
   );
 }

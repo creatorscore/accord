@@ -34,10 +34,8 @@ export const initializeRevenueCat = async (userId?: string) => {
 
     Purchases.configure({ apiKey, appUserID: userId });
 
-    // Enable debug logs in development
-    if (__DEV__) {
-      Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
-    }
+    // Only show warnings and errors from RevenueCat
+    Purchases.setLogLevel(__DEV__ ? Purchases.LOG_LEVEL.WARN : Purchases.LOG_LEVEL.ERROR);
 
     isInitialized = true;
   } catch (error) {
@@ -222,12 +220,30 @@ export const canUseFeature = (
   return false;
 };
 
+// Only these attributes are allowed to be sent to RevenueCat.
+// Identity fields (gender, orientation, ethnicity, etc.) must NEVER be sent to third parties.
+const ALLOWED_REVENUECAT_ATTRIBUTES = new Set([
+  '$displayName', '$email', // RevenueCat reserved attributes
+  'platform', 'app_version', 'subscription_tier',
+  'is_verified', 'profile_complete', 'account_age_days',
+]);
+
 /**
- * Set custom user attributes for analytics
+ * Set custom user attributes for analytics.
+ * Strips any attributes not in the whitelist to prevent identity data leakage.
  */
 export const setUserAttributes = async (attributes: { [key: string]: string | null }) => {
   try {
-    await Purchases.setAttributes(attributes);
+    const filtered: { [key: string]: string | null } = {};
+    for (const [key, value] of Object.entries(attributes)) {
+      if (ALLOWED_REVENUECAT_ATTRIBUTES.has(key)) {
+        filtered[key] = value;
+      }
+    }
+
+    if (Object.keys(filtered).length > 0) {
+      await Purchases.setAttributes(filtered);
+    }
   } catch (error) {
     console.error('Error setting user attributes:', error);
   }

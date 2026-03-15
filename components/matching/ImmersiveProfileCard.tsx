@@ -15,7 +15,8 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import { getHobbyIcon } from '@/lib/hobby-options';
+import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
@@ -26,7 +27,12 @@ import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
 import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import { useSafeBlur } from '@/hooks/useSafeBlur';
-import { getTransformUrl } from '@/hooks/usePhotoBlur';
+import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
+import { getSignedUrl } from '@/lib/signed-urls';
+import { isFieldVisible } from '@/lib/field-visibility';
+import { translateProfileValue, translateProfileArray } from '@/lib/translate-profile-values';
+import { ZoomablePhotoWrapper } from '@/components/shared/ZoomablePhotoWrapper';
+import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.6;
@@ -45,11 +51,9 @@ interface Profile {
   latitude?: number | null;
   longitude?: number | null;
   hide_distance?: boolean;
-  bio?: string;
-  occupation?: string;
-  education?: string;
   photos?: { url: string; is_primary: boolean; blur_data_uri?: string | null }[];
   compatibility_score?: number;
+  compatibilityBreakdown?: CompatibilityBreakdown;
   is_verified?: boolean;
   photo_verified?: boolean;
   distance?: number;
@@ -71,7 +75,11 @@ interface Profile {
     books?: string[];
     tv_shows?: string[];
   };
+  hometown?: string;
+  occupation?: string;
+  education?: string;
   photo_blur_enabled?: boolean; // Privacy: blur photos until matched
+  field_visibility?: Record<string, boolean>;
   preferences?: any; // Add preferences for compatibility
   last_active_at?: string;
   hide_last_active?: boolean;
@@ -88,6 +96,7 @@ interface Preferences {
   income_level?: string;
   religion?: string;
   political_views?: string;
+  lifestyle_preferences?: { drinking?: string; smoking?: string; pets?: string };
   drinking?: string;
   smoking?: string;
   pets?: string;
@@ -138,51 +147,15 @@ const formatArrayOrString = (value?: string | string[]): string => {
   return value;
 };
 
-// Value-to-label mappings for preferences
-const PREFERENCE_LABELS: { [key: string]: string } = {
-  // Financial arrangements
-  'separate': 'Keep Finances Separate',
-  'shared_expenses': 'Share Living Expenses',
-  'joint': 'Fully Joint Finances',
-  'prenup_required': 'Prenup Required',
-  'flexible': 'Flexible/Open to Discussion',
+// PREFERENCE_LABELS is now generated inside the component via getPreferenceLabels() for i18n support.
+// formatLabel is also defined inside the component to access the translated labels.
 
-  // Housing preferences
-  'separate_spaces': 'Separate Bedrooms/Spaces',
-  'roommates': 'Roommate-Style Arrangement',
-  'separate_homes': 'Separate Homes Nearby',
-  'shared_bedroom': 'Shared Bedroom',
-
-  // Children arrangements
-  'biological': 'Biological Children',
-  'adoption': 'Adoption',
-  'co_parenting': 'Co-Parenting Agreement',
-  'surrogacy': 'Surrogacy',
-  'ivf': 'IVF',
-  'already_have': 'Already Have Children',
-  'open_discussion': 'Open to Discussion',
-
-  // Primary reasons
-  'financial': 'Financial Stability',
-  'immigration': 'Immigration/Visa',
-  'family_pressure': 'Family Pressure',
-  'legal_benefits': 'Legal Benefits',
-  'companionship': 'Companionship',
-  'safety': 'Safety & Protection',
-
-  // Relationship types
-  'platonic': 'Platonic Only',
-  'romantic': 'Romantic Partnership',
-  'open': 'Open Arrangement',
-};
-
-// Helper to convert database values to display labels
-const formatLabel = (value: any): string => {
+// Fallback formatLabel for use outside the component (used by formatArrayWithLabels below)
+const formatLabelFallback = (value: any): string => {
   try {
     if (!value) return '';
-    if (Array.isArray(value)) return value.filter(Boolean).map(formatLabel).join(', ');
+    if (Array.isArray(value)) return value.filter(Boolean).map(formatLabelFallback).join(', ');
     if (typeof value !== 'string') return String(value);
-    if (PREFERENCE_LABELS[value]) return PREFERENCE_LABELS[value];
     return value.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   } catch {
     return typeof value === 'string' ? value : '';
@@ -222,11 +195,11 @@ const formatArrayWithLabels = (value?: string | string[]): string => {
   }
 
   // Filter out empty/null/undefined items before mapping to prevent errors
-  return items.filter(item => item && typeof item === 'string').map(formatLabel).join(', ');
+  return items.filter(item => item && typeof item === 'string').map(formatLabelFallback).join(', ');
 };
 
-// Helper function to format last active time
-const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boolean | undefined): string | null => {
+// Helper function to format last active time with i18n support
+const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boolean | undefined, t: (key: string, opts?: any) => string): string | null => {
   if (hideLastActive || !lastActiveAt) return null;
 
   const lastActive = new Date(lastActiveAt);
@@ -236,18 +209,18 @@ const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boo
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffMins < 5) return 'Active now';
-  if (diffMins < 60) return `Active ${diffMins}m ago`;
-  if (diffHours < 24) return `Active ${diffHours}h ago`;
-  if (diffDays === 1) return 'Active yesterday';
-  if (diffDays < 7) return `Active ${diffDays}d ago`;
+  if (diffMins < 5) return t('profileCard.activity.activeNow');
+  if (diffMins < 60) return t('profileCard.activity.minutesAgo', { count: diffMins });
+  if (diffHours < 24) return t('profileCard.activity.hoursAgo', { count: diffHours });
+  if (diffDays === 1) return t('profileCard.activity.yesterday');
+  if (diffDays < 7) return t('profileCard.activity.daysAgo', { count: diffDays });
   return null;
 };
 
 export default function ImmersiveProfileCard({
   profile,
   preferences,
-  compatibilityBreakdown,
+  compatibilityBreakdown: compatibilityBreakdownProp,
   onSwipeLeft,
   onSwipeRight,
   onSuperLike,
@@ -262,38 +235,100 @@ export default function ImmersiveProfileCard({
   currentProfileId,
   isAdmin = false,
 }: ImmersiveProfileCardProps) {
+  const { t } = useTranslation();
+
+  // i18n preference labels
+  const getPreferenceLabels = useCallback((): { [key: string]: string } => ({
+    // Financial arrangements
+    'separate': t('profileCard.preferences.financial.separate'),
+    'shared_expenses': t('profileCard.preferences.financial.sharedExpenses'),
+    'joint': t('profileCard.preferences.financial.joint'),
+    'prenup_required': t('profileCard.preferences.financial.prenupRequired'),
+    'flexible': t('profileCard.preferences.financial.flexible'),
+    // Housing preferences
+    'separate_spaces': t('profileCard.preferences.housing.separateSpaces'),
+    'roommates': t('profileCard.preferences.housing.roommates'),
+    'separate_homes': t('profileCard.preferences.housing.separateHomes'),
+    'shared_bedroom': t('profileCard.preferences.housing.sharedBedroom'),
+    // Children arrangements
+    'biological': t('profileCard.preferences.children.biological'),
+    'adoption': t('profileCard.preferences.children.adoption'),
+    'co_parenting': t('profileCard.preferences.children.coParenting'),
+    'surrogacy': t('profileCard.preferences.children.surrogacy'),
+    'ivf': t('profileCard.preferences.children.ivf'),
+    'already_have': t('profileCard.preferences.children.alreadyHave'),
+    'open_discussion': t('profileCard.preferences.children.openDiscussion'),
+    // Primary reasons
+    'financial': t('profileCard.preferences.reasons.financial'),
+    'immigration': t('profileCard.preferences.reasons.immigration'),
+    'family_pressure': t('profileCard.preferences.reasons.familyPressure'),
+    'legal_benefits': t('profileCard.preferences.reasons.legalBenefits'),
+    'companionship': t('profileCard.preferences.reasons.companionship'),
+    'safety': t('profileCard.preferences.reasons.safety'),
+    // Relationship types
+    'platonic': t('profileCard.preferences.relationship.platonic'),
+    'romantic': t('profileCard.preferences.relationship.romantic'),
+    'open': t('profileCard.preferences.relationship.open'),
+  }), [t]);
+
+  // i18n-aware formatLabel
+  const formatLabel = useCallback((value: any): string => {
+    try {
+      if (!value) return '';
+      if (Array.isArray(value)) return value.filter(Boolean).map(formatLabel).join(', ');
+      if (typeof value !== 'string') return String(value);
+      const labels = getPreferenceLabels();
+      if (labels[value]) return labels[value];
+      return value.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    } catch {
+      return typeof value === 'string' ? value : '';
+    }
+  }, [getPreferenceLabels]);
+
+  // i18n-aware formatArrayWithLabels
+  const formatArrayWithLabelsI18n = useCallback((value?: string | string[]): string => {
+    if (!value) return '';
+    let items: string[] = [];
+    if (Array.isArray(value)) {
+      items = value;
+    } else if (typeof value === 'string') {
+      if (value.startsWith('{') && value.endsWith('}')) {
+        items = value.slice(1, -1).split(',');
+      } else if (value.startsWith('[') && value.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) items = parsed;
+          else items = [value];
+        } catch {
+          items = [value];
+        }
+      } else {
+        items = [value];
+      }
+    }
+    return items.filter(item => item && typeof item === 'string').map(formatLabel).join(', ');
+  }, [formatLabel]);
+
+  // Fall back to profile's embedded breakdown if prop not provided
+  const compatibilityBreakdown = compatibilityBreakdownProp || profile.compatibilityBreakdown;
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
 
   const shouldBlur = (profile.photo_blur_enabled || false) && !isAdmin;
 
-  // Legacy fallback blur (only used when transform URL can't be built)
-  const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
+  // iOS: native blurRadius (safe). Android: SafeBlurImage handles it.
+  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
     shouldBlur,
-    blurIntensity: 20,
+    blurIntensity: 50,
   });
 
-  // Two-layer blur: downsized transform URL + light native blurRadius
-  // Uses 800px width for large profile photos to avoid zoomed-in look
-  // Falls back to useSafeBlur overlay if URL doesn't match Supabase storage pattern
-  const BLUR_WIDTH = 800;
-
+  // Always show original photo URL — blur is applied via SafeBlurImage
   const getPhotoUri = (photo: { url: string; blur_data_uri?: string | null }) => {
-    if (!shouldBlur) return photo.url;
-    const transformUrl = photo.blur_data_uri || getTransformUrl(photo.url, BLUR_WIDTH);
-    return transformUrl || photo.url;
+    return photo.url;
   };
 
-  const getBlurRadius = (photo: { url: string; blur_data_uri?: string | null }) => {
-    if (!shouldBlur) return 0;
-    const hasTransform = !!(photo.blur_data_uri || getTransformUrl(photo.url, BLUR_WIDTH));
-    if (hasTransform) return Platform.OS === 'ios' ? 35 : 18;
+  // Blur radius for all platforms — SafeBlurImage handles platform differences
+  const getBlurRadius = (_photo: { url: string; blur_data_uri?: string | null }) => {
     return blurRadius;
-  };
-
-  const getShowOverlay = (photo: { url: string; blur_data_uri?: string | null }) => {
-    if (!shouldBlur) return false;
-    const hasTransform = !!(photo.blur_data_uri || getTransformUrl(photo.url, BLUR_WIDTH));
-    return hasTransform ? false : showBlurOverlay;
   };
 
   const [isVoicePlaying, setIsVoicePlaying] = useState(false);
@@ -305,6 +340,19 @@ export default function ImmersiveProfileCard({
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [playbackDuration, setPlaybackDuration] = useState(profile.voice_intro_duration ? profile.voice_intro_duration * 1000 : 0);
+
+  // Signed voice intro URL for private bucket playback
+  const [signedVoiceUrl, setSignedVoiceUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (profile.voice_intro_url) {
+      getSignedUrl('voice-intros', profile.voice_intro_url).then((url) => {
+        setSignedVoiceUrl(url);
+      });
+    } else {
+      setSignedVoiceUrl(null);
+    }
+  }, [profile.voice_intro_url]);
 
   const photos = profile.photos || [];
   const heroPhoto = photos[0] ? getPhotoUri(photos[0]) : 'https://via.placeholder.com/400x600';
@@ -348,7 +396,7 @@ export default function ImmersiveProfileCard({
   }, [sound]);
 
   const handleVoicePlayPause = async () => {
-    if (!profile.voice_intro_url) return;
+    if (!signedVoiceUrl) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -365,7 +413,7 @@ export default function ImmersiveProfileCard({
           staysActiveInBackground: false,
         });
         const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: profile.voice_intro_url },
+          { uri: signedVoiceUrl },
           { shouldPlay: true },
           (status) => {
             if (status.isLoaded) {
@@ -385,7 +433,7 @@ export default function ImmersiveProfileCard({
       }
     } catch (error) {
       console.error('Error playing voice intro:', error);
-      Alert.alert('Error', 'Could not play voice intro');
+      Alert.alert(t('common.error'), t('profileCard.voice.playError'));
     }
   };
 
@@ -410,9 +458,9 @@ export default function ImmersiveProfileCard({
 
       {/* Sticky Header */}
       <Animated.View style={[styles.stickyHeader, { opacity: headerOpacity }]}>
-        <BlurView intensity={90} tint="light" style={styles.headerBlur}>
+        <SafeBlurView intensity={90} tint="light" style={styles.headerBlur}>
           <SafeAreaView edges={['top']} style={styles.headerContent}>
-            <Image
+            <SafeBlurImage
               source={{ uri: heroPhoto }}
               style={styles.headerAvatar}
               cachePolicy="memory-disk"
@@ -425,25 +473,25 @@ export default function ImmersiveProfileCard({
                 {profile.display_name}, {profile.age}
               </Text>
               {profile.compatibility_score && (
-                <Text style={styles.headerMatch}>{profile.compatibility_score}% Match</Text>
+                <Text style={styles.headerMatch}>{t('profileCard.compatibility.matchLabel', { score: profile.compatibility_score })}</Text>
               )}
             </View>
           </SafeAreaView>
-        </BlurView>
+        </SafeBlurView>
       </Animated.View>
 
       {/* Close Button & Menu */}
       <View style={[styles.closeContainer, { top: insets.top + 8 }]}>
         <View style={styles.topButtonsRow}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <BlurView intensity={80} tint="dark" style={styles.closeBlur}>
+            <SafeBlurView intensity={80} tint="dark" style={styles.closeBlur}>
               <Ionicons name="close" size={26} color="white" />
-            </BlurView>
+            </SafeBlurView>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setShowActionSheet(true)} style={styles.menuButton}>
-            <BlurView intensity={80} tint="dark" style={styles.closeBlur}>
+            <SafeBlurView intensity={80} tint="dark" style={styles.closeBlur}>
               <MaterialCommunityIcons name="dots-vertical" size={26} color="white" />
-            </BlurView>
+            </SafeBlurView>
           </TouchableOpacity>
         </View>
       </View>
@@ -457,34 +505,30 @@ export default function ImmersiveProfileCard({
         )}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={Platform.OS === 'android'}
       >
         {/* Hero Photo */}
-        <View style={styles.heroContainer}>
-          <Image
-            source={{ uri: heroPhoto }}
-            style={styles.heroImage}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            transition={200}
-            blurRadius={photos[0] ? getBlurRadius(photos[0]) : blurRadius}
-            onLoad={onImageLoad}
-            onError={onImageError}
-          />
-          {/* Android blur fallback - CSS overlay instead of RenderScript */}
-          {(photos[0] ? getShowOverlay(photos[0]) : showBlurOverlay) && (
-            <View
-              style={[styles.heroImage, { position: 'absolute', backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-              pointerEvents="none"
+        <View style={[styles.heroContainer, { overflow: 'hidden' }]}>
+          <ZoomablePhotoWrapper style={styles.heroImage} enabled={!shouldBlur}>
+            <SafeBlurImage
+              source={{ uri: heroPhoto }}
+              style={styles.heroImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={200}
+              blurRadius={photos[0] ? getBlurRadius(photos[0]) : blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
             />
-          )}
-          {/* Dynamic Watermark over hero image */}
-          {watermarkReady && (
-            <DynamicWatermark
-              userId={profile.id}
-              viewerUserId={viewerUserId}
-              visible={true}
-            />
-          )}
+            {/* Dynamic Watermark over hero image */}
+            {watermarkReady && (
+              <DynamicWatermark
+                userId={profile.id}
+                viewerUserId={viewerUserId}
+                visible={true}
+              />
+            )}
+          </ZoomablePhotoWrapper>
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.8)']}
             style={styles.heroGradient}
@@ -496,19 +540,19 @@ export default function ImmersiveProfileCard({
                 <MaterialCommunityIcons name="check-decagram" size={28} color="#A08AB7" />
               )}
             </View>
-            {getLastActiveText(profile.last_active_at, profile.hide_last_active) && (
+            {getLastActiveText(profile.last_active_at, profile.hide_last_active, t) && (
               <View style={styles.lastActiveRow}>
-                <View style={[styles.activeIndicator, { backgroundColor: getLastActiveText(profile.last_active_at, profile.hide_last_active) === 'Active now' ? '#22c55e' : '#A08AB7' }]} />
-                <Text style={styles.lastActiveText}>{getLastActiveText(profile.last_active_at, profile.hide_last_active)}</Text>
+                <View style={[styles.activeIndicator, { backgroundColor: getLastActiveText(profile.last_active_at, profile.hide_last_active, t) === t('profileCard.activity.activeNow') ? '#22c55e' : '#A08AB7' }]} />
+                <Text style={styles.lastActiveText}>{getLastActiveText(profile.last_active_at, profile.hide_last_active, t)}</Text>
               </View>
             )}
             {(profile.gender || profile.pronouns || profile.ethnicity) && (
               <View style={styles.heroIdentity}>
                 <Text style={styles.heroIdentityText}>
                   {[
-                    formatArrayOrString(profile.gender),
-                    profile.pronouns,
-                    profile.ethnicity && (Array.isArray(profile.ethnicity) ? !profile.ethnicity.includes('Prefer not to say') : profile.ethnicity !== 'Prefer not to say') ? formatArrayOrString(profile.ethnicity) : null
+                    isFieldVisible(profile.field_visibility, 'gender') ? translateProfileArray(t, 'gender', profile.gender) : null,
+                    profile.pronouns ? translateProfileValue(t, 'pronouns', profile.pronouns) : null,
+                    isFieldVisible(profile.field_visibility, 'ethnicity') && profile.ethnicity && (Array.isArray(profile.ethnicity) ? !profile.ethnicity.includes('Prefer not to say') : profile.ethnicity !== 'Prefer not to say') ? translateProfileArray(t, 'ethnicity', profile.ethnicity) : null
                   ].filter(Boolean).join(' • ')}
                 </Text>
               </View>
@@ -531,7 +575,7 @@ export default function ImmersiveProfileCard({
             <View style={styles.voiceContainer}>
               {/* Prompt Text */}
               <Text style={styles.voicePromptText}>
-                {profile.voice_intro_prompt || `${profile.display_name}'s voice intro`}
+                {profile.voice_intro_prompt || t('profileCard.voice.introFallback', { name: profile.display_name })}
               </Text>
 
               {/* Audio Player with Real Waveform */}
@@ -588,34 +632,17 @@ export default function ImmersiveProfileCard({
                 <MaterialCommunityIcons name="heart-circle" size={36} color="#A08AB7" />
                 <View style={styles.compatibilityTextBox}>
                   <Text style={styles.compatibilityScore}>{profile.compatibility_score}%</Text>
-                  <Text style={styles.compatibilityLabel}>Compatibility Match</Text>
+                  <Text style={styles.compatibilityLabel}>{t('profileCard.compatibility.label')}</Text>
                 </View>
               </View>
-              <View style={styles.compatibilityBreakdown}>
-                {compatibilityBreakdown ? (
-                  <>
-                    <CompFactorBar label="Marriage Goals" score={Math.round(compatibilityBreakdown.goals)} color="#A08AB7" />
-                    <CompFactorBar label="Location" score={Math.round(compatibilityBreakdown.location)} color="#A08AB7" />
-                    <CompFactorBar label="Lifestyle" score={Math.round(compatibilityBreakdown.lifestyle)} color="#A08AB7" />
-                    <CompFactorBar label="Personality" score={Math.round(compatibilityBreakdown.personality)} color="#A08AB7" />
-                  </>
-                ) : (
-                  <>
-                    <CompFactorBar label="Marriage Goals" score={92} color="#A08AB7" />
-                    <CompFactorBar label="Location" score={85} color="#A08AB7" />
-                    <CompFactorBar label="Lifestyle" score={88} color="#A08AB7" />
-                    <CompFactorBar label="Personality" score={90} color="#A08AB7" />
-                  </>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* About */}
-          {profile.bio && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>About {profile.display_name}</Text>
-              <Text style={styles.bioText}>{profile.bio}</Text>
+              {compatibilityBreakdown && (
+                <View style={styles.compatibilityBreakdown}>
+                  <CompFactorBar label={t('profileCard.compatibility.marriageGoals')} score={Math.round(compatibilityBreakdown.goals || 0)} color="#A08AB7" />
+                  <CompFactorBar label={t('profileCard.compatibility.location')} score={Math.round(compatibilityBreakdown.location || 0)} color="#A08AB7" />
+                  <CompFactorBar label={t('profileCard.compatibility.lifestyle')} score={Math.round(compatibilityBreakdown.lifestyle || 0)} color="#A08AB7" />
+                  <CompFactorBar label={t('profileCard.compatibility.personality')} score={Math.round(compatibilityBreakdown.personality || 0)} color="#A08AB7" />
+                </View>
+              )}
             </View>
           )}
 
@@ -628,23 +655,19 @@ export default function ImmersiveProfileCard({
 
           {/* Photo 2 */}
           {photos[1] && (
-            <View style={{ position: 'relative' }}>
-              <Image
-                source={{ uri: getPhotoUri(photos[1]) }}
-                style={styles.storyPhoto}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                transition={200}
-                blurRadius={getBlurRadius(photos[1])}
-                onLoad={onImageLoad}
-                onError={onImageError}
-              />
-              {getShowOverlay(photos[1]) && (
-                <View
-                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-                  pointerEvents="none"
+            <View style={[styles.storyPhoto, { overflow: 'hidden' }]}>
+              <ZoomablePhotoWrapper style={{ width: '100%', height: '100%' }} enabled={!shouldBlur}>
+                <SafeBlurImage
+                  source={{ uri: getPhotoUri(photos[1]) }}
+                  style={{ width: '100%', height: '100%' }}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={200}
+                  blurRadius={getBlurRadius(photos[1])}
+                  onLoad={onImageLoad}
+                  onError={onImageError}
                 />
-              )}
+              </ZoomablePhotoWrapper>
             </View>
           )}
 
@@ -652,12 +675,12 @@ export default function ImmersiveProfileCard({
           <View style={styles.criticalSection}>
             <View style={styles.criticalHeader}>
               <MaterialCommunityIcons name="ring" size={28} color="#A08AB7" />
-              <Text style={styles.criticalTitle}>Marriage Goals & Expectations</Text>
+              <Text style={styles.criticalTitle}>{t('profileCard.section.marriageGoals')}</Text>
             </View>
 
             {(preferences?.primary_reasons?.length || preferences?.primary_reason) && (
               <View style={styles.criticalItem}>
-                <Text style={styles.criticalLabel}>Primary reason{preferences?.primary_reasons && preferences.primary_reasons.length > 1 ? 's' : ''} for partnership</Text>
+                <Text style={styles.criticalLabel}>{preferences?.primary_reasons && preferences.primary_reasons.length > 1 ? t('profileCard.goals.primaryReasons') : t('profileCard.goals.primaryReason')}</Text>
                 <Text style={styles.criticalValue}>
                   {preferences?.primary_reasons && preferences.primary_reasons.length > 0
                     ? preferences.primary_reasons.map(r => formatLabel(r)).join(', ')
@@ -668,7 +691,7 @@ export default function ImmersiveProfileCard({
 
             {preferences?.relationship_type && (
               <View style={styles.criticalItem}>
-                <Text style={styles.criticalLabel}>Relationship dynamic</Text>
+                <Text style={styles.criticalLabel}>{t('profileCard.goals.relationshipDynamic')}</Text>
                 <Text style={styles.criticalValue}>
                   {formatLabel(preferences.relationship_type)}
                 </Text>
@@ -677,27 +700,27 @@ export default function ImmersiveProfileCard({
 
             {preferences?.wants_children !== undefined && preferences?.wants_children !== null && (
               <View style={styles.criticalItem}>
-                <Text style={styles.criticalLabel}>Children</Text>
+                <Text style={styles.criticalLabel}>{t('profileCard.goals.children')}</Text>
                 <Text style={styles.criticalValue}>
-                  {preferences.wants_children === true ? `Yes${preferences.children_arrangement ? ` - ${formatArrayWithLabels(preferences.children_arrangement)}` : ''}` :
-                   preferences.wants_children === false ? 'No children' :
-                   'Maybe/Open to discussion'}
+                  {preferences.wants_children === true ? `${t('common.yes')}${preferences.children_arrangement ? ` - ${formatArrayWithLabelsI18n(preferences.children_arrangement)}` : ''}` :
+                   preferences.wants_children === false ? t('profileCard.goals.noChildren') :
+                   t('profileCard.goals.maybeChildren')}
                 </Text>
               </View>
             )}
 
             {preferences?.public_relationship !== undefined && (
               <View style={styles.criticalItem}>
-                <Text style={styles.criticalLabel}>Public as a couple?</Text>
+                <Text style={styles.criticalLabel}>{t('profileCard.goals.publicCouple')}</Text>
                 <Text style={styles.criticalValue}>
-                  {preferences.public_relationship ? 'Yes, we\'d appear as a couple publicly' : 'Prefer to keep it private'}
+                  {preferences.public_relationship ? t('profileCard.goals.publicYes') : t('profileCard.goals.publicNo')}
                 </Text>
               </View>
             )}
 
             {preferences?.family_involvement && (
               <View style={styles.criticalItem}>
-                <Text style={styles.criticalLabel}>Family involvement</Text>
+                <Text style={styles.criticalLabel}>{t('profileCard.goals.familyInvolvement')}</Text>
                 <Text style={styles.criticalValue}>{preferences.family_involvement}</Text>
               </View>
             )}
@@ -711,66 +734,33 @@ export default function ImmersiveProfileCard({
                 <Text style={styles.promptAnswer}>{profile.prompt_answers[0].answer}</Text>
               </View>
               {photos[2] && (
-                <View style={{ position: 'relative' }}>
-                  <Image
-                    source={{ uri: getPhotoUri(photos[2]) }}
-                    style={styles.promptPhoto}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                    transition={200}
-                    blurRadius={getBlurRadius(photos[2])}
-                    onLoad={onImageLoad}
-                    onError={onImageError}
-                  />
-                  {getShowOverlay(photos[2]) && (
-                    <View
-                      style={[styles.promptPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-                      pointerEvents="none"
+                <View style={[styles.promptPhoto, { overflow: 'hidden' }]}>
+                  <ZoomablePhotoWrapper style={{ width: '100%', height: '100%' }} enabled={!shouldBlur}>
+                    <SafeBlurImage
+                      source={{ uri: getPhotoUri(photos[2]) }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={200}
+                      blurRadius={getBlurRadius(photos[2])}
+                      onLoad={onImageLoad}
+                      onError={onImageError}
                     />
-                  )}
+                  </ZoomablePhotoWrapper>
                 </View>
               )}
             </View>
           )}
-
-          {/* FINANCIAL EXPECTATIONS - CRITICAL */}
-          <View style={styles.criticalSection}>
-            <View style={styles.criticalHeader}>
-              <MaterialCommunityIcons name="currency-usd" size={28} color="#10B981" />
-              <Text style={styles.criticalTitle}>Financial Expectations</Text>
-            </View>
-
-            {preferences?.income_level && (
-              <View style={styles.criticalItem}>
-                <Text style={styles.criticalLabel}>Income level</Text>
-                <Text style={styles.criticalValue}>{preferences.income_level}</Text>
-              </View>
-            )}
-
-            {preferences?.financial_arrangement && (
-              <View style={styles.criticalItem}>
-                <Text style={styles.criticalLabel}>Financial arrangement</Text>
-                <Text style={styles.criticalValue}>{formatArrayWithLabels(preferences.financial_arrangement)}</Text>
-              </View>
-            )}
-
-            {preferences?.housing_preference && (
-              <View style={styles.criticalItem}>
-                <Text style={styles.criticalLabel}>Living situation</Text>
-                <Text style={styles.criticalValue}>{formatArrayWithLabels(preferences.housing_preference)}</Text>
-              </View>
-            )}
-          </View>
 
           {/* Must-Haves */}
           {preferences?.must_haves && preferences.must_haves.length > 0 && (
             <View style={[styles.section, { backgroundColor: '#F0FDF4', borderRadius: 16, padding: 16, marginTop: 16, borderWidth: 1, borderColor: '#86EFAC' }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 24, marginRight: 8 }}>✅</Text>
-                <Text style={[styles.sectionTitle, { color: '#166534', marginBottom: 0 }]}>Must-Haves</Text>
+                <Text style={[styles.sectionTitle, { color: '#166534', marginBottom: 0 }]}>{t('profileCard.section.mustHaves')}</Text>
               </View>
               <Text style={{ fontSize: 13, color: '#16A34A', marginBottom: 12, fontStyle: 'italic' }}>
-                Important qualities they&apos;re looking for
+                {t('profileCard.section.mustHavesSubtitle')}
               </Text>
               {preferences.must_haves.map((item, index) => (
                 <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -786,10 +776,10 @@ export default function ImmersiveProfileCard({
             <View style={[styles.section, { backgroundColor: '#FEF2F2', borderRadius: 16, padding: 16, marginTop: 16, borderWidth: 1, borderColor: '#FCA5A5' }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 24, marginRight: 8 }}>🚫</Text>
-                <Text style={[styles.sectionTitle, { color: '#991B1B', marginBottom: 0 }]}>Dealbreakers</Text>
+                <Text style={[styles.sectionTitle, { color: '#991B1B', marginBottom: 0 }]}>{t('profileCard.section.dealbreakers')}</Text>
               </View>
               <Text style={{ fontSize: 13, color: '#DC2626', marginBottom: 12, fontStyle: 'italic' }}>
-                Important boundaries to be aware of
+                {t('profileCard.section.dealbreakersSubtitle')}
               </Text>
               {preferences.dealbreakers.map((item, index) => (
                 <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -802,81 +792,86 @@ export default function ImmersiveProfileCard({
 
           {/* Photo 4 */}
           {photos[3] && (
-            <View style={{ position: 'relative' }}>
-              <Image
-                source={{ uri: getPhotoUri(photos[3]) }}
-                style={styles.storyPhoto}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                transition={200}
-                blurRadius={getBlurRadius(photos[3])}
-                onLoad={onImageLoad}
-                onError={onImageError}
-              />
-              {getShowOverlay(photos[3]) && (
-                <View
-                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-                  pointerEvents="none"
+            <View style={[styles.storyPhoto, { overflow: 'hidden' }]}>
+              <ZoomablePhotoWrapper style={{ width: '100%', height: '100%' }} enabled={!shouldBlur}>
+                <SafeBlurImage
+                  source={{ uri: getPhotoUri(photos[3]) }}
+                  style={{ width: '100%', height: '100%' }}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={200}
+                  blurRadius={getBlurRadius(photos[3])}
+                  onLoad={onImageLoad}
+                  onError={onImageError}
                 />
-              )}
+              </ZoomablePhotoWrapper>
             </View>
           )}
 
           {/* LIFESTYLE COMPATIBILITY */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Lifestyle & Values</Text>
+            <Text style={styles.sectionTitle}>{t('profileCard.section.lifestyleValues')}</Text>
             <View style={styles.lifestyleGrid}>
-              {profile.gender && (
-                <LifestyleItem icon="gender-male-female" label="Gender" value={formatArrayOrString(profile.gender)} />
+              {profile.gender && isFieldVisible(profile.field_visibility, 'gender') && (
+                <LifestyleItem icon="gender-male-female" label={t('profileCard.vitals.gender')} value={translateProfileArray(t, 'gender', profile.gender)} />
               )}
               {profile.pronouns && (
-                <LifestyleItem icon="account" label="Pronouns" value={profile.pronouns} />
+                <LifestyleItem icon="account" label={t('profileCard.vitals.pronouns')} value={translateProfileValue(t, 'pronouns', profile.pronouns)} />
               )}
-              {profile.sexual_orientation && (
-                <LifestyleItem icon="heart-multiple" label="Orientation" value={formatArrayOrString(profile.sexual_orientation)} />
+              {profile.sexual_orientation && isFieldVisible(profile.field_visibility, 'sexual_orientation') && (
+                <LifestyleItem icon="heart-multiple" label={t('profileCard.vitals.orientation')} value={translateProfileArray(t, 'sexual_orientation', profile.sexual_orientation)} />
               )}
-              {profile.ethnicity && (Array.isArray(profile.ethnicity) ? !profile.ethnicity.includes('Prefer not to say') : profile.ethnicity !== 'Prefer not to say') && (
-                <LifestyleItem icon="earth" label="Ethnicity" value={formatArrayOrString(profile.ethnicity)} />
+              {profile.ethnicity && isFieldVisible(profile.field_visibility, 'ethnicity') && (Array.isArray(profile.ethnicity) ? !profile.ethnicity.includes('Prefer not to say') : profile.ethnicity !== 'Prefer not to say') && (
+                <LifestyleItem icon="earth" label={t('profileCard.vitals.ethnicity')} value={translateProfileArray(t, 'ethnicity', profile.ethnicity)} />
               )}
               {profile.occupation && (
-                <LifestyleItem icon="briefcase" label="Work" value={profile.occupation} />
+                <LifestyleItem icon="briefcase" label={t('profileCard.vitals.occupation')} value={profile.occupation} />
               )}
               {profile.education && (
-                <LifestyleItem icon="school" label="Education" value={profile.education} />
+                <LifestyleItem icon="school" label={t('profileCard.vitals.education')} value={profile.education} />
+              )}
+              {profile.hometown && (
+                <LifestyleItem icon="home" label={t('profileCard.vitals.hometown')} value={profile.hometown} />
               )}
               {profile.height_inches && (
                 <LifestyleItem
                   icon="human-male-height"
-                  label="Height"
+                  label={t('profileCard.vitals.height')}
                   value={formatHeight(profile.height_inches, heightUnit)}
                 />
               )}
               {profile.zodiac_sign && (
-                <LifestyleItem icon="zodiac-gemini" label="Zodiac" value={profile.zodiac_sign} />
+                <LifestyleItem icon="zodiac-gemini" label={t('profileCard.vitals.zodiac')} value={translateProfileValue(t, 'zodiac_sign', profile.zodiac_sign)} />
               )}
               {profile.personality_type && (
-                <LifestyleItem icon="brain" label="Personality" value={profile.personality_type} />
+                <LifestyleItem icon="brain" label={t('profileCard.vitals.personality')} value={profile.personality_type} />
               )}
               {profile.love_language && (
-                <LifestyleItem icon="heart" label="Love Language" value={formatArrayOrString(profile.love_language)} />
+                <LifestyleItem icon="heart" label={t('profileCard.vitals.loveLanguage')} value={translateProfileArray(t, 'love_language', profile.love_language)} />
               )}
               {profile.languages_spoken && profile.languages_spoken.length > 0 && (
-                <LifestyleItem icon="translate" label="Languages" value={profile.languages_spoken.join(', ')} />
+                <LifestyleItem icon="translate" label={t('profileCard.vitals.languages')} value={translateProfileArray(t, 'languages_spoken', profile.languages_spoken)} />
               )}
-              {profile.religion && (
-                <LifestyleItem icon="hands-pray" label="Religion" value={profile.religion} />
+              {profile.religion && isFieldVisible(profile.field_visibility, 'religion') && (
+                <LifestyleItem icon="hands-pray" label={t('profileCard.vitals.religion')} value={translateProfileValue(t, 'religion', profile.religion)} />
               )}
-              {profile.political_views && (
-                <LifestyleItem icon="vote" label="Politics" value={profile.political_views} />
+              {profile.political_views && isFieldVisible(profile.field_visibility, 'political_views') && (
+                <LifestyleItem icon="vote" label={t('profileCard.vitals.politics')} value={translateProfileValue(t, 'political_views', profile.political_views)} />
               )}
-              {preferences?.drinking && (
-                <LifestyleItem icon="glass-wine" label="Drinking" value={formatLabel(preferences.drinking)} />
+              {preferences?.lifestyle_preferences?.drinking && isFieldVisible(profile.field_visibility, 'drinking') && (
+                <LifestyleItem icon="glass-wine" label={t('profileCard.vitals.drinking')} value={formatLabel(preferences.lifestyle_preferences.drinking)} />
               )}
-              {preferences?.smoking && (
-                <LifestyleItem icon="smoking" label="Smoking" value={formatLabel(preferences.smoking)} />
+              {preferences?.lifestyle_preferences?.smoking && isFieldVisible(profile.field_visibility, 'smoking') && (
+                <LifestyleItem icon="smoking" label={t('profileCard.vitals.smoking')} value={formatLabel(preferences.lifestyle_preferences.smoking)} />
               )}
-              {preferences?.pets && (
-                <LifestyleItem icon="paw" label="Pets" value={formatLabel(preferences.pets)} />
+              {preferences?.lifestyle_preferences?.pets && (
+                <LifestyleItem icon="paw" label={t('profileCard.vitals.pets')} value={formatLabel(preferences.lifestyle_preferences.pets)} />
+              )}
+              {preferences?.financial_arrangement && (
+                <LifestyleItem icon="cash-multiple" label={t('profileCard.vitals.finances')} value={formatArrayWithLabelsI18n(preferences.financial_arrangement)} />
+              )}
+              {preferences?.housing_preference && (
+                <LifestyleItem icon="home-city" label={t('profileCard.vitals.living')} value={formatArrayWithLabelsI18n(preferences.housing_preference)} />
               )}
             </View>
           </View>
@@ -884,10 +879,11 @@ export default function ImmersiveProfileCard({
           {/* Hobbies & Interests */}
           {profile.hobbies && profile.hobbies.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Hobbies & Interests</Text>
+              <Text style={styles.sectionTitle}>{t('profileCard.section.hobbiesInterests')}</Text>
               <View style={styles.hobbiesContainer}>
                 {profile.hobbies.map((hobby, index) => (
                   <View key={index} style={styles.hobbyTag}>
+                    <MaterialCommunityIcons name={getHobbyIcon(hobby) as any} size={16} color="#A08AB7" />
                     <Text style={styles.hobbyText}>{hobby}</Text>
                   </View>
                 ))}
@@ -903,13 +899,13 @@ export default function ImmersiveProfileCard({
             (profile.interests.tv_shows?.length ?? 0) > 0
           ) && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Favorites</Text>
+              <Text style={styles.sectionTitle}>{t('profileCard.section.favorites')}</Text>
 
               {profile.interests.movies && profile.interests.movies.length > 0 && (
                 <View style={styles.favoriteCategory}>
                   <View style={styles.favoriteCategoryHeader}>
                     <MaterialCommunityIcons name="movie-open" size={22} color="#CDC2E5" />
-                    <Text style={styles.favoriteCategoryTitle}>Movies</Text>
+                    <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.movies')}</Text>
                   </View>
                   <View style={styles.favoritesList}>
                     {profile.interests.movies.map((movie, index) => (
@@ -923,7 +919,7 @@ export default function ImmersiveProfileCard({
                 <View style={styles.favoriteCategory}>
                   <View style={styles.favoriteCategoryHeader}>
                     <MaterialCommunityIcons name="music" size={22} color="#A08AB7" />
-                    <Text style={styles.favoriteCategoryTitle}>Music Artists</Text>
+                    <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.musicArtists')}</Text>
                   </View>
                   <View style={styles.favoritesList}>
                     {profile.interests.music.map((artist, index) => (
@@ -937,7 +933,7 @@ export default function ImmersiveProfileCard({
                 <View style={styles.favoriteCategory}>
                   <View style={styles.favoriteCategoryHeader}>
                     <MaterialCommunityIcons name="book-open-page-variant" size={22} color="#3B82F6" />
-                    <Text style={styles.favoriteCategoryTitle}>Books</Text>
+                    <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.books')}</Text>
                   </View>
                   <View style={styles.favoritesList}>
                     {profile.interests.books.map((book, index) => (
@@ -951,7 +947,7 @@ export default function ImmersiveProfileCard({
                 <View style={styles.favoriteCategory}>
                   <View style={styles.favoriteCategoryHeader}>
                     <MaterialCommunityIcons name="television" size={22} color="#10B981" />
-                    <Text style={styles.favoriteCategoryTitle}>TV Shows</Text>
+                    <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.tvShows')}</Text>
                   </View>
                   <View style={styles.favoritesList}>
                     {profile.interests.tv_shows.map((show, index) => (
@@ -971,23 +967,19 @@ export default function ImmersiveProfileCard({
                 <Text style={styles.promptAnswer}>{prompt.answer}</Text>
               </View>
               {photos[4 + index] && (
-                <View style={{ position: 'relative' }}>
-                  <Image
-                    source={{ uri: getPhotoUri(photos[4 + index]) }}
-                    style={styles.promptPhoto}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                    transition={200}
-                    blurRadius={getBlurRadius(photos[4 + index])}
-                    onLoad={onImageLoad}
-                    onError={onImageError}
-                  />
-                  {getShowOverlay(photos[4 + index]) && (
-                    <View
-                      style={[styles.promptPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-                      pointerEvents="none"
+                <View style={[styles.promptPhoto, { overflow: 'hidden' }]}>
+                  <ZoomablePhotoWrapper style={{ width: '100%', height: '100%' }} enabled={!shouldBlur}>
+                    <SafeBlurImage
+                      source={{ uri: getPhotoUri(photos[4 + index]) }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={200}
+                      blurRadius={getBlurRadius(photos[4 + index])}
+                      onLoad={onImageLoad}
+                      onError={onImageError}
                     />
-                  )}
+                  </ZoomablePhotoWrapper>
                 </View>
               )}
             </View>
@@ -998,28 +990,28 @@ export default function ImmersiveProfileCard({
             <View style={styles.criticalSection}>
               <View style={styles.criticalHeader}>
                 <MaterialCommunityIcons name="map-marker-radius" size={28} color="#F59E0B" />
-                <Text style={styles.criticalTitle}>Location & Relocation</Text>
+                <Text style={styles.criticalTitle}>{t('profileCard.section.locationRelocation')}</Text>
               </View>
 
               {preferences?.max_distance_miles && (
                 <View style={styles.criticalItem}>
-                  <Text style={styles.criticalLabel}>Maximum distance</Text>
-                  <Text style={styles.criticalValue}>Up to {preferences.max_distance_miles} miles</Text>
+                  <Text style={styles.criticalLabel}>{t('profileCard.location.maxDistance')}</Text>
+                  <Text style={styles.criticalValue}>{t('profileCard.location.upToMiles', { miles: preferences.max_distance_miles })}</Text>
                 </View>
               )}
 
               {preferences?.willing_to_relocate !== undefined && (
                 <View style={styles.criticalItem}>
-                  <Text style={styles.criticalLabel}>Willing to relocate?</Text>
+                  <Text style={styles.criticalLabel}>{t('profileCard.location.willingToRelocate')}</Text>
                   <Text style={styles.criticalValue}>
-                    {preferences.willing_to_relocate ? 'Yes, open to moving' : 'Prefer to stay local'}
+                    {preferences.willing_to_relocate ? t('profileCard.location.openToMoving') : t('profileCard.location.stayLocal')}
                   </Text>
                 </View>
               )}
 
               {preferences?.preferred_cities && preferences.preferred_cities.length > 0 && (
                 <View style={styles.criticalItem}>
-                  <Text style={styles.criticalLabel}>Preferred cities</Text>
+                  <Text style={styles.criticalLabel}>{t('profileCard.location.preferredCities')}</Text>
                   <Text style={styles.criticalValue}>{preferences.preferred_cities.join(', ')}</Text>
                 </View>
               )}
@@ -1028,23 +1020,19 @@ export default function ImmersiveProfileCard({
 
           {/* Remaining photos */}
           {photos.slice(5).map((photo, index) => (
-            <View key={index} style={{ position: 'relative' }}>
-              <Image
-                source={{ uri: getPhotoUri(photo) }}
-                style={styles.storyPhoto}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                transition={200}
-                blurRadius={getBlurRadius(photo)}
-                onLoad={onImageLoad}
-                onError={onImageError}
-              />
-              {getShowOverlay(photo) && (
-                <View
-                  style={[styles.storyPhoto, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-                  pointerEvents="none"
+            <View key={index} style={[styles.storyPhoto, { overflow: 'hidden' }]}>
+              <ZoomablePhotoWrapper style={{ width: '100%', height: '100%' }} enabled={!shouldBlur}>
+                <SafeBlurImage
+                  source={{ uri: getPhotoUri(photo) }}
+                  style={{ width: '100%', height: '100%' }}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={200}
+                  blurRadius={getBlurRadius(photo)}
+                  onLoad={onImageLoad}
+                  onError={onImageError}
                 />
-              )}
+              </ZoomablePhotoWrapper>
             </View>
           ))}
 
@@ -1056,7 +1044,7 @@ export default function ImmersiveProfileCard({
       {!isMatched ? (
         // Swipe actions for discovery
         <SafeAreaView edges={['bottom']} style={styles.actionContainer}>
-          <BlurView intensity={95} tint="light" style={styles.actionBlur}>
+          <SafeBlurView intensity={95} tint="light" style={styles.actionBlur}>
             <View style={styles.actionButtons}>
               <TouchableOpacity onPress={() => handleAction('pass')} style={styles.actionButton}>
                 <LinearGradient colors={['#FEE2E2', '#FCA5A5']} style={styles.actionGradient}>
@@ -1078,21 +1066,21 @@ export default function ImmersiveProfileCard({
                 </LinearGradient>
               </TouchableOpacity>
             </View>
-          </BlurView>
+          </SafeBlurView>
         </SafeAreaView>
       ) : onSendMessage ? (
         // Message button for matched profiles
         <SafeAreaView edges={['bottom']} style={styles.actionContainer}>
-          <BlurView intensity={95} tint="light" style={styles.actionBlur}>
+          <SafeBlurView intensity={95} tint="light" style={styles.actionBlur}>
             <View style={styles.matchedActionContainer}>
               <TouchableOpacity onPress={onSendMessage} style={styles.messageButton}>
                 <View style={styles.messageButtonInner}>
                   <Ionicons name="chatbubble" size={22} color="white" />
-                  <Text style={styles.messageButtonText}>Send Message</Text>
+                  <Text style={styles.messageButtonText}>{t('profileCard.actions.sendMessage')}</Text>
                 </View>
               </TouchableOpacity>
             </View>
-          </BlurView>
+          </SafeBlurView>
         </SafeAreaView>
       ) : null}
 
@@ -1130,7 +1118,7 @@ export default function ImmersiveProfileCard({
                   }}
                 >
                   <MaterialCommunityIcons name="flag" size={24} color="#6B7280" />
-                  <Text style={styles.actionText}>Report</Text>
+                  <Text style={styles.actionText}>{t('profileCard.actions.report')}</Text>
                   <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
                 </TouchableOpacity>
               )}
@@ -1144,7 +1132,7 @@ export default function ImmersiveProfileCard({
                   }}
                 >
                   <MaterialCommunityIcons name="block-helper" size={24} color="#EF4444" />
-                  <Text style={[styles.actionText, styles.actionTextDanger]}>Block</Text>
+                  <Text style={[styles.actionText, styles.actionTextDanger]}>{t('profileCard.actions.block')}</Text>
                   <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
                 </TouchableOpacity>
               )}
@@ -1562,6 +1550,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#000000',
     fontWeight: '700',
+    marginTop: 40,
     marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1571,6 +1560,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     lineHeight: 32,
     fontWeight: '400',
+    marginBottom: 40,
   },
   promptPhoto: {
     width: '100%',
@@ -1666,6 +1656,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   hobbyTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#F3E8FF',
     paddingHorizontal: 16,
     paddingVertical: 10,

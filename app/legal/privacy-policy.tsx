@@ -39,7 +39,7 @@ export default function PrivacyPolicy() {
             {'\n'}• Gender identity and sexual orientation
             {'\n'}• Location (city, state, and approximate coordinates)
             {'\n'}• Photos you upload
-            {'\n'}• Profile information (bio, occupation, education, preferences)
+            {'\n'}• Profile information (personality, interests, preferences)
           </Text>
 
           <Text style={styles.subheading}>Verification Information</Text>
@@ -204,7 +204,7 @@ export default function PrivacyPolicy() {
           <Text style={styles.paragraph}>
             For privacy questions or to exercise your rights, contact us:
             {'\n\n'}Email: privacy@joinaccord.app
-            {'\n'}Mail: Accord Privacy Team, [Your Address]
+            {'\n'}Mail: Accord Privacy Team
             {'\n\n'}Response time: Within 30 days of request
           </Text>
 

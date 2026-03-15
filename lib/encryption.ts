@@ -1,7 +1,13 @@
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import { Buffer } from 'buffer';
-import QuickCrypto from 'react-native-quick-crypto';
+let QuickCrypto: any;
+try {
+  QuickCrypto = require('react-native-quick-crypto').default || require('react-native-quick-crypto');
+} catch {
+  console.warn('[encryption] react-native-quick-crypto not available, encryption will use fallback');
+  QuickCrypto = null;
+}
 
 /**
  * E2E Encryption for Messages
@@ -241,6 +247,9 @@ export async function encryptMessage(
   senderPrivateKey: string,
   recipientPublicKey: string
 ): Promise<string> {
+  if (!QuickCrypto) {
+    throw new Error('Native crypto module not available — cannot encrypt');
+  }
   try {
     // CRITICAL FIX: Derive sender's public key from their private key
     // Then use BOTH PUBLIC KEYS for shared key derivation
@@ -297,6 +306,10 @@ export async function decryptMessage(
   recipientPrivateKey: string,
   senderPublicKey: string
 ): Promise<string> {
+  if (!QuickCrypto) {
+    // Can't decrypt without native crypto — return encrypted content as-is
+    return encryptedMessage;
+  }
   try {
     // Parse encrypted message format
     const parts = encryptedMessage.split(':');

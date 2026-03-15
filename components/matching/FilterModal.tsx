@@ -61,23 +61,92 @@ interface FilterModalProps {
   onUpgrade: () => void;
 }
 
-// Option arrays - matching onboarding values
-const GENDERS = ['Man', 'Woman', 'Non-binary', 'Trans Man', 'Trans Woman', 'Genderqueer', 'Agender', 'Other'];
-const ETHNICITIES = ['Asian', 'Black/African', 'Hispanic/Latinx', 'Indigenous/Native', 'Middle Eastern/North African', 'Pacific Islander', 'South Asian', 'White/Caucasian', 'Multiracial', 'Other'];
-const SEXUAL_ORIENTATIONS = ['Straight', 'Lesbian', 'Gay', 'Bisexual', 'Queer', 'Asexual', 'Pansexual', 'Other'];
-const ZODIAC_SIGNS = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
-const PERSONALITY_TYPES = ['INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP', 'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP'];
-const LOVE_LANGUAGES = ['Words of Affirmation', 'Quality Time', 'Receiving Gifts', 'Acts of Service', 'Physical Touch'];
-const LANGUAGES = ['English', 'Spanish', 'French', 'Mandarin', 'Cantonese', 'Japanese', 'Korean', 'Vietnamese', 'Tagalog', 'Hindi', 'Arabic', 'Portuguese', 'German', 'Italian', 'Russian', 'Other'];
-const RELIGIONS = ['Christian', 'Catholic', 'Muslim', 'Jewish', 'Hindu', 'Buddhist', 'Atheist', 'Agnostic', 'Spiritual', 'Other'];
-const POLITICAL_VIEWS = ['Liberal', 'Progressive', 'Moderate', 'Conservative', 'Libertarian', 'Other'];
-const SMOKING_OPTIONS = ['Never', 'Socially', 'Regularly'];
-const DRINKING_OPTIONS = ['Never', 'Socially', 'Regularly'];
-const PET_OPTIONS = ['Dogs', 'Cats', 'Both', 'Other Pets', 'No Pets', 'Allergic'];
-const HOUSING_PREFERENCES = ['Separate Homes', 'Separate Spaces', 'Roommates', 'Shared Bedroom', 'Flexible'];
-const FINANCIAL_ARRANGEMENTS = ['Separate', 'Shared Expenses', 'Joint', 'Prenup Required', 'Flexible'];
-const PRIMARY_REASONS = ['Financial Benefits', 'Immigration', 'Family Pressure', 'Legal Benefits', 'Companionship', 'Safety', 'Other'];
-const RELATIONSHIP_TYPES = ['Platonic', 'Romantic', 'Open'];
+// Chip option type: value is stored in filters, label is displayed
+type ChipOption = { value: string; label: string };
+
+// Simple options where label === value (DB stores the same string)
+const GENDERS: ChipOption[] = ['Man', 'Woman', 'Non-binary'].map(s => ({ value: s, label: s }));
+const ETHNICITIES: ChipOption[] = ['Asian', 'Black/African', 'Hispanic/Latinx', 'Indigenous/Native', 'Middle Eastern/North African', 'Pacific Islander', 'South Asian', 'White/Caucasian', 'Multiracial', 'Other'].map(s => ({ value: s, label: s }));
+const SEXUAL_ORIENTATIONS: ChipOption[] = ['Straight', 'Lesbian', 'Gay', 'Bisexual', 'Queer', 'Asexual', 'Pansexual', 'Other'].map(s => ({ value: s, label: s }));
+const ZODIAC_SIGNS: ChipOption[] = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'].map(s => ({ value: s, label: s }));
+const PERSONALITY_TYPES: ChipOption[] = ['INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP', 'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP'].map(s => ({ value: s, label: s }));
+const LOVE_LANGUAGES: ChipOption[] = ['Words of Affirmation', 'Quality Time', 'Receiving Gifts', 'Acts of Service', 'Physical Touch'].map(s => ({ value: s, label: s }));
+const LANGUAGES: ChipOption[] = ['English', 'Spanish', 'French', 'Mandarin', 'Cantonese', 'Japanese', 'Korean', 'Vietnamese', 'Tagalog', 'Hindi', 'Arabic', 'Portuguese', 'German', 'Italian', 'Russian', 'Other'].map(s => ({ value: s, label: s }));
+
+// Options where DB value differs from display label - must match onboarding/settings values exactly
+const RELIGIONS: ChipOption[] = [
+  { value: 'Christian', label: 'Christian' },
+  { value: 'Catholic', label: 'Catholic' },
+  { value: 'Protestant', label: 'Protestant' },
+  { value: 'Muslim', label: 'Muslim' },
+  { value: 'Jewish', label: 'Jewish' },
+  { value: 'Hindu', label: 'Hindu' },
+  { value: 'Buddhist', label: 'Buddhist' },
+  { value: 'Sikh', label: 'Sikh' },
+  { value: 'Atheist', label: 'Atheist' },
+  { value: 'Agnostic', label: 'Agnostic' },
+  { value: 'Spiritual but not religious', label: 'Spiritual' },
+  { value: 'Other', label: 'Other' },
+  { value: 'Prefer not to say', label: 'Prefer not to say' },
+];
+const POLITICAL_VIEWS: ChipOption[] = [
+  { value: 'Liberal', label: 'Liberal' },
+  { value: 'Progressive', label: 'Progressive' },
+  { value: 'Moderate', label: 'Moderate' },
+  { value: 'Conservative', label: 'Conservative' },
+  { value: 'Libertarian', label: 'Libertarian' },
+  { value: 'Socialist', label: 'Socialist' },
+  { value: 'Apolitical', label: 'Apolitical' },
+  { value: 'Other', label: 'Other' },
+  { value: 'Prefer not to say', label: 'Prefer not to say' },
+];
+const SMOKING_OPTIONS: ChipOption[] = [
+  { value: 'never', label: 'Never' },
+  { value: 'socially', label: 'Socially' },
+  { value: 'regularly', label: 'Regularly' },
+  { value: 'trying_to_quit', label: 'Trying to Quit' },
+];
+const DRINKING_OPTIONS: ChipOption[] = [
+  { value: 'never', label: 'Never' },
+  { value: 'rarely', label: 'Rarely' },
+  { value: 'socially', label: 'Socially' },
+  { value: 'regularly', label: 'Regularly' },
+];
+const PET_OPTIONS: ChipOption[] = [
+  { value: 'love_them', label: 'Love Them' },
+  { value: 'like_them', label: 'Like Them' },
+  { value: 'indifferent', label: 'Indifferent' },
+  { value: 'allergic', label: 'Allergic' },
+  { value: 'dont_like', label: "Don't Like" },
+];
+const HOUSING_PREFERENCES: ChipOption[] = [
+  { value: 'separate_spaces', label: 'Separate Spaces' },
+  { value: 'roommates', label: 'Roommates' },
+  { value: 'separate_homes', label: 'Separate Homes' },
+  { value: 'shared_bedroom', label: 'Shared Bedroom' },
+  { value: 'flexible', label: 'Flexible' },
+];
+const FINANCIAL_ARRANGEMENTS: ChipOption[] = [
+  { value: 'separate', label: 'Separate' },
+  { value: 'shared_expenses', label: 'Shared Expenses' },
+  { value: 'joint', label: 'Joint' },
+  { value: 'prenup_required', label: 'Prenup Required' },
+  { value: 'flexible', label: 'Flexible' },
+];
+const PRIMARY_REASONS: ChipOption[] = [
+  { value: 'financial', label: 'Financial' },
+  { value: 'immigration', label: 'Immigration' },
+  { value: 'family_pressure', label: 'Family Pressure' },
+  { value: 'legal_benefits', label: 'Legal Benefits' },
+  { value: 'companionship', label: 'Companionship' },
+  { value: 'safety', label: 'Safety' },
+  { value: 'other', label: 'Other' },
+];
+const RELATIONSHIP_TYPES: ChipOption[] = [
+  { value: 'platonic', label: 'Platonic' },
+  { value: 'romantic', label: 'Romantic' },
+  { value: 'open', label: 'Open' },
+];
 const WANTS_CHILDREN_OPTIONS = ['Yes', 'No', 'Maybe'];
 
 // Height conversion helpers
@@ -231,7 +300,7 @@ export default function FilterModal({
   };
 
   const renderChips = (
-    options: string[],
+    options: ChipOption[],
     selectedValues: string[],
     filterKey: keyof FilterOptions,
     disabled: boolean = false
@@ -239,27 +308,27 @@ export default function FilterModal({
     <View style={styles.chipContainer}>
       {options.map((option) => (
         <TouchableOpacity
-          key={option}
+          key={option.value}
           disabled={disabled}
           style={[
             styles.chip,
-            selectedValues.includes(option) && styles.chipSelected,
+            selectedValues.includes(option.value) && styles.chipSelected,
             disabled && styles.chipDisabled,
           ]}
           onPress={() =>
             setFilters({
               ...filters,
-              [filterKey]: toggleArrayFilter(selectedValues, option),
+              [filterKey]: toggleArrayFilter(selectedValues, option.value),
             })
           }
         >
           <Text
             style={[
               styles.chipText,
-              selectedValues.includes(option) && styles.chipTextSelected,
+              selectedValues.includes(option.value) && styles.chipTextSelected,
             ]}
           >
-            {option}
+            {option.label}
           </Text>
         </TouchableOpacity>
       ))}
@@ -290,7 +359,7 @@ export default function FilterModal({
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* FREE FILTERS SECTION */}
           <View style={styles.freeSectionHeader}>
-            <Text style={styles.freeSectionTitle}>Basic Filters</Text>
+            <Text style={styles.freeSectionTitle}>{t('filters.basicFilters')}</Text>
           </View>
 
           {/* Age Range */}
@@ -301,7 +370,7 @@ export default function FilterModal({
               <Text style={styles.rangeText}>{localAgeMax}</Text>
             </View>
             <View style={styles.sliderContainer}>
-              <Text style={styles.sliderLabel}>Minimum</Text>
+              <Text style={styles.sliderLabel}>{t('filters.minimum')}</Text>
               <Slider
                 style={styles.slider}
                 minimumValue={18}
@@ -312,7 +381,7 @@ export default function FilterModal({
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
-              <Text style={styles.sliderLabel}>Maximum</Text>
+              <Text style={styles.sliderLabel}>{t('filters.maximum')}</Text>
               <Slider
                 style={styles.slider}
                 minimumValue={18}
@@ -347,8 +416,8 @@ export default function FilterModal({
             <View style={styles.toggleContent}>
               <MaterialCommunityIcons name="clock-outline" size={22} color="#A08AB7" />
               <View style={styles.toggleTextContainer}>
-                <Text style={styles.toggleTitle}>Active Today</Text>
-                <Text style={styles.toggleDescription}>Only show users active in the last 24 hours</Text>
+                <Text style={styles.toggleTitle}>{t('filters.activeToday')}</Text>
+                <Text style={styles.toggleDescription}>{t('filters.activeTodayDescription')}</Text>
               </View>
             </View>
             <Switch
@@ -364,8 +433,8 @@ export default function FilterModal({
             <View style={styles.toggleContent}>
               <MaterialCommunityIcons name="blur" size={22} color="#A08AB7" />
               <View style={styles.toggleTextContainer}>
-                <Text style={styles.toggleTitle}>Show Blurred Photos</Text>
-                <Text style={styles.toggleDescription}>Include profiles with photo blur enabled</Text>
+                <Text style={styles.toggleTitle}>{t('filters.showBlurred')}</Text>
+                <Text style={styles.toggleDescription}>{t('filters.showBlurredDescription')}</Text>
               </View>
             </View>
             <Switch
@@ -409,7 +478,7 @@ export default function FilterModal({
           {/* PREMIUM FILTERS SECTION */}
           <View style={styles.premiumSectionHeader}>
             <MaterialCommunityIcons name="crown" size={20} color="#FFD700" />
-            <Text style={styles.premiumSectionTitle}>Advanced Filters</Text>
+            <Text style={styles.premiumSectionTitle}>{t('filters.advancedFilters')}</Text>
           </View>
 
           {!isPremium && (
@@ -427,32 +496,32 @@ export default function FilterModal({
           {/* Identity & Background Section */}
           {renderCollapsibleSection(
             'identity',
-            'Identity & Background',
+            t('filters.identityBackground'),
             'account-outline',
             getSelectedCount([filters.genderPreference, filters.ethnicity, filters.sexualOrientation]),
             <>
-              {renderSubsection('Gender', renderChips(GENDERS, filters.genderPreference, 'genderPreference'))}
-              {renderSubsection('Ethnicity', renderChips(ETHNICITIES, filters.ethnicity, 'ethnicity'))}
-              {renderSubsection('Sexual Orientation', renderChips(SEXUAL_ORIENTATIONS, filters.sexualOrientation, 'sexualOrientation'))}
+              {renderSubsection(t('filters.gender'), renderChips(GENDERS, filters.genderPreference, 'genderPreference'))}
+              {renderSubsection(t('filters.ethnicity'), renderChips(ETHNICITIES, filters.ethnicity, 'ethnicity'))}
+              {renderSubsection(t('filters.sexualOrientation'), renderChips(SEXUAL_ORIENTATIONS, filters.sexualOrientation, 'sexualOrientation'))}
             </>
           )}
 
           {/* Physical & Personality Section */}
           {renderCollapsibleSection(
             'physical',
-            'Physical & Personality',
+            t('filters.physicalPersonality'),
             'account-heart-outline',
             getSelectedCount([filters.zodiacSign, filters.personalityType, filters.loveLanguage]) +
               (localHeightMin !== 48 || localHeightMax !== 84 ? 1 : 0),
             <>
-              {renderSubsection('Height Range', (
+              {renderSubsection(t('filters.heightRange'), (
                 <>
                   <View style={styles.rangeValues}>
                     <Text style={styles.rangeText}>{inchesToFeetDisplay(localHeightMin)}</Text>
                     <Text style={styles.rangeText}>{inchesToFeetDisplay(localHeightMax)}</Text>
                   </View>
                   <View style={styles.sliderContainer}>
-                    <Text style={styles.sliderLabel}>Minimum</Text>
+                    <Text style={styles.sliderLabel}>{t('filters.minimum')}</Text>
                     <Slider
                       style={styles.slider}
                       minimumValue={48}
@@ -463,7 +532,7 @@ export default function FilterModal({
                       minimumTrackTintColor="#A08AB7"
                       maximumTrackTintColor="#E5E7EB"
                     />
-                    <Text style={styles.sliderLabel}>Maximum</Text>
+                    <Text style={styles.sliderLabel}>{t('filters.maximum')}</Text>
                     <Slider
                       style={styles.slider}
                       minimumValue={48}
@@ -477,39 +546,39 @@ export default function FilterModal({
                   </View>
                 </>
               ))}
-              {renderSubsection('Zodiac Sign', renderChips(ZODIAC_SIGNS, filters.zodiacSign, 'zodiacSign'))}
-              {renderSubsection('MBTI Personality Type', renderChips(PERSONALITY_TYPES, filters.personalityType, 'personalityType'))}
-              {renderSubsection('Love Language', renderChips(LOVE_LANGUAGES, filters.loveLanguage, 'loveLanguage'))}
+              {renderSubsection(t('filters.zodiacSign'), renderChips(ZODIAC_SIGNS, filters.zodiacSign, 'zodiacSign'))}
+              {renderSubsection(t('filters.mbtiPersonality'), renderChips(PERSONALITY_TYPES, filters.personalityType, 'personalityType'))}
+              {renderSubsection(t('filters.loveLanguage'), renderChips(LOVE_LANGUAGES, filters.loveLanguage, 'loveLanguage'))}
             </>
           )}
 
           {/* Lifestyle Section */}
           {renderCollapsibleSection(
             'lifestyle',
-            'Lifestyle',
+            t('filters.lifestyle'),
             'heart-pulse',
             getSelectedCount([filters.religion, filters.politicalViews, filters.languagesSpoken, filters.smoking, filters.drinking, filters.pets]),
             <>
-              {renderSubsection('Religion', renderChips(RELIGIONS, filters.religion, 'religion'))}
-              {renderSubsection('Political Views', renderChips(POLITICAL_VIEWS, filters.politicalViews, 'politicalViews'))}
-              {renderSubsection('Languages Spoken', renderChips(LANGUAGES, filters.languagesSpoken, 'languagesSpoken'))}
-              {renderSubsection('Smoking', renderChips(SMOKING_OPTIONS, filters.smoking, 'smoking'))}
-              {renderSubsection('Drinking', renderChips(DRINKING_OPTIONS, filters.drinking, 'drinking'))}
-              {renderSubsection('Pets', renderChips(PET_OPTIONS, filters.pets, 'pets'))}
+              {renderSubsection(t('filters.religion'), renderChips(RELIGIONS, filters.religion, 'religion'))}
+              {renderSubsection(t('filters.politicalViews'), renderChips(POLITICAL_VIEWS, filters.politicalViews, 'politicalViews'))}
+              {renderSubsection(t('filters.languagesSpoken'), renderChips(LANGUAGES, filters.languagesSpoken, 'languagesSpoken'))}
+              {renderSubsection(t('filters.smoking'), renderChips(SMOKING_OPTIONS, filters.smoking, 'smoking'))}
+              {renderSubsection(t('filters.drinking'), renderChips(DRINKING_OPTIONS, filters.drinking, 'drinking'))}
+              {renderSubsection(t('filters.pets'), renderChips(PET_OPTIONS, filters.pets, 'pets'))}
             </>
           )}
 
           {/* Marriage Intentions Section */}
           {renderCollapsibleSection(
             'marriage',
-            'Marriage Intentions',
+            t('filters.marriageIntentions'),
             'ring',
             getSelectedCount([filters.housingPreference, filters.financialArrangement, filters.primaryReason, filters.relationshipType]) +
               (filters.wantsChildren ? 1 : 0),
             <>
-              {renderSubsection('Primary Reason', renderChips(PRIMARY_REASONS, filters.primaryReason, 'primaryReason'))}
-              {renderSubsection('Relationship Type', renderChips(RELATIONSHIP_TYPES, filters.relationshipType, 'relationshipType'))}
-              {renderSubsection('Wants Children', (
+              {renderSubsection(t('filters.primaryReason'), renderChips(PRIMARY_REASONS, filters.primaryReason, 'primaryReason'))}
+              {renderSubsection(t('filters.relationshipType'), renderChips(RELATIONSHIP_TYPES, filters.relationshipType, 'relationshipType'))}
+              {renderSubsection(t('filters.wantsChildren'), (
                 <View style={styles.chipContainer}>
                   {WANTS_CHILDREN_OPTIONS.map((option) => (
                     <TouchableOpacity
@@ -537,8 +606,8 @@ export default function FilterModal({
                   ))}
                 </View>
               ))}
-              {renderSubsection('Housing Preference', renderChips(HOUSING_PREFERENCES, filters.housingPreference, 'housingPreference'))}
-              {renderSubsection('Financial Arrangement', renderChips(FINANCIAL_ARRANGEMENTS, filters.financialArrangement, 'financialArrangement'))}
+              {renderSubsection(t('filters.housingPreference'), renderChips(HOUSING_PREFERENCES, filters.housingPreference, 'housingPreference'))}
+              {renderSubsection(t('filters.financialArrangement'), renderChips(FINANCIAL_ARRANGEMENTS, filters.financialArrangement, 'financialArrangement'))}
             </>
           )}
 
@@ -782,7 +851,7 @@ const styles = StyleSheet.create({
   infoText: {
     flex: 1,
     fontSize: 14,
-    color: '#6B21A8',
+    color: '#A08AB7',
     lineHeight: 20,
   },
   editPreferencesButton: {

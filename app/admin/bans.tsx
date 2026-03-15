@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, RefreshControl, TextInput, Modal, Image } from 'react-native';
+import { View, Text, ScrollView, FlatList, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, RefreshControl, TextInput, Modal } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendBanNotification } from '@/lib/notifications';
+import { signPhotoUrls, getSignedUrls } from '@/lib/signed-urls';
 
 interface FlaggedPhoto {
   url: string;
@@ -15,6 +17,7 @@ interface FlaggedPhoto {
 
 interface ProfilePhoto {
   url: string;
+  storage_path: string | null;
   is_primary: boolean;
   display_order: number;
   moderation_status: string;
@@ -40,6 +43,14 @@ interface Ban {
   profile_photos: ProfilePhoto[];
 }
 
+/**
+ * Get the photo URI. Photos are pre-signed at load time,
+ * so this just returns the url field.
+ */
+function getPhotoUri(photo: ProfilePhoto): string {
+  return photo.url;
+}
+
 export default function AdminBans() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -55,6 +66,7 @@ export default function AdminBans() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<FlaggedPhoto | null>(null);
+  const [unbanningId, setUnbanningId] = useState<string | null>(null);
 
   useEffect(() => {
     checkAdminStatus();
@@ -106,9 +118,11 @@ export default function AdminBans() {
           is_permanent,
           expires_at,
           created_at,
+          unbanned_at,
           banned_profile:banned_profile_id(display_name),
           banner:banned_by(display_name)
         `)
+        .is('unbanned_at', null)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -138,7 +152,7 @@ export default function AdminBans() {
       if (allProfileIds.length > 0) {
         const { data: profilePhotos } = await supabase
           .from('photos')
-          .select('profile_id, url, is_primary, display_order, moderation_status')
+          .select('profile_id, url, storage_path, is_primary, display_order, moderation_status')
           .in('profile_id', allProfileIds)
           .order('display_order', { ascending: true });
 
@@ -150,6 +164,7 @@ export default function AdminBans() {
             }
             photosByProfile.get(photo.profile_id)!.push({
               url: photo.url,
+              storage_path: photo.storage_path || null,
               is_primary: photo.is_primary,
               display_order: photo.display_order,
               moderation_status: photo.moderation_status || 'approved',
@@ -207,6 +222,47 @@ export default function AdminBans() {
         }
       }
 
+      // Sign all photo URLs in batch (private buckets require signed URLs)
+      // 1. Batch sign all profile photos across all bans
+      const allProfilePhotos: ProfilePhoto[] = [];
+      const profilePhotoOffsets: number[] = [];
+      for (const ban of transformedBans) {
+        profilePhotoOffsets.push(allProfilePhotos.length);
+        if (ban.profile_photos.length > 0) {
+          allProfilePhotos.push(...ban.profile_photos);
+        }
+      }
+      const signedProfilePhotos = allProfilePhotos.length > 0 ? await signPhotoUrls(allProfilePhotos) : [];
+      for (let i = 0; i < transformedBans.length; i++) {
+        const start = profilePhotoOffsets[i];
+        const count = transformedBans[i].profile_photos.length;
+        if (count > 0) {
+          transformedBans[i].profile_photos = signedProfilePhotos.slice(start, start + count);
+        }
+      }
+
+      // 2. Batch sign all flagged photos across all bans
+      const flaggedPaths: string[] = [];
+      const flaggedEntries: { banIdx: number; fpIdx: number }[] = [];
+      for (let b = 0; b < transformedBans.length; b++) {
+        for (let f = 0; f < transformedBans[b].flagged_photos.length; f++) {
+          const fp = transformedBans[b].flagged_photos[f];
+          if (fp.url) {
+            flaggedPaths.push(fp.url);
+            flaggedEntries.push({ banIdx: b, fpIdx: f });
+          }
+        }
+      }
+      if (flaggedPaths.length > 0) {
+        const signedFlagged = await getSignedUrls('profile-photos', flaggedPaths);
+        for (let j = 0; j < flaggedEntries.length; j++) {
+          if (signedFlagged[j]) {
+            const { banIdx, fpIdx } = flaggedEntries[j];
+            transformedBans[banIdx].flagged_photos[fpIdx].url = signedFlagged[j]!;
+          }
+        }
+      }
+
       setBans(transformedBans);
     } catch (error: any) {
       console.error('Error loading bans:', error);
@@ -238,19 +294,40 @@ export default function AdminBans() {
   };
 
   const executeUnban = async (banId: string) => {
+    setUnbanningId(banId);
     try {
-      const { error } = await supabase
-        .from('bans')
-        .delete()
-        .eq('id', banId);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No active session');
 
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke('admin-unban-user', {
+        body: { ban_id: banId },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
 
-      Alert.alert('Success', 'Ban has been removed.');
+      if (error) {
+        let errorMessage = error.message;
+        try {
+          if (error.context && !error.context.bodyUsed) {
+            const errorBody = await error.context.json();
+            errorMessage = errorBody?.error || errorMessage;
+          }
+        } catch {}
+        throw new Error(errorMessage);
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Unban failed');
+      }
+
+      Alert.alert('Success', data.message || 'User has been unbanned.');
       loadBans();
     } catch (error: any) {
       console.error('Error unbanning:', error);
-      Alert.alert('Error', 'Failed to remove ban.');
+      Alert.alert('Error', error.message || 'Failed to unban user.');
+    } finally {
+      setUnbanningId(null);
     }
   };
 
@@ -360,6 +437,13 @@ export default function AdminBans() {
           throw new Error('No active session');
         }
 
+        // Pre-fetch push notification data BEFORE ban deactivates the profile (RLS blocks inactive profiles)
+        const { data: pushProfile } = await supabase
+          .from('profiles')
+          .select('push_token, push_enabled, display_name')
+          .eq('id', existingUserProfile.id)
+          .maybeSingle();
+
         // Call admin-ban-user Edge Function (handles auth ban, profile deactivation, ban record creation)
         const { data: banResponse, error: banError } = await supabase.functions.invoke('admin-ban-user', {
           body: {
@@ -409,7 +493,7 @@ export default function AdminBans() {
         // Step 2d: Send ban notifications (push + email)
         try {
           // Send push notification
-          await sendBanNotification(existingUserProfile.id, newBanReason.trim());
+          await sendBanNotification(existingUserProfile.id, newBanReason.trim(), undefined, pushProfile);
 
           // Send email notification
           const { data: { session } } = await supabase.auth.getSession();
@@ -532,160 +616,175 @@ export default function AdminBans() {
           <Text style={styles.statLabel}>Email Bans</Text>
         </View>
         <View style={styles.statCard}>
-          <MaterialCommunityIcons name="phone-off" size={32} color="#8B5CF6" />
+          <MaterialCommunityIcons name="phone-off" size={32} color="#A08AB7" />
           <Text style={styles.statNumber}>{bans.filter(b => b.banned_phone_hash).length}</Text>
           <Text style={styles.statLabel}>Phone Bans</Text>
         </View>
       </View>
 
-      <ScrollView
+      <FlatList
+        data={bans}
+        keyExtractor={(item) => item.id}
         style={styles.content}
+        contentContainerStyle={bans.length === 0 ? { flex: 1 } : undefined}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#9B87CE" />
         }
-      >
-        {bans.length === 0 ? (
+        initialNumToRender={5}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+        removeClippedSubviews
+        ListEmptyComponent={
           <View style={styles.emptyState}>
             <MaterialCommunityIcons name="shield-check" size={64} color="#D1D5DB" />
             <Text style={styles.emptyStateText}>No bans yet</Text>
             <Text style={styles.emptyStateSubtext}>Banned users will appear here</Text>
           </View>
-        ) : (
-          bans.map((ban) => (
-            <View key={ban.id} style={styles.banCard}>
-              {/* Header */}
-              <View style={styles.banHeader}>
-                <View style={styles.banHeaderLeft}>
-                  {ban.profile_photos.length > 0 ? (
-                    <Image
-                      source={{ uri: ban.profile_photos.find(p => p.is_primary)?.url || ban.profile_photos[0].url }}
-                      style={styles.banAvatar}
-                    />
-                  ) : (
-                    <View style={[styles.banAvatar, styles.banAvatarPlaceholder]}>
-                      <MaterialCommunityIcons name="account-cancel" size={24} color="#EF4444" />
-                    </View>
+        }
+        renderItem={({ item: ban }) => (
+          <View style={styles.banCard}>
+            {/* Header */}
+            <View style={styles.banHeader}>
+              <View style={styles.banHeaderLeft}>
+                {ban.profile_photos.length > 0 ? (
+                  <Image
+                    source={{ uri: getPhotoUri(ban.profile_photos.find(p => p.is_primary) || ban.profile_photos[0]) }}
+                    style={styles.banAvatar}
+                    contentFit="cover"
+                    recyclingKey={ban.id}
+                  />
+                ) : (
+                  <View style={[styles.banAvatar, styles.banAvatarPlaceholder]}>
+                    <MaterialCommunityIcons name="account-cancel" size={24} color="#EF4444" />
+                  </View>
+                )}
+                <View style={{ marginLeft: 12, flex: 1 }}>
+                  <Text style={styles.banEmail}>{ban.banned_email || 'Manual Ban'}</Text>
+                  {ban.banned_profile && (
+                    <Text style={styles.banSubtext}>{ban.banned_profile.display_name}</Text>
                   )}
-                  <View style={{ marginLeft: 12, flex: 1 }}>
-                    <Text style={styles.banEmail}>{ban.banned_email || 'Manual Ban'}</Text>
-                    {ban.banned_profile && (
-                      <Text style={styles.banSubtext}>{ban.banned_profile.display_name}</Text>
-                    )}
-                  </View>
                 </View>
               </View>
+            </View>
 
-              {/* Profile Photos */}
-              {ban.profile_photos.length > 0 && (
-                <View style={styles.profilePhotosContainer}>
-                  <Text style={styles.profilePhotosLabel}>
-                    Profile Photos ({ban.profile_photos.length}
-                    {ban.profile_photos.some(p => p.moderation_status === 'rejected') &&
-                      ` · ${ban.profile_photos.filter(p => p.moderation_status === 'rejected').length} rejected`}
-                    ):
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flaggedPhotosScroll}>
-                    {ban.profile_photos.map((photo, idx) => {
-                      const isRejected = photo.moderation_status === 'rejected';
-                      return (
-                        <TouchableOpacity
-                          key={idx}
-                          style={[styles.profilePhotoCard, isRejected && styles.rejectedPhotoCard]}
-                          onPress={() => setSelectedPhoto({ url: photo.url, confidence: isRejected ? 'REJECTED' : '', labels: `Photo ${idx + 1}${photo.is_primary ? ' (Primary)' : ''}${isRejected ? ' — NSFW Rejected' : ''}` })}
-                          activeOpacity={0.7}
-                        >
-                          <Image source={{ uri: photo.url }} style={styles.profilePhotoImage} resizeMode="cover" />
-                          {isRejected && (
-                            <View style={styles.nsfwBadge}>
-                              <Text style={styles.nsfwBadgeText}>NSFW</Text>
-                            </View>
-                          )}
-                          {photo.is_primary && !isRejected && (
-                            <View style={styles.primaryBadge}>
-                              <Text style={styles.primaryBadgeText}>Primary</Text>
-                            </View>
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Ban Identifiers */}
-              <View style={styles.identifiersContainer}>
-                {ban.banned_email && (
-                  <View style={styles.identifier}>
-                    <MaterialCommunityIcons name="email" size={16} color="#6B7280" />
-                    <Text style={styles.identifierText}>Email</Text>
-                  </View>
-                )}
-                {ban.banned_phone_hash && (
-                  <View style={styles.identifier}>
-                    <MaterialCommunityIcons name="phone" size={16} color="#6B7280" />
-                    <Text style={styles.identifierText}>Phone</Text>
-                  </View>
-                )}
-                {ban.banned_device_id && (
-                  <View style={styles.identifier}>
-                    <MaterialCommunityIcons name="cellphone" size={16} color="#6B7280" />
-                    <Text style={styles.identifierText}>Device</Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Reason */}
-              <View style={styles.reasonContainer}>
-                <Text style={styles.reasonLabel}>Reason:</Text>
-                <Text style={styles.reasonText}>{ban.ban_reason}</Text>
-              </View>
-
-              {/* Flagged Photos */}
-              {ban.flagged_photos.length > 0 && (
-                <View style={styles.flaggedPhotosContainer}>
-                  <Text style={styles.flaggedPhotosLabel}>Flagged Photos:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flaggedPhotosScroll}>
-                    {ban.flagged_photos.map((photo, idx) => (
-                      <TouchableOpacity key={idx} style={styles.flaggedPhotoCard} onPress={() => photo.url && setSelectedPhoto(photo)} activeOpacity={0.7}>
-                        {photo.url ? (
-                          <Image source={{ uri: photo.url }} style={styles.flaggedPhotoImage} resizeMode="cover" />
-                        ) : (
-                          <View style={[styles.flaggedPhotoImage, styles.flaggedPhotoPlaceholder]}>
-                            <MaterialCommunityIcons name="image-off" size={24} color="#9CA3AF" />
+            {/* Profile Photos */}
+            {ban.profile_photos.length > 0 && (
+              <View style={styles.profilePhotosContainer}>
+                <Text style={styles.profilePhotosLabel}>
+                  Profile Photos ({ban.profile_photos.length}
+                  {ban.profile_photos.some(p => p.moderation_status === 'rejected') &&
+                    ` · ${ban.profile_photos.filter(p => p.moderation_status === 'rejected').length} rejected`}
+                  ):
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flaggedPhotosScroll}>
+                  {ban.profile_photos.map((photo, idx) => {
+                    const isRejected = photo.moderation_status === 'rejected';
+                    const photoUri = getPhotoUri(photo);
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[styles.profilePhotoCard, isRejected && styles.rejectedPhotoCard]}
+                        onPress={() => setSelectedPhoto({ url: photoUri, confidence: isRejected ? 'REJECTED' : '', labels: `Photo ${idx + 1}${photo.is_primary ? ' (Primary)' : ''}${isRejected ? ' — NSFW Rejected' : ''}` })}
+                        activeOpacity={0.7}
+                      >
+                        <Image source={{ uri: photoUri }} style={styles.profilePhotoImage} contentFit="cover" cachePolicy="disk" />
+                        {isRejected && (
+                          <View style={styles.nsfwBadge}>
+                            <Text style={styles.nsfwBadgeText}>NSFW</Text>
                           </View>
                         )}
-                        <View style={styles.flaggedPhotoInfo}>
-                          <Text style={styles.flaggedPhotoConfidence}>{photo.confidence}</Text>
-                          <Text style={styles.flaggedPhotoLabels} numberOfLines={2}>{photo.labels}</Text>
-                        </View>
+                        {photo.is_primary && !isRejected && (
+                          <View style={styles.primaryBadge}>
+                            <Text style={styles.primaryBadgeText}>Primary</Text>
+                          </View>
+                        )}
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Ban Identifiers */}
+            <View style={styles.identifiersContainer}>
+              {ban.banned_email && (
+                <View style={styles.identifier}>
+                  <MaterialCommunityIcons name="email" size={16} color="#6B7280" />
+                  <Text style={styles.identifierText}>Email</Text>
                 </View>
               )}
-
-              {/* Meta */}
-              <View style={styles.metaContainer}>
-                <Text style={styles.metaText}>
-                  Banned by: {ban.banner?.display_name || 'System'}
-                </Text>
-                <Text style={styles.metaText}>
-                  {ban.created_at ? formatDate(ban.created_at) : 'Unknown date'}
-                </Text>
-              </View>
-
-              {/* Unban Button */}
-              <TouchableOpacity
-                style={styles.unbanButton}
-                onPress={() => handleUnban(ban.id)}
-              >
-                <MaterialCommunityIcons name="account-check" size={18} color="#10B981" />
-                <Text style={styles.unbanButtonText}>Unban</Text>
-              </TouchableOpacity>
+              {ban.banned_phone_hash && (
+                <View style={styles.identifier}>
+                  <MaterialCommunityIcons name="phone" size={16} color="#6B7280" />
+                  <Text style={styles.identifierText}>Phone</Text>
+                </View>
+              )}
+              {ban.banned_device_id && (
+                <View style={styles.identifier}>
+                  <MaterialCommunityIcons name="cellphone" size={16} color="#6B7280" />
+                  <Text style={styles.identifierText}>Device</Text>
+                </View>
+              )}
             </View>
-          ))
+
+            {/* Reason */}
+            <View style={styles.reasonContainer}>
+              <Text style={styles.reasonLabel}>Reason:</Text>
+              <Text style={styles.reasonText}>{ban.ban_reason}</Text>
+            </View>
+
+            {/* Flagged Photos */}
+            {ban.flagged_photos.length > 0 && (
+              <View style={styles.flaggedPhotosContainer}>
+                <Text style={styles.flaggedPhotosLabel}>Flagged Photos:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flaggedPhotosScroll}>
+                  {ban.flagged_photos.map((photo, idx) => (
+                    <TouchableOpacity key={idx} style={styles.flaggedPhotoCard} onPress={() => photo.url && setSelectedPhoto(photo)} activeOpacity={0.7}>
+                      {photo.url ? (
+                        <Image source={{ uri: photo.url }} style={styles.flaggedPhotoImage} contentFit="cover" cachePolicy="disk" />
+                      ) : (
+                        <View style={[styles.flaggedPhotoImage, styles.flaggedPhotoPlaceholder]}>
+                          <MaterialCommunityIcons name="image-off" size={24} color="#9CA3AF" />
+                        </View>
+                      )}
+                      <View style={styles.flaggedPhotoInfo}>
+                        <Text style={styles.flaggedPhotoConfidence}>{photo.confidence}</Text>
+                        <Text style={styles.flaggedPhotoLabels} numberOfLines={2}>{photo.labels}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Meta */}
+            <View style={styles.metaContainer}>
+              <Text style={styles.metaText}>
+                Banned by: {ban.banner?.display_name || 'System'}
+              </Text>
+              <Text style={styles.metaText}>
+                {ban.created_at ? formatDate(ban.created_at) : 'Unknown date'}
+              </Text>
+            </View>
+
+            {/* Unban Button */}
+            <TouchableOpacity
+              style={[styles.unbanButton, unbanningId === ban.id && styles.buttonDisabled]}
+              onPress={() => handleUnban(ban.id)}
+              disabled={unbanningId === ban.id}
+            >
+              {unbanningId === ban.id ? (
+                <ActivityIndicator size="small" color="#10B981" />
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="account-check" size={18} color="#10B981" />
+                  <Text style={styles.unbanButtonText}>Unban</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         )}
-      </ScrollView>
+      />
 
       {/* Search User Modal */}
       <Modal
@@ -874,7 +973,8 @@ export default function AdminBans() {
               <Image
                 source={{ uri: selectedPhoto.url }}
                 style={styles.photoViewerImage}
-                resizeMode="contain"
+                contentFit="contain"
+                cachePolicy="disk"
               />
               <View style={styles.photoViewerInfo}>
                 <Text style={styles.photoViewerConfidence}>Confidence: {selectedPhoto.confidence}</Text>

@@ -21,7 +21,7 @@ import Animated, {
 import { getReleaseNotes, ReleaseNote, ReleaseFeature } from '@/lib/release-notes';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const STORAGE_KEY = 'whats_new_seen_version';
+const STORAGE_KEY = 'whats_new_seen_version_v2';
 
 // Get current app version from app.json
 const CURRENT_VERSION = Constants.expoConfig?.version || '1.0.0';

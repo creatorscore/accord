@@ -9,10 +9,12 @@ import {
   Animated,
   Modal,
   Pressable,
+  RefreshControl,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { getHobbyIcon } from '@/lib/hobby-options';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomSheetModal, BottomSheetView, BottomSheetTextInput, BottomSheetBackdrop, BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
@@ -24,7 +26,13 @@ import { useWatermark } from '@/hooks/useWatermark';
 import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import { useSafeBlur } from '@/hooks/useSafeBlur';
 import { usePhotoBlur } from '@/hooks/usePhotoBlur';
+import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
+import { getSignedUrl } from '@/lib/signed-urls';
+import { isFieldVisible } from '@/lib/field-visibility';
+import { translateProfileValue, translateProfileArray } from '@/lib/translate-profile-values';
+import { ZoomablePhotoWrapper } from '@/components/shared/ZoomablePhotoWrapper';
+import { useTranslation } from 'react-i18next';
 
 const { width: _SCREEN_WIDTH, height: _SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -39,11 +47,7 @@ interface Profile {
   location_city?: string;
   location_state?: string;
   location_country?: string;
-  hometown?: string;
   hide_distance?: boolean;
-  bio?: string;
-  occupation?: string;
-  education?: string;
   photos?: { url: string; is_primary: boolean; blur_data_uri?: string | null }[];
   compatibility_score?: number;
   is_verified?: boolean;
@@ -67,7 +71,12 @@ interface Profile {
     books?: string[];
     tv_shows?: string[];
   };
+  bio?: string;
+  hometown?: string;
+  occupation?: string;
+  education?: string;
   photo_blur_enabled?: boolean;
+  field_visibility?: Record<string, boolean>;
   preferences?: any;
   last_active_at?: string;
   hide_last_active?: boolean;
@@ -82,6 +91,7 @@ interface Preferences {
   housing_preference?: string | string[];
   financial_arrangement?: string | string[];
   income_level?: string;
+  lifestyle_preferences?: { drinking?: string; smoking?: string; pets?: string };
   drinking?: string;
   smoking?: string;
   pets?: string;
@@ -129,8 +139,11 @@ interface DiscoveryProfileViewProps {
   hideActions?: boolean; // Hide all action buttons (for preview mode)
   hideCompatibilityScore?: boolean; // Hide compatibility score section (for match profile view)
   renderAdditionalContent?: () => React.ReactNode; // Custom content to render after profile
+  renderHeader?: () => React.ReactNode; // Custom header content rendered inside ScrollView (scrolls with content)
   isPhotoRevealed?: boolean; // Whether profile owner has revealed photos to viewer (for matched users)
   isOwnProfile?: boolean; // Whether viewer is viewing their own profile (never blur own photos)
+  onRefresh?: () => void; // Pull-to-refresh callback
+  refreshing?: boolean; // Whether refresh is in progress
 }
 
 // Helper functions
@@ -140,40 +153,15 @@ const formatArrayOrString = (value?: string | string[]): string => {
   return value;
 };
 
-const PREFERENCE_LABELS: { [key: string]: string } = {
-  'separate': 'Keep Finances Separate',
-  'shared_expenses': 'Share Living Expenses',
-  'joint': 'Fully Joint Finances',
-  'prenup_required': 'Prenup Required',
-  'flexible': 'Flexible/Open to Discussion',
-  'separate_spaces': 'Separate Bedrooms/Spaces',
-  'roommates': 'Roommate-Style Arrangement',
-  'separate_homes': 'Separate Homes Nearby',
-  'shared_bedroom': 'Shared Bedroom',
-  'biological': 'Biological Children',
-  'adoption': 'Adoption',
-  'co_parenting': 'Co-Parenting Agreement',
-  'surrogacy': 'Surrogacy',
-  'ivf': 'IVF',
-  'already_have': 'Already Have Children',
-  'open_discussion': 'Open to Discussion',
-  'financial': 'Financial Stability',
-  'immigration': 'Immigration/Visa',
-  'family_pressure': 'Family Pressure',
-  'legal_benefits': 'Legal Benefits',
-  'companionship': 'Companionship',
-  'safety': 'Safety & Protection',
-  'platonic': 'Platonic Only',
-  'romantic': 'Romantic Partnership',
-  'open': 'Open Arrangement',
-};
+// PREFERENCE_LABELS is now generated inside the component via getPreferenceLabels() for i18n support.
+// formatLabel is also defined inside the component to access the translated labels.
 
-const formatLabel = (value: any): string => {
+// Fallback formatLabel for use outside the component (used by formatArrayWithLabels and VitalsSection)
+const formatLabelFallback = (value: any): string => {
   try {
     if (!value) return '';
-    if (Array.isArray(value)) return value.filter(Boolean).map(formatLabel).join(', ');
+    if (Array.isArray(value)) return value.filter(Boolean).map(formatLabelFallback).join(', ');
     if (typeof value !== 'string') return String(value);
-    if (PREFERENCE_LABELS[value]) return PREFERENCE_LABELS[value];
     return value.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   } catch {
     return typeof value === 'string' ? value : '';
@@ -193,10 +181,10 @@ const formatArrayWithLabels = (value?: string | string[]): string => {
     }
   }
   // Filter out empty/null/undefined items before mapping to prevent errors
-  return items.filter(item => item && typeof item === 'string').map(formatLabel).join(', ');
+  return items.filter(item => item && typeof item === 'string').map(formatLabelFallback).join(', ');
 };
 
-const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boolean | undefined): string | null => {
+const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boolean | undefined, t: (key: string, opts?: any) => string): string | null => {
   if (hideLastActive || !lastActiveAt) return null;
   const lastActive = new Date(lastActiveAt);
   const now = new Date();
@@ -205,11 +193,11 @@ const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boo
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffMins < 5) return 'Active now';
-  if (diffMins < 60) return `Active ${diffMins}m ago`;
-  if (diffHours < 24) return `Active ${diffHours}h ago`;
-  if (diffDays === 1) return 'Active yesterday';
-  if (diffDays < 7) return `Active ${diffDays}d ago`;
+  if (diffMins < 5) return t('profileCard.activity.activeNow');
+  if (diffMins < 60) return t('profileCard.activity.minutesAgo', { count: diffMins });
+  if (diffHours < 24) return t('profileCard.activity.hoursAgo', { count: diffHours });
+  if (diffDays === 1) return t('profileCard.activity.yesterday');
+  if (diffDays < 7) return t('profileCard.activity.daysAgo', { count: diffDays });
   return null;
 };
 
@@ -240,7 +228,6 @@ const PhotoCard = React.memo(function PhotoCard({
   uri,
   onLike,
   blurRadius,
-  showBlurOverlay,
   onImageLoad,
   onImageError,
   watermarkReady,
@@ -254,7 +241,6 @@ const PhotoCard = React.memo(function PhotoCard({
   uri: string;
   onLike: () => void;
   blurRadius: number;
-  showBlurOverlay: boolean;
   onImageLoad: () => void;
   onImageError: () => void;
   watermarkReady: boolean;
@@ -265,44 +251,36 @@ const PhotoCard = React.memo(function PhotoCard({
   blurDataUri?: string | null;
   shouldBlur?: boolean;
 }) {
-  // Use two-layer blur: downsized transform URL + light native blur
   const photoBlur = usePhotoBlur({
     shouldBlur,
     photoUrl: uri,
     blurDataUri,
-    transformWidth: 800,
   });
   const imageUri = photoBlur.imageUri;
   const effectiveBlurRadius = photoBlur.blurRadius;
-  const effectiveShowOverlay = photoBlur.showBlurOverlay;
 
   return (
   <View style={styles.photoCard}>
-    <Image
-      source={{ uri: imageUri }}
-      style={styles.photoImage}
-      contentFit="cover"
-      cachePolicy="memory-disk"
-      transition={200}
-      blurRadius={effectiveBlurRadius}
-      onLoad={onImageLoad}
-      onError={onImageError}
-    />
-    {/* Android blur fallback - CSS overlay instead of RenderScript */}
-    {effectiveShowOverlay && (
-      <View
-        style={[styles.photoImage, { position: 'absolute', backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-        pointerEvents="none"
+    <ZoomablePhotoWrapper enabled={!shouldBlur}>
+      <SafeBlurImage
+        source={{ uri: imageUri }}
+        style={styles.photoImage}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={200}
+        blurRadius={effectiveBlurRadius}
+        onLoad={onImageLoad}
+        onError={onImageError}
       />
-    )}
-    {watermarkReady && viewerUserId && (
-      <DynamicWatermark
-        key={`watermark-${profileId}-${photoIndex}`}
-        userId={profileId}
-        viewerUserId={viewerUserId}
-        visible={true}
-      />
-    )}
+      {watermarkReady && viewerUserId && (
+        <DynamicWatermark
+          key={`watermark-${profileId}-${photoIndex}`}
+          userId={profileId}
+          viewerUserId={viewerUserId}
+          visible={true}
+        />
+      )}
+    </ZoomablePhotoWrapper>
     {showLikeButton && (
       <View style={styles.photoLikeContainer}>
         <LikeButton onPress={onLike} />
@@ -338,7 +316,7 @@ const PromptCard = React.memo(function PromptCard({
 });
 
 // Vitals Chip Component (for horizontal scroll row - Hinge style with dividers)
-const VitalsChip = function VitalsChip({ icon, value, isLast }: { icon: string; value: string; isLast?: boolean }) {
+const VitalsChip = React.memo(function VitalsChip({ icon, value, isLast }: { icon: string; value: string; isLast?: boolean }) {
   return (
   <View style={styles.vitalsChipContainer}>
     <View style={styles.vitalsChip}>
@@ -348,10 +326,10 @@ const VitalsChip = function VitalsChip({ icon, value, isLast }: { icon: string; 
     {!isLast && <View style={styles.vitalsChipDivider} />}
   </View>
   );
-};
+});
 
 // Vitals Row Item Component (for vertical list - Hinge style with separators)
-const VitalsRowItem = function VitalsRowItem({ icon, value, isLast }: { icon: string; value: string; isLast?: boolean }) {
+const VitalsRowItem = React.memo(function VitalsRowItem({ icon, value, isLast }: { icon: string; value: string; isLast?: boolean }) {
   return (
   <View style={styles.vitalsRowContainer}>
     <View style={styles.vitalsRowItem}>
@@ -363,7 +341,7 @@ const VitalsRowItem = function VitalsRowItem({ icon, value, isLast }: { icon: st
     {!isLast && <View style={styles.vitalsRowSeparator} />}
   </View>
   );
-};
+});
 
 // Hinge-Style Vitals Section
 const VitalsSection = React.memo(function VitalsSection({
@@ -377,13 +355,74 @@ const VitalsSection = React.memo(function VitalsSection({
   heightUnit: HeightUnit;
   distanceUnit: DistanceUnit;
 }) {
+  const { t } = useTranslation();
+  const fv = profile.field_visibility;
+
+  // i18n preference labels for VitalsSection
+  const preferenceLabels: { [key: string]: string } = useMemo(() => ({
+    'separate': t('profileCard.preferences.financial.separate'),
+    'shared_expenses': t('profileCard.preferences.financial.sharedExpenses'),
+    'joint': t('profileCard.preferences.financial.joint'),
+    'prenup_required': t('profileCard.preferences.financial.prenupRequired'),
+    'flexible': t('profileCard.preferences.financial.flexible'),
+    'separate_spaces': t('profileCard.preferences.housing.separateSpaces'),
+    'roommates': t('profileCard.preferences.housing.roommates'),
+    'separate_homes': t('profileCard.preferences.housing.separateHomes'),
+    'shared_bedroom': t('profileCard.preferences.housing.sharedBedroom'),
+    'biological': t('profileCard.preferences.children.biological'),
+    'adoption': t('profileCard.preferences.children.adoption'),
+    'co_parenting': t('profileCard.preferences.children.coParenting'),
+    'surrogacy': t('profileCard.preferences.children.surrogacy'),
+    'ivf': t('profileCard.preferences.children.ivf'),
+    'already_have': t('profileCard.preferences.children.alreadyHave'),
+    'open_discussion': t('profileCard.preferences.children.openDiscussion'),
+    'financial': t('profileCard.preferences.reasons.financial'),
+    'immigration': t('profileCard.preferences.reasons.immigration'),
+    'family_pressure': t('profileCard.preferences.reasons.familyPressure'),
+    'legal_benefits': t('profileCard.preferences.reasons.legalBenefits'),
+    'companionship': t('profileCard.preferences.reasons.companionship'),
+    'safety': t('profileCard.preferences.reasons.safety'),
+    'platonic': t('profileCard.preferences.relationship.platonic'),
+    'romantic': t('profileCard.preferences.relationship.romantic'),
+    'open': t('profileCard.preferences.relationship.open'),
+  }), [t]);
+
+  const formatLabelI18n = useCallback((value: any): string => {
+    try {
+      if (!value) return '';
+      if (Array.isArray(value)) return value.filter(Boolean).map(formatLabelI18n).join(', ');
+      if (typeof value !== 'string') return String(value);
+      if (preferenceLabels[value]) return preferenceLabels[value];
+      return value.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    } catch {
+      return typeof value === 'string' ? value : '';
+    }
+  }, [preferenceLabels]);
+
+  const formatArrayWithLabelsI18n = useCallback((value?: string | string[]): string => {
+    if (!value) return '';
+    let items: string[] = [];
+    if (Array.isArray(value)) {
+      items = value;
+    } else if (typeof value === 'string') {
+      if (value.startsWith('{') && value.endsWith('}')) {
+        items = value.slice(1, -1).split(',');
+      } else {
+        items = [value];
+      }
+    }
+    return items.filter(item => item && typeof item === 'string').map(formatLabelI18n).join(', ');
+  }, [formatLabelI18n]);
+
   // Build pills for horizontal scroll (using outline icons for clean Hinge look)
   const pills: { icon: string; value: string }[] = [];
 
   if (profile.age) pills.push({ icon: 'cake-variant-outline', value: String(profile.age) });
-  if (profile.gender) pills.push({ icon: 'account-outline', value: formatArrayOrString(profile.gender) });
-  if (profile.sexual_orientation) pills.push({ icon: 'magnet', value: formatArrayOrString(profile.sexual_orientation) });
+  if (profile.gender && isFieldVisible(fv, 'gender')) pills.push({ icon: 'account-outline', value: translateProfileArray(t, 'gender', profile.gender) });
+  if (profile.sexual_orientation && isFieldVisible(fv, 'sexual_orientation')) pills.push({ icon: 'magnet', value: translateProfileArray(t, 'sexual_orientation', profile.sexual_orientation) });
   if (profile.height_inches) pills.push({ icon: 'human-male-height-variant', value: formatHeight(profile.height_inches, heightUnit) });
+  if (profile.occupation) pills.push({ icon: 'briefcase-outline', value: profile.occupation });
+  if (profile.education) pills.push({ icon: 'school-outline', value: profile.education });
   // Current location
   if (profile.location_city) {
     const locationText = profile.location_state
@@ -395,45 +434,55 @@ const VitalsSection = React.memo(function VitalsSection({
   if (profile.distance) {
     pills.push({ icon: 'map-marker-distance', value: formatDistance(profile.distance, distanceUnit, profile.hide_distance) });
   }
-  if (profile.zodiac_sign) pills.push({ icon: 'star-four-points-outline', value: profile.zodiac_sign });
+  if (profile.zodiac_sign) pills.push({ icon: 'star-four-points-outline', value: translateProfileValue(t, 'zodiac_sign', profile.zodiac_sign) });
   if (profile.personality_type) pills.push({ icon: 'head-outline', value: profile.personality_type });
   // Note: pronouns are already shown in the header, so not duplicated here
   // Lifestyle preferences
-  if (preferences?.drinking) pills.push({ icon: 'glass-wine', value: formatLabel(preferences.drinking) });
-  if (preferences?.smoking) pills.push({ icon: 'smoking-off', value: formatLabel(preferences.smoking) });
-  if (preferences?.pets) pills.push({ icon: 'paw-outline', value: formatLabel(preferences.pets) });
+  if (preferences?.lifestyle_preferences?.drinking && isFieldVisible(fv, 'drinking')) pills.push({ icon: 'glass-wine', value: formatLabelI18n(preferences.lifestyle_preferences.drinking) });
+  if (preferences?.lifestyle_preferences?.smoking && isFieldVisible(fv, 'smoking')) pills.push({ icon: 'smoking-off', value: formatLabelI18n(preferences.lifestyle_preferences.smoking) });
+  if (preferences?.lifestyle_preferences?.pets) pills.push({ icon: 'paw-outline', value: formatLabelI18n(preferences.lifestyle_preferences.pets) });
   // Children
-  if (preferences?.wants_children === true) {
-    pills.push({ icon: 'baby-face-outline', value: 'Wants children' });
-  } else if (preferences?.wants_children === false) {
-    pills.push({ icon: 'cancel', value: "Doesn't want children" });
+  if (isFieldVisible(fv, 'wants_children')) {
+    if (preferences?.wants_children === true) {
+      const childrenText = preferences.children_arrangement
+        ? t('profileCard.vitals.wantsChildrenWith', { arrangement: formatArrayWithLabelsI18n(preferences.children_arrangement) })
+        : t('profileCard.vitals.wantsChildren');
+      pills.push({ icon: 'baby-face-outline', value: childrenText });
+    } else if (preferences?.wants_children === false) {
+      pills.push({ icon: 'cancel', value: t('profileCard.vitals.doesntWantChildren') });
+    }
   }
 
   // Build rows for vertical list (using outline icons for clean Hinge look)
   const rows: { icon: string; value: string }[] = [];
 
-  if (profile.occupation) rows.push({ icon: 'briefcase-outline', value: profile.occupation });
-  if (profile.education) rows.push({ icon: 'school-outline', value: profile.education });
   if (profile.hometown) rows.push({ icon: 'home-outline', value: profile.hometown });
-  if (profile.religion) rows.push({ icon: 'book-open-outline', value: profile.religion });
-  if (profile.ethnicity && (Array.isArray(profile.ethnicity) ? !profile.ethnicity.includes('Prefer not to say') : profile.ethnicity !== 'Prefer not to say')) {
-    rows.push({ icon: 'account-circle-outline', value: formatArrayOrString(profile.ethnicity) });
+  if (profile.religion && isFieldVisible(fv, 'religion')) rows.push({ icon: 'book-open-outline', value: translateProfileValue(t, 'religion', profile.religion) });
+  if (profile.ethnicity && isFieldVisible(fv, 'ethnicity') && (Array.isArray(profile.ethnicity) ? !profile.ethnicity.includes('Prefer not to say') : profile.ethnicity !== 'Prefer not to say')) {
+    rows.push({ icon: 'account-circle-outline', value: translateProfileArray(t, 'ethnicity', profile.ethnicity) });
   }
-  if (preferences?.relationship_type) rows.push({ icon: 'account-multiple-outline', value: formatLabel(preferences.relationship_type) });
+  if (preferences?.relationship_type && isFieldVisible(fv, 'relationship_type')) rows.push({ icon: 'account-multiple-outline', value: formatLabelI18n(preferences.relationship_type) });
   if (preferences?.primary_reason || preferences?.primary_reasons?.length) {
     const goalText = preferences?.primary_reasons?.length
-      ? preferences.primary_reasons.map(formatLabel).join(', ')
-      : formatLabel(preferences?.primary_reason || '');
+      ? preferences.primary_reasons.map(formatLabelI18n).join(', ')
+      : formatLabelI18n(preferences?.primary_reason || '');
     rows.push({ icon: 'magnify', value: goalText });
   }
   if (profile.languages_spoken && profile.languages_spoken.length > 0) {
-    rows.push({ icon: 'translate', value: profile.languages_spoken.join(', ') });
+    rows.push({ icon: 'translate', value: translateProfileArray(t, 'languages_spoken', profile.languages_spoken) });
   }
   if (profile.love_language) {
-    rows.push({ icon: 'heart-outline', value: formatArrayOrString(profile.love_language) });
+    rows.push({ icon: 'heart-outline', value: translateProfileArray(t, 'love_language', profile.love_language) });
   }
-  if (profile.political_views) {
-    rows.push({ icon: 'vote-outline', value: profile.political_views });
+  if (profile.political_views && isFieldVisible(fv, 'political_views')) {
+    rows.push({ icon: 'vote-outline', value: translateProfileValue(t, 'political_views', profile.political_views) });
+  }
+  // Living & Finances (in vitals area alongside other profile details)
+  if (preferences?.financial_arrangement) {
+    rows.push({ icon: 'cash-multiple', value: formatArrayWithLabelsI18n(preferences.financial_arrangement) });
+  }
+  if (preferences?.housing_preference) {
+    rows.push({ icon: 'home-city-outline', value: formatArrayWithLabelsI18n(preferences.housing_preference) });
   }
 
   if (pills.length === 0 && rows.length === 0) return null;
@@ -484,7 +533,7 @@ const VitalsSection = React.memo(function VitalsSection({
 const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfileViewProps>(({
   profile,
   preferences,
-  compatibilityBreakdown,
+  compatibilityBreakdown: compatibilityBreakdownProp,
   distanceUnit = 'miles',
   heightUnit = 'imperial',
   onBlock,
@@ -502,16 +551,23 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
   hideActions = false,
   hideCompatibilityScore = false,
   renderAdditionalContent,
+  renderHeader,
   isPhotoRevealed = false,
   isOwnProfile = false,
+  onRefresh,
+  refreshing = false,
 }, ref) => {
+  const { t } = useTranslation();
+
+  // Fall back to profile's embedded breakdown if prop not provided
+  const compatibilityBreakdown = compatibilityBreakdownProp || (profile as any).compatibilityBreakdown;
   const { viewerUserId, isReady: watermarkReady } = useWatermark();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
 
   const shouldBlurPhotos = (profile.photo_blur_enabled || false) && !isPhotoRevealed && !isOwnProfile && !isAdmin;
 
-  const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
+  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
     shouldBlur: shouldBlurPhotos,
     blurIntensity: 50,
   });
@@ -519,11 +575,15 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
   // Enable screenshot protection when profile is visible
   useScreenCaptureProtection(true);
 
+  const [showStickyHeader, setShowStickyHeader] = useState(false);
+  const profileHeaderBottomY = useRef(0);
+
   const [isVoicePlaying, setIsVoicePlaying] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [playbackDuration, setPlaybackDuration] = useState(profile.voice_intro_duration ? profile.voice_intro_duration * 1000 : 0);
+  const [signedVoiceUrl, setSignedVoiceUrl] = useState<string | null>(null);
   const [pendingLikeContent, setPendingLikeContent] = useState<string | null>(null);
   const [pendingLikeContentData, setPendingLikeContentData] = useState<{ type: string; prompt?: string; answer?: string; index?: number } | null>(null);
   const [likeMessage, setLikeMessage] = useState('');
@@ -536,8 +596,9 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
     [],
   );
 
-  const photos = profile.photos || [];
-  const lastActiveText = getLastActiveText(profile.last_active_at, profile.hide_last_active);
+  const photos = useMemo(() => profile.photos || [], [profile.photos]);
+  const promptAnswers = useMemo(() => profile.prompt_answers || [], [profile.prompt_answers]);
+  const lastActiveText = getLastActiveText(profile.last_active_at, profile.hide_last_active, t);
 
   useImperativeHandle(ref, () => ({
     scrollToTop: () => {
@@ -561,6 +622,17 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id]);
 
+  // Sign voice intro URL for private bucket playback
+  useEffect(() => {
+    if (profile.voice_intro_url) {
+      getSignedUrl('voice-intros', profile.voice_intro_url).then((url) => {
+        setSignedVoiceUrl(url);
+      });
+    } else {
+      setSignedVoiceUrl(null);
+    }
+  }, [profile.voice_intro_url]);
+
   const waveformBars = useMemo(() => {
     const seed = profile.voice_intro_url
       ? profile.voice_intro_url.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
@@ -576,13 +648,13 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
     return bars;
   }, [profile.voice_intro_url, profile.display_name]);
 
-  const formatTime = (ms: number) => {
+  const formatTime = useCallback((ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
     return `${Math.floor(totalSeconds / 60)}:${(totalSeconds % 60).toString().padStart(2, '0')}`;
-  };
+  }, []);
 
   const handleVoicePlayPause = async () => {
-    if (!profile.voice_intro_url) return;
+    if (!signedVoiceUrl) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       if (sound && isVoicePlaying) {
@@ -597,7 +669,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           staysActiveInBackground: false,
         });
         const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: profile.voice_intro_url },
+          { uri: signedVoiceUrl },
           { shouldPlay: true },
           (status) => {
             if (status.isLoaded) {
@@ -620,13 +692,28 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
     }
   };
 
-  const handleLikeContent = (contentType: string, contentData?: { type: string; prompt?: string; answer?: string; index?: number }) => {
+  const handleLikeContent = useCallback((contentType: string, contentData?: { type: string; prompt?: string; answer?: string; index?: number }) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPendingLikeContent(contentType);
     setPendingLikeContentData(contentData || null);
     setLikeMessage('');
     likeSheetRef.current?.present();
-  };
+  }, []);
+
+  // Stable onLike callbacks for PhotoCard/PromptCard so React.memo works
+  const onLikePhoto0 = useCallback(() => handleLikeContent('photo_1', { type: 'photo', index: 0 }), [handleLikeContent]);
+  const onLikePhoto1 = useCallback(() => handleLikeContent('photo_2', { type: 'photo', index: 1 }), [handleLikeContent]);
+  const onLikePhoto2 = useCallback(() => handleLikeContent('photo_3', { type: 'photo', index: 2 }), [handleLikeContent]);
+
+  const onLikePrompt0 = useCallback(() => {
+    if (promptAnswers[0]) handleLikeContent('prompt_1', { type: 'prompt', prompt: promptAnswers[0].prompt, answer: promptAnswers[0].answer });
+  }, [handleLikeContent, promptAnswers]);
+  const onLikePrompt1 = useCallback(() => {
+    if (promptAnswers[1]) handleLikeContent('prompt_2', { type: 'prompt', prompt: promptAnswers[1].prompt, answer: promptAnswers[1].answer });
+  }, [handleLikeContent, promptAnswers]);
+  const onLikePrompt2 = useCallback(() => {
+    if (promptAnswers[2]) handleLikeContent('prompt_3', { type: 'prompt', prompt: promptAnswers[2].prompt, answer: promptAnswers[2].answer });
+  }, [handleLikeContent, promptAnswers]);
 
   const handleLikeChoice = (isObsessed: boolean) => {
     likeSheetRef.current?.dismiss();
@@ -641,22 +728,57 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
     setLikeMessage('');
   };
 
-  const handlePass = () => {
+  const handlePass = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onPass?.();
-  };
+  }, [onPass]);
+
+  const handleProfileHeaderLayout = useCallback((event: any) => {
+    const { y, height } = event.nativeEvent.layout;
+    // y is relative to the ScrollView content — store the bottom edge
+    profileHeaderBottomY.current = y + height;
+  }, []);
+
+  const handleScroll = useCallback((event: any) => {
+    const scrollY = event.nativeEvent.contentOffset.y;
+    // Show sticky header once the profile name has scrolled past the top safe area
+    const threshold = profileHeaderBottomY.current > 0
+      ? profileHeaderBottomY.current - insets.top
+      : 120; // fallback
+    setShowStickyHeader(scrollY > threshold);
+  }, [insets.top]);
 
   return (
     <View style={styles.container}>
+      {/* Sticky Header Bar - appears when profile name scrolls out of view */}
+      {showStickyHeader && (
+        <View style={[styles.stickyHeader, { paddingTop: insets.top + 8 }]}>
+          <View style={styles.stickyHeaderContent}>
+            <Text style={styles.stickyHeaderName} numberOfLines={1}>{profile.display_name}</Text>
+            {(profile.photo_verified || profile.is_verified) && (
+              <MaterialCommunityIcons name="check-decagram" size={18} color="#A08AB7" style={{ marginLeft: 6 }} />
+            )}
+          </View>
+        </View>
+      )}
+
       {/* Scrollable Content */}
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 100, paddingTop: insets.top }]}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        refreshControl={onRefresh ? (
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#999" />
+        ) : undefined}
       >
+        {/* Discovery header (filters/search) - scrolls with content */}
+        {renderHeader?.()}
         {/* Profile Header - Scrolls with content */}
-        <View style={styles.profileHeaderInline}>
+        <View onLayout={handleProfileHeaderLayout} style={styles.profileHeaderInline}>
           <View style={styles.headerTopRow}>
             <View style={styles.nameRow}>
               <Text style={styles.profileName}>{profile.display_name}</Text>
@@ -685,13 +807,13 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           </View>
           <View style={styles.subInfoRow}>
             {profile.pronouns && profile.pronouns.trim() !== '' && (
-              <Text style={styles.pronounsText}>{profile.pronouns}</Text>
+              <Text style={styles.pronounsText}>{translateProfileValue(t, 'pronouns', profile.pronouns)}</Text>
             )}
             {profile.pronouns && profile.pronouns.trim() !== '' && lastActiveText && (
               <Text style={styles.divider}>|</Text>
             )}
             {lastActiveText && (
-              <Text style={[styles.activeText, lastActiveText === 'Active now' && styles.activeNow]}>
+              <Text style={[styles.activeText, lastActiveText === t('profileCard.activity.activeNow') && styles.activeNow]}>
                 {lastActiveText}
               </Text>
             )}
@@ -702,9 +824,9 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         {photos[0] && (
           <PhotoCard
             uri={photos[0].url}
-            onLike={() => handleLikeContent('photo_1', { type: 'photo', index: 0 })}
+            onLike={onLikePhoto0}
             blurRadius={blurRadius}
-            showBlurOverlay={showBlurOverlay}
+
             onImageLoad={onImageLoad}
             onImageError={onImageError}
             watermarkReady={watermarkReady}
@@ -721,7 +843,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         {profile.voice_intro_url && (
           <View style={styles.voiceContainer}>
             <Text style={styles.voicePromptText}>
-              {profile.voice_intro_prompt || `${profile.display_name}'s voice intro`}
+              {profile.voice_intro_prompt || t('profileCard.voice.introFallback', { name: profile.display_name })}
             </Text>
             <View style={styles.voicePlayerContainer}>
               <TouchableOpacity style={styles.voicePlayButton} onPress={handleVoicePlayPause}>
@@ -747,20 +869,12 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           </View>
         )}
 
-        {/* About Me Section */}
-        {profile.bio && (
-          <View style={styles.bioSection}>
-            <Text style={styles.bioSectionTitle}>About {profile.display_name}</Text>
-            <Text style={styles.bioText}>{profile.bio}</Text>
-          </View>
-        )}
-
-        {/* First Prompt - Right after About Me */}
-        {profile.prompt_answers?.[0] && (
+        {/* First Prompt */}
+        {promptAnswers[0] && (
           <PromptCard
-            prompt={profile.prompt_answers[0].prompt}
-            answer={profile.prompt_answers[0].answer}
-            onLike={() => handleLikeContent('prompt_1', { type: 'prompt', prompt: profile.prompt_answers![0].prompt, answer: profile.prompt_answers![0].answer })}
+            prompt={promptAnswers[0].prompt}
+            answer={promptAnswers[0].answer}
+            onLike={onLikePrompt0}
             showLikeButton={!hideActions}
           />
         )}
@@ -777,9 +891,9 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         {photos[1] && (
           <PhotoCard
             uri={photos[1].url}
-            onLike={() => handleLikeContent('photo_2', { type: 'photo', index: 1 })}
+            onLike={onLikePhoto1}
             blurRadius={blurRadius}
-            showBlurOverlay={showBlurOverlay}
+
             onImageLoad={onImageLoad}
             onImageError={onImageError}
             watermarkReady={watermarkReady}
@@ -793,11 +907,11 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         )}
 
         {/* Second Prompt */}
-        {profile.prompt_answers?.[1] && (
+        {promptAnswers[1] && (
           <PromptCard
-            prompt={profile.prompt_answers[1].prompt}
-            answer={profile.prompt_answers[1].answer}
-            onLike={() => handleLikeContent('prompt_2', { type: 'prompt', prompt: profile.prompt_answers![1].prompt, answer: profile.prompt_answers![1].answer })}
+            prompt={promptAnswers[1].prompt}
+            answer={promptAnswers[1].answer}
+            onLike={onLikePrompt1}
             showLikeButton={!hideActions}
           />
         )}
@@ -806,9 +920,9 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         {photos[2] && (
           <PhotoCard
             uri={photos[2].url}
-            onLike={() => handleLikeContent('photo_3', { type: 'photo', index: 2 })}
+            onLike={onLikePhoto2}
             blurRadius={blurRadius}
-            showBlurOverlay={showBlurOverlay}
+
             onImageLoad={onImageLoad}
             onImageError={onImageError}
             watermarkReady={watermarkReady}
@@ -821,103 +935,17 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           />
         )}
 
-        {/* Marriage Goals Section */}
-        {(preferences?.primary_reasons?.length || preferences?.primary_reason || preferences?.relationship_type ||
-          preferences?.wants_children === true || preferences?.wants_children === false || preferences?.children_arrangement ||
-          preferences?.public_relationship !== undefined || preferences?.family_involvement) && (
-          <View style={styles.goalsSection}>
-            <View style={styles.goalsSectionHeader}>
-              <MaterialCommunityIcons name="ring" size={24} color="#A08AB7" />
-              <Text style={styles.goalsSectionTitle}>Marriage Goals</Text>
-            </View>
-            {(preferences?.primary_reasons?.length || preferences?.primary_reason) && (
-              <View style={styles.goalsItem}>
-                <Text style={styles.goalsLabel}>Looking for</Text>
-                <Text style={styles.goalsValue}>
-                  {preferences?.primary_reasons?.length
-                    ? preferences.primary_reasons.map(formatLabel).join(', ')
-                    : formatLabel(preferences?.primary_reason || '')}
-                </Text>
-              </View>
-            )}
-            {preferences?.relationship_type && (
-              <View style={styles.goalsItem}>
-                <Text style={styles.goalsLabel}>Relationship type</Text>
-                <Text style={styles.goalsValue}>{formatLabel(preferences.relationship_type)}</Text>
-              </View>
-            )}
-            {(preferences?.wants_children === true || preferences?.wants_children === false || preferences?.children_arrangement) && (
-              <View style={styles.goalsItem}>
-                <Text style={styles.goalsLabel}>Children</Text>
-                <Text style={[
-                  styles.goalsValue,
-                  preferences?.wants_children === false && styles.goalsValueNo
-                ]}>
-                  {preferences?.wants_children === true
-                    ? `Yes, wants children${preferences.children_arrangement ? ` - ${formatArrayWithLabels(preferences.children_arrangement)}` : ''}`
-                    : preferences?.wants_children === false
-                      ? 'Does not want children'
-                      : preferences?.children_arrangement
-                        ? formatArrayWithLabels(preferences.children_arrangement)
-                        : 'Open to discussion'}
-                </Text>
-              </View>
-            )}
-            {preferences?.public_relationship !== undefined && (
-              <View style={styles.goalsItem}>
-                <Text style={styles.goalsLabel}>Public as a couple?</Text>
-                <Text style={styles.goalsValue}>
-                  {preferences.public_relationship ? "Yes, we'd appear as a couple publicly" : 'Prefer to keep it private'}
-                </Text>
-              </View>
-            )}
-            {preferences?.family_involvement && (
-              <View style={styles.goalsItem}>
-                <Text style={styles.goalsLabel}>Family involvement</Text>
-                <Text style={styles.goalsValue}>{preferences.family_involvement}</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Living & Finances Section */}
-        {(preferences?.income_level || preferences?.financial_arrangement || preferences?.housing_preference) && (
-          <View style={styles.financesSection}>
-            <View style={styles.financesSectionHeader}>
-              <MaterialCommunityIcons name="home-city" size={24} color="#A08AB7" />
-              <Text style={styles.financesSectionTitle}>Living & Finances</Text>
-            </View>
-            {preferences?.income_level && (
-              <View style={styles.financesItem}>
-                <Text style={styles.financesLabel}>Income level</Text>
-                <Text style={styles.financesValue}>{formatLabel(preferences.income_level)}</Text>
-              </View>
-            )}
-            {preferences?.financial_arrangement && (
-              <View style={styles.financesItem}>
-                <Text style={styles.financesLabel}>Financial arrangement</Text>
-                <Text style={styles.financesValue}>{formatArrayWithLabels(preferences.financial_arrangement)}</Text>
-              </View>
-            )}
-            {preferences?.housing_preference && (
-              <View style={styles.financesItem}>
-                <Text style={styles.financesLabel}>Living situation</Text>
-                <Text style={styles.financesValue}>{formatArrayWithLabels(preferences.housing_preference)}</Text>
-              </View>
-            )}
-          </View>
-        )}
-
         {/* Hobbies Section */}
         {profile.hobbies && profile.hobbies.length > 0 && (
           <View style={styles.hobbiesSection}>
             <View style={styles.hobbiesSectionHeader}>
               <MaterialCommunityIcons name="palette" size={24} color="#A08AB7" />
-              <Text style={styles.hobbiesSectionTitle}>Hobbies & Interests</Text>
+              <Text style={styles.hobbiesSectionTitle}>{t('profileCard.section.hobbiesInterests')}</Text>
             </View>
             <View style={styles.hobbiesContainer}>
               {profile.hobbies.map((hobby, index) => (
                 <View key={index} style={styles.hobbyTag}>
+                  <MaterialCommunityIcons name={getHobbyIcon(hobby) as any} size={16} color="#A08AB7" />
                   <Text style={styles.hobbyText}>{hobby}</Text>
                 </View>
               ))}
@@ -935,14 +963,14 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           <View style={styles.favoritesSection}>
             <View style={styles.favoritesSectionHeader}>
               <MaterialCommunityIcons name="star-circle" size={24} color="#A08AB7" />
-              <Text style={styles.favoritesSectionTitle}>Favorites</Text>
+              <Text style={styles.favoritesSectionTitle}>{t('profileCard.section.favorites')}</Text>
             </View>
 
             {profile.interests.movies && profile.interests.movies.length > 0 && (
               <View style={styles.favoriteCategory}>
                 <View style={styles.favoriteCategoryHeader}>
                   <MaterialCommunityIcons name="movie-open" size={20} color="#CDC2E5" />
-                  <Text style={styles.favoriteCategoryTitle}>Movies</Text>
+                  <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.movies')}</Text>
                 </View>
                 <View style={styles.favoritesList}>
                   {profile.interests.movies.map((movie, index) => (
@@ -956,7 +984,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
               <View style={styles.favoriteCategory}>
                 <View style={styles.favoriteCategoryHeader}>
                   <MaterialCommunityIcons name="music" size={20} color="#A08AB7" />
-                  <Text style={styles.favoriteCategoryTitle}>Music Artists</Text>
+                  <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.musicArtists')}</Text>
                 </View>
                 <View style={styles.favoritesList}>
                   {profile.interests.music.map((artist, index) => (
@@ -970,7 +998,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
               <View style={styles.favoriteCategory}>
                 <View style={styles.favoriteCategoryHeader}>
                   <MaterialCommunityIcons name="book-open-page-variant" size={20} color="#3B82F6" />
-                  <Text style={styles.favoriteCategoryTitle}>Books</Text>
+                  <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.books')}</Text>
                 </View>
                 <View style={styles.favoritesList}>
                   {profile.interests.books.map((book, index) => (
@@ -984,7 +1012,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
               <View style={styles.favoriteCategory}>
                 <View style={styles.favoriteCategoryHeader}>
                   <MaterialCommunityIcons name="television" size={20} color="#10B981" />
-                  <Text style={styles.favoriteCategoryTitle}>TV Shows</Text>
+                  <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.tvShows')}</Text>
                 </View>
                 <View style={styles.favoritesList}>
                   {profile.interests.tv_shows.map((show, index) => (
@@ -1001,28 +1029,28 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           <View style={styles.locationSection}>
             <View style={styles.locationSectionHeader}>
               <MaterialCommunityIcons name="map-marker-radius" size={24} color="#F59E0B" />
-              <Text style={styles.locationSectionTitle}>Location & Relocation</Text>
+              <Text style={styles.locationSectionTitle}>{t('profileCard.section.locationRelocation')}</Text>
             </View>
 
             {preferences?.max_distance_miles && (
               <View style={styles.locationItem}>
-                <Text style={styles.locationLabel}>Maximum distance</Text>
-                <Text style={styles.locationValue}>Up to {preferences.max_distance_miles} miles</Text>
+                <Text style={styles.locationLabel}>{t('profileCard.location.maxDistance')}</Text>
+                <Text style={styles.locationValue}>{t('profileCard.location.upToMiles', { miles: preferences.max_distance_miles })}</Text>
               </View>
             )}
 
             {preferences?.willing_to_relocate !== undefined && (
               <View style={styles.locationItem}>
-                <Text style={styles.locationLabel}>Willing to relocate?</Text>
+                <Text style={styles.locationLabel}>{t('profileCard.location.willingToRelocate')}</Text>
                 <Text style={styles.locationValue}>
-                  {preferences.willing_to_relocate ? 'Yes, open to moving' : 'Prefer to stay local'}
+                  {preferences.willing_to_relocate ? t('profileCard.location.openToMoving') : t('profileCard.location.stayLocal')}
                 </Text>
               </View>
             )}
 
             {preferences?.preferred_cities && preferences.preferred_cities.length > 0 && (
               <View style={styles.locationItem}>
-                <Text style={styles.locationLabel}>Preferred cities</Text>
+                <Text style={styles.locationLabel}>{t('profileCard.location.preferredCities')}</Text>
                 <Text style={styles.locationValue}>{preferences.preferred_cities.join(', ')}</Text>
               </View>
             )}
@@ -1034,9 +1062,9 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           <View style={styles.mustHavesSection}>
             <View style={styles.mustHavesSectionHeader}>
               <Text style={styles.mustHavesEmoji}>✅</Text>
-              <Text style={styles.mustHavesSectionTitle}>Must-Haves</Text>
+              <Text style={styles.mustHavesSectionTitle}>{t('profileCard.section.mustHaves')}</Text>
             </View>
-            <Text style={styles.mustHavesSubtitle}>Important qualities they&apos;re looking for</Text>
+            <Text style={styles.mustHavesSubtitle}>{t('profileCard.section.mustHavesSubtitle')}</Text>
             {preferences.must_haves.map((item, index) => (
               <View key={index} style={styles.mustHavesItem}>
                 <Text style={styles.mustHavesBullet}>•</Text>
@@ -1051,9 +1079,9 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           <View style={styles.dealbreakersSection}>
             <View style={styles.dealbreakersHeader}>
               <Text style={styles.dealbreakersEmoji}>🚫</Text>
-              <Text style={styles.dealbreakersTitle}>Dealbreakers</Text>
+              <Text style={styles.dealbreakersTitle}>{t('profileCard.section.dealbreakers')}</Text>
             </View>
-            <Text style={styles.dealbreakersSubtitle}>Important boundaries to be aware of</Text>
+            <Text style={styles.dealbreakersSubtitle}>{t('profileCard.section.dealbreakersSubtitle')}</Text>
             {preferences.dealbreakers.map((item, index) => (
               <View key={index} style={styles.dealbreakersItem}>
                 <Text style={styles.dealbreakersBullet}>•</Text>
@@ -1064,17 +1092,17 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         )}
 
         {/* Third Prompt */}
-        {profile.prompt_answers?.[2] && (
+        {promptAnswers[2] && (
           <PromptCard
-            prompt={profile.prompt_answers[2].prompt}
-            answer={profile.prompt_answers[2].answer}
-            onLike={() => handleLikeContent('prompt_3', { type: 'prompt', prompt: profile.prompt_answers![2].prompt, answer: profile.prompt_answers![2].answer })}
+            prompt={promptAnswers[2].prompt}
+            answer={promptAnswers[2].answer}
+            onLike={onLikePrompt2}
             showLikeButton={!hideActions}
           />
         )}
 
         {/* Remaining Prompts (4th, 5th, etc.) */}
-        {profile.prompt_answers?.slice(3).map((promptItem, index) => (
+        {promptAnswers.slice(3).map((promptItem, index) => (
           <PromptCard
             key={`prompt_${index + 4}`}
             prompt={promptItem.prompt}
@@ -1091,7 +1119,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             uri={photo.url}
             onLike={() => handleLikeContent(`photo_${index + 4}`, { type: 'photo', index: index + 3 })}
             blurRadius={blurRadius}
-            showBlurOverlay={showBlurOverlay}
+
             onImageLoad={onImageLoad}
             onImageError={onImageError}
             watermarkReady={watermarkReady}
@@ -1105,20 +1133,20 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         ))}
 
         {/* Compatibility Score */}
-        {!hideCompatibilityScore && profile.compatibility_score && (
+        {!hideCompatibilityScore && profile.compatibility_score != null && profile.compatibility_score > 0 && (
           <View style={styles.compatSection}>
             <View style={styles.compatHeader}>
               <MaterialCommunityIcons name="heart-circle" size={32} color="#A08AB7" />
               <View>
                 <Text style={styles.compatScore}>{profile.compatibility_score}%</Text>
-                <Text style={styles.compatLabel}>Compatible</Text>
+                <Text style={styles.compatLabel}>{t('profileCard.compatibility.compatible')}</Text>
               </View>
             </View>
             {compatibilityBreakdown && (
               <View style={styles.compatBars}>
-                <CompatBar label="Goals" score={compatibilityBreakdown.goals} />
-                <CompatBar label="Location" score={compatibilityBreakdown.location} />
-                <CompatBar label="Lifestyle" score={compatibilityBreakdown.lifestyle} />
+                <CompatBar label={t('profileCard.compatibility.goals')} score={compatibilityBreakdown.goals || 0} />
+                <CompatBar label={t('profileCard.compatibility.location')} score={compatibilityBreakdown.location || 0} />
+                <CompatBar label={t('profileCard.compatibility.lifestyle')} score={compatibilityBreakdown.lifestyle || 0} />
               </View>
             )}
           </View>
@@ -1162,7 +1190,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                   onPress={() => { setShowActionSheet(false); setTimeout(() => onReport(), 100); }}
                 >
                   <MaterialCommunityIcons name="flag" size={24} color="#6B7280" />
-                  <Text style={styles.actionText}>Report</Text>
+                  <Text style={styles.actionText}>{t('profileCard.actions.report')}</Text>
                 </TouchableOpacity>
               )}
               {onBlock && (
@@ -1171,7 +1199,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                   onPress={() => { setShowActionSheet(false); setTimeout(() => onBlock(), 100); }}
                 >
                   <MaterialCommunityIcons name="block-helper" size={24} color="#EF4444" />
-                  <Text style={[styles.actionText, styles.actionTextDanger]}>Block</Text>
+                  <Text style={[styles.actionText, styles.actionTextDanger]}>{t('profileCard.actions.block')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1206,7 +1234,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                 contentFit="cover"
                 cachePolicy="memory-disk"
               />
-              <Text style={styles.likeChoicePhotoLabel}>Liked their photo</Text>
+              <Text style={styles.likeChoicePhotoLabel}>{t('discover.like.likedPhoto')}</Text>
             </View>
           )}
 
@@ -1214,7 +1242,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           <View style={styles.likeChoiceInputContainer}>
             <BottomSheetTextInput
               style={styles.likeChoiceInput}
-              placeholder="Say something nice..."
+              placeholder={t('discover.like.placeholder')}
               placeholderTextColor="#B0A4C0"
               value={likeMessage}
               onChangeText={setLikeMessage}
@@ -1248,11 +1276,11 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
               >
                 <Ionicons name="heart" size={20} color="white" />
                 <Text style={styles.likeChoicePrimaryText}>
-                  {likeMessage.trim() ? 'Send Like with Comment' : 'Send Like'}
+                  {likeMessage.trim() ? t('discover.like.sendWithComment') : t('discover.like.sendLike')}
                 </Text>
               </LinearGradient>
               {!isPremium && (
-                <Text style={styles.likeChoicePrimarySubtext}>{likesRemaining}/{dailyLikeLimit} today</Text>
+                <Text style={styles.likeChoicePrimarySubtext}>{t('discover.likesRemaining', { count: likesRemaining, limit: dailyLikeLimit })}</Text>
               )}
             </TouchableOpacity>
 
@@ -1272,7 +1300,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                 <Text style={[
                   styles.likeChoiceSecondaryText,
                   superLikesRemaining === 0 && { color: '#9CA3AF' },
-                ]}>Obsessed</Text>
+                ]}>{t('discover.like.obsessed')}</Text>
                 <View style={[
                   styles.likeChoiceCountBadge,
                   superLikesRemaining === 0 && { backgroundColor: '#E5E7EB' },
@@ -1294,7 +1322,8 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
 DiscoveryProfileView.displayName = 'DiscoveryProfileView';
 
 // Compatibility Bar Component
-const CompatBar = ({ label, score }: { label: string; score: number }) => (
+const CompatBar = React.memo(function CompatBar({ label, score }: { label: string; score: number }) {
+  return (
   <View style={styles.compatBarRow}>
     <Text style={styles.compatBarLabel}>{label}</Text>
     <View style={styles.compatBarBg}>
@@ -1302,12 +1331,36 @@ const CompatBar = ({ label, score }: { label: string; score: number }) => (
     </View>
     <Text style={styles.compatBarScore}>{Math.round(score)}%</Text>
   </View>
-);
+  );
+});
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  stickyHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
+    paddingBottom: 16,
+  },
+  stickyHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 48,
+  },
+  stickyHeaderName: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
   },
   // Profile header - scrolls with content, seamless with first photo
   profileHeaderInline: {
@@ -1381,6 +1434,7 @@ const styles = StyleSheet.create({
   },
   // Photo Card styles
   photoCard: {
+    width: '100%',
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
@@ -1388,6 +1442,7 @@ const styles = StyleSheet.create({
   photoImage: {
     width: '100%',
     aspectRatio: 0.8,
+    backgroundColor: '#F3F4F6',
   },
   photoLikeContainer: {
     position: 'absolute',
@@ -1425,6 +1480,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginTop: 40,
     marginBottom: 24,
   },
   promptAnswer: {
@@ -1433,6 +1489,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     lineHeight: 30,
     paddingRight: 50,
+    marginBottom: 40,
   },
   promptLikeContainer: {
     position: 'absolute',
@@ -1584,96 +1641,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     marginLeft: 44, // Align with text, not icon
   },
-  // Goals section styles
-  goalsSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    position: 'relative',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  goalsSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
-  },
-  goalsSectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
-  },
-  goalsItem: {
-    marginBottom: 12,
-  },
-  goalsLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#000000',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  goalsValue: {
-    fontSize: 16,
-    color: '#000000',
-    fontWeight: '500',
-  },
-  goalsValueNo: {
-    color: '#DC2626',
-    fontWeight: '600',
-  },
-  goalsLikeContainer: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-  },
-  // Living & Finances section styles
-  financesSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  financesSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
-  },
-  financesSectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
-  },
-  financesItem: {
-    marginBottom: 12,
-  },
-  financesLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#000000',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  financesValue: {
-    fontSize: 16,
-    color: '#000000',
-    fontWeight: '500',
-  },
   // Bio section styles
   bioSection: {
     backgroundColor: '#FFFFFF',
@@ -1736,6 +1703,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   hobbyTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#F3F0F8',
     paddingHorizontal: 14,
     paddingVertical: 8,

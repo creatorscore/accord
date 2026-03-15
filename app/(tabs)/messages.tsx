@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Alert, Modal, Pressable, useWindowDimensions, Platform, InteractionManager } from 'react-native';
+import { useState, useEffect, useCallback, useMemo, useRef, createRef } from 'react';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, StyleSheet, Alert, Modal, Pressable, useWindowDimensions, Platform, InteractionManager, BackHandler } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect , router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,11 +12,15 @@ import { supabase } from '@/lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import { getPrivateKey, decryptMessage } from '@/lib/encryption';
+import { getSignedUrls } from '@/lib/signed-urls';
 import { useScreenProtection } from '@/hooks/useScreenProtection';
 import { useColorScheme } from '@/lib/useColorScheme';
-import { usePhotoBlur } from '@/hooks/usePhotoBlur';
 import { MessagesListSkeleton } from '@/components/shared/SkeletonScreens';
 import { useToast } from '@/contexts/ToastContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import SwipeableConversationCard from '@/components/messaging/SwipeableConversationCard';
+import ReportUserModal from '@/components/moderation/ReportUserModal';
+import type { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 interface Conversation {
   match_id: string;
@@ -56,94 +60,162 @@ export default function Messages() {
   const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
   const { colors, isDarkColorScheme } = useColorScheme();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const currentProfileIdRef = useRef<string | null>(null);
+  const initialLoadDone = useRef(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [upgradeBannerDismissed, setUpgradeBannerDismissed] = useState(true); // hidden until checked
   const [showArchived, setShowArchived] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set()); // Set of match_ids where other user is typing
+  const typingUsersRef = useRef(typingUsers);
+  typingUsersRef.current = typingUsers;
   const [isAdmin, setIsAdmin] = useState(false);
+  const [archivedCount, setArchivedCount] = useState(0);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportingConversation, setReportingConversation] = useState<Conversation | null>(null);
 
   // Refs for typing indicator subscriptions
   const typingChannelsRef = useRef<Map<string, RealtimeChannel>>(new Map());
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
+  // Swipeable refs for single-open coordination
+  const openSwipeableRef = useRef<SwipeableMethods | null>(null);
+  const swipeableRefs = useRef<Map<string, React.RefObject<SwipeableMethods | null>>>(new Map());
+
   // Protect conversation list from screenshots
   useScreenProtection();
 
+  // Android back handler: return from archived view instead of exiting tab
   useEffect(() => {
-    loadCurrentProfile();
+    if (!showArchived) return;
+    const onBackPress = () => {
+      setShowArchived(false);
+      setConversations([]);
+      setLoading(true);
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [showArchived]);
+
+  // Check if upgrade banner was recently dismissed (3-day cooldown)
+  useEffect(() => {
+    const checkBannerDismissal = async () => {
+      try {
+        const dismissedAt = await AsyncStorage.getItem('upgradeBannerDismissedAt');
+        if (dismissedAt) {
+          const daysSince = (Date.now() - parseInt(dismissedAt, 10)) / (1000 * 60 * 60 * 24);
+          setUpgradeBannerDismissed(daysSince < 3);
+        } else {
+          setUpgradeBannerDismissed(false);
+        }
+      } catch {
+        setUpgradeBannerDismissed(false);
+      }
+    };
+    checkBannerDismissal();
   }, []);
 
   useEffect(() => {
-    if (currentProfileId) {
-      loadConversations();
-      const unsubscribe = subscribeToMessages();
-      return () => {
-        unsubscribe();
-      };
-    }
-  }, [currentProfileId, showArchived]);
+    let unsubscribe: (() => void) | null = null;
 
-  // Reload conversations when screen comes into focus (e.g., after viewing a chat)
+    const initMessages = async () => {
+      try {
+        // ═══ Phase 0: Profile + matches in parallel ═══
+        // RLS on matches table filters to current user, so no profileId needed for query
+        // Get profile first (need ID to filter matches to own only)
+        const profileResult = await supabase.from('profiles').select('id, is_admin').eq('user_id', user?.id).single();
+        if (profileResult.error) throw profileResult.error;
+        const myProfileId = profileResult.data.id;
+        currentProfileIdRef.current = myProfileId;
+        setCurrentProfileId(myProfileId);
+        setIsAdmin(profileResult.data.is_admin || false);
+
+        // CRITICAL: Always filter to own matches — admin RLS returns ALL matches in DB
+        const matchesResult = await supabase.from('matches')
+            .select('id, profile1_id, profile2_id, is_muted, is_archived, is_pinned')
+            .eq('status', 'active')
+            .eq('is_archived', showArchived)
+            .or(`profile1_id.eq.${myProfileId},profile2_id.eq.${myProfileId}`);
+
+        if (matchesResult.error) throw matchesResult.error;
+        const matches = matchesResult.data || [];
+
+        // Now run queries that need profileId
+        await loadConversationsWithId(myProfileId, matches);
+
+        // Set up subscription
+        unsubscribe = subscribeToMessages();
+        initialLoadDone.current = true;
+      } catch (error: any) {
+        console.error('Error initializing messages:', error);
+        setLoading(false);
+      }
+    };
+
+    initMessages();
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [showArchived]);
+
+  // Reload conversations when screen regains focus (e.g., after viewing a chat)
+  // Skip initial mount — initMessages already handles that
   useFocusEffect(
     useCallback(() => {
-      if (currentProfileId) {
+      if (initialLoadDone.current && currentProfileId) {
         loadConversations();
       }
     }, [currentProfileId, showArchived])
   );
 
-  const loadCurrentProfile = async () => {
+  const loadConversations = async () => {
+    const profileId = currentProfileIdRef.current || currentProfileId;
+    if (!profileId) return;
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, is_admin')
-        .eq('user_id', user?.id)
-        .single();
-
-      if (error) throw error;
-      setCurrentProfileId(data.id);
-      setIsAdmin(data.is_admin || false);
+      const [matchesResult] = await Promise.all([
+        supabase.from('matches')
+          .select('id, profile1_id, profile2_id, is_muted, is_archived, is_pinned')
+          .or(`profile1_id.eq.${profileId},profile2_id.eq.${profileId}`)
+          .eq('status', 'active')
+          .eq('is_archived', showArchived),
+      ]);
+      if (matchesResult.error) throw matchesResult.error;
+      await loadConversationsWithId(profileId, matchesResult.data || []);
     } catch (error: any) {
-      console.error('Error loading profile:', error);
+      console.error('Error loading conversations:', error);
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const loadConversations = async () => {
+  const loadConversationsWithId = async (profileId: string, filteredMatchesRaw: any[]) => {
     try {
-      if (!currentProfileId) return;
-
-      // Run initial queries in parallel for better performance
-      const [matchesResult, blockedByMeResult, blockedMeResult, revealsResult] = await Promise.all([
-        // Get all matches (filtered by archived status)
-        supabase
-          .from('matches')
-          .select('id, profile1_id, profile2_id, is_muted, is_archived, is_pinned')
-          .or(`profile1_id.eq.${currentProfileId},profile2_id.eq.${currentProfileId}`)
-          .eq('status', 'active')
-          .eq('is_archived', showArchived),
-        // Get blocked users
-        supabase
-          .from('blocks')
-          .select('blocked_profile_id')
-          .eq('blocker_profile_id', currentProfileId),
-        supabase
-          .from('blocks')
-          .select('blocker_profile_id')
-          .eq('blocked_profile_id', currentProfileId),
-        // Get photo reveals for current user
-        supabase
-          .from('photo_reveals')
-          .select('revealer_profile_id')
-          .eq('revealed_to_profile_id', currentProfileId),
+      // Run block/reveal queries + data queries all in parallel
+      const [blockedByMeResult, blockedMeResult, revealsResult] = await Promise.all([
+        supabase.from('blocks').select('blocked_profile_id').eq('blocker_profile_id', profileId),
+        supabase.from('blocks').select('blocker_profile_id').eq('blocked_profile_id', profileId),
+        supabase.from('photo_reveals').select('revealer_profile_id').eq('revealed_to_profile_id', profileId),
       ]);
 
-      if (matchesResult.error) throw matchesResult.error;
+      // Fetch archived count in parallel when viewing active messages (non-blocking)
+      if (!showArchived) {
+        supabase
+          .from('matches')
+          .select('id', { count: 'exact', head: true })
+          .or(`profile1_id.eq.${profileId},profile2_id.eq.${profileId}`)
+          .eq('status', 'active')
+          .eq('is_archived', true)
+          .then(({ count }) => {
+            setArchivedCount(count || 0);
+          });
+      }
 
-      const matches = matchesResult.data || [];
       const blockedProfileIds = new Set([
         ...(blockedByMeResult.data?.map(b => b.blocked_profile_id) || []),
         ...(blockedMeResult.data?.map(b => b.blocker_profile_id) || [])
@@ -152,12 +224,12 @@ export default function Messages() {
         revealsResult.data?.map(r => r.revealer_profile_id) || []
       );
 
-      // Filter out matches with blocked users and get other profile IDs
-      const filteredMatches = matches.filter(match => {
-        const otherProfileId = match.profile1_id === currentProfileId
+      // Filter out matches with blocked users
+      const filteredMatches = filteredMatchesRaw.filter(match => {
+        const otherPId = match.profile1_id === profileId
           ? match.profile2_id
           : match.profile1_id;
-        return !blockedProfileIds.has(otherProfileId);
+        return !blockedProfileIds.has(otherPId);
       });
 
       if (filteredMatches.length === 0) {
@@ -169,13 +241,12 @@ export default function Messages() {
 
       // Get all other profile IDs
       const otherProfileIds = filteredMatches.map(match =>
-        match.profile1_id === currentProfileId ? match.profile2_id : match.profile1_id
+        match.profile1_id === profileId ? match.profile2_id : match.profile1_id
       );
       const matchIds = filteredMatches.map(match => match.id);
 
-      // Batch fetch all profiles and messages in parallel
-      const [profilesResult, messagesResult, unreadCountsResult] = await Promise.all([
-        // Get all profiles at once
+      // Batch fetch profiles, messages, unread counts, and private key all in parallel
+      const [profilesResult, messagesResult, unreadCountsResult, privateKey] = await Promise.all([
         supabase
           .from('profiles')
           .select(`
@@ -188,25 +259,17 @@ export default function Messages() {
             photo_blur_enabled,
             photos (
               url,
+              storage_path,
               is_primary,
               display_order,
               blur_data_uri
             )
           `)
           .in('id', otherProfileIds),
-        // Get last message for each match using a single query with distinct
-        supabase
-          .from('messages')
-          .select('match_id, encrypted_content, created_at, sender_profile_id, read_at')
-          .in('match_id', matchIds)
-          .order('created_at', { ascending: false }),
-        // Get unread counts for all matches at once
-        supabase
-          .from('messages')
-          .select('match_id', { count: 'exact' })
-          .in('match_id', matchIds)
-          .eq('receiver_profile_id', currentProfileId)
-          .is('read_at', null),
+        // PERFORMANCE: Use RPCs that return only last message per match + grouped unread counts
+        supabase.rpc('get_last_messages', { p_match_ids: matchIds }),
+        supabase.rpc('get_unread_counts', { p_match_ids: matchIds, p_profile_id: profileId }),
+        getPrivateKey(user?.id || ''),
       ]);
 
       // Create lookup maps for O(1) access
@@ -214,109 +277,143 @@ export default function Messages() {
         (profilesResult.data || []).map(p => [p.id, p])
       );
 
-      // Get last message per match (first occurrence since sorted desc)
-      const lastMessagesMap = new Map<string, any>();
-      for (const msg of messagesResult.data || []) {
-        if (!lastMessagesMap.has(msg.match_id)) {
-          lastMessagesMap.set(msg.match_id, msg);
+      // RPC returns one row per match (DISTINCT ON), so direct map
+      const lastMessagesMap = new Map<string, any>(
+        (messagesResult.data || []).map((msg: any) => [msg.match_id, msg])
+      );
+
+      // RPC returns grouped counts, so direct map
+      const unreadCountsMap = new Map<string, number>(
+        (unreadCountsResult.data || []).map((row: any) => [row.match_id, Number(row.unread_count)])
+      );
+
+      // Collect primary photo paths for all conversations, then batch-sign (1 RPC call)
+      const matchEntries = filteredMatches.map((match) => {
+        const otherProfileId = match.profile1_id === profileId
+          ? match.profile2_id
+          : match.profile1_id;
+        const profile = profilesMap.get(otherProfileId);
+        const photos = profile?.photos?.sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
+        const primaryPhoto = photos?.find((p: any) => p.is_primary) || photos?.[0];
+        return { match, otherProfileId, profile, primaryPhoto };
+      });
+
+      // Batch-sign all primary photo URLs at once (skip entries with no photo)
+      const photoPaths = matchEntries.map(e =>
+        e.primaryPhoto ? (e.primaryPhoto.storage_path || e.primaryPhoto.url || '') : ''
+      );
+      const validIndices: number[] = [];
+      const validPaths: string[] = [];
+      photoPaths.forEach((p, i) => {
+        if (p) { validIndices.push(i); validPaths.push(p); }
+      });
+      const signedPhotoUrls: (string | null)[] = new Array(photoPaths.length).fill(null);
+      if (validPaths.length > 0) {
+        const signed = await getSignedUrls('profile-photos', validPaths);
+        for (let j = 0; j < signed.length; j++) {
+          signedPhotoUrls[validIndices[j]] = signed[j];
         }
       }
 
-      // Count unread messages per match
-      const unreadCountsMap = new Map<string, number>();
-      for (const msg of unreadCountsResult.data || []) {
-        const current = unreadCountsMap.get(msg.match_id) || 0;
-        unreadCountsMap.set(msg.match_id, current + 1);
-      }
+      // Build conversations WITHOUT decryption first (show UI immediately)
+      const conversationsData = matchEntries.map(({ match, otherProfileId, profile, primaryPhoto }, i) => {
+        const lastMessage = lastMessagesMap.get(match.id);
+        const unreadCount = unreadCountsMap.get(match.id) || 0;
+        const isRevealed = revealedProfileIds.has(otherProfileId);
+        const signedPhotoUrl = signedPhotoUrls[i] || primaryPhoto?.url;
 
-      // Get private key once for all decryptions
-      const privateKey = await getPrivateKey(user?.id || '');
-
-      // Build conversations with decryption done in parallel
-      const conversationsData = await Promise.all(
-        filteredMatches.map(async (match) => {
-          const otherProfileId = match.profile1_id === currentProfileId
-            ? match.profile2_id
-            : match.profile1_id;
-
-          const profile = profilesMap.get(otherProfileId);
-          const lastMessage = lastMessagesMap.get(match.id);
-          const unreadCount = unreadCountsMap.get(match.id) || 0;
-
-          const photos = profile?.photos?.sort((a: any, b: any) => a.display_order - b.display_order);
-          const primaryPhoto = photos?.find((p: any) => p.is_primary) || photos?.[0];
-          const isRevealed = revealedProfileIds.has(otherProfileId);
-
-          // Decrypt last message if available
-          let decryptedContent: string | undefined;
-          if (lastMessage && profile?.encryption_public_key) {
-            try {
-              if (privateKey) {
-                decryptedContent = await decryptMessage(
-                  lastMessage.encrypted_content,
-                  privateKey,
-                  profile.encryption_public_key
-                );
-              } else {
-                decryptedContent = t('messages.encryptedMessage');
-              }
-            } catch (error) {
-              decryptedContent = t('messages.encryptedMessage');
-            }
-          } else if (lastMessage) {
-            const content = lastMessage.encrypted_content;
-            if (content && content.includes(':') && /^[A-Za-z0-9+/=]+:/.test(content)) {
-              decryptedContent = t('messages.encryptedMessage');
-            } else {
-              decryptedContent = content;
-            }
+        // Quick check for plaintext messages (no decryption needed)
+        let decryptedContent: string | undefined;
+        if (lastMessage) {
+          const content = lastMessage.encrypted_content;
+          if (content && content.includes(':') && /^[A-Za-z0-9+/=]+:/.test(content)) {
+            decryptedContent = t('messages.encryptedMessage');
+          } else {
+            decryptedContent = content;
           }
+        }
 
-          return {
-            match_id: match.id,
-            profile: {
-              id: profile?.id || '',
-              display_name: profile?.display_name || 'Unknown',
-              age: profile?.age || 0,
-              photo_url: primaryPhoto?.url,
-              photo_blur_data_uri: primaryPhoto?.blur_data_uri,
-              is_verified: profile?.is_verified,
-              photo_verified: profile?.photo_verified,
-              encryption_public_key: profile?.encryption_public_key,
-              photo_blur_enabled: profile?.photo_blur_enabled || false,
-              is_revealed: isRevealed,
-            },
-            last_message: lastMessage ? {
-              ...lastMessage,
-              decrypted_content: decryptedContent
-            } : undefined,
-            unread_count: unreadCount,
-            is_muted: match.is_muted || false,
-            is_archived: match.is_archived || false,
-            is_pinned: match.is_pinned || false,
-          };
-        })
-      );
-
-      // Sort: pinned first, then by last message time (most recent first)
-      const sorted = conversationsData.sort((a, b) => {
-        if (a.is_pinned && !b.is_pinned) return -1;
-        if (!a.is_pinned && b.is_pinned) return 1;
-        if (!a.last_message) return 1;
-        if (!b.last_message) return -1;
-        return new Date(b.last_message.created_at).getTime() - new Date(a.last_message.created_at).getTime();
+        return {
+          match_id: match.id,
+          profile: {
+            id: profile?.id || '',
+            display_name: profile?.display_name || 'Unknown',
+            age: profile?.age || 0,
+            photo_url: signedPhotoUrl,
+            photo_blur_data_uri: primaryPhoto?.blur_data_uri,
+            is_verified: profile?.is_verified,
+            photo_verified: profile?.photo_verified,
+            encryption_public_key: profile?.encryption_public_key,
+            photo_blur_enabled: profile?.photo_blur_enabled || false,
+            is_revealed: isRevealed,
+          },
+          last_message: lastMessage ? {
+            ...lastMessage,
+            decrypted_content: decryptedContent
+          } : undefined,
+          unread_count: unreadCount,
+          is_muted: match.is_muted || false,
+          is_archived: match.is_archived || false,
+          is_pinned: match.is_pinned || false,
+        };
       });
 
-      setConversations(sorted);
+      // Sort: pinned first, then by last message time (most recent first)
+      const sortConversations = (list: typeof conversationsData) =>
+        [...list].sort((a, b) => {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+          if (!a.last_message) return 1;
+          if (!b.last_message) return -1;
+          return new Date(b.last_message.created_at).getTime() - new Date(a.last_message.created_at).getTime();
+        });
+
+      // Show conversations immediately (with placeholder previews)
+      setConversations(sortConversations(conversationsData));
+      setLoading(false);
+      setRefreshing(false);
+
+      // PERFORMANCE: Defer decryption until after UI is responsive
+      InteractionManager.runAfterInteractions(async () => {
+        try {
+          if (!privateKey) return;
+          const decrypted = await Promise.all(
+            conversationsData.map(async (conv) => {
+              if (!conv.last_message || !conv.profile.encryption_public_key) return conv;
+              const content = conv.last_message.encrypted_content;
+              // Skip if already plaintext
+              if (!content || !(content.includes(':') && /^[A-Za-z0-9+/=]+:/.test(content))) return conv;
+              try {
+                const decryptedContent = await decryptMessage(
+                  content,
+                  privateKey,
+                  conv.profile.encryption_public_key!
+                );
+                return {
+                  ...conv,
+                  last_message: { ...conv.last_message, decrypted_content: decryptedContent },
+                };
+              } catch {
+                return conv;
+              }
+            })
+          );
+          setConversations(sortConversations(decrypted));
+        } catch (error) {
+          console.error('Error decrypting message previews:', error);
+        }
+      });
     } catch (error: any) {
       console.error('Error loading conversations:', error);
-    } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
   const subscribeToMessages = () => {
+    const profileId = currentProfileIdRef.current || currentProfileId;
+    if (!profileId) return () => {};
+
     const channel = supabase
       .channel('messages-updates')
       .on(
@@ -325,6 +422,7 @@ export default function Messages() {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
+          filter: `receiver_profile_id=eq.${profileId}`,
         },
         () => {
           loadConversations();
@@ -336,6 +434,7 @@ export default function Messages() {
           event: 'UPDATE',
           schema: 'public',
           table: 'messages',
+          filter: `receiver_profile_id=eq.${profileId}`,
         },
         () => {
           loadConversations();
@@ -380,7 +479,7 @@ export default function Messages() {
       channel
         .on('broadcast', { event: 'typing' }, (payload) => {
           // Only show typing if it's from the other user
-          if (payload.payload?.profileId && payload.payload.profileId !== currentProfileId) {
+          if (payload.payload?.profileId && payload.payload.profileId !== (currentProfileIdRef.current || currentProfileId)) {
             // Add to typing users
             setTypingUsers((prev) => {
               const newSet = new Set(prev);
@@ -440,11 +539,11 @@ export default function Messages() {
     loadConversations();
   }, [currentProfileId]);
 
-  const handleConversationPress = (conversation: Conversation) => {
+  const handleConversationPress = useCallback((conversation: Conversation) => {
     router.push(`/chat/${conversation.match_id}`);
-  };
+  }, []);
 
-  const handleDeleteConversation = (conversation: Conversation) => {
+  const handleDeleteConversation = useCallback((conversation: Conversation) => {
     Alert.alert(
       t('messages.deleteDialog.title'),
       t('messages.deleteDialog.message', { name: conversation.profile.display_name }),
@@ -458,7 +557,7 @@ export default function Messages() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Delete all messages in the conversation
+              // Delete all messages to free DB storage (match stays intact)
               const { error: messagesError } = await supabase
                 .from('messages')
                 .delete()
@@ -479,7 +578,7 @@ export default function Messages() {
         },
       ]
     );
-  };
+  }, [t, showToast]);
 
   const handleBlock = (conversation: Conversation) => {
     Alert.alert(
@@ -540,56 +639,8 @@ export default function Messages() {
   };
 
   const handleReport = (conversation: Conversation) => {
-    Alert.prompt(
-      t('messages.reportDialog.title'),
-      t('messages.reportDialog.message', { name: conversation.profile.display_name }),
-      [
-        {
-          text: t('common.cancel'),
-          style: 'cancel',
-        },
-        {
-          text: t('messages.reportDialog.submit'),
-          onPress: async (reason?: string) => {
-            if (!reason || reason.trim() === '') {
-              showToast({ type: 'error', title: t('common.error'), message: t('messages.reportDialog.errorEmpty') });
-              return;
-            }
-
-            try {
-              // Get current profile ID
-              const { data: currentProfile } = await supabase
-                .from('profiles')
-                .select('id')
-                .eq('user_id', user?.id)
-                .single();
-
-              if (!currentProfile) {
-                throw new Error('Could not find your profile');
-              }
-
-              // Insert report
-              const { error } = await supabase
-                .from('reports')
-                .insert({
-                  reporter_profile_id: currentProfile.id,
-                  reported_profile_id: conversation.profile.id,
-                  reason: reason.trim(),
-                  status: 'pending',
-                });
-
-              if (error) throw error;
-
-              showToast({ type: 'success', title: t('messages.reportDialog.success'), message: t('messages.reportDialog.successMessage') });
-            } catch (error: any) {
-              console.error('Error reporting user:', error);
-              showToast({ type: 'error', title: t('common.error'), message: t('messages.reportDialog.error') });
-            }
-          },
-        },
-      ],
-      'plain-text'
-    );
+    setReportingConversation(conversation);
+    setShowReportModal(true);
   };
 
   const handleMuteToggle = async (conversation: Conversation) => {
@@ -620,7 +671,7 @@ export default function Messages() {
     }
   };
 
-  const handleArchiveToggle = async (conversation: Conversation) => {
+  const handleArchiveToggle = useCallback(async (conversation: Conversation) => {
     try {
       const newArchivedState = !conversation.is_archived;
 
@@ -634,6 +685,9 @@ export default function Messages() {
       // Remove from current view immediately
       setConversations((prev) => prev.filter((c) => c.match_id !== conversation.match_id));
 
+      // Update archived count without re-fetching
+      setArchivedCount((prev) => newArchivedState ? prev + 1 : Math.max(prev - 1, 0));
+
       showToast({ type: 'success', title: t('common.success'), message: t('messages.archiveSuccess', {
         status: newArchivedState ? t('messages.archived') : t('messages.unarchived')
       }) });
@@ -641,7 +695,7 @@ export default function Messages() {
       console.error('Error toggling archive:', error);
       showToast({ type: 'error', title: t('common.error'), message: t('messages.markUnreadError') });
     }
-  };
+  }, [t, showToast]);
 
   const handlePinToggle = async (conversation: Conversation) => {
     try {
@@ -704,10 +758,10 @@ export default function Messages() {
     }
   };
 
-  const handleConversationLongPress = (conversation: Conversation) => {
+  const handleConversationLongPress = useCallback((conversation: Conversation) => {
     setSelectedConversation(conversation);
     setShowActionSheet(true);
-  };
+  }, []);
 
   const handleActionSelect = (action: string) => {
     if (!selectedConversation) return;
@@ -745,7 +799,7 @@ export default function Messages() {
     }, 100);
   };
 
-  const getTimeAgo = (dateString: string) => {
+  const getTimeAgo = useCallback((dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
@@ -755,143 +809,19 @@ export default function Messages() {
     if (seconds < 86400) return t('messages.timeAgo.hoursAgo', { count: Math.floor(seconds / 3600) });
     if (seconds < 604800) return t('messages.timeAgo.daysAgo', { count: Math.floor(seconds / 86400) });
     return t('messages.timeAgo.weeksAgo', { count: Math.floor(seconds / 604800) });
-  };
+  }, [t]);
 
-  // Separate ConversationCard component to use usePhotoBlur hook
-  const ConversationCard = ({ item, index }: { item: Conversation; index: number }) => {
-    const hasUnread = item.unread_count > 0;
-    const isTyping = typingUsers.has(item.match_id);
-
-    // Photo blur - uses server-side data URI when available, falls back to legacy blur
-    const { imageUri, blurRadius, showBlurOverlay, onImageLoad, onImageError } = usePhotoBlur({
-      shouldBlur: (item.profile.photo_blur_enabled || false) && !item.profile.is_revealed && !isAdmin,
-      photoUrl: item.profile.photo_url || 'https://via.placeholder.com/64',
-      blurDataUri: item.profile.photo_blur_data_uri,
-      blurIntensity: 30,
-    });
-
-    return (
-        <TouchableOpacity
-          style={[styles.conversationCard, { backgroundColor: colors.card }]}
-          onPress={() => handleConversationPress(item)}
-          onLongPress={() => handleConversationLongPress(item)}
-          activeOpacity={0.7}
-        >
-          {/* Profile Photo */}
-          <View style={styles.photoContainer}>
-            <Image
-              source={{ uri: imageUri }}
-              style={[styles.photo, { backgroundColor: colors.muted }]}
-              blurRadius={blurRadius}
-              onLoad={onImageLoad}
-              onError={onImageError}
-            />
-            {/* Android blur fallback - dark frosted overlay instead of RenderScript */}
-            {showBlurOverlay && (
-              <View
-                style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-                pointerEvents="none"
-              />
-            )}
-            {(item.profile.is_verified || item.profile.photo_verified) && (
-              <View style={[styles.verifiedBadge, { backgroundColor: colors.background }]}>
-                <MaterialCommunityIcons name="check-decagram" size={16} color="#A08AB7" />
-              </View>
-            )}
-            {hasUnread && <View style={styles.unreadDot} />}
-          </View>
-
-          {/* Conversation Info */}
-          <View style={styles.conversationInfo}>
-            <View style={styles.conversationHeader}>
-              <View style={styles.nameRow}>
-                {item.is_pinned && (
-                  <MaterialCommunityIcons name="pin" size={16} color={colors.primary} style={{ marginRight: 4 }} />
-                )}
-                <Text style={[styles.conversationName, { color: colors.foreground }]} numberOfLines={1}>
-                  {item.profile.display_name}
-                </Text>
-                {item.is_muted && (
-                  <MaterialCommunityIcons name="bell-off" size={14} color={colors.mutedForeground} style={{ marginLeft: 6 }} />
-                )}
-              </View>
-              {item.last_message && (
-                <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>{getTimeAgo(item.last_message.created_at)}</Text>
-              )}
-            </View>
-
-            {/* Last Message or Typing Indicator */}
-            {isTyping ? (
-              <View style={styles.messageRow}>
-                <View style={styles.typingIndicator}>
-                  <MotiView
-                    from={{ opacity: 0.4 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ type: 'timing', duration: 400, loop: true }}
-                    style={[styles.typingDot, { backgroundColor: colors.primary }]}
-                  />
-                  <MotiView
-                    from={{ opacity: 0.4 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ type: 'timing', duration: 400, loop: true, delay: 150 }}
-                    style={[styles.typingDot, { backgroundColor: colors.primary }]}
-                  />
-                  <MotiView
-                    from={{ opacity: 0.4 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ type: 'timing', duration: 400, loop: true, delay: 300 }}
-                    style={[styles.typingDot, { backgroundColor: colors.primary }]}
-                  />
-                  <Text style={[styles.typingText, { color: colors.primary }]}>
-                    {t('messages.typing', { defaultValue: 'typing' })}
-                  </Text>
-                </View>
-              </View>
-            ) : item.last_message ? (
-              <View style={styles.messageRow}>
-                <Text
-                  style={[styles.lastMessage, { color: colors.mutedForeground }, hasUnread && { color: colors.foreground, fontWeight: '600' }]}
-                  numberOfLines={2}
-                >
-                  {item.last_message.sender_profile_id === currentProfileId ? t('matches.youLabel') : ''}
-                  {item.last_message.decrypted_content || (
-                    // If no decrypted content and it looks encrypted, show placeholder
-                    item.last_message.encrypted_content?.includes(':')
-                      ? t('messages.encryptedMessage')
-                      : item.last_message.encrypted_content
-                  )}
-                </Text>
-                {isPremium && item.last_message.sender_profile_id === currentProfileId && (
-                  <MaterialCommunityIcons
-                    name={item.last_message.read_at ? "check-all" : "check"}
-                    size={16}
-                    color={item.last_message.read_at ? colors.info : colors.mutedForeground}
-                    style={{ marginLeft: 4 }}
-                  />
-                )}
-                {hasUnread && (
-                  <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadCount}>{item.unread_count}</Text>
-                  </View>
-                )}
-              </View>
-            ) : (
-              <View style={styles.ctaRow}>
-                <MaterialCommunityIcons name="chat-outline" size={14} color={colors.primary} />
-                <Text style={[styles.ctaText, { color: colors.primary }]}>{t('messages.startConversation')}</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Chevron */}
-          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.grey3} />
-        </TouchableOpacity>
-    );
-  };
+  // Get or create a ref for a conversation's swipeable
+  const getSwipeableRef = useCallback((matchId: string) => {
+    if (!swipeableRefs.current.has(matchId)) {
+      swipeableRefs.current.set(matchId, createRef<SwipeableMethods | null>());
+    }
+    return swipeableRefs.current.get(matchId)!;
+  }, []);
 
   const renderUpgradeCard = () => {
-    // Only show for free users with at least 2 conversations
-    if (isPremium || conversations.length < 2) return null;
+    // Only show for free users with at least 2 conversations, and not dismissed
+    if (isPremium || conversations.length < 2 || upgradeBannerDismissed) return null;
 
     return (
       <MotiView
@@ -916,7 +846,16 @@ export default function Messages() {
                 <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
                 <Text style={styles.upgradeTitle}>{t('messages.upgradeCard.title')}</Text>
               </View>
-              <MaterialCommunityIcons name="close" size={20} color="rgba(255,255,255,0.8)" />
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setUpgradeBannerDismissed(true);
+                  AsyncStorage.setItem('upgradeBannerDismissedAt', Date.now().toString());
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialCommunityIcons name="close" size={20} color="rgba(255,255,255,0.8)" />
+              </TouchableOpacity>
             </View>
 
             {/* Features */}
@@ -924,7 +863,6 @@ export default function Messages() {
               {[
                 { icon: 'check-all', text: t('messages.upgradeCard.readReceipts') },
                 { icon: 'microphone', text: t('messages.upgradeCard.voiceMessages') },
-                { icon: 'message-text', text: t('messages.upgradeCard.introMessages') },
               ].map((feature, i) => (
                 <View key={i} style={styles.upgradeFeatureRow}>
                   <MaterialCommunityIcons name={feature.icon as any} size={18} color="white" />
@@ -944,9 +882,59 @@ export default function Messages() {
     );
   };
 
-  const renderConversation = ({ item, index }: { item: Conversation; index: number }) => {
-    return <ConversationCard item={item} index={index} />;
-  };
+  const renderConversation = useCallback(({ item }: { item: Conversation }) => {
+    const ref = getSwipeableRef(item.match_id);
+    return (
+      <SwipeableConversationCard
+        item={item}
+        currentProfileId={currentProfileId}
+        isAdmin={isAdmin}
+        isPremium={isPremium}
+        isTyping={typingUsersRef.current.has(item.match_id)}
+        showArchived={showArchived}
+        colors={colors}
+        openSwipeableRef={openSwipeableRef}
+        swipeableRef={ref}
+        getTimeAgo={getTimeAgo}
+        onPress={handleConversationPress}
+        onLongPress={handleConversationLongPress}
+        onArchive={handleArchiveToggle}
+        onDelete={handleDeleteConversation}
+      />
+    );
+  }, [currentProfileId, isAdmin, isPremium, showArchived, colors, getTimeAgo, handleConversationPress, handleConversationLongPress, handleArchiveToggle, handleDeleteConversation, getSwipeableRef]);
+
+  const keyExtractor = useCallback((item: Conversation) => item.match_id, []);
+
+  const listHeader = useMemo(() => (
+    <>
+      {renderUpgradeCard()}
+      {!showArchived && archivedCount > 0 && (
+        <TouchableOpacity
+          style={[styles.archivedFolderRow, { backgroundColor: colors.card }]}
+          onPress={() => {
+            setShowArchived(true);
+            setConversations([]);
+            setLoading(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.archivedFolderIcon, { backgroundColor: colors.muted }]}>
+            <MaterialCommunityIcons name="archive-outline" size={20} color="#A08AB7" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.archivedFolderLabel, { color: colors.foreground }]}>
+              {t('messages.archivedFolder')}
+            </Text>
+          </View>
+          <Text style={[styles.archivedFolderCount, { color: colors.mutedForeground }]}>
+            {archivedCount}
+          </Text>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.grey3} />
+        </TouchableOpacity>
+      )}
+    </>
+  ), [showArchived, archivedCount, colors, t, isPremium, conversations.length]);
 
   // Loading state
   if (loading) {
@@ -969,8 +957,31 @@ export default function Messages() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
         <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('messages.title')}</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('messages.subtitle')}</Text>
+          {showArchived ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowArchived(false);
+                  setConversations([]);
+                  setLoading(true);
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialCommunityIcons name="arrow-left" size={28} color={colors.foreground} />
+              </TouchableOpacity>
+              <View>
+                <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('messages.archivedFolder')}</Text>
+                <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
+                  {t('messages.conversation', { count: 0 })}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View>
+              <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('messages.title')}</Text>
+              <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{t('messages.subtitle')}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.emptyContainer}>
@@ -979,24 +990,53 @@ export default function Messages() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', delay: 200 }}
           >
-            <View style={styles.emptyIconContainer}>
-              <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.emptyIcon}>
-                <MaterialCommunityIcons name="chat-outline" size={48} color="white" />
-              </LinearGradient>
-            </View>
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t('messages.noMessagesYet')}</Text>
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              {t('messages.noMessagesText')}
-            </Text>
-            <TouchableOpacity
-              style={styles.emptyButton}
-              onPress={() => router.push('/(tabs)/discover')}
-            >
-              <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.emptyButtonGradient}>
-                <MaterialCommunityIcons name="cards-heart" size={20} color="white" />
-                <Text style={styles.emptyButtonText}>{t('messages.findMatches')}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+            {showArchived ? (
+              <>
+                <View style={styles.emptyIconContainer}>
+                  <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
+                    <MaterialCommunityIcons name="archive-outline" size={48} color={colors.mutedForeground} />
+                  </View>
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t('messages.noArchivedMessages')}</Text>
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                  {t('messages.noArchivedMessagesText')}
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyButton}
+                  onPress={() => {
+                    setShowArchived(false);
+                    setConversations([]);
+                    setLoading(true);
+                  }}
+                >
+                  <View style={[styles.emptyButtonGradient, { backgroundColor: colors.muted }]}>
+                    <MaterialCommunityIcons name="arrow-left" size={20} color={colors.foreground} />
+                    <Text style={[styles.emptyButtonText, { color: colors.foreground }]}>{t('messages.backToMessages')}</Text>
+                  </View>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={styles.emptyIconContainer}>
+                  <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.emptyIcon}>
+                    <MaterialCommunityIcons name="chat-outline" size={48} color="white" />
+                  </LinearGradient>
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t('messages.noMessagesYet')}</Text>
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                  {t('messages.noMessagesText')}
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyButton}
+                  onPress={() => router.push('/(tabs)/discover')}
+                >
+                  <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.emptyButtonGradient}>
+                    <MaterialCommunityIcons name="cards-heart" size={20} color="white" />
+                    <Text style={styles.emptyButtonText}>{t('messages.findMatches')}</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </>
+            )}
           </MotiView>
         </View>
       </View>
@@ -1008,42 +1048,48 @@ export default function Messages() {
     <View style={[styles.container, { backgroundColor: colors.background, paddingRight: rightSafeArea }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('messages.title')}</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
-            {showArchived
-              ? t('messages.archivedConversations')
-              : conversations.length === 1
+        {showArchived ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowArchived(false);
+                setConversations([]);
+                setLoading(true);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialCommunityIcons name="arrow-left" size={28} color={colors.foreground} />
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('messages.archivedFolder')}</Text>
+              <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
+                {conversations.length === 1
+                  ? t('messages.archivedFolderCountOne', { count: conversations.length })
+                  : t('messages.archivedFolderCount', { count: conversations.length })
+                }
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('messages.title')}</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
+              {conversations.length === 1
                 ? t('messages.conversation', { count: conversations.length })
                 : t('messages.conversations', { count: conversations.length })
-            }
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {/* Archive Button */}
-          <TouchableOpacity
-            onPress={() => {
-              setShowArchived(!showArchived);
-              setConversations([]); // Clear to trigger reload
-              setLoading(true);
-            }}
-            style={[styles.archiveButton, { backgroundColor: colors.muted }]}
-          >
-            <MaterialCommunityIcons
-              name={showArchived ? "inbox" : "archive"}
-              size={24}
-              color="#A08AB7"
-            />
-          </TouchableOpacity>
-        </View>
+              }
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Conversations List */}
       <FlatList
         data={conversations}
         renderItem={renderConversation}
-        keyExtractor={(item) => item.match_id}
-        ListHeaderComponent={renderUpgradeCard}
+        keyExtractor={keyExtractor}
+        extraData={typingUsers}
+        ListHeaderComponent={listHeader}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 80 }]}
         refreshControl={
           <RefreshControl
@@ -1054,7 +1100,6 @@ export default function Messages() {
           />
         }
         showsVerticalScrollIndicator={false}
-        // ANR FIX: Optimize FlatList rendering performance
         initialNumToRender={10}
         maxToRenderPerBatch={5}
         updateCellsBatchingPeriod={50}
@@ -1110,7 +1155,7 @@ export default function Messages() {
                 <MaterialCommunityIcons
                   name="pin"
                   size={24}
-                  color={selectedConversation?.is_pinned ? colors.primary : colors.grey}
+                  color={selectedConversation?.is_pinned ? '#A08AB7' : colors.grey}
                 />
                 <Text style={[styles.actionText, { color: colors.foreground }]}>
                   {selectedConversation?.is_pinned ? t('messages.actions.unpinConversation') : t('messages.actions.pinConversation')}
@@ -1189,6 +1234,19 @@ export default function Messages() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Report User Modal */}
+      {reportingConversation && (
+        <ReportUserModal
+          visible={showReportModal}
+          onClose={() => {
+            setShowReportModal(false);
+            setReportingConversation(null);
+          }}
+          reportedProfileId={reportingConversation.profile.id}
+          reportedProfileName={reportingConversation.profile.display_name}
+        />
+      )}
     </View>
   );
 }
@@ -1296,133 +1354,6 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
-  conversationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    gap: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  photoContainer: {
-    position: 'relative',
-  },
-  photo: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#E5E7EB',
-  },
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  unreadDot: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#EF4444',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  conversationInfo: {
-    flex: 1,
-    gap: 6,
-  },
-  conversationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  conversationName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#111827',
-    flexShrink: 1,
-  },
-  timestamp: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginLeft: 8,
-  },
-  messageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  lastMessage: {
-    flex: 1,
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
-  },
-  lastMessageUnread: {
-    color: '#111827',
-    fontWeight: '600',
-  },
-  unreadBadge: {
-    backgroundColor: '#EF4444',
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  unreadCount: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  ctaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  ctaText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#A08AB7',
-  },
-  typingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  typingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#A08AB7',
-  },
-  typingText: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 4,
-    color: '#A08AB7',
-  },
   upgradeCardContainer: {
     marginBottom: 16,
   },
@@ -1478,6 +1409,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'PlusJakartaSans-Bold',
     color: '#A08AB7',
+  },
+  archivedFolderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    padding: 14,
+    gap: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  archivedFolderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  archivedFolderLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  archivedFolderCount: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginRight: 4,
   },
   modalOverlay: {
     flex: 1,

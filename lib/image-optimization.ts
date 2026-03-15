@@ -4,6 +4,46 @@ import * as Crypto from 'expo-crypto';
 import { decode } from 'base64-arraybuffer';
 
 /**
+ * Persistent directory for optimized images.
+ * Uses documentDirectory (not cacheDirectory) so Android/Samsung
+ * aggressive memory management won't clean these up before upload.
+ */
+const OPTIMIZED_IMAGES_DIR = `${FileSystem.documentDirectory}optimized-photos/`;
+
+async function ensureOptimizedDir(): Promise<void> {
+  const info = await FileSystem.getInfoAsync(OPTIMIZED_IMAGES_DIR);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(OPTIMIZED_IMAGES_DIR, { intermediates: true });
+  }
+}
+
+/**
+ * Copy an image from a temp/cache URI to the persistent optimized-photos directory.
+ * Returns the new persistent URI.
+ */
+async function persistImage(tempUri: string): Promise<string> {
+  await ensureOptimizedDir();
+  const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const persistentUri = `${OPTIMIZED_IMAGES_DIR}${filename}`;
+  await FileSystem.copyAsync({ from: tempUri, to: persistentUri });
+  return persistentUri;
+}
+
+/**
+ * Clean up all persisted optimized images (call after successful upload).
+ */
+export async function cleanupOptimizedImages(): Promise<void> {
+  try {
+    const info = await FileSystem.getInfoAsync(OPTIMIZED_IMAGES_DIR);
+    if (info.exists) {
+      await FileSystem.deleteAsync(OPTIMIZED_IMAGES_DIR, { idempotent: true });
+    }
+  } catch (error) {
+    console.warn('Failed to cleanup optimized images dir:', error);
+  }
+}
+
+/**
  * Image optimization configuration
  */
 export const IMAGE_CONFIG = {
@@ -117,15 +157,20 @@ export async function optimizeImage(
       }
     }
 
+    // Persist optimized image to document directory so it survives
+    // Android memory management (Samsung, Xiaomi, etc. aggressively clean temp files)
+    const persistedUri = await persistImage(finalUri);
+    const persistedSize = await getFileSize(persistedUri);
+
     const result: {
       optimized: OptimizedImage;
       thumbnail?: OptimizedImage;
     } = {
       optimized: {
-        uri: finalUri,
+        uri: persistedUri,
         width: manipulated.width,
         height: manipulated.height,
-        size: fileSize,
+        size: persistedSize || fileSize,
       },
     };
 
@@ -186,20 +231,70 @@ export async function optimizeImages(
 }
 
 /**
- * Convert image URI to ArrayBuffer for Supabase upload
+ * Convert image URI to ArrayBuffer for Supabase upload.
+ * Optionally accepts an originalUri to re-optimize from if the file is missing
+ * (handles Android temp file cleanup by Samsung/Xiaomi/etc).
  */
-export async function uriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
+export async function uriToArrayBuffer(
+  uri: string,
+  originalUri?: string
+): Promise<ArrayBuffer> {
   try {
-    // Read file as base64
+    // Check if file still exists (Android can clean temp/cache files)
+    const info = await FileSystem.getInfoAsync(uri);
+    const fileSize = info.exists && 'size' in info ? info.size : 0;
+
+    // Treat 0-byte files as missing (Samsung/Xiaomi can write empty files during cleanup)
+    if (!info.exists || fileSize === 0) {
+      // If we have the original URI, try re-optimizing
+      if (originalUri) {
+        console.warn('Optimized file missing or empty, re-optimizing from original:', originalUri);
+        const originalInfo = await FileSystem.getInfoAsync(originalUri);
+        if (originalInfo.exists) {
+          const { optimized } = await optimizeImage(originalUri);
+          uri = optimized.uri;
+        } else {
+          throw new Error(
+            'Photo file was removed by your device. Please remove this photo and re-add it.'
+          );
+        }
+      } else {
+        throw new Error(
+          'Photo file was removed by your device. Please remove this photo and re-add it.'
+        );
+      }
+    }
+
+    // Primary path: fetch(uri) → ArrayBuffer (no base64 intermediate, lower memory)
+    try {
+      const response = await fetch(uri);
+      if (!response.ok) {
+        throw new Error(`fetch returned ${response.status}`);
+      }
+      const buffer = await response.arrayBuffer();
+      if (buffer.byteLength === 0) {
+        throw new Error('fetch returned empty body');
+      }
+      return buffer;
+    } catch (fetchError) {
+      console.warn('fetch(uri).arrayBuffer() failed, falling back to base64:', fetchError);
+    }
+
+    // Fallback: read as base64 string then decode (works on some file URI schemes where fetch doesn't)
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-
-    // Convert base64 to ArrayBuffer
+    if (!base64 || base64.length === 0) {
+      throw new Error('Photo file could not be read. Please remove this photo and re-add it.');
+    }
     return decode(base64);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error converting URI to ArrayBuffer:', error);
-    throw new Error('Failed to process image for upload');
+    // Re-throw with the original message if it's already user-friendly
+    if (error.message?.includes('Please remove') || error.message?.includes('re-add')) {
+      throw error;
+    }
+    throw new Error('Failed to process image for upload. Please try removing and re-adding the photo.');
   }
 }
 

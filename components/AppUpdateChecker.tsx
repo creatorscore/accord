@@ -10,8 +10,6 @@ import {
   AppState,
   AppStateStatus,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import { supabase } from '@/lib/supabase';
 
@@ -44,6 +42,49 @@ interface UpdateInfo {
   update_message?: string;
   is_forced: boolean;
   admin_test_update?: boolean; // Only show update modal to admins for testing
+}
+
+// Preview component for admins to test the update modal
+export function UpdateModalPreview({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const mockInfo: UpdateInfo = {
+    latest_version: '99.0.0',
+    minimum_version: '99.0.0',
+    is_forced: true,
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.screen}>
+        <View style={styles.content}>
+          <View style={styles.dots}>
+            <View style={[styles.dot, styles.dotSmall, { left: '15%', top: 0 }]} />
+            <View style={[styles.dot, styles.dotMedium, { right: '20%', top: 20 }]} />
+            <View style={[styles.dot, styles.dotSmall, { left: '35%', top: 40 }]} />
+          </View>
+          <Text style={styles.emoji}>{'\u{1F527}'}</Text>
+          <Text style={styles.title}>{"We've made some\nimportant changes"}</Text>
+          <Text style={styles.body}>
+            This version of Accord is no longer supported. Update to keep your conversations safe and everything running smoothly.
+          </Text>
+          <View style={styles.versionPill}>
+            <Text style={styles.versionPillText}>
+              v{CURRENT_VERSION}  →  v{mockInfo.latest_version}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.updateButton} onPress={onClose} activeOpacity={0.85}>
+            <Text style={styles.updateButtonText}>Update Accord</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.laterButton} onPress={onClose} activeOpacity={0.7}>
+            <Text style={styles.laterButtonText}>Close Preview</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 export default function AppUpdateChecker() {
@@ -219,63 +260,66 @@ export default function AppUpdateChecker() {
   return (
     <Modal
       visible={showFallbackModal}
-      transparent
       animationType="fade"
       onRequestClose={handleLater}
+      statusBarTranslucent
     >
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          {/* Icon */}
-          <View style={styles.iconContainer}>
-            <LinearGradient
-              colors={['#9B87CE', '#B8A9DD']}
-              style={styles.iconGradient}
-            >
-              <MaterialCommunityIcons
-                name={isForced ? 'alert-circle' : 'arrow-up-circle'}
-                size={48}
-                color="#FFF"
-              />
-            </LinearGradient>
+      <View style={styles.screen}>
+        <View style={styles.content}>
+          {/* Decorative dots */}
+          <View style={styles.dots}>
+            <View style={[styles.dot, styles.dotSmall, { left: '15%', top: 0 }]} />
+            <View style={[styles.dot, styles.dotMedium, { right: '20%', top: 20 }]} />
+            <View style={[styles.dot, styles.dotSmall, { left: '35%', top: 40 }]} />
           </View>
 
-          {/* Title */}
+          {/* Emoji — simple, human, no gradient blob */}
+          <Text style={styles.emoji}>
+            {isForced ? '\u{1F527}' : '\u{2728}'}
+          </Text>
+
+          {/* Headline */}
           <Text style={styles.title}>
-            {isForced ? 'Update Required' : 'Update Available'}
+            {isForced
+              ? "We've made some\nimportant changes"
+              : "Something new\nis waiting for you"}
           </Text>
 
-          {/* Version info */}
-          <Text style={styles.versionText}>
-            Version {updateInfo.latest_version} is available
+          {/* Body */}
+          <Text style={styles.body}>
+            {updateInfo.update_message
+              ? updateInfo.update_message
+              : isForced
+                ? "This version of Accord is no longer supported. Update to keep your conversations safe and everything running smoothly."
+                : "A newer version of Accord is available with improvements you'll appreciate."}
           </Text>
-          <Text style={styles.currentVersion}>
-            You have version {CURRENT_VERSION}
-          </Text>
 
-          {/* Message */}
-          {updateInfo.update_message && (
-            <Text style={styles.message}>{updateInfo.update_message}</Text>
-          )}
+          {/* Version pill */}
+          <View style={styles.versionPill}>
+            <Text style={styles.versionPillText}>
+              v{CURRENT_VERSION}  →  v{updateInfo.latest_version}
+            </Text>
+          </View>
+        </View>
 
-          {/* Forced update warning */}
-          {isForced && (
-            <View style={styles.warningBox}>
-              <MaterialCommunityIcons name="information" size={20} color="#DC2626" />
-              <Text style={styles.warningText}>
-                This update is required to continue using Accord
-              </Text>
-            </View>
-          )}
-
-          {/* Buttons */}
-          <TouchableOpacity style={styles.updateButton} onPress={handleUpdate}>
-            <Text style={styles.updateButtonText}>Update Now</Text>
+        {/* Bottom actions — anchored to bottom */}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={styles.updateButton}
+            onPress={handleUpdate}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.updateButtonText}>Update Accord</Text>
           </TouchableOpacity>
 
           {(!isForced || isAdminTest) && (
-            <TouchableOpacity style={styles.laterButton} onPress={handleLater}>
+            <TouchableOpacity
+              style={styles.laterButton}
+              onPress={handleLater}
+              activeOpacity={0.7}
+            >
               <Text style={styles.laterButtonText}>
-                {isAdminTest ? 'Close (Admin Test)' : 'Maybe Later'}
+                {isAdminTest ? 'Close (Admin Test)' : 'Not now'}
               </Text>
             </TouchableOpacity>
           )}
@@ -286,90 +330,97 @@ export default function AppUpdateChecker() {
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  screen: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: '#FAFAFA',
+    justifyContent: 'space-between',
+  },
+  content: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 36,
   },
-  container: {
-    backgroundColor: '#FFF',
-    borderRadius: 24,
-    padding: 24,
-    width: '100%',
-    maxWidth: 340,
-    alignItems: 'center',
+  dots: {
+    position: 'absolute',
+    top: '18%',
+    left: 0,
+    right: 0,
+    height: 60,
   },
-  iconContainer: {
-    marginBottom: 20,
+  dot: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: '#E8E0F0',
   },
-  iconGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  dotSmall: {
+    width: 8,
+    height: 8,
+  },
+  dotMedium: {
+    width: 12,
+    height: 12,
+    backgroundColor: '#D5CAE8',
+  },
+  emoji: {
+    fontSize: 56,
+    marginBottom: 28,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
+    color: '#1A1A2E',
     textAlign: 'center',
+    lineHeight: 36,
+    letterSpacing: -0.5,
+    marginBottom: 16,
   },
-  versionText: {
+  body: {
     fontSize: 16,
-    color: '#374151',
-    marginBottom: 4,
-  },
-  currentVersion: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 16,
-  },
-  message: {
-    fontSize: 14,
-    color: '#374151',
+    color: '#6B6B80',
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 16,
+    lineHeight: 24,
+    maxWidth: 300,
+    marginBottom: 24,
   },
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 20,
-    gap: 8,
+  versionPill: {
+    backgroundColor: '#F0ECF5',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
   },
-  warningText: {
-    flex: 1,
+  versionPillText: {
     fontSize: 13,
-    color: '#DC2626',
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#8B7AAD',
+    letterSpacing: 0.3,
+  },
+  actions: {
+    paddingHorizontal: 24,
+    paddingBottom: 48,
+    paddingTop: 12,
   },
   updateButton: {
-    backgroundColor: '#9B87CE',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 24,
+    backgroundColor: '#1A1A2E',
+    paddingVertical: 18,
+    borderRadius: 16,
     width: '100%',
     marginBottom: 12,
   },
   updateButtonText: {
     color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
   laterButton: {
-    paddingVertical: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
   },
   laterButtonText: {
-    color: '#6B7280',
-    fontSize: 14,
+    color: '#9B9BAD',
+    fontSize: 15,
     fontWeight: '500',
   },
 });

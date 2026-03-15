@@ -16,9 +16,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import { getOfferings, purchasePackage, checkTrialEligibility, getTrialInfo, TrialInfo } from '@/lib/revenue-cat';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useTranslation } from 'react-i18next';
 
 interface PremiumPaywallProps {
   visible: boolean;
@@ -27,85 +28,24 @@ interface PremiumPaywallProps {
   feature?: string; // What triggered the paywall (e.g., "unlimited_swipes")
 }
 
-const PREMIUM_FEATURES = [
-  {
-    icon: 'infinity',
-    title: 'Unlimited Swipes',
-    description: 'Upgrade from 25 daily swipes to unlimited',
-  },
-  {
-    icon: 'eye',
-    title: 'See Who Liked You',
-    description: 'See all your likes and match instantly',
-  },
-  {
-    icon: 'filter-variant',
-    title: 'Advanced Filters',
-    description: 'Filter by lifestyle, goals, and finances',
-  },
-  {
-    icon: 'incognito',
-    title: 'Incognito Mode',
-    description: 'Browse profiles privately without being seen',
-  },
-  {
-    icon: 'message-text',
-    title: 'Intro Messages',
-    description: 'Stand out with personalized first messages',
-  },
-  {
-    icon: 'check-all',
-    title: 'Read Receipts',
-    description: 'Know when your messages are read',
-  },
-  {
-    icon: 'keyboard',
-    title: 'Typing Indicators',
-    description: 'See when a match is typing a message',
-  },
-  {
-    icon: 'microphone',
-    title: 'Voice Messages',
-    description: 'Send and receive voice notes',
-  },
-  {
-    icon: 'undo-variant',
-    title: 'Rewind',
-    description: 'Take back your last swipe',
-  },
-  {
-    icon: 'star',
-    title: '5 Super Likes/Week',
-    description: 'Get noticed by your top matches',
-  },
+const PREMIUM_FEATURE_KEYS = [
+  { icon: 'infinity', titleKey: 'unlimitedLikes', descKey: 'unlimitedLikesDesc' },
+  { icon: 'eye', titleKey: 'seeWhoLikedYou', descKey: 'seeWhoLikedYouDesc' },
+  { icon: 'lightning-bolt', titleKey: 'activityCenter', descKey: 'activityCenterDesc' },
+  { icon: 'filter-variant', titleKey: 'advancedFilters', descKey: 'advancedFiltersDesc' },
+  { icon: 'incognito', titleKey: 'incognitoMode', descKey: 'incognitoModeDesc' },
+  { icon: 'check-all', titleKey: 'readReceipts', descKey: 'readReceiptsDesc' },
+  { icon: 'keyboard', titleKey: 'typingIndicators', descKey: 'typingIndicatorsDesc' },
+  { icon: 'microphone', titleKey: 'voiceMessages', descKey: 'voiceMessagesDesc' },
+  { icon: 'undo-variant', titleKey: 'rewind', descKey: 'rewindDesc' },
+  { icon: 'star', titleKey: 'superLikes', descKey: 'superLikesDesc' },
 ];
 
-const PLATINUM_FEATURES = [
-  ...PREMIUM_FEATURES,
-  {
-    icon: 'shield-check',
-    title: 'Background Check',
-    description: 'Optional background checks for peace of mind (Coming Soon)',
-    comingSoon: true,
-  },
-  {
-    icon: 'library',
-    title: 'Legal Resources',
-    description: 'Prenup templates & attorney directory (Coming Soon)',
-    comingSoon: true,
-  },
-  {
-    icon: 'headset',
-    title: 'Priority Support',
-    description: '24/7 priority customer service',
-    comingSoon: false,
-  },
-  {
-    icon: 'rocket',
-    title: 'Weekly Profile Boost',
-    description: '30-minute visibility boost every week (Coming Soon)',
-    comingSoon: true,
-  },
+const PLATINUM_EXTRA_KEYS = [
+  { icon: 'shield-check', titleKey: 'backgroundCheck', descKey: 'backgroundCheckDesc', comingSoon: true },
+  { icon: 'library', titleKey: 'legalResources', descKey: 'legalResourcesDesc', comingSoon: true },
+  { icon: 'headset', titleKey: 'prioritySupport', descKey: 'prioritySupportDesc', comingSoon: false },
+  { icon: 'rocket', titleKey: 'weeklyBoost', descKey: 'weeklyBoostDesc', comingSoon: true },
 ];
 
 export default function PremiumPaywall({
@@ -115,6 +55,7 @@ export default function PremiumPaywall({
   feature,
 }: PremiumPaywallProps) {
   const { refreshSubscription, syncWithDatabase } = useSubscription();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'quarterly' | 'annual'>('monthly'); // Default to monthly (least commitment)
@@ -176,8 +117,8 @@ export default function PremiumPaywall({
   };
 
   const isPlatinum = variant === 'platinum';
-  const features = isPlatinum ? PLATINUM_FEATURES : PREMIUM_FEATURES;
-  const title = isPlatinum ? 'Accord Platinum' : 'Accord Premium';
+  const featureKeys = isPlatinum ? [...PREMIUM_FEATURE_KEYS, ...PLATINUM_EXTRA_KEYS] : PREMIUM_FEATURE_KEYS;
+  const title = isPlatinum ? t('premiumPaywall.accordPlatinum') : t('premiumPaywall.accordPremium');
   const monthlyPrice = isPlatinum ? '$24.99' : '$14.99';
   const quarterlyPrice = isPlatinum ? '$54.99' : '$34.99';
   const annualPrice = isPlatinum ? '$199.99' : '$119.99';
@@ -191,25 +132,20 @@ export default function PremiumPaywall({
       // In development mode, simulate purchase by updating database
       if (__DEV__) {
         Alert.alert(
-          'Development Mode',
-          'RevenueCat is not configured yet. This would activate a real subscription in production.\n\nFor testing, would you like to enable premium status in the database?',
+          t('premiumPaywall.alerts.devModeTitle'),
+          t('premiumPaywall.alerts.devModeMessage'),
           [
             {
-              text: 'Cancel',
+              text: t('premiumPaywall.alerts.cancel'),
               style: 'cancel',
             },
             {
-              text: 'Enable Premium',
+              text: t('premiumPaywall.alerts.enablePremium'),
               onPress: async () => {
-                // Import supabase and auth
-                const { supabase } = await import('@/lib/supabase');
-                const { useAuth } = await import('@/contexts/AuthContext');
-
-                // This is a workaround - in real implementation you'd have user context
                 Alert.alert(
-                  '⚠️ Development Only',
-                  'In production, this would process a real payment through Apple/Google.\n\nTo test premium features now:\n1. Go to your database\n2. Set is_premium = true for your profile\n3. Restart the app',
-                  [{ text: 'OK', onPress: onClose }]
+                  t('premiumPaywall.alerts.devOnlyTitle'),
+                  t('premiumPaywall.alerts.devOnlyMessage'),
+                  [{ text: t('common.ok'), onPress: onClose }]
                 );
               },
             },
@@ -220,7 +156,7 @@ export default function PremiumPaywall({
 
       const offerings = await getOfferings();
       if (!offerings) {
-        Alert.alert('Error', 'Unable to load subscription options. Please try again.');
+        Alert.alert(t('common.error'), t('premiumPaywall.alerts.errorLoadPlans'));
         return;
       }
 
@@ -263,19 +199,19 @@ export default function PremiumPaywall({
 
         if (fallbackPkg) {
           Alert.alert(
-            'Subscription Package',
-            `Would you like to subscribe to ${fallbackPkg.product.title} for ${fallbackPkg.product.priceString}?`,
+            t('premiumPaywall.alerts.subscriptionPackage'),
+            t('premiumPaywall.alerts.wouldYouLikeToSubscribe', { title: fallbackPkg.product.title, price: fallbackPkg.product.priceString }),
             [
-              { text: 'Cancel', style: 'cancel' },
+              { text: t('premiumPaywall.alerts.cancel'), style: 'cancel' },
               {
-                text: 'Subscribe',
+                text: t('premiumPaywall.alerts.subscribe'),
                 onPress: async () => {
                   const customerInfo = await purchasePackage(fallbackPkg);
                   if (customerInfo) {
                     await refreshSubscription();
-                    await syncWithDatabase(customerInfo); // Pass fresh customerInfo
-                    Alert.alert('🎉 Success!', 'Welcome to Accord Premium!', [
-                      { text: 'Let\'s Go!', onPress: onClose }
+                    await syncWithDatabase(customerInfo);
+                    Alert.alert(t('premiumPaywall.alerts.successTitle'), t('premiumPaywall.alerts.welcomePremium'), [
+                      { text: t('premiumPaywall.alerts.letsGo'), onPress: onClose }
                     ]);
                   }
                 }
@@ -285,7 +221,7 @@ export default function PremiumPaywall({
           return;
         }
 
-        Alert.alert('Error', 'Subscription package not found. Please try again.');
+        Alert.alert(t('common.error'), t('premiumPaywall.alerts.packageNotFound'));
         return;
       }
 
@@ -294,23 +230,22 @@ export default function PremiumPaywall({
       if (customerInfo) {
         // Purchase successful - sync to database and refresh
         await refreshSubscription();
-        await syncWithDatabase(customerInfo); // Pass fresh customerInfo for instant UI update
+        await syncWithDatabase(customerInfo);
         Alert.alert(
-          '🎉 Success!',
-          `Welcome to Accord ${isPlatinum ? 'Platinum' : 'Premium'}!`,
+          t('premiumPaywall.alerts.successTitle'),
+          t('premiumPaywall.alerts.welcomeTier', { tier: isPlatinum ? t('premiumPaywall.platinum') : 'Premium' }),
           [
             {
-              text: 'Let\'s Go!',
+              text: t('premiumPaywall.alerts.letsGo'),
               onPress: onClose,
             },
           ]
         );
       } else {
-        // Purchase failed or was cancelled
         Alert.alert(
-          'Purchase Failed',
-          'Unable to complete the purchase. Please check your payment method and try again.',
-          [{ text: 'OK' }]
+          t('premiumPaywall.alerts.purchaseFailedTitle'),
+          t('premiumPaywall.alerts.purchaseFailedMessage'),
+          [{ text: t('common.ok') }]
         );
       }
     } catch (error: any) {
@@ -339,16 +274,15 @@ export default function PremiumPaywall({
         errorCode === 'PRODUCT_ALREADY_OWNED' ||
         errorCode === '7' // Google Play error code for already owned
       ) {
-        // User has a canceled subscription - guide them to reactivate or switch accounts
         Alert.alert(
-          'Subscription Already Exists',
+          t('premiumPaywall.alerts.subscriptionExistsTitle'),
           Platform.OS === 'android'
-            ? 'You have a canceled subscription on your current Google Play account.\n\nOptions:\n\n1. Reactivate your existing subscription in Google Play Settings\n\n2. Use a different Google Play account: Sign out of Google Play on your device, then sign in with a different account and try again'
-            : 'You have a canceled subscription on your current Apple ID.\n\nOptions:\n\n1. Reactivate your existing subscription in App Store Settings\n\n2. Use a different Apple ID: Sign out in Settings > [Your Name], then sign in with a different Apple ID and try again',
+            ? t('premiumPaywall.alerts.subscriptionExistsAndroid')
+            : t('premiumPaywall.alerts.subscriptionExistsIOS'),
           [
-            { text: 'Got It', style: 'cancel', onPress: onClose },
+            { text: t('premiumPaywall.alerts.gotIt'), style: 'cancel', onPress: onClose },
             {
-              text: 'Open Settings',
+              text: t('premiumPaywall.alerts.openSettings'),
               onPress: async () => {
                 try {
                   if (Platform.OS === 'ios') {
@@ -358,33 +292,33 @@ export default function PremiumPaywall({
                   }
                   onClose();
                 } catch (err) {
-                  Alert.alert('Error', 'Could not open subscription management');
+                  Alert.alert(t('common.error'), t('premiumPaywall.alerts.couldNotOpenManagement'));
                 }
               }
             }
           ]
         );
       } else if (errorMessage.includes('Product not available')) {
-        Alert.alert('Error', 'This subscription is currently unavailable. Please try again later.', [{ text: 'OK' }]);
+        Alert.alert(t('common.error'), t('premiumPaywall.alerts.productNotAvailable'), [{ text: t('common.ok') }]);
       } else if (errorMessage.includes('network')) {
-        Alert.alert('Error', 'Network error. Please check your connection and try again.', [{ text: 'OK' }]);
+        Alert.alert(t('common.error'), t('premiumPaywall.alerts.networkError'), [{ text: t('common.ok') }]);
       } else {
         // Show detailed error for debugging in TestFlight
         const debugInfo = `Code: ${errorCode}\nMessage: ${errorMessage}\nReadable: ${error.readableErrorCode || 'N/A'}\nUnderlying: ${error.underlyingErrorMessage || 'N/A'}`;
 
         Alert.alert(
-          'Purchase Error',
+          t('premiumPaywall.alerts.purchaseErrorTitle'),
           __DEV__
             ? debugInfo
-            : 'Something went wrong. Please try again or contact support.\n\nError: ' + errorMessage,
+            : t('premiumPaywall.alerts.purchaseErrorMessage') + '\n\nError: ' + errorMessage,
           [
             {
-              text: 'Copy Error',
+              text: t('premiumPaywall.alerts.copyError'),
               onPress: () => {
                 // Note: In production, you'd use Clipboard.setString(debugInfo)
               }
             },
-            { text: 'OK' }
+            { text: t('common.ok') }
           ]
         );
       }
@@ -401,13 +335,13 @@ export default function PremiumPaywall({
 
       if (customerInfo) {
         await refreshSubscription();
-        await syncWithDatabase(customerInfo); // Pass fresh customerInfo from restore
-        Alert.alert('Success', 'Your purchases have been restored!', [{ text: 'OK', onPress: onClose }]);
+        await syncWithDatabase(customerInfo);
+        Alert.alert(t('premiumPaywall.alerts.successTitle'), t('premiumPaywall.alerts.restoreSuccess'), [{ text: t('common.ok'), onPress: onClose }]);
       } else {
-        Alert.alert('No Purchases', 'We couldn\'t find any purchases to restore.');
+        Alert.alert(t('premiumPaywall.alerts.restoreNoPurchases'), t('premiumPaywall.alerts.restoreNoPurchases'));
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to restore purchases. Please try again.');
+      Alert.alert(t('common.error'), t('premiumPaywall.alerts.restoreFailed'));
     } finally {
       setLoading(false);
     }
@@ -435,9 +369,9 @@ export default function PremiumPaywall({
               disabled={isClosing}
             >
               {!isClosing && (
-                <BlurView intensity={40} tint="dark" style={styles.closeBlur}>
+                <SafeBlurView intensity={40} tint="dark" style={styles.closeBlur}>
                   <MaterialCommunityIcons name="close" size={24} color="white" />
-                </BlurView>
+                </SafeBlurView>
               )}
             </TouchableOpacity>
 
@@ -456,14 +390,16 @@ export default function PremiumPaywall({
             {isPlatinum && (
               <View style={styles.platinumBadge}>
                 <MaterialCommunityIcons name="crown" size={20} color="#FFD700" />
-                <Text style={styles.platinumBadgeText}>Platinum</Text>
+                <Text style={styles.platinumBadgeText}>{t('premiumPaywall.platinum')}</Text>
               </View>
             )}
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>
-              {feature
-                ? `Unlock ${feature.replace('_', ' ')} and all premium features`
-                : 'Unlock the full Accord experience'}
+              {feature === 'unlimited_swipes'
+                ? t('premiumPaywall.subtitleSwipes')
+                : feature
+                  ? t('premiumPaywall.subtitleFeature', { feature: feature.replace('_', ' ') })
+                  : t('premiumPaywall.subtitleDefault')}
             </Text>
           </MotiView>
 
@@ -481,9 +417,9 @@ export default function PremiumPaywall({
                 </View>
                 <View style={styles.planRowInfo}>
                   <View style={styles.planNameRow}>
-                    <Text style={styles.planRowName}>3 Months</Text>
+                    <Text style={styles.planRowName}>{t('premiumPaywall.threeMonths')}</Text>
                     <View style={styles.mostPopularBadgeInline}>
-                      <Text style={styles.mostPopularBadgeInlineText}>MOST POPULAR</Text>
+                      <Text style={styles.mostPopularBadgeInlineText}>{t('premiumPaywall.mostPopular')}</Text>
                     </View>
                   </View>
                   <Text style={styles.planRowSubtext}>
@@ -497,7 +433,7 @@ export default function PremiumPaywall({
               <View style={styles.planRowRight}>
                 <Text style={styles.planRowPrice}>{quarterlyPrice}</Text>
                 <View style={styles.savingsBadgeInline}>
-                  <Text style={styles.savingsBadgeInlineText}>SAVE {quarterlySavings}</Text>
+                  <Text style={styles.savingsBadgeInlineText}>{t('premiumPaywall.save', { percent: quarterlySavings })}</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -514,9 +450,9 @@ export default function PremiumPaywall({
                 </View>
                 <View style={styles.planRowInfo}>
                   <View style={styles.planNameRow}>
-                    <Text style={styles.planRowName}>Annual</Text>
+                    <Text style={styles.planRowName}>{t('premiumPaywall.annual')}</Text>
                     <View style={styles.bestValueBadgeInline}>
-                      <Text style={styles.bestValueBadgeInlineText}>BEST VALUE</Text>
+                      <Text style={styles.bestValueBadgeInlineText}>{t('premiumPaywall.bestValue')}</Text>
                     </View>
                   </View>
                   <Text style={styles.planRowSubtext}>
@@ -530,7 +466,7 @@ export default function PremiumPaywall({
               <View style={styles.planRowRight}>
                 <Text style={styles.planRowPrice}>{annualPrice}</Text>
                 <View style={styles.savingsBadgeInline}>
-                  <Text style={styles.savingsBadgeInlineText}>SAVE {annualSavings}</Text>
+                  <Text style={styles.savingsBadgeInlineText}>{t('premiumPaywall.save', { percent: annualSavings })}</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -546,7 +482,7 @@ export default function PremiumPaywall({
                   {selectedPlan === 'monthly' && <View style={styles.radioInner} />}
                 </View>
                 <View style={styles.planRowInfo}>
-                  <Text style={styles.planRowName}>Monthly</Text>
+                  <Text style={styles.planRowName}>{t('premiumPaywall.monthly')}</Text>
                   <Text style={styles.planRowSubtext}>
                     {(() => {
                       const trial = getTrialTextForPlan(isPlatinum ? 'platinum' : 'premium', 'monthly');
@@ -563,20 +499,20 @@ export default function PremiumPaywall({
 
           {/* Features List */}
           <View style={styles.featuresContainer}>
-            {features.map((feature, index) => (
+            {featureKeys.map((feat, index) => (
               <MotiView
-                key={feature.title}
+                key={feat.titleKey}
                 from={{ opacity: 0, translateX: -20 }}
                 animate={{ opacity: 1, translateX: 0 }}
                 transition={{ type: 'timing', duration: 400, delay: index * 50 }}
                 style={styles.featureItem}
               >
                 <View style={styles.featureIcon}>
-                  <MaterialCommunityIcons name={feature.icon as any} size={24} color="#A08AB7" />
+                  <MaterialCommunityIcons name={feat.icon as any} size={24} color="#A08AB7" />
                 </View>
                 <View style={styles.featureText}>
-                  <Text style={styles.featureTitle}>{feature.title}</Text>
-                  <Text style={styles.featureDescription}>{feature.description}</Text>
+                  <Text style={styles.featureTitle}>{t(`premiumPaywall.features.${feat.titleKey}`)}</Text>
+                  <Text style={styles.featureDescription}>{t(`premiumPaywall.features.${feat.descKey}`)}</Text>
                 </View>
               </MotiView>
             ))}
@@ -596,17 +532,17 @@ export default function PremiumPaywall({
                 (() => {
                   const trial = getTrialTextForPlan(isPlatinum ? 'platinum' : 'premium', selectedPlan);
                   const price = selectedPlan === 'monthly' ? monthlyPrice : selectedPlan === 'quarterly' ? quarterlyPrice : annualPrice;
-                  const period = selectedPlan === 'monthly' ? 'mo' : selectedPlan === 'quarterly' ? '3 mo' : 'yr';
+                  const period = selectedPlan === 'monthly' ? t('premiumPaywall.periodMonth') : selectedPlan === 'quarterly' ? t('premiumPaywall.periodThreeMonths') : t('premiumPaywall.periodYear');
                   return (
                     <>
                       <Text style={styles.ctaButtonText}>
                         {trial.eligible && trial.text
-                          ? `Start ${trial.text.replace(/\b\w/g, (c) => c.toUpperCase())}`
-                          : 'Subscribe Now'}
+                          ? t('premiumPaywall.startTrial', { trial: trial.text.replace(/\b\w/g, (c: string) => c.toUpperCase()) })
+                          : t('premiumPaywall.subscribeNow')}
                       </Text>
                       {trial.eligible && (
                         <Text style={styles.ctaButtonSubtext}>
-                          Then {price}/{period}
+                          {t('premiumPaywall.thenPrice', { price, period })}
                         </Text>
                       )}
                     </>
@@ -618,23 +554,22 @@ export default function PremiumPaywall({
 
           {/* Restore Purchases */}
           <TouchableOpacity onPress={handleRestore} disabled={loading}>
-            <Text style={styles.restoreText}>Restore Purchases</Text>
+            <Text style={styles.restoreText}>{t('premiumPaywall.restorePurchases')}</Text>
           </TouchableOpacity>
 
           {/* Fine Print */}
           <Text style={styles.finePrint}>
-            Subscription automatically renews unless cancelled at least 24 hours before the end of the current
-            period. Payment charged to your Apple or Google account. Manage in Account Settings.
+            {t('premiumPaywall.finePrint')}
           </Text>
 
           {/* Terms of Use & Privacy Policy (Required by App Store) */}
           <View style={styles.legalLinks}>
             <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}>
-              <Text style={styles.legalLinkText}>Terms of Use</Text>
+              <Text style={styles.legalLinkText}>{t('premiumPaywall.termsOfUse')}</Text>
             </TouchableOpacity>
             <Text style={styles.legalLinkSeparator}>•</Text>
             <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}>
-              <Text style={styles.legalLinkText}>Privacy Policy</Text>
+              <Text style={styles.legalLinkText}>{t('premiumPaywall.privacyPolicy')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

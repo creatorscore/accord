@@ -1,11 +1,30 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, TextInput, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, Alert, StyleSheet, useColorScheme } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
+import { getGlobalStep } from '@/lib/onboarding-steps';
 import { useTranslation } from 'react-i18next';
+import * as Haptics from 'expo-haptics';
+import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
+import OnboardingChips from '@/components/onboarding/OnboardingChips';
+import { useOnboardingDraft } from '@/hooks/useOnboardingDraft';
+
+interface MarriagePrefsDraft {
+  primaryReason: string[];
+  relationshipType: string;
+  wantsChildren: boolean | null | undefined;
+  childrenArrangement: string[];
+  housingPreference: string[];
+  financialArrangement: string[];
+  smoking: string;
+  drinking: string;
+  pets: string;
+  dealbreakers: string[];
+  mustHaves: string[];
+}
 
 const PRIMARY_REASONS = [
   { value: 'financial', label: 'Financial Stability' },
@@ -23,10 +42,16 @@ const RELATIONSHIP_TYPES = [
   { value: 'open', label: 'Open Arrangement' },
 ];
 
-const CHILDREN_OPTIONS = [
-  { value: true, label: 'Yes' },
-  { value: false, label: 'No' },
-  { value: null, label: 'Maybe/Open' },
+const CHILDREN_ARRANGEMENTS = [
+  { value: 'biological', label: 'Biological Children' },
+  { value: 'adoption', label: 'Adoption' },
+  { value: 'surrogacy', label: 'Surrogacy' },
+  { value: 'ivf', label: 'IVF/Fertility Treatments' },
+  { value: 'co_parenting', label: 'Co-Parenting' },
+  { value: 'fostering', label: 'Fostering' },
+  { value: 'already_have', label: 'Already Have Children' },
+  { value: 'open_discussion', label: 'Open to Discussion' },
+  { value: 'other', label: 'Other' },
 ];
 
 const HOUSING_PREFERENCES = [
@@ -43,18 +68,6 @@ const FINANCIAL_ARRANGEMENTS = [
   { value: 'joint', label: 'Joint Finances' },
   { value: 'prenup_required', label: 'Prenup Required' },
   { value: 'flexible', label: 'Flexible/Negotiable' },
-];
-
-const CHILDREN_ARRANGEMENTS = [
-  { value: 'biological', label: 'Biological Children' },
-  { value: 'adoption', label: 'Adoption' },
-  { value: 'surrogacy', label: 'Surrogacy' },
-  { value: 'ivf', label: 'IVF/Fertility Treatments' },
-  { value: 'co_parenting', label: 'Co-Parenting' },
-  { value: 'fostering', label: 'Fostering' },
-  { value: 'already_have', label: 'Already Have Children' },
-  { value: 'open_discussion', label: 'Open to Discussion' },
-  { value: 'other', label: 'Other' },
 ];
 
 const SMOKING_OPTIONS = [
@@ -83,6 +96,80 @@ export default function MarriagePreferences() {
   const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  // Label mappings for option arrays defined outside the component
+  const reasonLabels: Record<string, string> = {
+    financial: t('onboarding.marriagePreferences.reason.financial'),
+    immigration: t('onboarding.marriagePreferences.reason.immigration'),
+    family_pressure: t('onboarding.marriagePreferences.reason.familyPressure'),
+    legal_benefits: t('onboarding.marriagePreferences.reason.legalBenefits'),
+    companionship: t('onboarding.marriagePreferences.reason.companionship'),
+    safety: t('onboarding.marriagePreferences.reason.safety'),
+    other: t('common.other'),
+  };
+
+  const relationshipLabels: Record<string, string> = {
+    platonic: t('onboarding.marriagePreferences.relationship.platonic'),
+    romantic: t('onboarding.marriagePreferences.relationship.romantic'),
+    open: t('onboarding.marriagePreferences.relationship.open'),
+  };
+
+  const childrenLabels: Record<string, string> = {
+    biological: t('onboarding.marriagePreferences.children.biological'),
+    adoption: t('onboarding.marriagePreferences.children.adoption'),
+    surrogacy: t('onboarding.marriagePreferences.children.surrogacy'),
+    ivf: t('onboarding.marriagePreferences.children.ivf'),
+    co_parenting: t('onboarding.marriagePreferences.children.coParenting'),
+    fostering: t('onboarding.marriagePreferences.children.fostering'),
+    already_have: t('onboarding.marriagePreferences.children.alreadyHave'),
+    open_discussion: t('onboarding.marriagePreferences.children.openToDiscussion'),
+    other: t('common.other'),
+  };
+
+  const housingLabels: Record<string, string> = {
+    separate_spaces: t('onboarding.marriagePreferences.housing.separateSpaces'),
+    roommates: t('onboarding.marriagePreferences.housing.roommates'),
+    separate_homes: t('onboarding.marriagePreferences.housing.separateHomes'),
+    shared_bedroom: t('onboarding.marriagePreferences.housing.sharedBedroom'),
+    flexible: t('onboarding.marriagePreferences.housing.flexible'),
+  };
+
+  const financialLabels: Record<string, string> = {
+    separate: t('onboarding.marriagePreferences.financial.separate'),
+    shared_expenses: t('onboarding.marriagePreferences.financial.sharedExpenses'),
+    joint: t('onboarding.marriagePreferences.financial.joint'),
+    prenup_required: t('onboarding.marriagePreferences.financial.prenupRequired'),
+    flexible: t('onboarding.marriagePreferences.financial.flexible'),
+  };
+
+  const smokingLabels: Record<string, string> = {
+    never: t('onboarding.marriagePreferences.lifestyle.never'),
+    socially: t('onboarding.marriagePreferences.lifestyle.socially'),
+    regularly: t('onboarding.marriagePreferences.lifestyle.regularly'),
+    trying_to_quit: t('onboarding.marriagePreferences.lifestyle.tryingToQuit'),
+  };
+
+  const drinkingLabels: Record<string, string> = {
+    never: t('onboarding.marriagePreferences.lifestyle.never'),
+    socially: t('onboarding.marriagePreferences.lifestyle.socially'),
+    regularly: t('onboarding.marriagePreferences.lifestyle.regularly'),
+    prefer_not_to_say: t('onboarding.marriagePreferences.lifestyle.preferNotToSay'),
+  };
+
+  const petsLabels: Record<string, string> = {
+    love_them: t('onboarding.marriagePreferences.lifestyle.loveThem'),
+    like_them: t('onboarding.marriagePreferences.lifestyle.likeThem'),
+    indifferent: t('onboarding.marriagePreferences.lifestyle.indifferent'),
+    allergic: t('onboarding.marriagePreferences.lifestyle.allergic'),
+    dont_like: t('onboarding.marriagePreferences.lifestyle.dontLike'),
+  };
+
+  const localizedOptions = (options: { value: string; label: string }[], labels: Record<string, string>) =>
+    options.map(o => ({ ...o, label: labels[o.value] || o.label }));
+
+  const [subStep, setSubStep] = useState(0);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -100,6 +187,8 @@ export default function MarriagePreferences() {
   const [mustHaves, setMustHaves] = useState<string[]>([]);
   const [newMustHave, setNewMustHave] = useState('');
 
+  const { loadDraft, saveDraft, clearDraft } = useOnboardingDraft<MarriagePrefsDraft>(user?.id, 'marriage-preferences');
+
   useEffect(() => {
     loadProfile();
   }, []);
@@ -108,7 +197,7 @@ export default function MarriagePreferences() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, field_visibility')
         .eq('user_id', user?.id)
         .single();
 
@@ -117,7 +206,6 @@ export default function MarriagePreferences() {
       if (data) {
         setProfileId(data.id);
 
-        // Load existing preferences
         const { data: prefs, error: prefsError } = await supabase
           .from('preferences')
           .select('*')
@@ -129,7 +217,6 @@ export default function MarriagePreferences() {
         }
 
         if (prefs) {
-          // Pre-fill form with existing data
           if (prefs.primary_reasons) setPrimaryReason(Array.isArray(prefs.primary_reasons) ? prefs.primary_reasons : [prefs.primary_reasons]);
           else if (prefs.primary_reason) setPrimaryReason([prefs.primary_reason]);
           if (prefs.relationship_type) setRelationshipType(prefs.relationship_type);
@@ -140,7 +227,6 @@ export default function MarriagePreferences() {
           if (prefs.dealbreakers) setDealbreakers(Array.isArray(prefs.dealbreakers) ? prefs.dealbreakers : [prefs.dealbreakers]);
           if (prefs.must_haves) setMustHaves(Array.isArray(prefs.must_haves) ? prefs.must_haves : [prefs.must_haves]);
 
-          // Lifestyle preferences
           if (prefs.lifestyle_preferences) {
             if (prefs.lifestyle_preferences.smoking) setSmoking(prefs.lifestyle_preferences.smoking);
             if (prefs.lifestyle_preferences.drinking) setDrinking(prefs.lifestyle_preferences.drinking);
@@ -148,99 +234,62 @@ export default function MarriagePreferences() {
           }
         }
       }
+
+      // Overlay draft on top of DB data
+      const draft = await loadDraft();
+      if (draft) {
+        const d = draft.data;
+        if (d.primaryReason?.length) setPrimaryReason(d.primaryReason);
+        if (d.relationshipType) setRelationshipType(d.relationshipType);
+        if (d.wantsChildren !== undefined) setWantsChildren(d.wantsChildren);
+        if (d.childrenArrangement?.length) setChildrenArrangement(d.childrenArrangement);
+        if (d.housingPreference?.length) setHousingPreference(d.housingPreference);
+        if (d.financialArrangement?.length) setFinancialArrangement(d.financialArrangement);
+        if (d.smoking) setSmoking(d.smoking);
+        if (d.drinking) setDrinking(d.drinking);
+        if (d.pets) setPets(d.pets);
+        if (d.dealbreakers?.length) setDealbreakers(d.dealbreakers);
+        if (d.mustHaves?.length) setMustHaves(d.mustHaves);
+        setSubStep(draft.subStep);
+      }
     } catch (error: any) {
       console.error('Error loading profile:', error);
     }
   };
 
-  // Toggle functions for multi-select fields
-  const togglePrimaryReason = (value: string) => {
-    if (primaryReason.includes(value)) {
-      setPrimaryReason(primaryReason.filter(item => item !== value));
-    } else {
-      setPrimaryReason([...primaryReason, value]);
-    }
-  };
-
-  const toggleChildrenArrangement = (value: string) => {
-    if (childrenArrangement.includes(value)) {
-      setChildrenArrangement(childrenArrangement.filter(item => item !== value));
-    } else {
-      setChildrenArrangement([...childrenArrangement, value]);
-    }
-  };
-
-  const toggleHousingPreference = (value: string) => {
-    if (housingPreference.includes(value)) {
-      setHousingPreference(housingPreference.filter(item => item !== value));
-    } else {
-      setHousingPreference([...housingPreference, value]);
-    }
-  };
-
-  const toggleFinancialArrangement = (value: string) => {
-    if (financialArrangement.includes(value)) {
-      setFinancialArrangement(financialArrangement.filter(item => item !== value));
-    } else {
-      setFinancialArrangement([...financialArrangement, value]);
-    }
-  };
-
-  const handleContinue = async () => {
-    if (primaryReason.length === 0) {
-      Alert.alert('Required', 'Please select at least one reason');
-      return;
-    }
-
-    if (!relationshipType) {
-      Alert.alert('Required', 'Please select your preferred relationship type');
-      return;
-    }
-
-    if (wantsChildren === undefined) {
-      Alert.alert('Required', 'Please indicate your preference about children');
-      return;
-    }
-
-    if (housingPreference.length === 0) {
-      Alert.alert('Required', 'Please select at least one housing preference');
-      return;
-    }
-
-    if (financialArrangement.length === 0) {
-      Alert.alert('Required', 'Please select at least one financial arrangement preference');
-      return;
-    }
+  const handleSaveAndContinue = async () => {
+    if (primaryReason.length === 0) { Alert.alert(t('common.required'), t('onboarding.marriagePreferences.errors.selectReason')); return; }
+    if (!relationshipType) { Alert.alert(t('common.required'), t('onboarding.marriagePreferences.errors.selectRelationship')); return; }
+    if (wantsChildren === undefined) { Alert.alert(t('common.required'), t('onboarding.marriagePreferences.errors.selectChildren')); return; }
+    if (housingPreference.length === 0) { Alert.alert(t('common.required'), t('onboarding.marriagePreferences.errors.selectHousing')); return; }
+    if (financialArrangement.length === 0) { Alert.alert(t('common.required'), t('onboarding.marriagePreferences.errors.selectFinancial')); return; }
 
     if (!profileId) {
-      Alert.alert('Error', 'Profile not found. Please start over.');
+      Alert.alert(t('common.error'), t('onboarding.common.profileNotFound'));
       return;
     }
 
     try {
       setLoading(true);
 
-      // Create or update preferences
       const lifestylePreferences: any = {};
       if (smoking) lifestylePreferences.smoking = smoking;
       if (drinking) lifestylePreferences.drinking = drinking;
       if (pets) lifestylePreferences.pets = pets;
 
       const marriagePrefs = {
-        primary_reasons: primaryReason.length > 0 ? primaryReason : null,
-        primary_reason: primaryReason.length > 0 ? primaryReason[0] : null,
+        primary_reasons: primaryReason.length > 0 ? primaryReason : ['other'],
+        primary_reason: primaryReason.length > 0 ? primaryReason[0] : 'other',
         relationship_type: relationshipType,
         wants_children: wantsChildren,
         children_arrangement: childrenArrangement.length > 0 ? childrenArrangement : null,
-        housing_preference: housingPreference.length > 0 ? housingPreference : null,
-        financial_arrangement: financialArrangement.length > 0 ? financialArrangement : null,
+        housing_preference: housingPreference.length > 0 ? housingPreference : ['flexible'],
+        financial_arrangement: financialArrangement.length > 0 ? financialArrangement : ['flexible'],
         lifestyle_preferences: Object.keys(lifestylePreferences).length > 0 ? lifestylePreferences : null,
         dealbreakers: dealbreakers.length > 0 ? dealbreakers : null,
         must_haves: mustHaves.length > 0 ? mustHaves : null,
       };
 
-      // Check if preferences row exists to avoid upsert overwriting other fields
-      // (e.g., if user navigates back to this step after setting matching preferences)
       const { data: existing } = await supabase
         .from('preferences')
         .select('id')
@@ -253,470 +302,404 @@ export default function MarriagePreferences() {
 
       if (error) throw error;
 
-      // Update onboarding step
       await supabase
         .from('profiles')
         .update({ onboarding_step: 8 })
         .eq('id', profileId);
 
+      await clearDraft();
       router.push('/(onboarding)/matching-preferences');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save preferences');
+      Alert.alert(t('common.error'), error.message || t('onboarding.marriagePreferences.errors.saveFailed'));
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <ScrollView className="flex-1 bg-white dark:bg-gray-900">
-      <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
-        {/* Progress */}
-        <View className="mb-8">
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 7 of 8</Text>
-            <Text className="text-sm text-lavender-500 font-bold">88%</Text>
-          </View>
-          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <View
-              className="h-3 bg-lavender-500 rounded-full"
-              style={{ width: '88%' }}
+  const buildDraftSnapshot = (): MarriagePrefsDraft => ({
+    primaryReason, relationshipType, wantsChildren, childrenArrangement,
+    housingPreference, financialArrangement, smoking, drinking, pets,
+    dealbreakers, mustHaves,
+  });
+
+  const handleBack = () => {
+    if (subStep === 0) {
+      goToPreviousOnboardingStep('/(onboarding)/marriage-preferences');
+    } else {
+      const prevStep = subStep - 1;
+      saveDraft(prevStep, buildDraftSnapshot());
+      setSubStep(prevStep);
+    }
+  };
+
+  const handleContinue = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (subStep < 6) {
+      const nextStep = subStep + 1;
+      saveDraft(nextStep, buildDraftSnapshot());
+      setSubStep(nextStep);
+    } else {
+      handleSaveAndContinue();
+    }
+  };
+
+  const handleSkip = () => {
+    if (subStep < 6) {
+      const nextStep = subStep + 1;
+      saveDraft(nextStep, buildDraftSnapshot());
+      setSubStep(nextStep);
+    } else {
+      handleSaveAndContinue();
+    }
+  };
+
+  const canContinue = () => {
+    switch (subStep) {
+      case 0: return primaryReason.length > 0;
+      case 1: return !!relationshipType;
+      case 2: return wantsChildren !== undefined;
+      case 3: return housingPreference.length > 0;
+      case 4: return financialArrangement.length > 0;
+      case 5: return true; // optional
+      case 6: return true; // optional
+      default: return true;
+    }
+  };
+
+  const getStepConfig = () => {
+    switch (subStep) {
+      case 0: return { title: t('onboarding.marriagePreferences.step0Title'), subtitle: t('onboarding.marriagePreferences.step0Subtitle') };
+      case 1: return { title: t('onboarding.marriagePreferences.step1Title'), subtitle: t('onboarding.marriagePreferences.step1Subtitle') };
+      case 2: return { title: t('onboarding.marriagePreferences.step2Title'), subtitle: t('onboarding.marriagePreferences.step2Subtitle') };
+      case 3: return { title: t('onboarding.marriagePreferences.step3Title'), subtitle: t('onboarding.marriagePreferences.step3Subtitle') };
+      case 4: return { title: t('onboarding.marriagePreferences.step4Title'), subtitle: t('onboarding.marriagePreferences.step4Subtitle') };
+      case 5: return { title: t('onboarding.marriagePreferences.step5Title'), subtitle: t('onboarding.marriagePreferences.step5Subtitle') };
+      case 6: return { title: t('onboarding.marriagePreferences.step6Title'), subtitle: t('onboarding.marriagePreferences.step6Subtitle') };
+      default: return { title: "", subtitle: "" };
+    }
+  };
+
+  const { title, subtitle } = getStepConfig();
+
+  const renderContent = () => {
+    switch (subStep) {
+      case 0:
+        return (
+          <View>
+            <OnboardingChips
+              options={localizedOptions(PRIMARY_REASONS, reasonLabels)}
+              value={primaryReason}
+              onChange={setPrimaryReason}
+              multiSelect
             />
-          </View>
-        </View>
-
-        {/* Header */}
-        <View className="mb-8">
-          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
-            Marriage Goals 💍
-          </Text>
-          <Text className="text-gray-600 dark:text-gray-400 text-lg">
-            What are you looking for in this partnership?
-          </Text>
-        </View>
-
-        {/* Form */}
-        <View className="space-y-8">
-          {/* Primary Reason - Multi-select */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Reasons for seeking a lavender marriage?
-            </Text>
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that apply</Text>
-            <View className="space-y-2">
-              {PRIMARY_REASONS.map((reason) => (
-                <TouchableOpacity
-                  key={reason.value}
-                  className={`px-4 py-3 rounded-xl border ${
-                    primaryReason.includes(reason.value)
-                      ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => togglePrimaryReason(reason.value)}
-                >
-                  <Text
-                    className={`${
-                      primaryReason.includes(reason.value)
-                        ? 'text-lavender-500 font-semibold'
-                        : 'text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    {reason.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {primaryReason.length > 0 && (
-              <Text className="text-xs text-lavender-500 mt-2">
-                Selected: {primaryReason.map(val => PRIMARY_REASONS.find(r => r.value === val)?.label).join(', ')}
-              </Text>
-            )}
-          </View>
-
-          {/* Relationship Type */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Preferred relationship dynamic?
-            </Text>
-            <View className="space-y-2">
-              {RELATIONSHIP_TYPES.map((type) => (
-                <TouchableOpacity
-                  key={type.value}
-                  className={`px-4 py-3 rounded-xl border ${
-                    relationshipType === type.value
-                      ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => setRelationshipType(type.value)}
-                >
-                  <Text
-                    className={`${
-                      relationshipType === type.value
-                        ? 'text-lavender-500 font-semibold'
-                        : 'text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    {type.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.visibilityNote}>
+              <MaterialCommunityIcons name="eye-outline" size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Text style={[styles.visibilityNoteText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>{t('onboarding.visibility.alwaysVisible')}</Text>
             </View>
           </View>
+        );
 
-          {/* Children */}
+      case 1:
+        return (
           <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Do you want children?
-            </Text>
-            <View className="flex-row gap-2">
-              {CHILDREN_OPTIONS.map((option) => (
-                <TouchableOpacity
-                  key={String(option.value)}
-                  className={`flex-1 px-4 py-3 rounded-xl border ${
-                    wantsChildren === option.value
-                      ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => setWantsChildren(option.value)}
-                >
-                  <Text
-                    className={`text-center ${
-                      wantsChildren === option.value
-                        ? 'text-lavender-500 font-semibold'
-                        : 'text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <OnboardingChips
+              options={localizedOptions(RELATIONSHIP_TYPES, relationshipLabels)}
+              value={relationshipType}
+              onChange={setRelationshipType}
+            />
+            <View style={styles.visibilityNote}>
+              <MaterialCommunityIcons name="eye-outline" size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Text style={[styles.visibilityNoteText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>{t('onboarding.visibility.alwaysVisible')}</Text>
             </View>
           </View>
+        );
 
-          {/* Housing */}
+      case 2:
+        return (
           <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Living arrangement preference?
-            </Text>
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that you're open to</Text>
-            <View className="space-y-2">
-              {HOUSING_PREFERENCES.map((pref) => (
-                <TouchableOpacity
-                  key={pref.value}
-                  className={`px-4 py-3 rounded-xl border ${
-                    housingPreference.includes(pref.value)
-                      ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => toggleHousingPreference(pref.value)}
-                >
-                  <Text
-                    className={`${
-                      housingPreference.includes(pref.value)
-                        ? 'text-lavender-500 font-semibold'
-                        : 'text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    {pref.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {housingPreference.length > 0 && (
-              <Text className="text-xs text-lavender-500 mt-2">
-                Selected: {housingPreference.map(val => HOUSING_PREFERENCES.find(p => p.value === val)?.label).join(', ')}
-              </Text>
-            )}
-          </View>
-
-          {/* Financial */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Financial arrangement preference?
-            </Text>
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that you're open to</Text>
-            <View className="space-y-2">
-              {FINANCIAL_ARRANGEMENTS.map((arr) => (
-                <TouchableOpacity
-                  key={arr.value}
-                  className={`px-4 py-3 rounded-xl border ${
-                    financialArrangement.includes(arr.value)
-                      ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => toggleFinancialArrangement(arr.value)}
-                >
-                  <Text
-                    className={`${
-                      financialArrangement.includes(arr.value)
-                        ? 'text-lavender-500 font-semibold'
-                        : 'text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    {arr.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {financialArrangement.length > 0 && (
-              <Text className="text-xs text-lavender-500 mt-2">
-                Selected: {financialArrangement.map(val => FINANCIAL_ARRANGEMENTS.find(a => a.value === val)?.label).join(', ')}
-              </Text>
-            )}
-          </View>
-
-          {/* Children Arrangement - only show if wants children */}
-          {wantsChildren === true && (
             <View>
-              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                How would you like to have children? (optional)
-              </Text>
-              <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that you're open to</Text>
-              <View className="space-y-2">
-                {CHILDREN_ARRANGEMENTS.map((arr) => (
+              {[
+                { value: true, label: t('common.yes') },
+                { value: false, label: t('common.no') },
+                { value: null, label: t('onboarding.marriagePreferences.children.maybeOpen') },
+              ].map((option, i) => {
+                const selected = wantsChildren === option.value;
+                return (
                   <TouchableOpacity
-                    key={arr.value}
-                    className={`px-4 py-3 rounded-xl border ${
-                      childrenArrangement.includes(arr.value)
-                        ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
-                        : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                    }`}
-                    onPress={() => toggleChildrenArrangement(arr.value)}
+                    key={String(option.value)}
+                    style={[styles.optionRow, i < 2 && { marginBottom: 4 }]}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setWantsChildren(option.value); }}
+                    activeOpacity={0.7}
                   >
-                    <Text
-                      className={`${
-                        childrenArrangement.includes(arr.value)
-                          ? 'text-lavender-500 font-semibold'
-                          : 'text-gray-700 dark:text-gray-300'
-                      }`}
-                    >
-                      {arr.label}
+                    <Text style={[styles.optionRowText, { color: selected ? '#A08AB7' : isDark ? '#E5E7EB' : '#374151' }]}>
+                      {option.label}
                     </Text>
+                    {selected && (
+                      <MaterialCommunityIcons name="check" size={22} color="#A08AB7" />
+                    )}
                   </TouchableOpacity>
-                ))}
-              </View>
-              {childrenArrangement.length > 0 && (
-                <Text className="text-xs text-lavender-500 mt-2">
-                  Selected: {childrenArrangement.map(val => CHILDREN_ARRANGEMENTS.find(a => a.value === val)?.label).join(', ')}
+                );
+              })}
+            </View>
+
+            {wantsChildren === true && (
+              <View style={styles.childrenArrangementSection}>
+                <Text style={[styles.sectionLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                  {t('onboarding.marriagePreferences.childrenArrangementLabel')}
                 </Text>
-              )}
-            </View>
-          )}
-
-          {/* Lifestyle Preferences */}
-          <View>
-            <Text className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-              Lifestyle Preferences
-            </Text>
-
-            {/* Smoking */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                Smoking (optional)
-              </Text>
-              <View className="space-y-2">
-                {SMOKING_OPTIONS.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    className={`px-4 py-3 rounded-xl border ${
-                      smoking === option.value
-                        ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
-                        : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                    }`}
-                    onPress={() => setSmoking(option.value)}
-                  >
-                    <Text
-                      className={`${
-                        smoking === option.value
-                          ? 'text-lavender-500 font-semibold'
-                          : 'text-gray-700 dark:text-gray-300'
-                      }`}
-                    >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                <OnboardingChips
+                  options={localizedOptions(CHILDREN_ARRANGEMENTS, childrenLabels)}
+                  value={childrenArrangement}
+                  onChange={setChildrenArrangement}
+                  multiSelect
+                />
               </View>
-            </View>
-
-            {/* Drinking */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                Drinking (optional)
-              </Text>
-              <View className="space-y-2">
-                {DRINKING_OPTIONS.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    className={`px-4 py-3 rounded-xl border ${
-                      drinking === option.value
-                        ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
-                        : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                    }`}
-                    onPress={() => setDrinking(option.value)}
-                  >
-                    <Text
-                      className={`${
-                        drinking === option.value
-                          ? 'text-lavender-500 font-semibold'
-                          : 'text-gray-700 dark:text-gray-300'
-                      }`}
-                    >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Pets */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                Pets (optional)
-              </Text>
-              <View className="space-y-2">
-                {PETS_OPTIONS.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    className={`px-4 py-3 rounded-xl border ${
-                      pets === option.value
-                        ? 'bg-lavender-50 dark:bg-lavender-900/30 border-lavender-500 dark:border-lavender-700'
-                        : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                    }`}
-                    onPress={() => setPets(option.value)}
-                  >
-                    <Text
-                      className={`${
-                        pets === option.value
-                          ? 'text-lavender-500 font-semibold'
-                          : 'text-gray-700 dark:text-gray-300'
-                      }`}
-                    >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+            )}
+            <View style={styles.visibilityNote}>
+              <MaterialCommunityIcons name="eye-outline" size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Text style={[styles.visibilityNoteText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>{t('onboarding.visibility.alwaysVisible')}</Text>
             </View>
           </View>
+        );
 
-          {/* Must-Haves */}
+      case 3:
+        return (
           <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Must-haves in a partner (optional)
-            </Text>
-            <View className="flex-row items-center gap-2 mb-2">
+            <OnboardingChips
+              options={localizedOptions(HOUSING_PREFERENCES, housingLabels)}
+              value={housingPreference}
+              onChange={setHousingPreference}
+              multiSelect
+            />
+            <View style={styles.visibilityNote}>
+              <MaterialCommunityIcons name="eye-outline" size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Text style={[styles.visibilityNoteText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>{t('onboarding.visibility.alwaysVisible')}</Text>
+            </View>
+          </View>
+        );
+
+      case 4:
+        return (
+          <View>
+            <OnboardingChips
+              options={localizedOptions(FINANCIAL_ARRANGEMENTS, financialLabels)}
+              value={financialArrangement}
+              onChange={setFinancialArrangement}
+              multiSelect
+            />
+            <View style={styles.visibilityNote}>
+              <MaterialCommunityIcons name="eye-outline" size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Text style={[styles.visibilityNoteText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>{t('onboarding.visibility.alwaysVisible')}</Text>
+            </View>
+          </View>
+        );
+
+      case 5:
+        return (
+          <View>
+            <View style={[styles.lifestyleCard, { backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA' }]}>
+              <View style={styles.lifestyleCardHeader}>
+                <MaterialCommunityIcons name="smoking" size={20} color="#A08AB7" />
+                <Text style={[styles.lifestyleCardTitle, { color: isDark ? '#E5E7EB' : '#1F2937' }]}>{t('onboarding.marriagePreferences.lifestyle.smokingTitle')}</Text>
+              </View>
+              <OnboardingChips options={localizedOptions(SMOKING_OPTIONS, smokingLabels)} value={smoking} onChange={setSmoking} />
+            </View>
+
+            <View style={[styles.lifestyleCard, { backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA' }]}>
+              <View style={styles.lifestyleCardHeader}>
+                <MaterialCommunityIcons name="glass-cocktail" size={20} color="#A08AB7" />
+                <Text style={[styles.lifestyleCardTitle, { color: isDark ? '#E5E7EB' : '#1F2937' }]}>{t('onboarding.marriagePreferences.lifestyle.drinkingTitle')}</Text>
+              </View>
+              <OnboardingChips options={localizedOptions(DRINKING_OPTIONS, drinkingLabels)} value={drinking} onChange={setDrinking} />
+            </View>
+
+            <View style={[styles.lifestyleCard, { backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA' }]}>
+              <View style={styles.lifestyleCardHeader}>
+                <MaterialCommunityIcons name="paw" size={20} color="#A08AB7" />
+                <Text style={[styles.lifestyleCardTitle, { color: isDark ? '#E5E7EB' : '#1F2937' }]}>{t('onboarding.marriagePreferences.lifestyle.petsTitle')}</Text>
+              </View>
+              <OnboardingChips options={localizedOptions(PETS_OPTIONS, petsLabels)} value={pets} onChange={setPets} />
+            </View>
+          </View>
+        );
+
+      case 6:
+        return (
+          <View>
+            {/* Must-haves */}
+            <Text style={[styles.sectionLabel, { color: isDark ? '#E5E7EB' : '#1F2937' }]}>{t('onboarding.marriagePreferences.mustHavesTitle')}</Text>
+            <View style={styles.tagInputRow}>
               <TextInput
-                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-gray-900 dark:text-white dark:bg-gray-800"
-                placeholder="e.g., Good communication"
-                placeholderTextColor="#999"
+                style={[styles.tagInput, {
+                  backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+                  color: isDark ? '#F5F5F7' : '#1A1A2E',
+                }]}
+                placeholder={t('onboarding.marriagePreferences.mustHavesPlaceholder')}
+                placeholderTextColor="#9CA3AF"
                 value={newMustHave}
                 onChangeText={setNewMustHave}
                 onSubmitEditing={() => {
-                  if (newMustHave.trim()) {
-                    setMustHaves([...mustHaves, newMustHave.trim()]);
-                    setNewMustHave('');
-                  }
+                  if (newMustHave.trim()) { setMustHaves([...mustHaves, newMustHave.trim()]); setNewMustHave(''); }
                 }}
               />
               <TouchableOpacity
-                className="bg-lavender-500 p-3 rounded-lg"
+                style={[styles.tagAddButton, { backgroundColor: newMustHave.trim() ? '#A08AB7' : isDark ? '#2C2C3E' : '#D1D5DB' }]}
                 onPress={() => {
-                  if (newMustHave.trim()) {
-                    setMustHaves([...mustHaves, newMustHave.trim()]);
-                    setNewMustHave('');
-                  }
+                  if (newMustHave.trim()) { setMustHaves([...mustHaves, newMustHave.trim()]); setNewMustHave(''); }
                 }}
               >
-                <MaterialCommunityIcons name="plus" size={24} color="white" />
+                <MaterialCommunityIcons name="plus" size={22} color="white" />
               </TouchableOpacity>
             </View>
-            <View className="flex-row flex-wrap gap-2">
+            <View style={styles.tagsContainer}>
               {mustHaves.map((item, index) => (
-                <View key={index} className="bg-green-100 dark:bg-green-900/30 px-3 py-2 rounded-full flex-row items-center gap-2">
-                  <Text className="text-green-800 dark:text-green-300">{item}</Text>
+                <View key={index} style={[styles.tag, { backgroundColor: isDark ? 'rgba(22,101,52,0.3)' : '#DCFCE7' }]}>
+                  <Text style={[styles.tagText, { color: isDark ? '#86EFAC' : '#166534' }]}>{item}</Text>
                   <TouchableOpacity onPress={() => setMustHaves(mustHaves.filter((_, i) => i !== index))}>
-                    <MaterialCommunityIcons name="close-circle" size={18} color="#166534" />
+                    <MaterialCommunityIcons name="close-circle" size={16} color={isDark ? '#86EFAC' : '#166534'} />
                   </TouchableOpacity>
                 </View>
               ))}
             </View>
-          </View>
 
-          {/* Dealbreakers */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Dealbreakers (optional)
-            </Text>
-            <View className="flex-row items-center gap-2 mb-2">
+            {/* Dealbreakers */}
+            <Text style={[styles.sectionLabel, { color: isDark ? '#E5E7EB' : '#1F2937', marginTop: 28 }]}>{t('onboarding.marriagePreferences.dealbreakersTitle')}</Text>
+            <View style={styles.tagInputRow}>
               <TextInput
-                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-gray-900 dark:text-white dark:bg-gray-800"
-                placeholder="e.g., Smoking"
-                placeholderTextColor="#999"
+                style={[styles.tagInput, {
+                  backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+                  color: isDark ? '#F5F5F7' : '#1A1A2E',
+                }]}
+                placeholder={t('onboarding.marriagePreferences.dealbreakersPlaceholder')}
+                placeholderTextColor="#9CA3AF"
                 value={newDealbreaker}
                 onChangeText={setNewDealbreaker}
                 onSubmitEditing={() => {
-                  if (newDealbreaker.trim()) {
-                    setDealbreakers([...dealbreakers, newDealbreaker.trim()]);
-                    setNewDealbreaker('');
-                  }
+                  if (newDealbreaker.trim()) { setDealbreakers([...dealbreakers, newDealbreaker.trim()]); setNewDealbreaker(''); }
                 }}
               />
               <TouchableOpacity
-                className="bg-lavender-500 p-3 rounded-lg"
+                style={[styles.tagAddButton, { backgroundColor: newDealbreaker.trim() ? '#A08AB7' : isDark ? '#2C2C3E' : '#D1D5DB' }]}
                 onPress={() => {
-                  if (newDealbreaker.trim()) {
-                    setDealbreakers([...dealbreakers, newDealbreaker.trim()]);
-                    setNewDealbreaker('');
-                  }
+                  if (newDealbreaker.trim()) { setDealbreakers([...dealbreakers, newDealbreaker.trim()]); setNewDealbreaker(''); }
                 }}
               >
-                <MaterialCommunityIcons name="plus" size={24} color="white" />
+                <MaterialCommunityIcons name="plus" size={22} color="white" />
               </TouchableOpacity>
             </View>
-            <View className="flex-row flex-wrap gap-2">
+            <View style={styles.tagsContainer}>
               {dealbreakers.map((item, index) => (
-                <View key={index} className="bg-red-100 dark:bg-red-900/30 px-3 py-2 rounded-full flex-row items-center gap-2">
-                  <Text className="text-red-800 dark:text-red-300">{item}</Text>
+                <View key={index} style={[styles.tag, { backgroundColor: isDark ? 'rgba(153,27,27,0.3)' : '#FEE2E2' }]}>
+                  <Text style={[styles.tagText, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>{item}</Text>
                   <TouchableOpacity onPress={() => setDealbreakers(dealbreakers.filter((_, i) => i !== index))}>
-                    <MaterialCommunityIcons name="close-circle" size={18} color="#991B1B" />
+                    <MaterialCommunityIcons name="close-circle" size={16} color={isDark ? '#FCA5A5' : '#991B1B'} />
                   </TouchableOpacity>
                 </View>
               ))}
             </View>
           </View>
-        </View>
+        );
 
-        {/* Buttons */}
-        <View className="flex-row gap-3 mt-8">
-          <TouchableOpacity
-            className="flex-1 py-4 rounded-full border border-gray-300 dark:border-gray-600"
-            onPress={() => goToPreviousOnboardingStep('/(onboarding)/marriage-preferences')}
-            disabled={loading}
-          >
-            <Text className="text-gray-700 dark:text-gray-300 text-center font-semibold text-lg">{t('common.back')}</Text>
-          </TouchableOpacity>
+      default:
+        return null;
+    }
+  };
 
-          <TouchableOpacity
-            className={`flex-1 py-4 rounded-full ${
-              loading || primaryReason.length === 0 || !relationshipType || wantsChildren === undefined || housingPreference.length === 0 || financialArrangement.length === 0
-                ? 'bg-gray-400 dark:bg-gray-700'
-                : 'bg-lavender-500'
-            }`}
-            style={{
-              borderRadius: 9999,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingVertical: 16,
-            }}
-            onPress={handleContinue}
-            disabled={loading || primaryReason.length === 0 || !relationshipType || wantsChildren === undefined || housingPreference.length === 0 || financialArrangement.length === 0}
-          >
-            <Text className="text-white text-center font-semibold text-lg">
-              {loading ? t('common.loading') : t('common.continue')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScrollView>
+  return (
+    <OnboardingLayout
+      currentStep={getGlobalStep('marriage-preferences', subStep)}
+      title={title}
+      subtitle={subtitle}
+      onBack={handleBack}
+      onContinue={handleContinue}
+      onSkip={undefined}
+      continueDisabled={loading || !canContinue()}
+      continueLabel={loading ? t('common.loading') : t('common.continue')}
+      currentRoute="/(onboarding)/marriage-preferences"
+    >
+      {renderContent()}
+    </OnboardingLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  optionRow: {
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  optionRowText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  childrenArrangementSection: {
+    marginTop: 28,
+  },
+  sectionLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  tagInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  tagInput: {
+    flex: 1,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+  },
+  tagAddButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 100,
+  },
+  tagText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  lifestyleCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  lifestyleCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+  },
+  lifestyleCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  visibilityNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 20,
+  },
+  visibilityNoteText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+});

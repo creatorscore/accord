@@ -7,6 +7,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/** Base64-encode a UUID to prevent casual inspection of push payloads */
+function obfuscateId(id: string): string {
+  return btoa(id);
+}
+
 /**
  * Server-side notification for new messages
  * Called by database trigger on messages INSERT
@@ -71,7 +76,7 @@ serve(async (req) => {
       .from('profiles')
       .select('display_name')
       .eq('id', sender_profile_id)
-      .single();
+      .maybeSingle();
 
     const senderName = sender?.display_name || 'Someone';
     const lang = receiver.preferred_language || 'en';
@@ -133,7 +138,7 @@ serve(async (req) => {
           body,
           data: {
             type: 'new_message',
-            matchId: match_id,
+            matchId: obfuscateId(match_id),
             screen: 'chat',
           },
           priority: 'high',

@@ -204,7 +204,7 @@ export default function BetaFeedbackAdmin() {
       case 'reviewing':
         return '#3B82F6';
       case 'planned':
-        return '#8B5CF6';
+        return '#A08AB7';
       case 'in_progress':
         return '#F59E0B';
       case 'completed':

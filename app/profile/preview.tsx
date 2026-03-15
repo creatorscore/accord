@@ -1,14 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { signPhotoUrls, getSignedUrl } from '@/lib/signed-urls';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
 
 export default function ProfilePreview() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { colors } = useColorScheme();
   const insets = useSafeAreaInsets();
@@ -54,6 +57,7 @@ export default function ProfilePreview() {
           *,
           photos (
             url,
+            storage_path,
             is_primary,
             display_order,
             blur_data_uri
@@ -68,11 +72,26 @@ export default function ProfilePreview() {
       // Extract preferences from the joined query
       const { preferences: prefsData, ...restProfileData } = profileData;
 
+      let sortedPhotos = profileData.photos?.sort((a: any, b: any) =>
+        (a.display_order || 0) - (b.display_order || 0)
+      );
+
+      // Sign photo URLs for private storage buckets
+      if (sortedPhotos?.length) {
+        sortedPhotos = await signPhotoUrls(sortedPhotos);
+      }
+
+      // Sign voice intro URL if present
+      let voiceUrl = restProfileData.voice_intro_url;
+      if (voiceUrl) {
+        const signed = await getSignedUrl('voice-intros', voiceUrl);
+        if (signed) voiceUrl = signed;
+      }
+
       const transformedProfile = {
         ...restProfileData,
-        photos: profileData.photos?.sort((a: any, b: any) =>
-          (a.display_order || 0) - (b.display_order || 0)
-        ),
+        photos: sortedPhotos,
+        voice_intro_url: voiceUrl,
         languages_spoken: profileData.languages_spoken || [],
       };
 
@@ -90,7 +109,7 @@ export default function ProfilePreview() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color="#A08AB7" />
-        <Text style={{ color: colors.mutedForeground, marginTop: 16 }}>Loading preview...</Text>
+        <Text style={{ color: colors.mutedForeground, marginTop: 16 }}>{t('profile.preview.loading')}</Text>
       </View>
     );
   }
@@ -98,7 +117,7 @@ export default function ProfilePreview() {
   if (!profile) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: colors.mutedForeground }}>Profile not found</Text>
+        <Text style={{ color: colors.mutedForeground }}>{t('profile.preview.notFound')}</Text>
       </View>
     );
   }

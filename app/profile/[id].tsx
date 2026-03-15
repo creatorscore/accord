@@ -1,16 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, StatusBar, StyleSheet } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import { supabase } from '@/lib/supabase';
+import { signPhotoUrls, getSignedUrl } from '@/lib/signed-urls';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { getCompatibilityBreakdown } from '@/lib/matching-algorithm';
 import { calculateDistance } from '@/lib/geolocation';
 import { formatHeight, HeightUnit } from '@/lib/height-utils';
+import { translateProfileValue, translateProfileArray } from '@/lib/translate-profile-values';
 import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
 import MatchModal from '@/components/matching/MatchModal';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
@@ -39,9 +42,6 @@ interface Profile {
   sexual_orientation?: string | string[]; // Multi-select support
   location_city?: string;
   location_state?: string;
-  bio?: string;
-  occupation?: string;
-  education?: string;
   is_verified?: boolean;
   photo_verified?: boolean;
   photos?: Photo[];
@@ -65,6 +65,9 @@ interface Profile {
   voice_intro_duration?: number;
   religion?: string;
   political_views?: string;
+  hometown?: string;
+  occupation?: string;
+  education?: string;
   photo_blur_enabled?: boolean;
 }
 
@@ -182,8 +185,12 @@ const _CompatibilityBar = ({ label, score, icon, color }: { label: string; score
   );
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function ProfileView() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const isValidUUID = id ? UUID_REGEX.test(id) : false;
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
   const insets = useSafeAreaInsets();
@@ -215,6 +222,12 @@ export default function ProfileView() {
   }, []);
 
   useEffect(() => {
+    if (id && !isValidUUID) {
+      Alert.alert(t('profileView.invalidProfile'), t('profileView.invalidProfileMsg'), [
+        { text: t('common.goBack'), onPress: () => router.back() },
+      ]);
+      return;
+    }
     if (id && currentProfileId) {
       loadProfile();
       checkIfMatched();
@@ -222,26 +235,21 @@ export default function ProfileView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, currentProfileId, currentPreferences]);
 
-  // Refetch profile data when screen comes back into focus (e.g., after editing)
-  useFocusEffect(
-    useCallback(() => {
-      if (id && currentProfileId) {
-        loadProfile();
-        checkIfMatched();
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id, currentProfileId, currentPreferences])
-  );
+  // Skip redundant refetch on focus — the useEffect above already loads on id/currentProfileId change.
+  // Only refetch if the profile ID changed (e.g., navigating from one profile to another).
 
   const loadCurrentProfile = async () => {
     try {
-      // Load current user's full profile
+      // PERFORMANCE: Fetch profile+photos first, then preferences in parallel
+      // NOTE: Cannot use JOIN for preferences — the admin RLS policy on preferences
+      // causes statement timeouts when evaluated per-row inside a JOIN.
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select(`
           *,
           photos (
             url,
+            storage_path,
             is_primary
           )
         `)
@@ -250,25 +258,24 @@ export default function ProfileView() {
 
       if (profileError) throw profileError;
 
+      // Sign photos + fetch preferences in parallel (saves ~400ms vs sequential)
+      const [signedPhotos, prefsResult] = await Promise.all([
+        profileData.photos?.length ? signPhotoUrls(profileData.photos) : Promise.resolve(profileData.photos),
+        supabase
+          .from('preferences')
+          .select('*')
+          .eq('profile_id', profileData.id)
+          .maybeSingle(),
+      ]);
+
+      if (signedPhotos) profileData.photos = signedPhotos;
+
       setCurrentProfileId(profileData.id);
       setCurrentProfile(profileData);
-      setIsAdmin(profileData.is_admin === true); // Set admin status
-      // Get primary photo for match modal
+      setIsAdmin(profileData.is_admin === true);
       const primaryPhoto = profileData.photos?.find((p: any) => p.is_primary)?.url || profileData.photos?.[0]?.url;
       setCurrentUserPhoto(primaryPhoto || null);
-
-      // Load current user's preferences for compatibility calculation
-      const { data: prefsData, error: prefsError } = await supabase
-        .from('preferences')
-        .select('*')
-        .eq('profile_id', profileData.id)
-        .single();
-
-      if (prefsError) {
-        console.error('Error loading current user preferences:', prefsError);
-      }
-
-      setCurrentPreferences(prefsData);
+      setCurrentPreferences(prefsResult.data || null);
     } catch (error: any) {
       console.error('Error loading current profile:', error);
     }
@@ -296,7 +303,7 @@ export default function ProfileView() {
         .select('id')
         .eq('status', 'active')
         .or(`and(profile1_id.eq.${currentProfileId},profile2_id.eq.${id}),and(profile1_id.eq.${id},profile2_id.eq.${currentProfileId})`)
-        .single();
+        .maybeSingle();
 
       if (match) {
         setIsMatched(true);
@@ -339,11 +346,18 @@ export default function ProfileView() {
         // Not matched and no permission to view - redirect back
         setIsMatched(false);
         setMatchId(null);
-        Alert.alert('Not Matched', 'You can only view full profiles of your matches.', [
-          { text: 'OK', onPress: () => router.back() }
+        Alert.alert(t('profileView.notMatched'), t('profileView.notMatchedMsg'), [
+          { text: t('common.ok'), onPress: () => router.back() }
         ]);
       }
     } catch {
+      // Admin can always view profiles — don't redirect back on error
+      if (isAdmin) {
+        setIsMatched(true);
+        setMatchId(null);
+        return;
+      }
+
       // Check if premium user viewing someone who liked them
       if (isPremium || isPlatinum) {
         try {
@@ -351,8 +365,7 @@ export default function ProfileView() {
             .rpc('check_mutual_like', { p_target_profile_id: id });
 
           if (theirLikeId) {
-            // Premium user viewing someone who liked them - allow it
-            setIsMatched(false); // Not matched yet, will show like/pass buttons
+            setIsMatched(false);
             setMatchId(null);
             return;
           }
@@ -364,8 +377,8 @@ export default function ProfileView() {
       // No match found and no permission - redirect back
       setIsMatched(false);
       setMatchId(null);
-      Alert.alert('Not Matched', 'You can only view full profiles of your matches.', [
-        { text: 'OK', onPress: () => router.back() }
+      Alert.alert(t('profileView.notMatched'), t('profileView.notMatchedMsg'), [
+        { text: t('common.ok'), onPress: () => router.back() }
       ]);
     }
   };
@@ -374,25 +387,24 @@ export default function ProfileView() {
     if (!currentProfileId || !id) return;
 
     try {
-      // Check if current user has revealed photos to this profile
-      const { data: myReveal } = await supabase
-        .from('photo_reveals')
-        .select('id')
-        .eq('revealer_profile_id', currentProfileId)
-        .eq('revealed_to_profile_id', id)
-        .maybeSingle();
+      // PERFORMANCE: Check both reveal directions in parallel
+      const [myRevealResult, theirRevealResult] = await Promise.all([
+        supabase
+          .from('photo_reveals')
+          .select('id')
+          .eq('revealer_profile_id', currentProfileId)
+          .eq('revealed_to_profile_id', id)
+          .maybeSingle(),
+        supabase
+          .from('photo_reveals')
+          .select('id')
+          .eq('revealer_profile_id', id)
+          .eq('revealed_to_profile_id', currentProfileId)
+          .maybeSingle(),
+      ]);
 
-      setHasRevealedPhotos(!!myReveal);
-
-      // Check if other user has revealed photos to current user
-      const { data: theirReveal } = await supabase
-        .from('photo_reveals')
-        .select('id')
-        .eq('revealer_profile_id', id)
-        .eq('revealed_to_profile_id', currentProfileId)
-        .maybeSingle();
-
-      setOtherUserRevealed(!!theirReveal);
+      setHasRevealedPhotos(!!myRevealResult.data);
+      setOtherUserRevealed(!!theirRevealResult.data);
     } catch (error: any) {
       console.error('Error checking photo reveal status:', error);
     }
@@ -400,7 +412,7 @@ export default function ProfileView() {
 
   const togglePhotoReveal = async () => {
     if (!currentProfileId || !id || !matchId) {
-      Alert.alert('Error', 'You must be matched with this user to reveal photos');
+      Alert.alert(t('common.error'), t('profileView.mustBeMatched'));
       return;
     }
 
@@ -418,7 +430,7 @@ export default function ProfileView() {
         if (error) throw error;
 
         setHasRevealedPhotos(false);
-        Alert.alert('Photos Blurred', 'Your photos are now blurred for this match');
+        Alert.alert(t('profileView.photosBlurred'), t('profileView.photosBlurredMsg'));
       } else {
         // Reveal: Insert new reveal
         const { error } = await supabase
@@ -432,11 +444,11 @@ export default function ProfileView() {
         if (error) throw error;
 
         setHasRevealedPhotos(true);
-        Alert.alert('Photos Revealed', `Your photos are now visible to ${profile?.display_name}`);
+        Alert.alert(t('profileView.photosRevealed'), t('profileView.photosRevealedMsg', { name: profile?.display_name }));
       }
     } catch (error: any) {
       console.error('Error toggling photo reveal:', error);
-      Alert.alert('Error', 'Failed to update photo visibility. Please try again.');
+      Alert.alert(t('common.error'), t('profileView.photoVisibilityError'));
     } finally {
       setRevealLoading(false);
     }
@@ -446,76 +458,93 @@ export default function ProfileView() {
     try {
       setLoading(true);
 
-      // CRITICAL SAFETY: Check if user is banned
-      const { data: banData } = await supabase
-        .from('bans')
-        .select('id')
-        .eq('banned_profile_id', id)
-        .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
-        .maybeSingle();
+      // PERFORMANCE: Run ban check + profile+prefs fetch in parallel (saves 1-2 round trips)
+      const [banResult, profileResult, prefsResult] = await Promise.all([
+        // Ban check
+        supabase
+          .from('bans')
+          .select('id')
+          .eq('banned_profile_id', id)
+          .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
+          .maybeSingle(),
 
-      if (banData) {
-        // User is banned - don't show their profile
+        // Profile + photos (no preferences JOIN — admin RLS causes timeout in JOINs)
+        supabase
+          .from('profiles')
+          .select(`
+            id,
+            display_name,
+            age,
+            gender,
+            pronouns,
+            ethnicity,
+            sexual_orientation,
+            location_city,
+            location_state,
+            latitude,
+            longitude,
+            is_verified,
+            photo_verified,
+            prompt_answers,
+            interests,
+            hobbies,
+            voice_intro_url,
+            voice_intro_duration,
+            height_inches,
+            zodiac_sign,
+            personality_type,
+            love_language,
+            languages_spoken,
+            hometown,
+            occupation,
+            education,
+            religion,
+            political_views,
+            field_visibility,
+            photo_blur_enabled,
+            photos (
+              url,
+              storage_path,
+              is_primary,
+              display_order,
+              blur_data_uri
+            )
+          `)
+          .eq('id', id)
+          .single(),
+
+        // Preferences as separate query (avoids RLS timeout in JOINs)
+        supabase
+          .from('preferences')
+          .select('*')
+          .eq('profile_id', id)
+          .maybeSingle(),
+      ]);
+
+      // Handle ban check
+      if (banResult.data) {
         Alert.alert(
-          'Error',
-          'This profile is no longer available.',
-          [{ text: 'OK', onPress: () => router.back() }]
+          t('common.error'),
+          t('profileView.profileUnavailable'),
+          [{ text: t('common.ok'), onPress: () => router.back() }]
         );
         setLoading(false);
         return;
       }
 
-      // Load profile with photos
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          display_name,
-          age,
-          gender,
-          pronouns,
-          ethnicity,
-          sexual_orientation,
-          location_city,
-          location_state,
-          latitude,
-          longitude,
-          bio,
-          occupation,
-          education,
-          is_verified,
-          photo_verified,
-          prompt_answers,
-          interests,
-          hobbies,
-          voice_intro_url,
-          voice_intro_duration,
-          height_inches,
-          zodiac_sign,
-          personality_type,
-          love_language,
-          languages_spoken,
-          religion,
-          political_views,
-          photo_blur_enabled,
-          photos (
-            url,
-            is_primary,
-            display_order,
-            blur_data_uri
-          )
-        `)
-        .eq('id', id)
-        .single();
-
+      const { data: profileData, error: profileError } = profileResult;
       if (profileError) throw profileError;
 
-      // Load preferences
-      const { data: prefsData } = await supabase
-        .from('preferences')
-        .select('*')
-        .eq('profile_id', id)
-        .single();
+      const prefsData = prefsResult.data || null;
+
+      // PERFORMANCE: Sign photos + voice intro in parallel
+      const [signedPhotos, signedVoiceUrl] = await Promise.all([
+        profileData.photos?.length ? signPhotoUrls(profileData.photos) : Promise.resolve(profileData.photos),
+        profileData.voice_intro_url ? getSignedUrl('voice-intros', profileData.voice_intro_url) : Promise.resolve(null),
+      ]);
+
+      if (signedPhotos) profileData.photos = signedPhotos;
+      if (signedVoiceUrl) profileData.voice_intro_url = signedVoiceUrl;
 
       // Transform profile data
       const transformedProfile: Profile = {
@@ -565,7 +594,7 @@ export default function ProfileView() {
       setProfile(transformedProfile);
       setPreferences(prefsData);
     } catch {
-      Alert.alert('Error', 'Failed to load profile');
+      Alert.alert(t('common.error'), t('profileView.loadError'));
       router.back();
     } finally {
       setLoading(false);
@@ -607,9 +636,9 @@ export default function ProfileView() {
 
         if (existingMatch?.status === 'active') {
           // Already matched
-          Alert.alert('Already Matched!', `You're already matched with ${profile?.display_name}!`, [
-            { text: 'Send Message', onPress: () => router.push(`/chat/${existingMatch.id}`) },
-            { text: 'OK', onPress: () => router.back() }
+          Alert.alert(t('profileView.alreadyMatched'), t('profileView.alreadyMatchedMsg', { name: profile?.display_name }), [
+            { text: t('profileView.actions.sendMessage'), onPress: () => router.push(`/chat/${existingMatch.id}`) },
+            { text: t('common.ok'), onPress: () => router.back() }
           ]);
           return;
         }
@@ -661,7 +690,7 @@ export default function ProfileView() {
       }
     } catch (error: any) {
       console.error('Error liking profile:', error);
-      Alert.alert('Error', 'Failed to like profile');
+      Alert.alert(t('common.error'), t('profileView.likeError'));
       setIsLiked(false);
     }
   };
@@ -677,7 +706,7 @@ export default function ProfileView() {
 
       router.back();
     } catch {
-      Alert.alert('Error', 'Failed to pass profile');
+      Alert.alert(t('common.error'), t('profileView.passError'));
     }
   };
 
@@ -724,61 +753,62 @@ export default function ProfileView() {
         setTimeout(() => setShowMatchModal(true), 500);
       } else {
         setTimeout(() => {
-          Alert.alert('💜 Obsessed!', `${profile?.display_name} will be notified that you're interested!`, [
-            { text: 'OK', onPress: () => router.back() }
+          Alert.alert(t('profileView.obsessed'), t('profileView.obsessedMsg', { name: profile?.display_name }), [
+            { text: t('common.ok'), onPress: () => router.back() }
           ]);
         }, 500);
       }
     } catch {
-      Alert.alert('Error', 'Failed to send super like');
+      Alert.alert(t('common.error'), t('profileView.superLikeError'));
       setIsSuperLiked(false);
     }
   };
 
-  // Value-to-label mappings for preferences
-  const PREFERENCE_LABELS: { [key: string]: string } = {
+  // Value-to-label mappings for preferences (using i18n)
+  const getPreferenceLabels = (): { [key: string]: string } => ({
     // Financial arrangements
-    'separate': 'Keep Finances Separate',
-    'shared_expenses': 'Share Living Expenses',
-    'joint': 'Fully Joint Finances',
-    'prenup_required': 'Prenup Required',
-    'flexible': 'Flexible/Open to Discussion',
+    'separate': t('profileCard.preferences.financial.separate'),
+    'shared_expenses': t('profileCard.preferences.financial.sharedExpenses'),
+    'joint': t('profileCard.preferences.financial.joint'),
+    'prenup_required': t('profileCard.preferences.financial.prenupRequired'),
+    'flexible': t('profileCard.preferences.financial.flexible'),
 
     // Housing preferences
-    'separate_spaces': 'Separate Bedrooms/Spaces',
-    'roommates': 'Roommate-Style Arrangement',
-    'separate_homes': 'Separate Homes Nearby',
-    'shared_bedroom': 'Shared Bedroom',
+    'separate_spaces': t('profileCard.preferences.housing.separateSpaces'),
+    'roommates': t('profileCard.preferences.housing.roommates'),
+    'separate_homes': t('profileCard.preferences.housing.separateHomes'),
+    'shared_bedroom': t('profileCard.preferences.housing.sharedBedroom'),
 
     // Children arrangements
-    'biological': 'Biological Children',
-    'adoption': 'Adoption',
-    'co_parenting': 'Co-Parenting Agreement',
-    'surrogacy': 'Surrogacy',
-    'ivf': 'IVF',
-    'already_have': 'Already Have Children',
-    'open_discussion': 'Open to Discussion',
+    'biological': t('profileCard.preferences.children.biological'),
+    'adoption': t('profileCard.preferences.children.adoption'),
+    'co_parenting': t('profileCard.preferences.children.coParenting'),
+    'surrogacy': t('profileCard.preferences.children.surrogacy'),
+    'ivf': t('profileCard.preferences.children.ivf'),
+    'already_have': t('profileCard.preferences.children.alreadyHave'),
+    'open_discussion': t('profileCard.preferences.children.openDiscussion'),
 
     // Primary reasons
-    'financial': 'Financial Stability',
-    'immigration': 'Immigration/Visa',
-    'family_pressure': 'Family Pressure',
-    'legal_benefits': 'Legal Benefits',
-    'companionship': 'Companionship',
-    'safety': 'Safety & Protection',
+    'financial': t('profileCard.preferences.reasons.financial'),
+    'immigration': t('profileCard.preferences.reasons.immigration'),
+    'family_pressure': t('profileCard.preferences.reasons.familyPressure'),
+    'legal_benefits': t('profileCard.preferences.reasons.legalBenefits'),
+    'companionship': t('profileCard.preferences.reasons.companionship'),
+    'safety': t('profileCard.preferences.reasons.safety'),
 
     // Relationship types
-    'platonic': 'Platonic Only',
-    'romantic': 'Romantic Partnership',
-    'open': 'Open Arrangement',
-  };
+    'platonic': t('profileCard.preferences.relationship.platonic'),
+    'romantic': t('profileCard.preferences.relationship.romantic'),
+    'open': t('profileCard.preferences.relationship.open'),
+  });
 
   const formatLabel = (value: any): string => {
     try {
       if (!value) return '';
       if (Array.isArray(value)) return value.filter(Boolean).map(formatLabel).join(', ');
       if (typeof value !== 'string') return String(value);
-      if (PREFERENCE_LABELS[value]) return PREFERENCE_LABELS[value];
+      const labels = getPreferenceLabels();
+      if (labels[value]) return labels[value];
       return value.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     } catch {
       return typeof value === 'string' ? value : '';
@@ -828,7 +858,7 @@ export default function ProfileView() {
   if (!profile) {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: '#6B7280' }}>Profile not found</Text>
+        <Text style={{ color: '#6B7280' }}>{t('profileView.notFound')}</Text>
       </View>
     );
   }
@@ -840,36 +870,36 @@ export default function ProfileView() {
   if (profile.height_inches) {
     quickFacts.push({
       emoji: '📏',
-      label: 'Height',
+      label: t('profileCard.vitals.height'),
       value: formatHeight(profile.height_inches, viewerHeightUnit),
     });
   }
   if (profile.zodiac_sign) {
     quickFacts.push({
       emoji: '✨',
-      label: 'Zodiac',
-      value: profile.zodiac_sign,
+      label: t('profileCard.vitals.zodiac'),
+      value: translateProfileValue(t, 'zodiac_sign', profile.zodiac_sign),
     });
   }
   if (profile.personality_type) {
     quickFacts.push({
       emoji: '🧠',
-      label: 'Personality',
+      label: t('profileCard.vitals.personality'),
       value: profile.personality_type,
     });
   }
   if (profile.love_language) {
     quickFacts.push({
       emoji: '💖',
-      label: 'Love Language',
-      value: formatArrayOrString(profile.love_language),
+      label: t('profileCard.vitals.loveLanguage'),
+      value: translateProfileArray(t, 'love_language', profile.love_language),
     });
   }
   if (profile.languages?.length) {
     quickFacts.push({
       emoji: '🌍',
-      label: 'Languages',
-      value: profile.languages.join(', '),
+      label: t('profileCard.vitals.languages'),
+      value: translateProfileArray(t, 'languages_spoken', profile.languages),
     });
   }
 
@@ -898,14 +928,14 @@ export default function ProfileView() {
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
           <MaterialCommunityIcons name="heart-multiple" size={24} color="#A08AB7" />
           <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#000000', marginLeft: 12 }}>
-            Why We Match
+            {t('profileView.compatibility.whyWeMatch')}
           </Text>
         </View>
 
         {/* Detailed Compatibility Breakdown */}
         <View style={{ marginTop: 16 }}>
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 16 }}>
-            What Makes You Compatible
+            {t('profileView.compatibility.whatMakesYouCompatible')}
           </Text>
 
           {/* Location Analysis */}
@@ -913,17 +943,15 @@ export default function ProfileView() {
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <MaterialCommunityIcons name="map-marker" size={20} color="#10B981" />
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                Location & Distance
+                {t('profileView.compatibility.locationDistance')}
               </Text>
             </View>
             <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
               {compatibilityBreakdown.location >= 80
-                ? `You're both ${profile.distance ? `only ${profile.distance} miles apart` : 'in the same area'}, making it easy to meet up and build a connection. ${preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate ? 'Plus, you\'re both open to relocating if needed.' : ''}`
+                ? t('profileView.compatibility.locationHigh')
                 : compatibilityBreakdown.location >= 60
-                ? `You're ${profile.distance ? `${profile.distance} miles apart` : 'at a moderate distance'}. ${preferences?.willing_to_relocate && currentPreferences?.willing_to_relocate ? 'Fortunately, you\'re both willing to relocate, which opens up possibilities.' : preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate ? 'One of you is open to relocating, which could work well.' : 'The distance is manageable with some planning.'}`
-                : preferences?.search_globally || currentPreferences?.search_globally || preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate
-                ? `While you're ${profile.distance ? `${profile.distance} miles apart` : 'at a distance'}, you're both open to ${preferences?.search_globally || currentPreferences?.search_globally ? 'matching globally' : 'relocating'}, showing flexibility in making a connection work.`
-                : `You're ${profile.distance ? `${profile.distance} miles apart` : 'at a distance'}. Consider discussing how distance might work for your arrangement.`}
+                ? t('profileView.compatibility.locationMedium')
+                : t('profileView.compatibility.locationLow')}
             </Text>
           </View>
 
@@ -932,15 +960,15 @@ export default function ProfileView() {
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <MaterialCommunityIcons name="target" size={20} color="#3B82F6" />
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                Marriage Goals & Vision
+                {t('profileView.compatibility.goalsVision')}
               </Text>
             </View>
             <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
               {compatibilityBreakdown.goals >= 80
-                ? `You're highly aligned on marriage goals! ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both seek this arrangement primarily for ${formatLabel(preferences?.primary_reason || '')}.` : ''} ${preferences?.relationship_type === currentPreferences?.relationship_type ? `You both envision a ${formatLabel(preferences?.relationship_type || '')} partnership.` : ''} ${preferences?.wants_children === currentPreferences?.wants_children ? (preferences?.wants_children ? 'You both want children' : 'You both prefer not to have children') + ', making family planning straightforward.' : ''}`
+                ? t('profileView.compatibility.goalsHigh')
                 : compatibilityBreakdown.goals >= 60
-                ? `You share common ground on key goals. ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both primarily seek ${formatLabel(preferences?.primary_reason || '')}.` : 'Your primary reasons differ but may complement each other.'} ${preferences?.relationship_type && currentPreferences?.relationship_type ? `Your relationship style preferences (${formatLabel(preferences?.relationship_type)} vs ${formatLabel(currentPreferences?.relationship_type)}) could work with open communication.` : ''}`
-                : `Your marriage goals differ in some areas. ${preferences?.wants_children !== currentPreferences?.wants_children ? 'You have different views on children, which is important to discuss.' : ''} ${preferences?.relationship_type !== currentPreferences?.relationship_type ? `You envision different relationship styles (${formatLabel(preferences?.relationship_type || '')} vs ${formatLabel(currentPreferences?.relationship_type || '')}), but compromise may be possible.` : ''} Open and honest conversation about expectations will be key.`}
+                ? t('profileView.compatibility.goalsMedium')
+                : t('profileView.compatibility.goalsLow')}
             </Text>
           </View>
 
@@ -949,15 +977,15 @@ export default function ProfileView() {
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <MaterialCommunityIcons name="coffee" size={20} color="#F59E0B" />
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                Lifestyle & Values
+                {t('profileView.compatibility.lifestyleValues')}
               </Text>
             </View>
             <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
               {compatibilityBreakdown.lifestyle >= 80
-                ? `Your day-to-day lifestyles are very compatible! ${preferences?.lifestyle_preferences?.smoking === currentPreferences?.lifestyle_preferences?.smoking ? 'You share the same views on smoking.' : ''} ${preferences?.lifestyle_preferences?.drinking === currentPreferences?.lifestyle_preferences?.drinking ? 'You have aligned drinking preferences.' : ''} ${preferences?.lifestyle_preferences?.pets === currentPreferences?.lifestyle_preferences?.pets ? 'You feel the same way about pets.' : ''} ${arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? `You both prefer ${formatArrayWithLabels(preferences?.housing_preference)} living arrangements.` : ''}`
+                ? t('profileView.compatibility.lifestyleHigh')
                 : compatibilityBreakdown.lifestyle >= 60
-                ? `Your lifestyles are moderately compatible. ${preferences?.lifestyle_preferences?.smoking !== currentPreferences?.lifestyle_preferences?.smoking ? 'You differ on smoking preferences, which may need discussion.' : ''} ${!arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? 'Your ideal living arrangements differ but could potentially be negotiated.' : ''} ${preferences?.financial_arrangement || currentPreferences?.financial_arrangement ? 'Discussing financial expectations will help align your lifestyles.' : ''}`
-                : `Your lifestyle preferences show some differences. ${preferences?.lifestyle_preferences?.pets !== currentPreferences?.lifestyle_preferences?.pets && (preferences?.lifestyle_preferences?.pets === 'allergic' || currentPreferences?.lifestyle_preferences?.pets === 'allergic') ? 'Pet allergies may be a challenge to work around.' : ''} ${!arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? `You have different housing preferences (${formatArrayWithLabels(preferences?.housing_preference)} vs ${formatArrayWithLabels(currentPreferences?.housing_preference)}).` : ''} These differences are worth exploring in depth.`}
+                ? t('profileView.compatibility.lifestyleMedium')
+                : t('profileView.compatibility.lifestyleLow')}
             </Text>
           </View>
 
@@ -966,15 +994,15 @@ export default function ProfileView() {
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <MaterialCommunityIcons name="heart" size={20} color="#A08AB7" />
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                Personality & Interests
+                {t('profileView.compatibility.personalityInterests')}
               </Text>
             </View>
             <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
               {compatibilityBreakdown.personality >= 75
-                ? `You share great chemistry! ${profile.personality_type === currentProfile?.personality_type ? `You're both ${profile.personality_type} personalities.` : profile.personality_type && currentProfile?.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} personalities complement each other well.` : ''} ${profile.love_language && currentProfile?.love_language ? `${formatArrayOrString(profile.love_language) === formatArrayOrString(currentProfile.love_language) ? `You both value ${formatArrayOrString(profile.love_language)}.` : 'Your different love languages can create balance.'}` : ''} You likely have engaging conversations and shared interests.`
+                ? t('profileView.compatibility.personalityHigh')
                 : compatibilityBreakdown.personality >= 60
-                ? `You have some personality compatibility. ${profile.hobbies && currentProfile?.hobbies ? 'You share some hobbies and interests.' : ''} ${profile.personality_type && currentProfile?.personality_type && profile.personality_type !== currentProfile.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} types can balance each other out.` : ''} Getting to know each other's communication styles will strengthen your connection.`
-                : `Your personalities are quite different, which isn't necessarily bad! ${profile.personality_type && currentProfile?.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} types approach things differently.` : ''} Opposites can complement each other well if you appreciate each other's unique traits and communication styles.`}
+                ? t('profileView.compatibility.personalityMedium')
+                : t('profileView.compatibility.personalityLow')}
             </Text>
           </View>
 
@@ -983,15 +1011,15 @@ export default function ProfileView() {
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <MaterialCommunityIcons name="account-group" size={20} color="#EC4899" />
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                Background & Values
+                {t('profileView.compatibility.backgroundValues')}
               </Text>
             </View>
             <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
               {compatibilityBreakdown.demographics >= 75
-                ? `You share similar backgrounds and values. ${profile.religion === currentProfile?.religion ? `You both identify as ${profile.religion}.` : ''} ${profile.political_views === currentProfile?.political_views ? `You align politically as ${profile.political_views}.` : ''} ${profile.education === currentProfile?.education ? 'You have similar educational backgrounds.' : ''} This common ground provides a strong foundation for understanding each other's perspectives.`
+                ? t('profileView.compatibility.backgroundHigh')
                 : compatibilityBreakdown.demographics >= 60
-                ? `You have some shared background elements. ${profile.religion !== currentProfile?.religion ? 'You have different religious backgrounds, which can bring diverse perspectives.' : ''} ${profile.political_views !== currentProfile?.political_views ? 'Your political views differ, but mutual respect is what matters most.' : ''} Your differences can be enriching if approached with open minds.`
-                : `You come from different backgrounds, which can offer valuable perspectives. ${profile.religion && currentProfile?.religion && profile.religion !== currentProfile.religion ? `Your ${profile.religion} and ${currentProfile.religion} backgrounds may require extra communication about values.` : ''} ${profile.political_views && currentProfile?.political_views && profile.political_views !== currentProfile.political_views ? 'Your differing political views are worth discussing to ensure mutual respect.' : ''} Diversity can strengthen a partnership when handled thoughtfully.`}
+                ? t('profileView.compatibility.backgroundMedium')
+                : t('profileView.compatibility.backgroundLow')}
             </Text>
           </View>
         </View>
@@ -1046,7 +1074,7 @@ export default function ProfileView() {
         preferences={preferences || undefined}
         heightUnit={(currentProfile?.height_unit as 'imperial' | 'metric') || 'imperial'}
         hideActions={true}
-        hideCompatibilityScore={true}
+        hideCompatibilityScore={false}
         isAdmin={isAdmin}
         isPhotoRevealed={otherUserRevealed}
         renderAdditionalContent={renderWhyWeMatch}
@@ -1123,9 +1151,9 @@ export default function ProfileView() {
 
           {/* Action Labels */}
           <View className="flex-row justify-center items-center gap-8 mt-2 px-6">
-            <Text className="text-xs text-gray-500 font-medium">Pass</Text>
-            <Text className="text-xs text-purple-600 font-bold">Obsessed</Text>
-            <Text className="text-xs text-gray-500 font-medium">Like</Text>
+            <Text className="text-xs text-gray-500 font-medium">{t('profileView.actions.pass')}</Text>
+            <Text className="text-xs text-purple-600 font-bold">{t('profileView.actions.obsessed')}</Text>
+            <Text className="text-xs text-gray-500 font-medium">{t('profileView.actions.like')}</Text>
           </View>
         </LinearGradient>
       ) : (
@@ -1140,7 +1168,7 @@ export default function ProfileView() {
               <TouchableOpacity
                 onPress={togglePhotoReveal}
                 disabled={revealLoading}
-                style={hasRevealedPhotos ? { backgroundColor: '#FFFFFF', borderColor: '#9333EA' } : { backgroundColor: '#F3E8FF', borderColor: '#D8B4FE' }}
+                style={hasRevealedPhotos ? { backgroundColor: '#FFFFFF', borderColor: '#A08AB7' } : { backgroundColor: '#F3E8FF', borderColor: '#D8B4FE' }}
                 className="rounded-full py-3 shadow-lg border-2"
               >
                 <View className="flex-row items-center justify-center gap-2">
@@ -1154,7 +1182,7 @@ export default function ProfileView() {
                         color="#A08AB7"
                       />
                       <Text className="text-purple-600 text-base font-semibold">
-                        {hasRevealedPhotos ? 'Blur My Photos' : 'Reveal My Photos'}
+                        {hasRevealedPhotos ? t('profileView.actions.blurPhotos') : t('profileView.actions.revealPhotos')}
                       </Text>
                     </>
                   )}
@@ -1172,8 +1200,8 @@ export default function ProfileView() {
                 />
                 <Text style={{ color: '#6B7280' }} className="text-xs">
                   {otherUserRevealed
-                    ? `${profile.display_name} revealed their photos to you`
-                    : `${profile.display_name}'s photos are blurred`}
+                    ? t('profileView.revealedPhotos', { name: profile.display_name })
+                    : t('profileView.blurredPhotos', { name: profile.display_name })}
                 </Text>
               </View>
             )}
@@ -1187,14 +1215,14 @@ export default function ProfileView() {
               >
                 <View className="flex-row items-center justify-center gap-2">
                   <MaterialCommunityIcons name="message-text" size={24} color="white" />
-                  <Text className="text-white text-lg font-bold">Send Message</Text>
+                  <Text className="text-white text-lg font-bold">{t('profileView.actions.sendMessage')}</Text>
                 </View>
               </TouchableOpacity>
             ) : (
               <View style={{ backgroundColor: '#E5E7EB' }} className="rounded-full py-4">
                 <View className="flex-row items-center justify-center gap-2">
                   <MaterialCommunityIcons name="eye" size={24} color={'#6B7280'} />
-                  <Text style={{ color: '#6B7280' }} className="text-lg font-semibold">Viewing Profile</Text>
+                  <Text style={{ color: '#6B7280' }} className="text-lg font-semibold">{t('profileView.viewingProfile')}</Text>
                 </View>
               </View>
             )}
