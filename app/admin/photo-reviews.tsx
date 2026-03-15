@@ -187,7 +187,7 @@ export default function AdminPhotoReviews() {
   if (loading && !refreshing) {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+        <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
           </TouchableOpacity>
@@ -196,7 +196,7 @@ export default function AdminPhotoReviews() {
         </LinearGradient>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
         </View>
       </View>
     );
@@ -208,7 +208,7 @@ export default function AdminPhotoReviews() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+      <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
@@ -286,7 +286,7 @@ export default function AdminPhotoReviews() {
                   style={styles.viewButton}
                   onPress={() => handleViewProfile(user.id)}
                 >
-                  <MaterialCommunityIcons name="eye" size={20} color="#9B87CE" />
+                  <MaterialCommunityIcons name="eye" size={20} color="#A08AB7" />
                   <Text style={styles.viewButtonText}>View</Text>
                 </TouchableOpacity>
 
@@ -458,13 +458,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
     gap: 6,
   },
   viewButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   approveButton: {
     flex: 1,

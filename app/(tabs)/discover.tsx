@@ -3655,7 +3655,7 @@ export default function Discover() {
                   activeOpacity={0.8}
                 >
                   <View className="w-10 h-10 bg-lavender-100 rounded-full items-center justify-center mr-3">
-                    <MaterialCommunityIcons name={isPreviewMode ? "arrow-left" : "account-edit"} size={20} color="#9B87CE" />
+                    <MaterialCommunityIcons name={isPreviewMode ? "arrow-left" : "account-edit"} size={20} color="#A08AB7" />
                   </View>
                   <View className="flex-1">
                     <Text className="text-lavender-900 font-semibold text-sm">
@@ -3667,7 +3667,7 @@ export default function Discover() {
                         : t('discover.banner.completeProfileDefault')}
                     </Text>
                   </View>
-                  <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
+                  <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
                 </TouchableOpacity>
               )}
             </>

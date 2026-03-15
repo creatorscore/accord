@@ -196,7 +196,7 @@ export default function BannedScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
           <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </View>
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   submitButton: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   supportEmail: {
-    color: '#9B87CE',
+    color: '#A08AB7',
     fontWeight: '600',
   },
   backButton: {

@@ -384,7 +384,7 @@ export default function Profile() {
                 style={styles.upgradeToPlatinum}
                 onPress={() => setShowPaywall(true)}
               >
-                <MaterialCommunityIcons name="crown" size={16} color="#9B87CE" />
+                <MaterialCommunityIcons name="crown" size={16} color="#A08AB7" />
                 <Text style={styles.upgradeToPlatinumText}>{t('profile.upgradeToPlatinum')}</Text>
               </TouchableOpacity>
             )} */}
@@ -433,7 +433,7 @@ export default function Profile() {
 
               <View style={styles.upgradeCTA}>
                 <Text style={styles.upgradeCTAText}>{t('profile.unlockPremiumFeatures')}</Text>
-                <MaterialCommunityIcons name="arrow-right" size={20} color="#9B87CE" />
+                <MaterialCommunityIcons name="arrow-right" size={20} color="#A08AB7" />
               </View>
             </LinearGradient>
           </TouchableOpacity>
@@ -752,6 +752,20 @@ export default function Profile() {
                   </View>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#F5F0FF', borderColor: '#7C3AED', borderLeftWidth: 4, borderLeftColor: '#7C3AED' }]}
+                onPress={() => router.push('/(onboarding)/welcome-info')}
+              >
+                <View style={styles.menuItemLeft}>
+                  <MaterialCommunityIcons name="heart-multiple" size={24} color="#7C3AED" />
+                  <View>
+                    <Text style={[styles.menuItemText, { color: '#5B21B6', fontWeight: '700' }]}>Welcome Screen</Text>
+                    <Text style={[styles.adminSubtext, { color: '#5B21B6' }]}>Lavender marriage explanation</Text>
+                  </View>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#7C3AED" />
               </TouchableOpacity>
 
               <TouchableOpacity

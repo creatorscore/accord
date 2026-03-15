@@ -230,7 +230,7 @@ export default function AdminPushNotifications() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
       </View>
     );
   }
@@ -239,7 +239,7 @@ export default function AdminPushNotifications() {
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={['#9B87CE', '#B8A9DD']}
+        colors={['#A08AB7', '#B8A9DD']}
         style={styles.header}
       >
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -258,7 +258,7 @@ export default function AdminPushNotifications() {
         {/* Stats Cards */}
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
-            <MaterialCommunityIcons name="account-group" size={24} color="#9B87CE" />
+            <MaterialCommunityIcons name="account-group" size={24} color="#A08AB7" />
             <Text style={styles.statValue}>{stats.totalUsers}</Text>
             <Text style={styles.statLabel}>Total Users</Text>
           </View>
@@ -303,7 +303,7 @@ export default function AdminPushNotifications() {
                 <MaterialCommunityIcons
                   name={option.icon as any}
                   size={20}
-                  color={targetAudience === option.value ? 'white' : '#9B87CE'}
+                  color={targetAudience === option.value ? 'white' : '#A08AB7'}
                 />
                 <Text
                   style={[
@@ -356,7 +356,7 @@ export default function AdminPushNotifications() {
               <Text style={styles.previewLabel}>Preview:</Text>
               <View style={styles.previewCard}>
                 <View style={styles.previewHeader}>
-                  <MaterialCommunityIcons name="heart" size={20} color="#9B87CE" />
+                  <MaterialCommunityIcons name="heart" size={20} color="#A08AB7" />
                   <Text style={styles.previewAppName}>Accord</Text>
                   <Text style={styles.previewTime}>now</Text>
                 </View>
@@ -503,13 +503,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   audienceButtonActive: {
-    backgroundColor: '#9B87CE',
-    borderColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
+    borderColor: '#A08AB7',
   },
   audienceButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   audienceButtonTextActive: {
     color: 'white',
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   sendButton: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     borderRadius: 12,
     paddingVertical: 16,
     marginTop: 24,

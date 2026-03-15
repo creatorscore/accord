@@ -85,7 +85,7 @@ export default function WhatsNewModal() {
         >
           {/* Header with gradient */}
           <LinearGradient
-            colors={['#9B87CE', '#B8A9DD']}
+            colors={['#A08AB7', '#B8A9DD']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.header}
@@ -161,7 +161,7 @@ function FeatureItem({ feature, t }: FeatureItemProps) {
           <MaterialCommunityIcons
             name={feature.icon as any}
             size={24}
-            color="#9B87CE"
+            color="#A08AB7"
           />
         </LinearGradient>
       </View>
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 24,

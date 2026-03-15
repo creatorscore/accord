@@ -7,7 +7,11 @@ import { changeLanguage } from '@/lib/i18n';
 
 const LANGUAGES = [
   { code: 'en', name: 'English', nativeName: 'English', flag: '🇺🇸' },
+  { code: 'fr', name: 'French', nativeName: 'Français', flag: '🇫🇷' },
   { code: 'es', name: 'Spanish', nativeName: 'Español', flag: '🇪🇸' },
+  { code: 'pt', name: 'Portuguese', nativeName: 'Português', flag: '🇵🇹' },
+  { code: 'de', name: 'German', nativeName: 'Deutsch', flag: '🇩🇪' },
+  { code: 'it', name: 'Italian', nativeName: 'Italiano', flag: '🇮🇹' },
   { code: 'ar', name: 'Arabic', nativeName: 'العربية', flag: '🇸🇦' },
   { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी', flag: '🇮🇳' },
   { code: 'ur', name: 'Urdu', nativeName: 'اردو', flag: '🇵🇰' },
@@ -17,6 +21,9 @@ const LANGUAGES = [
   { code: 'bn', name: 'Bengali', nativeName: 'বাংলা', flag: '🇧🇩' },
   { code: 'id', name: 'Indonesian', nativeName: 'Bahasa Indonesia', flag: '🇮🇩' },
   { code: 'ru', name: 'Russian', nativeName: 'Русский', flag: '🇷🇺' },
+  { code: 'uk', name: 'Ukrainian', nativeName: 'Українська', flag: '🇺🇦' },
+  { code: 'pl', name: 'Polish', nativeName: 'Polski', flag: '🇵🇱' },
+  { code: 'ka', name: 'Georgian', nativeName: 'ქართული', flag: '🇬🇪' },
   { code: 'zh', name: 'Chinese', nativeName: '中文', flag: '🇨🇳' },
 ];
 
@@ -33,8 +40,8 @@ export default function LanguageSelection() {
       // Change language
       await changeLanguage(selectedLanguage);
 
-      // Navigate to basic info (first onboarding step)
-      router.push('/(onboarding)/basic-info');
+      // Navigate to welcome info (lavender marriage explanation)
+      router.push('/(onboarding)/welcome-info');
     } catch (error: any) {
       Alert.alert('Error', 'Failed to set language. Please try again.');
     } finally {

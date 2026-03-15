@@ -191,7 +191,7 @@ function generateReminderEmailHtml(displayName: string, deactivationDate: Date):
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
           <tr>
-            <td style="background: linear-gradient(135deg, #9B87CE 0%, #B8A9DD 100%); padding: 30px; text-align: center;">
+            <td style="background: linear-gradient(135deg, #A08AB7 0%, #B8A9DD 100%); padding: 30px; text-align: center;">
               <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Accord</h1>
             </td>
           </tr>
@@ -218,7 +218,7 @@ function generateReminderEmailHtml(displayName: string, deactivationDate: Date):
               </p>
 
               <p style="color: #4a4a4a; font-size: 14px; line-height: 1.6; margin-top: 25px;">
-                Questions? Contact <a href="mailto:hello@joinaccord.app" style="color: #9B87CE;">hello@joinaccord.app</a>
+                Questions? Contact <a href="mailto:hello@joinaccord.app" style="color: #A08AB7;">hello@joinaccord.app</a>
               </p>
 
               <p style="color: #4a4a4a; font-size: 16px; margin-top: 25px;">

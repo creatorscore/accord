@@ -138,7 +138,7 @@ export default function SuccessMetrics() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#9B87CE" />
+        <ActivityIndicator size="large" color="#A08AB7" />
         <Text style={styles.loadingText}>Loading metrics...</Text>
       </View>
     );
@@ -153,7 +153,7 @@ export default function SuccessMetrics() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Success Metrics</Text>
         <TouchableOpacity onPress={refreshMetrics} style={styles.refreshButton}>
-          <Ionicons name="refresh" size={24} color="#9B87CE" />
+          <Ionicons name="refresh" size={24} color="#A08AB7" />
         </TouchableOpacity>
       </View>
 
@@ -196,7 +196,7 @@ export default function SuccessMetrics() {
                 label="Active Users"
                 value={todayMetrics?.daily_active_users || 0}
                 subtitle="today"
-                color="#9B87CE"
+                color="#A08AB7"
               />
               <MetricCard
                 icon="heart"
@@ -229,7 +229,7 @@ export default function SuccessMetrics() {
                 label="Total Matches"
                 value={todayMetrics?.total_matches || 0}
                 subtitle="all time"
-                color="#9B87CE"
+                color="#A08AB7"
               />
               <MetricCard
                 icon="chatbubble-ellipses"
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   activeTab: {
-    borderBottomColor: '#9B87CE',
+    borderBottomColor: '#A08AB7',
   },
   tabText: {
     fontSize: 14,
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   activeTabText: {
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   content: {
     flex: 1,
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
   rankNumber: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   performerInfo: {
     flex: 1,

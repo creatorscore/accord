@@ -91,7 +91,7 @@ serve(async (req) => {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
           </head>
           <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #9B87CE 0%, #B8A9DD 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+            <div style="background: linear-gradient(135deg, #A08AB7 0%, #B8A9DD 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
               <h1 style="color: white; margin: 0; font-size: 24px;">Account Restricted</h1>
             </div>
 
@@ -119,7 +119,7 @@ serve(async (req) => {
 
               <p style="font-size: 16px; margin-bottom: 20px;">
                 If you believe this restriction was made in error, please contact our support team at
-                <a href="mailto:hello@joinaccord.app" style="color: #9B87CE; text-decoration: none;">hello@joinaccord.app</a>
+                <a href="mailto:hello@joinaccord.app" style="color: #A08AB7; text-decoration: none;">hello@joinaccord.app</a>
                 with a detailed explanation. We review all appeals carefully.
               </p>
 
@@ -131,7 +131,7 @@ serve(async (req) => {
 
               <p style="font-size: 14px; color: #666; text-align: center; margin: 0;">
                 Accord - Safe Connections for Meaningful Partnerships<br>
-                <a href="https://joinaccord.app" style="color: #9B87CE; text-decoration: none;">joinaccord.app</a>
+                <a href="https://joinaccord.app" style="color: #A08AB7; text-decoration: none;">joinaccord.app</a>
               </p>
             </div>
           </body>

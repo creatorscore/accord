@@ -191,7 +191,7 @@ const MatchCard = memo(function MatchCard({ item, currentProfileId, colors, onPr
           </Text>
         ) : (
           <View style={styles.ctaRow}>
-            <MaterialCommunityIcons name="message-outline" size={14} color="#9B87CE" />
+            <MaterialCommunityIcons name="message-outline" size={14} color="#A08AB7" />
             <Text style={styles.ctaText}>{t('matches.sayHi')}</Text>
           </View>
         )}

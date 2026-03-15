@@ -64,3 +64,7 @@ GoogleService-Info.plist
 *~
 android/
 !android/app/google-services.json
+.mcp.json
+.claude/
+sentry_*.json
+screen.png

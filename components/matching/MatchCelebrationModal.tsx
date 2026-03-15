@@ -6,8 +6,8 @@ import {
   Modal,
   TouchableOpacity,
   Dimensions,
-  Image,
 } from 'react-native';
+import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -30,8 +30,10 @@ interface MatchCelebrationModalProps {
     id: string;
     displayName: string;
     photoUrl?: string;
+    photoBlurEnabled?: boolean;
   } | null;
   currentUserPhoto?: string;
+  isAdmin?: boolean;
   onSendMessage: () => void;
   onKeepSwiping: () => void; // kept for backwards compatibility
 }
@@ -40,9 +42,11 @@ export default function MatchCelebrationModal({
   visible,
   matchedUser,
   currentUserPhoto,
+  isAdmin = false,
   onSendMessage,
   onKeepSwiping,
 }: MatchCelebrationModalProps) {
+  const shouldBlurMatched = (matchedUser?.photoBlurEnabled || false) && !isAdmin;
   const scale = useSharedValue(0);
   const heartScale = useSharedValue(0);
   const leftPhotoX = useSharedValue(-width);
@@ -124,7 +128,7 @@ export default function MatchCelebrationModal({
           <View style={styles.photosContainer}>
             <Animated.View style={[styles.photoWrapper, styles.leftPhoto, leftPhotoStyle]}>
               {currentUserPhoto ? (
-                <Image source={{ uri: currentUserPhoto }} style={styles.photo} />
+                <SafeBlurImage source={{ uri: currentUserPhoto }} style={styles.photo} resizeMode="cover" />
               ) : (
                 <View style={[styles.photo, styles.placeholderPhoto]}>
                   <MaterialCommunityIcons name="account" size={50} color="#fff" />
@@ -140,7 +144,12 @@ export default function MatchCelebrationModal({
 
             <Animated.View style={[styles.photoWrapper, styles.rightPhoto, rightPhotoStyle]}>
               {matchedUser.photoUrl ? (
-                <Image source={{ uri: matchedUser.photoUrl }} style={styles.photo} />
+                <SafeBlurImage
+                  source={{ uri: matchedUser.photoUrl }}
+                  style={styles.photo}
+                  resizeMode="cover"
+                  blurRadius={shouldBlurMatched ? 20 : 0}
+                />
               ) : (
                 <View style={[styles.photo, styles.placeholderPhoto]}>
                   <MaterialCommunityIcons name="account" size={50} color="#fff" />

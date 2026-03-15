@@ -61,15 +61,15 @@ function generateInactiveEmail(
     const textItems = [];
 
     if (stats.likesReceived > 0) {
-      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #9B87CE;">${stats.likesReceived}</div><div style="font-size: 12px; color: #666;">New Likes</div></td>`);
+      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #A08AB7;">${stats.likesReceived}</div><div style="font-size: 12px; color: #666;">New Likes</div></td>`);
       textItems.push(`${stats.likesReceived} new likes`);
     }
     if (stats.newMatches > 0) {
-      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #9B87CE;">${stats.newMatches}</div><div style="font-size: 12px; color: #666;">Matches</div></td>`);
+      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #A08AB7;">${stats.newMatches}</div><div style="font-size: 12px; color: #666;">Matches</div></td>`);
       textItems.push(`${stats.newMatches} matches`);
     }
     if (stats.potentialMatches > 0) {
-      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #9B87CE;">${stats.potentialMatches}+</div><div style="font-size: 12px; color: #666;">Potential Matches</div></td>`);
+      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #A08AB7;">${stats.potentialMatches}+</div><div style="font-size: 12px; color: #666;">Potential Matches</div></td>`);
       textItems.push(`${stats.potentialMatches}+ potential matches`);
     }
 
@@ -141,7 +141,7 @@ function generateInactiveEmail(
 
               <!-- Header -->
               <tr>
-                <td style="background: linear-gradient(135deg, #9B87CE 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
+                <td style="background: linear-gradient(135deg, #A08AB7 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
                   <div style="font-size: 56px; line-height: 1;">${template.emoji}</div>
                   <h1 style="color: white; margin: 15px 0 0 0; font-size: 28px; font-weight: 700; line-height: 1.2;">${template.headline}</h1>
                   <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px; line-height: 1.4;">${template.subheadline}</p>
@@ -208,7 +208,7 @@ function generateInactiveEmail(
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
                           Accord - Safe Connections for Meaningful Partnerships<br>
-                          <a href="https://joinaccord.app" style="color: #9B87CE; text-decoration: none;">joinaccord.app</a>
+                          <a href="https://joinaccord.app" style="color: #A08AB7; text-decoration: none;">joinaccord.app</a>
                         </p>
                       </td>
                     </tr>

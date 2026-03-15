@@ -71,6 +71,8 @@ export default function OnboardingLayout() {
         animation: 'slide_from_right',
         contentStyle: { backgroundColor: 'transparent' },
       }}
-    />
+    >
+      <Stack.Screen name="welcome-info" options={{ headerShown: false }} />
+    </Stack>
   );
 }

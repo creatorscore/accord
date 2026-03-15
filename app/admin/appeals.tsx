@@ -318,7 +318,7 @@ export default function AdminAppeals() {
   if (loading && !refreshing) {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+        <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
           </TouchableOpacity>
@@ -327,7 +327,7 @@ export default function AdminAppeals() {
         </LinearGradient>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
         </View>
       </View>
     );
@@ -339,7 +339,7 @@ export default function AdminAppeals() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+      <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
@@ -391,7 +391,7 @@ export default function AdminAppeals() {
       <ScrollView
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#9B87CE" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#A08AB7" />
         }
       >
         {appeals.length === 0 ? (
@@ -739,7 +739,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   filterTabTextActive: {
-    color: '#9B87CE',
+    color: '#A08AB7',
     fontWeight: '600',
   },
   badge: {
@@ -898,7 +898,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 10,
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     borderRadius: 8,
   },
   respondButtonText: {

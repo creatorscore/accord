@@ -191,7 +191,7 @@ export default function AdminVerification() {
   if (loading && !refreshing) {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+        <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
           </TouchableOpacity>
@@ -200,7 +200,7 @@ export default function AdminVerification() {
         </LinearGradient>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
         </View>
       </View>
     );
@@ -212,7 +212,7 @@ export default function AdminVerification() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+      <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
@@ -225,7 +225,7 @@ export default function AdminVerification() {
       {/* Stats */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
-          <MaterialCommunityIcons name="account-multiple" size={28} color="#9B87CE" />
+          <MaterialCommunityIcons name="account-multiple" size={28} color="#A08AB7" />
           <Text style={styles.statNumber}>{stats.total}</Text>
           <Text style={styles.statLabel}>Attempted</Text>
         </View>
@@ -249,7 +249,7 @@ export default function AdminVerification() {
       <ScrollView
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#9B87CE" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#A08AB7" />
         }
       >
         {users.length === 0 ? (
@@ -295,10 +295,10 @@ export default function AdminVerification() {
                   disabled={resetting === u.id}
                 >
                   {resetting === u.id ? (
-                    <ActivityIndicator size="small" color="#9B87CE" />
+                    <ActivityIndicator size="small" color="#A08AB7" />
                   ) : (
                     <>
-                      <MaterialCommunityIcons name="refresh" size={18} color="#9B87CE" />
+                      <MaterialCommunityIcons name="refresh" size={18} color="#A08AB7" />
                       <Text style={styles.resetButtonText}>Reset Attempts</Text>
                     </>
                   )}
@@ -383,7 +383,7 @@ export default function AdminVerification() {
                         handleResetVerification(u.id, u.display_name);
                       }}
                     >
-                      <MaterialCommunityIcons name="refresh" size={16} color="#9B87CE" />
+                      <MaterialCommunityIcons name="refresh" size={16} color="#A08AB7" />
                     </TouchableOpacity>
                   )}
                   {u.photo_verified && (
@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
   resetButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   searchButton: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     borderRadius: 8,
     paddingHorizontal: 16,
     alignItems: 'center',

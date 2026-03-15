@@ -60,8 +60,9 @@ export function SafeBlurImage({
 
   // Show placeholder on error instead of empty space
   if (hasError) {
+    const placeholderStyle = style || (className ? { width: '100%', height: '100%' } : undefined);
     return (
-      <View style={[style as any, { backgroundColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[placeholderStyle as any, { backgroundColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' }]}>
         <MaterialCommunityIcons name="image-off-outline" size={40} color="#9CA3AF" />
       </View>
     );
@@ -70,11 +71,14 @@ export function SafeBlurImage({
   // Android: Always use RN Image (Fresco) — expo-image (Glide) has known rendering
   // failures on many Android devices where images load but render as blank/invisible.
   // Fresco is more reliable for image display across Android OEMs.
+  // NOTE: RNImage doesn't support NativeWind className — when callers pass className
+  // instead of style (e.g. className="w-full h-full"), we must provide explicit dimensions.
   if (isAndroid) {
+    const androidStyle = style || (className ? { width: '100%', height: '100%' } : undefined);
     return (
       <RNImage
         source={source}
-        style={style}
+        style={androidStyle}
         resizeMode={resizeMode || contentFit as any || 'cover'}
         blurRadius={blurRadius}
         onLoad={onLoad}
