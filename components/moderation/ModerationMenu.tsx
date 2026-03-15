@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Modal, TouchableOpacity, Text, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import ReportUserModal from './ReportUserModal';
 import BlockUserModal from './BlockUserModal';
 import UnmatchModal from './UnmatchModal';
@@ -23,6 +24,7 @@ export default function ModerationMenu({
   onBlock,
   onUnmatch,
 }: ModerationMenuProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [menuVisible, setMenuVisible] = useState(false);
   const [reportModalVisible, setReportModalVisible] = useState(false);
@@ -91,7 +93,7 @@ export default function ModerationMenu({
                 onPress={handleReport}
               >
                 <MaterialCommunityIcons name="flag" size={24} color="#6B7280" />
-                <Text style={styles.actionText}>Report User</Text>
+                <Text style={styles.actionText}>{t('moderation.menu.reportUser')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
               </TouchableOpacity>
 
@@ -102,7 +104,7 @@ export default function ModerationMenu({
                   onPress={handleUnmatch}
                 >
                   <MaterialCommunityIcons name="heart-broken" size={24} color="#F59E0B" />
-                  <Text style={[styles.actionText, styles.actionTextWarning]}>Unmatch</Text>
+                  <Text style={[styles.actionText, styles.actionTextWarning]}>{t('moderation.menu.unmatch')}</Text>
                   <MaterialCommunityIcons name="chevron-right" size={20} color="#F59E0B" />
                 </TouchableOpacity>
               )}
@@ -112,7 +114,7 @@ export default function ModerationMenu({
                 onPress={handleBlock}
               >
                 <MaterialCommunityIcons name="block-helper" size={24} color="#EF4444" />
-                <Text style={[styles.actionText, styles.actionTextDanger]}>Block User</Text>
+                <Text style={[styles.actionText, styles.actionTextDanger]}>{t('moderation.menu.blockUser')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
               </TouchableOpacity>
             </View>

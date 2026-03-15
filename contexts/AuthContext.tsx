@@ -4,9 +4,11 @@ import { AppState, AppStateStatus, InteractionManager } from 'react-native';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
-import { initializeEncryption } from '@/lib/encryption';
+import { initializeEncryption, deleteEncryptionKeys } from '@/lib/encryption';
 import { setUser as setSentryUser } from '@/lib/sentry';
 import { identifyUser, resetUser, trackUserAction } from '@/lib/analytics';
+import { removePushToken } from '@/lib/notifications';
+import { clearSignedUrlCache } from '@/lib/signed-urls';
 
 interface AuthContextType {
   user: User | null;
@@ -59,9 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       // Update user identity in PostHog
       if (session?.user) {
         setSentryUser({ id: session.user.id });
-        identifyUser(session.user.id, {
-          email: session.user.email,
-        });
+        identifyUser(session.user.id);
       } else {
         setSentryUser(null);
         resetUser();
@@ -109,11 +109,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
-    // PERFORMANCE: Defer ban check until after initial render
+    // Run ban check immediately — security takes priority over startup performance.
+    // The index.tsx routing already does a primary ban check; this is the secondary
+    // safeguard for users who were banned AFTER the initial route check.
     if (user) {
-      InteractionManager.runAfterInteractions(() => {
-        checkBanStatus();
-      });
+      checkBanStatus();
     }
   }, [user]);
 
@@ -261,6 +261,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // Listen for app state changes
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      // When app goes to background, clear signed URL cache
+      if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
+        clearSignedUrlCache();
+      }
+
       // When app comes to foreground, refresh location
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         // Fix: Don't await - let it run in background to prevent ANR
@@ -316,11 +321,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const signOut = async () => {
+    // Capture user ID before clearing state for cleanup
+    const userId = user?.id;
+
+    // Clear state immediately so components stop making authenticated requests
+    // before the server-side token revocation completes (prevents 401 race condition)
+    setUser(null);
+    setSession(null);
+
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
 
     // Track sign out
     trackUserAction.signOut();
+
+    // Non-blocking cleanup: remove push token, encryption keys, signed URL cache
+    if (userId) {
+      Promise.allSettled([
+        removePushToken(userId),
+        deleteEncryptionKeys(userId),
+        Promise.resolve(clearSignedUrlCache()),
+      ]).catch(() => {});
+    }
   };
 
   const sendPasswordResetEmail = async (email: string) => {

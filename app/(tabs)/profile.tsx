@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,19 +23,18 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
+import { signPhotoUrls, getSignedUrl } from '@/lib/signed-urls';
 import { useColorScheme } from '@/lib/useColorScheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
+import { UpdateModalPreview } from '@/components/AppUpdateChecker';
 
 interface ProfileData {
   id: string;
   display_name: string;
   birth_date?: string;
   age: number;
-  bio?: string;
-  occupation?: string;
-  education?: string;
   location_city?: string;
   location_state?: string;
   gender?: string;
@@ -48,7 +47,7 @@ interface ProfileData {
   personality_type?: string;
   is_verified: boolean;
   photo_verified?: boolean;
-  photos?: { url: string; is_primary?: boolean; display_order?: number; caption?: string }[];
+  photos?: { url: string; is_primary?: boolean; display_order?: number; caption?: string; storage_path?: string | null }[];
   prompt_answers?: { prompt: string; answer: string }[];
   interests?: string[];
   hobbies?: string[];
@@ -56,6 +55,9 @@ interface ProfileData {
   languages_spoken?: string[];
   religion?: string;
   political_views?: string;
+  hometown?: string;
+  occupation?: string;
+  education?: string;
   voice_intro_url?: string;
   voice_intro_duration?: number;
 }
@@ -76,6 +78,8 @@ export default function Profile() {
   const [preferences, setPreferences] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showActivityNewBadge, setShowActivityNewBadge] = useState(false);
+  const [showUpdatePreview, setShowUpdatePreview] = useState(false);
+  const initialLoadDone = useRef(false);
 
   useEffect(() => {
     AsyncStorage.getItem('activity_center_seen').then(val => {
@@ -89,21 +93,18 @@ export default function Profile() {
     router.push('/activity');
   }, []);
 
+  // Load profile when user becomes available (handles initial mount + OAuth sign-in timing)
   useEffect(() => {
-    loadProfile();
-  }, []);
-
-  // Reload profile when user changes (handles OAuth sign-in timing)
-  useEffect(() => {
-    if (user?.id && !profile) {
+    if (user?.id) {
       loadProfile();
     }
-  }, [user]);
+  }, [user?.id]);
 
   // Reload profile when screen comes into focus (fixes photo caching issue)
+  // Skips initial mount since loadProfile is already called by the useEffect above
   useFocusEffect(
     useCallback(() => {
-      if (user?.id) {
+      if (initialLoadDone.current && user?.id) {
         loadProfile();
       }
     }, [user?.id])
@@ -124,9 +125,6 @@ export default function Profile() {
           display_name,
           birth_date,
           age,
-          bio,
-          occupation,
-          education,
           location_city,
           location_state,
           gender,
@@ -147,10 +145,14 @@ export default function Profile() {
           languages_spoken,
           religion,
           political_views,
+          hometown,
+          occupation,
+          education,
           voice_intro_url,
           voice_intro_duration,
           photos (
             url,
+            storage_path,
             is_primary,
             display_order,
             blur_data_uri
@@ -169,17 +171,26 @@ export default function Profile() {
       }
 
       // Sort photos by display order
-      const sortedPhotos = data.photos?.sort((a: any, b: any) =>
+      let sortedPhotos = data.photos?.sort((a: any, b: any) =>
         (a.display_order || 0) - (b.display_order || 0)
       );
 
+      // Sign photo URLs and voice intro URL in parallel
+      const [signedPhotos, signedVoiceUrl] = await Promise.all([
+        sortedPhotos?.length ? signPhotoUrls(sortedPhotos) : Promise.resolve(sortedPhotos),
+        data.voice_intro_url ? getSignedUrl('voice-intros', data.voice_intro_url) : Promise.resolve(null),
+      ]);
+
       setProfile({
         ...data,
-        photos: sortedPhotos,
+        photos: signedPhotos ?? sortedPhotos,
+        voice_intro_url: signedVoiceUrl || data.voice_intro_url,
       });
 
       // Set admin status
       setIsAdmin(data.is_admin || false);
+
+      initialLoadDone.current = true;
     } catch (error: any) {
       console.error('Error loading profile:', error);
       Alert.alert(
@@ -237,7 +248,7 @@ export default function Profile() {
         .from('preferences')
         .select('*')
         .eq('profile_id', profile.id)
-        .single();
+        .maybeSingle();
 
       setPreferences(prefsData);
       setShowPreview(true);
@@ -278,18 +289,18 @@ export default function Profile() {
               </Text>
             </View>
           )}
-          <Text style={[styles.profileName, { color: colors.foreground }]}>
-            {profile?.display_name}
-          </Text>
-          <View style={styles.verifiedRow}>
-            <MaterialCommunityIcons
-              name="check-decagram"
-              size={20}
-              color={(profile?.photo_verified || profile?.is_verified) ? '#A08AB7' : colors.mutedForeground}
-            />
-            <Text style={(profile?.photo_verified || profile?.is_verified) ? styles.verifiedText : [styles.unverifiedText, { color: colors.mutedForeground }]}>
-              {(profile?.photo_verified || profile?.is_verified) ? t('profile.verified') : t('profile.notVerified')}
+          <View style={styles.nameRow}>
+            <Text style={[styles.profileName, { color: colors.foreground }]}>
+              {profile?.display_name}
             </Text>
+            {(profile?.photo_verified || profile?.is_verified) && (
+              <MaterialCommunityIcons
+                name="check-decagram"
+                size={24}
+                color="#A08AB7"
+                style={{ marginLeft: 8 }}
+              />
+            )}
           </View>
         </View>
 
@@ -356,7 +367,7 @@ export default function Profile() {
               {[
                 t('profile.unlimitedSwipes'),
                 t('profile.seeWhoLikesYou'),
-                t('profile.activityCenterFeature', 'Activity Center'),
+                t('profile.activityCenterFeature'),
                 isPlatinum ? t('profile.weeklyProfileBoost') : t('profile.superLikesPerWeek'),
                 isPlatinum ? t('profile.prioritySupport') : t('profile.voiceMessages'),
               ].map((benefit, i) => (
@@ -409,7 +420,7 @@ export default function Profile() {
                 {[
                   t('profile.unlimitedSwipes'),
                   t('profile.seeWhoLikesYou'),
-                  t('profile.activityCenterFeature', 'Activity Center'),
+                  t('profile.activityCenterFeature'),
                   t('profile.advancedFilters'),
                   t('profile.readReceiptsAndVoice'),
                 ].map((feature, i) => (
@@ -431,7 +442,7 @@ export default function Profile() {
 
           {/* ===== ACTIVITY & MATCHING ===== */}
           <View style={styles.menuSection}>
-            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Activity & Matching</Text>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>{t('profile.sections.activityMatching')}</Text>
 
             {/* Activity Center */}
             <TouchableOpacity
@@ -440,10 +451,10 @@ export default function Profile() {
             >
               <View style={styles.menuItemLeft}>
                 <MaterialCommunityIcons name="bell-ring-outline" size={24} color="#A08AB7" />
-                <Text style={[styles.menuItemText, { color: '#A08AB7', fontWeight: '600' }]}>{t('profile.activityCenter', 'Activity Center')}</Text>
+                <Text style={[styles.menuItemText, { color: '#A08AB7', fontWeight: '600' }]}>{t('profile.activityCenter')}</Text>
                 {showActivityNewBadge && (
                   <View style={styles.newBadge}>
-                    <Text style={styles.newBadgeText}>NEW</Text>
+                    <Text style={styles.newBadgeText}>{t('common.new')}</Text>
                   </View>
                 )}
               </View>
@@ -465,7 +476,7 @@ export default function Profile() {
 
           {/* ===== APP SETTINGS ===== */}
           <View style={styles.menuSection}>
-            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Settings</Text>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>{t('profile.sections.settings')}</Text>
 
             {/* Account & Privacy */}
             <TouchableOpacity
@@ -518,7 +529,7 @@ export default function Profile() {
 
           {/* ===== REVIEWS ===== */}
           <View style={styles.menuSection}>
-            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Reviews</Text>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>{t('profile.sections.reviews')}</Text>
 
             {/* My Reviews */}
             <TouchableOpacity
@@ -547,7 +558,7 @@ export default function Profile() {
 
           {/* ===== SAFETY & PRIVACY ===== */}
           <View style={styles.menuSection}>
-            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Safety & Privacy</Text>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>{t('profile.sections.safetyPrivacy')}</Text>
 
             {/* Safety Center */}
             <TouchableOpacity
@@ -612,7 +623,7 @@ export default function Profile() {
 
           {/* ===== SUBSCRIPTION ===== */}
           <View style={styles.menuSection}>
-            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Subscription</Text>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>{t('profile.sections.subscription')}</Text>
 
             <TouchableOpacity
               style={[styles.menuItem, { backgroundColor: !isPremium ? '#F5F0FF' : colors.card, borderColor: !isPremium ? '#A08AB7' : colors.border, borderLeftWidth: !isPremium ? 4 : 0, borderLeftColor: '#A08AB7' }]}
@@ -634,27 +645,27 @@ export default function Profile() {
 
           {/* ===== SUPPORT ===== */}
           <View style={styles.menuSection}>
-            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>Support</Text>
+            <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>{t('profile.sections.support')}</Text>
 
             <TouchableOpacity
               style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={async () => {
                 try {
-                  const mailtoUrl = 'mailto:hello@joinaccord.app?subject=Support Request&body=Hi Accord Team,\n\n';
+                  const mailtoUrl = `mailto:hello@joinaccord.app?subject=${encodeURIComponent(t('profile.support.emailSubject'))}&body=${encodeURIComponent(t('profile.support.emailBody'))}`;
                   const canOpen = await Linking.canOpenURL(mailtoUrl);
                   if (canOpen) {
                     await Linking.openURL(mailtoUrl);
                   } else {
                     Alert.alert(
-                      'Contact Support',
-                      'Email us at hello@joinaccord.app',
+                      t('profile.support.contactTitle'),
+                      t('profile.support.contactMessage'),
                       [{ text: 'OK' }]
                     );
                   }
                 } catch (error) {
                   Alert.alert(
-                    'Contact Support',
-                    'Email us at hello@joinaccord.app',
+                    t('profile.support.contactTitle'),
+                    t('profile.support.contactMessage'),
                     [{ text: 'OK' }]
                   );
                 }
@@ -671,7 +682,7 @@ export default function Profile() {
           {/* ===== ADMIN PANEL ===== */}
           {isAdmin && (
             <View style={styles.menuSection}>
-              <Text style={[styles.menuSectionTitle, { color: '#F59E0B' }]}>Admin Tools</Text>
+              <Text style={[styles.menuSectionTitle, { color: '#F59E0B' }]}>{t('profile.sections.adminTools')}</Text>
 
               <TouchableOpacity
                 style={[styles.menuItem, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B', borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}
@@ -708,8 +719,8 @@ export default function Profile() {
                 <View style={styles.menuItemLeft}>
                   <MaterialCommunityIcons name="bell-ring" size={24} color="#A08AB7" />
                   <View>
-                    <Text style={[styles.menuItemText, { color: '#6B21A8', fontWeight: '700' }]}>{t('profile.pushNotifications')}</Text>
-                    <Text style={[styles.adminSubtext, { color: '#6B21A8' }]}>{t('profile.sendMessagesToUsers')}</Text>
+                    <Text style={[styles.menuItemText, { color: '#A08AB7', fontWeight: '700' }]}>{t('profile.pushNotifications')}</Text>
+                    <Text style={[styles.adminSubtext, { color: '#A08AB7' }]}>{t('profile.sendMessagesToUsers')}</Text>
                   </View>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
@@ -722,8 +733,8 @@ export default function Profile() {
                 <View style={styles.menuItemLeft}>
                   <MaterialCommunityIcons name="camera-account" size={24} color="#10B981" />
                   <View>
-                    <Text style={[styles.menuItemText, { color: '#065F46', fontWeight: '700' }]}>Photo Verification</Text>
-                    <Text style={[styles.adminSubtext, { color: '#065F46' }]}>Reset user attempts</Text>
+                    <Text style={[styles.menuItemText, { color: '#065F46', fontWeight: '700' }]}>{t('profile.admin.photoVerification')}</Text>
+                    <Text style={[styles.adminSubtext, { color: '#065F46' }]}>{t('profile.admin.resetUserAttempts')}</Text>
                   </View>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={24} color="#10B981" />
@@ -736,8 +747,8 @@ export default function Profile() {
                 <View style={styles.menuItemLeft}>
                   <MaterialCommunityIcons name="image-search" size={24} color="#EF4444" />
                   <View>
-                    <Text style={[styles.menuItemText, { color: '#991B1B', fontWeight: '700' }]}>Photo Reviews</Text>
-                    <Text style={[styles.adminSubtext, { color: '#991B1B' }]}>Review flagged user photos</Text>
+                    <Text style={[styles.menuItemText, { color: '#991B1B', fontWeight: '700' }]}>{t('profile.admin.photoReviews')}</Text>
+                    <Text style={[styles.adminSubtext, { color: '#991B1B' }]}>{t('profile.admin.reviewFlaggedPhotos')}</Text>
                   </View>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={24} color="#EF4444" />
@@ -750,11 +761,25 @@ export default function Profile() {
                 <View style={styles.menuItemLeft}>
                   <MaterialCommunityIcons name="clipboard-list" size={24} color="#F59E0B" />
                   <View>
-                    <Text style={[styles.menuItemText, { color: '#92400E', fontWeight: '700' }]}>Preview Onboarding</Text>
-                    <Text style={[styles.adminSubtext, { color: '#92400E' }]}>View all onboarding screens</Text>
+                    <Text style={[styles.menuItemText, { color: '#92400E', fontWeight: '700' }]}>{t('profile.admin.previewOnboarding')}</Text>
+                    <Text style={[styles.adminSubtext, { color: '#92400E' }]}>{t('profile.admin.viewOnboardingScreens')}</Text>
                   </View>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#F0F0F5', borderColor: '#1A1A2E', borderLeftWidth: 4, borderLeftColor: '#1A1A2E' }]}
+                onPress={() => setShowUpdatePreview(true)}
+              >
+                <View style={styles.menuItemLeft}>
+                  <MaterialCommunityIcons name="cellphone-arrow-down" size={24} color="#1A1A2E" />
+                  <View>
+                    <Text style={[styles.menuItemText, { color: '#1A1A2E', fontWeight: '700' }]}>{t('profile.admin.previewForceUpdate')}</Text>
+                    <Text style={[styles.adminSubtext, { color: '#6B6B80' }]}>{t('profile.admin.viewUpdateModal')}</Text>
+                  </View>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#1A1A2E" />
               </TouchableOpacity>
             </View>
           )}
@@ -807,6 +832,12 @@ export default function Profile() {
         visible={showPaywall}
         onClose={() => setShowPaywall(false)}
         variant={isPremium ? 'platinum' : 'premium'}
+      />
+
+      {/* Force Update Modal Preview (admin only) */}
+      <UpdateModalPreview
+        visible={showUpdatePreview}
+        onClose={() => setShowUpdatePreview(false)}
       />
 
       {/* Profile Preview Modal */}
@@ -874,24 +905,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
   },
-  profileName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  verifiedRow: {
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
   },
-  verifiedText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#A08AB7',
-  },
-  unverifiedText: {
-    fontSize: 14,
-    fontWeight: '500',
+  profileName: {
+    fontSize: 26,
+    fontWeight: '700',
   },
   settingsButtonOverlay: {
     position: 'absolute',

@@ -1,35 +1,21 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useState, useEffect, useMemo } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Alert, ScrollView, StyleSheet, useColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
-import { validatePromptAnswer, validateContent } from '@/lib/content-moderation';
+import { getGlobalStep } from '@/lib/onboarding-steps';
+import { validateContent } from '@/lib/content-moderation';
+import { PROMPT_KEYS } from '@/lib/prompt-options';
+import * as Haptics from 'expo-haptics';
+import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
+import { useOnboardingDraft } from '@/hooks/useOnboardingDraft';
 
-const PROMPTS = [
-  'My ideal lavender marriage looks like...',
-  'I\'m looking for someone who...',
-  'The best partnership includes...',
-  'A perfect Sunday with my partner would be...',
-  'Together we could...',
-  'I need a partner who understands...',
-  'My ideal living situation is...',
-  'Financial goals I want us to share...',
-  'The most important thing in our arrangement...',
-  'I can offer my partner...',
-  'Deal breakers for me are...',
-  'My vision for our future includes...',
-  'What makes me a great partner is...',
-  'I\'m passionate about...',
-  'Green flags I\'m looking for...',
-  'A fun fact about me...',
-  'My love language is...',
-  'I\'m secretly really good at...',
-  'The key to my heart is...',
-  'My guilty pleasure is...',
-];
+interface PromptsDraft {
+  selectedPrompts: PromptAnswer[];
+}
 
 interface PromptAnswer {
   prompt: string;
@@ -39,7 +25,13 @@ interface PromptAnswer {
 export default function Prompts() {
   const router = useRouter();
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const PROMPTS = useMemo(() => PROMPT_KEYS.map(key => t(`prompts.${key}`)), [t]);
+
+  const [subStep, setSubStep] = useState(0);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -48,9 +40,11 @@ export default function Prompts() {
     { prompt: '', answer: '' },
     { prompt: '', answer: '' },
   ]);
-  const [showPromptPicker, setShowPromptPicker] = useState<number | null>(null);
-  const [showCustomPromptInput, setShowCustomPromptInput] = useState<number | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
   const [customPromptText, setCustomPromptText] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
+  const { loadDraft, saveDraft, clearDraft } = useOnboardingDraft<PromptsDraft>(user?.id, 'prompts');
 
   useEffect(() => {
     loadProfile();
@@ -68,9 +62,7 @@ export default function Prompts() {
 
       if (data) {
         setProfileId(data.id);
-        // Pre-fill prompts if data exists
         if (data.prompt_answers && Array.isArray(data.prompt_answers) && data.prompt_answers.length > 0) {
-          // Pad with empty slots if less than 3 prompts saved
           const loadedPrompts = [...data.prompt_answers];
           while (loadedPrompts.length < 3) {
             loadedPrompts.push({ prompt: '', answer: '' });
@@ -78,28 +70,29 @@ export default function Prompts() {
           setSelectedPrompts(loadedPrompts.slice(0, 3));
         }
       }
+
+      // Overlay draft on top of DB data
+      const draft = await loadDraft();
+      if (draft) {
+        if (draft.data.selectedPrompts?.length) setSelectedPrompts(draft.data.selectedPrompts);
+        setSubStep(draft.subStep);
+      }
     } catch (error: any) {
       console.error('Error loading profile:', error);
     }
   };
 
-  const selectPrompt = (index: number, prompt: string) => {
+  const selectPrompt = (prompt: string) => {
     const newPrompts = [...selectedPrompts];
-    newPrompts[index] = { prompt, answer: newPrompts[index].answer };
+    newPrompts[subStep] = { prompt, answer: newPrompts[subStep].answer };
     setSelectedPrompts(newPrompts);
-    setShowPromptPicker(null);
-  };
-
-  const handleCustomPrompt = () => {
-    if (showPromptPicker === null) return;
-    setShowPromptPicker(null);
-    setShowCustomPromptInput(showPromptPicker);
+    setShowPicker(false);
+    setShowCustomInput(false);
   };
 
   const saveCustomPrompt = () => {
-    if (showCustomPromptInput === null || !customPromptText.trim()) return;
+    if (!customPromptText.trim() || customPromptText.trim().length < 10) return;
 
-    // Validate custom prompt for profanity and gibberish
     const validation = validateContent(customPromptText, {
       checkProfanity: true,
       checkContactInfo: false,
@@ -109,34 +102,30 @@ export default function Prompts() {
 
     if (!validation.isValid) {
       Alert.alert(
-        validation.moderationResult?.isGibberish ? 'Invalid Prompt' : 'Inappropriate Content',
+        validation.moderationResult?.isGibberish ? t('onboarding.promptsStep.invalidPrompt') : t('onboarding.promptsStep.inappropriateContent'),
         validation.error
       );
       return;
     }
 
-    selectPrompt(showCustomPromptInput, customPromptText.trim());
+    selectPrompt(customPromptText.trim());
     setCustomPromptText('');
-    setShowCustomPromptInput(null);
   };
 
-  const updateAnswer = (index: number, answer: string) => {
+  const updateAnswer = (answer: string) => {
     const newPrompts = [...selectedPrompts];
-    newPrompts[index].answer = answer;
+    newPrompts[subStep].answer = answer;
     setSelectedPrompts(newPrompts);
   };
 
-  const handleContinue = async () => {
-    const filledPrompts = selectedPrompts.filter(
-      (p) => p.prompt && p.answer.trim()
-    );
+  const handleSaveAndContinue = async () => {
+    const filledPrompts = selectedPrompts.filter(p => p.prompt && p.answer.trim());
 
     if (filledPrompts.length === 0) {
-      Alert.alert('Required', 'Please answer at least one prompt');
+      Alert.alert(t('common.required'), t('onboarding.promptsStep.answerAtLeastOne'));
       return;
     }
 
-    // Check all prompt answers for profanity, contact info, and gibberish
     for (let i = 0; i < filledPrompts.length; i++) {
       const validation = validateContent(filledPrompts[i].answer, {
         checkProfanity: true,
@@ -146,7 +135,7 @@ export default function Prompts() {
       });
       if (!validation.isValid) {
         Alert.alert(
-          validation.moderationResult?.isGibberish ? 'Invalid Response' : 'Inappropriate Content',
+          validation.moderationResult?.isGibberish ? t('onboarding.promptsStep.invalidResponse') : t('onboarding.promptsStep.inappropriateContent'),
           validation.error
         );
         return;
@@ -154,7 +143,7 @@ export default function Prompts() {
     }
 
     if (!profileId) {
-      Alert.alert('Error', 'Profile not found. Please start over.');
+      Alert.alert(t('common.error'), t('onboarding.common.profileNotFound'));
       return;
     }
 
@@ -171,233 +160,306 @@ export default function Prompts() {
 
       if (error) throw error;
 
+      await clearDraft();
       router.push('/(onboarding)/voice-intro');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save prompts');
+      Alert.alert(t('common.error'), error.message || t('onboarding.promptsStep.saveFailed'));
     } finally {
       setLoading(false);
     }
   };
 
-  const usedPrompts = selectedPrompts.map((p) => p.prompt).filter(Boolean);
-  const availablePrompts = PROMPTS.filter((p) => !usedPrompts.includes(p));
+  const buildDraftSnapshot = (): PromptsDraft => ({ selectedPrompts });
+
+  const handleBack = () => {
+    if (showPicker || showCustomInput) {
+      setShowPicker(false);
+      setShowCustomInput(false);
+      return;
+    }
+    if (subStep === 0) {
+      goToPreviousOnboardingStep('/(onboarding)/prompts');
+    } else {
+      const prevStep = subStep - 1;
+      saveDraft(prevStep, buildDraftSnapshot());
+      setSubStep(prevStep);
+    }
+  };
+
+  const handleContinue = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (subStep < 2) {
+      const nextStep = subStep + 1;
+      saveDraft(nextStep, buildDraftSnapshot());
+      setSubStep(nextStep);
+    } else {
+      handleSaveAndContinue();
+    }
+  };
+
+  const handleSkip = () => {
+    if (subStep < 2) {
+      const nextStep = subStep + 1;
+      saveDraft(nextStep, buildDraftSnapshot());
+      setSubStep(nextStep);
+    } else {
+      handleSaveAndContinue();
+    }
+  };
+
+  const currentPrompt = selectedPrompts[subStep];
+  const usedPrompts = selectedPrompts.map(p => p.prompt).filter(Boolean);
+  const availablePrompts = PROMPTS.filter(p => !usedPrompts.includes(p) || p === currentPrompt.prompt);
+
+  const getStepConfig = () => {
+    switch (subStep) {
+      case 0: return { title: t('onboarding.promptsStep.step0Title'), subtitle: t('onboarding.promptsStep.step0Subtitle') };
+      case 1: return { title: t('onboarding.promptsStep.step1Title'), subtitle: t('onboarding.promptsStep.step1Subtitle') };
+      case 2: return { title: t('onboarding.promptsStep.step2Title'), subtitle: t('onboarding.promptsStep.step2Subtitle') };
+      default: return { title: "", subtitle: "" };
+    }
+  };
+
+  const { title, subtitle } = getStepConfig();
+  const isFirstPromptRequired = subStep === 0 && (!currentPrompt.prompt || !currentPrompt.answer.trim());
+  const hasAtLeastOnePrompt = selectedPrompts.some(p => p.prompt && p.answer.trim());
 
   return (
-    <ScrollView
-      className="flex-1 bg-white dark:bg-gray-900"
-      contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 32 }}
+    <OnboardingLayout
+      currentStep={getGlobalStep('prompts', subStep)}
+      title={title}
+      subtitle={subtitle}
+      onBack={handleBack}
+      onContinue={handleContinue}
+      onSkip={undefined}
+      continueDisabled={loading || (subStep === 0 && !hasAtLeastOnePrompt && (!currentPrompt.prompt || !currentPrompt.answer.trim()))}
+      continueLabel={loading ? t('common.saving') : t('common.continue')}
+      currentRoute="/(onboarding)/prompts"
     >
-      <View className="px-6" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
-        {/* Progress */}
-        <View className="mb-8">
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 5 of 7</Text>
-            <Text className="text-sm text-lavender-500 font-bold">71%</Text>
-          </View>
-          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <View
-              className="h-3 bg-lavender-500 rounded-full"
-              style={{ width: '71%' }}
-            />
-          </View>
-        </View>
-
-        {/* Header */}
-        <View className="mb-8">
-          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
-            Tell your story 💭
-          </Text>
-          <Text className="text-gray-600 dark:text-gray-400 text-lg">
-            Answer prompts to spark meaningful conversations
-          </Text>
-        </View>
-
-        {/* Prompts */}
-        {selectedPrompts.map((promptAnswer, index) => (
-          <View key={index} className="mb-6">
-            {!promptAnswer.prompt ? (
-              <TouchableOpacity
-                className="bg-purple-100 dark:bg-purple-900/30 border-2 border-dashed border-purple-300 dark:border-purple-700 rounded-3xl p-6 items-center"
-                onPress={() => setShowPromptPicker(index)}
-              >
-                <MaterialCommunityIcons name="plus-circle" size={40} color="#A08AB7" />
-                <Text className="text-purple-700 dark:text-purple-300 font-bold text-lg mt-2">
-                  Choose a prompt
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <View className="bg-white dark:bg-gray-800 border-2 border-purple-200 dark:border-purple-700 rounded-3xl overflow-hidden shadow-sm">
-                <TouchableOpacity
-                  className="bg-lavender-500 px-6 py-4 flex-row justify-between items-center"
-                  onPress={() => setShowPromptPicker(index)}
-                >
-                  <Text className="text-white font-bold text-base flex-1">
-                    {promptAnswer.prompt}
-                  </Text>
-                  <MaterialCommunityIcons name="pencil" size={20} color="white" />
-                </TouchableOpacity>
-                <View className="p-6">
-                  <TextInput
-                    className="text-gray-900 dark:text-white text-lg min-h-24"
-                    placeholder="Your answer..."
-                    value={promptAnswer.answer}
-                    onChangeText={(text) => updateAnswer(index, text)}
-                    multiline
-                    textAlignVertical="top"
-                    maxLength={200}
-                    placeholderTextColor="#9CA3AF"
-                  />
-                  <Text className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-right">
-                    {promptAnswer.answer.length}/200
-                  </Text>
-                </View>
-              </View>
-            )}
-          </View>
-        ))}
-
-        {/* Prompt Picker Modal */}
-        {showPromptPicker !== null && (
-          <View className="absolute inset-0 bg-black/50 items-center justify-center px-6 z-50">
-            <View className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-h-96">
-              <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-xl font-bold text-gray-900 dark:text-white">
-                  Choose a prompt
-                </Text>
-                <TouchableOpacity onPress={() => setShowPromptPicker(null)}>
-                  <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView className="max-h-80">
-                {/* Write Your Own Option */}
-                <TouchableOpacity
-                  className="py-4 border-b-2 border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/30 rounded-xl mb-2 px-4 flex-row items-center"
-                  onPress={handleCustomPrompt}
-                >
-                  <MaterialCommunityIcons name="pencil-plus" size={24} color="#A08AB7" />
-                  <Text className="text-purple-700 dark:text-purple-300 font-bold text-base ml-3">
-                    ✨ Write your own prompt
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Predefined Prompts */}
-                {availablePrompts.map((prompt) => (
-                  <TouchableOpacity
-                    key={prompt}
-                    className="py-4 border-b border-gray-200 dark:border-gray-700"
-                    onPress={() => selectPrompt(showPromptPicker, prompt)}
-                  >
-                    <Text className="text-gray-700 dark:text-gray-300 text-base">{prompt}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        )}
-
-        {/* Custom Prompt Input Modal */}
-        {showCustomPromptInput !== null && (
-          <View className="absolute inset-0 bg-black/50 items-center justify-center px-6 z-50">
-            <View className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full">
-              <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-xl font-bold text-gray-900 dark:text-white">
-                  Write your own prompt
-                </Text>
-                <TouchableOpacity onPress={() => {
-                  setShowCustomPromptInput(null);
-                  setCustomPromptText('');
-                }}>
-                  <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
-
-              <Text className="text-gray-600 dark:text-gray-400 mb-4">
-                Create a unique question that helps showcase your personality! 💫
-              </Text>
-
-              <TextInput
-                className="bg-gray-100 dark:bg-gray-700 rounded-2xl p-4 text-gray-900 dark:text-white text-base mb-2 min-h-24"
-                placeholder="e.g., What I'm most excited to share with a partner is..."
-                value={customPromptText}
-                onChangeText={setCustomPromptText}
-                multiline
-                textAlignVertical="top"
-                maxLength={100}
-                placeholderTextColor="#9CA3AF"
-                autoFocus
-              />
-              <Text className="text-xs text-gray-500 dark:text-gray-400 mb-4 text-right">
-                {customPromptText.length}/100
-              </Text>
-
-              <TouchableOpacity
-                className={`py-4 rounded-full ${
-                  customPromptText.trim().length < 10 ? 'bg-gray-300 dark:bg-gray-600' : 'bg-purple-600'
-                }`}
-                onPress={saveCustomPrompt}
-                disabled={customPromptText.trim().length < 10}
-              >
-                <Text className="text-white text-center font-bold text-lg">
-                  Use This Prompt
-                </Text>
-              </TouchableOpacity>
-
-              <Text className="text-xs text-gray-500 dark:text-gray-400 text-center mt-3">
-                Minimum 10 characters
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Tips */}
-        <View className="bg-purple-50 dark:bg-purple-900/30 border-2 border-purple-200 dark:border-purple-700 rounded-3xl p-5 mb-8">
-          <View className="flex-row items-center mb-3">
-            <MaterialCommunityIcons name="lightbulb-on" size={24} color="#A08AB7" />
-            <Text className="text-purple-900 dark:text-purple-300 font-bold text-lg ml-2">Pro Tips</Text>
-          </View>
-          <Text className="text-purple-800 dark:text-purple-200 text-sm mb-2">
-            ✨ Be specific and authentic - generic answers don't stand out
-          </Text>
-          <Text className="text-purple-800 dark:text-purple-200 text-sm mb-2">
-            💬 Show your personality - humor, vulnerability, and honesty work
-          </Text>
-          <Text className="text-purple-800 dark:text-purple-200 text-sm">
-            🎯 Focus on what matters in a lavender marriage partnership
-          </Text>
-        </View>
-
-        {/* Buttons */}
-        <View className="flex-row gap-3">
+      {/* Prompt Picker View */}
+      {showPicker ? (
+        <View>
+          {/* Write Your Own */}
           <TouchableOpacity
-            className="flex-1 py-4 rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-            onPress={() => goToPreviousOnboardingStep('/(onboarding)/prompts')}
-            disabled={loading}
+            style={styles.writeOwnButton}
+            onPress={() => { setShowPicker(false); setShowCustomInput(true); }}
           >
-            <Text className="text-gray-700 dark:text-gray-300 text-center font-bold text-lg">Back</Text>
+            <MaterialCommunityIcons name="pencil-plus" size={22} color="#A08AB7" />
+            <Text style={[styles.writeOwnText, { color: isDark ? '#D4C4E8' : '#A08AB7' }]}>{t('onboarding.promptsStep.writeYourOwn')}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            className={`flex-1 py-4 rounded-full ${
-              loading || !selectedPrompts.some((p) => p.prompt && p.answer.trim())
-                ? 'bg-gray-400 dark:bg-gray-600'
-                : 'bg-lavender-500'
-            }`}
-            style={{
-              borderRadius: 9999,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingVertical: 16,
-            }}
-            onPress={handleContinue}
-            disabled={loading || !selectedPrompts.some((p) => p.prompt && p.answer.trim())}
-          >
-            <Text className="text-white text-center font-bold text-lg">
-              {loading ? 'Saving...' : 'Continue'}
-            </Text>
-          </TouchableOpacity>
+          {/* Available Prompts */}
+          {availablePrompts.map((prompt) => (
+            <TouchableOpacity
+              key={prompt}
+              style={styles.promptOption}
+              onPress={() => selectPrompt(prompt)}
+            >
+              <Text style={[styles.promptOptionText, { color: isDark ? '#D1D5DB' : '#374151' }]}>{prompt}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      </View>
-    </ScrollView>
+      ) : showCustomInput ? (
+        /* Custom Prompt Input */
+        <View>
+          <Text style={[styles.customLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+            {t('onboarding.promptsStep.customLabel')}
+          </Text>
+          <TextInput
+            style={[styles.customInput, {
+              backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+              color: isDark ? '#F5F5F7' : '#1A1A2E',
+            }]}
+            placeholder={t('onboarding.promptsStep.customPlaceholder')}
+            placeholderTextColor="#9CA3AF"
+            value={customPromptText}
+            onChangeText={setCustomPromptText}
+            multiline
+            textAlignVertical="top"
+            maxLength={100}
+            autoFocus
+          />
+          <Text style={[styles.charCount, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
+            {customPromptText.length}/100
+          </Text>
+          <TouchableOpacity
+            style={[styles.usePromptButton, { backgroundColor: customPromptText.trim().length < 10 ? (isDark ? '#2C2C3E' : '#D1D5DB') : '#A08AB7' }]}
+            onPress={saveCustomPrompt}
+            disabled={customPromptText.trim().length < 10}
+          >
+            <Text style={styles.usePromptButtonText}>{t('onboarding.promptsStep.useThisPrompt')}</Text>
+          </TouchableOpacity>
+          <Text style={[styles.minChars, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>{t('onboarding.promptsStep.minimumChars')}</Text>
+        </View>
+      ) : (
+        /* Main Prompt View */
+        <View>
+          {!currentPrompt.prompt ? (
+            <TouchableOpacity
+              style={[styles.choosePromptButton, { backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA' }]}
+              onPress={() => setShowPicker(true)}
+            >
+              <MaterialCommunityIcons name="plus-circle" size={36} color="#A08AB7" />
+              <Text style={[styles.choosePromptText, { color: isDark ? '#D4C4E8' : '#A08AB7' }]}>{t('onboarding.promptsStep.choosePrompt')}</Text>
+            </TouchableOpacity>
+          ) : (
+            <View>
+              {/* Selected Prompt Header */}
+              <TouchableOpacity
+                style={styles.promptHeader}
+                onPress={() => setShowPicker(true)}
+              >
+                <Text style={styles.promptHeaderText}>{currentPrompt.prompt}</Text>
+                <MaterialCommunityIcons name="pencil" size={18} color="white" />
+              </TouchableOpacity>
+
+              {/* Answer Input */}
+              <View style={styles.answerBox}>
+                <TextInput
+                  style={[styles.answerInput, { color: isDark ? '#F5F5F7' : '#1A1A2E', borderBottomColor: isDark ? '#2C2C3E' : '#E8E3F0' }]}
+                  placeholder={t('onboarding.promptsStep.answerPlaceholder')}
+                  placeholderTextColor="#9CA3AF"
+                  value={currentPrompt.answer}
+                  onChangeText={updateAnswer}
+                  multiline
+                  textAlignVertical="top"
+                  maxLength={200}
+                />
+                <Text style={[styles.charCount, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
+                  {currentPrompt.answer.length}/200
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Tips (only show on first prompt) */}
+      {subStep === 0 && !showPicker && !showCustomInput && (
+        <View style={[styles.tipsCard, { backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA' }]}>
+          <View style={styles.tipsHeader}>
+            <MaterialCommunityIcons name="lightbulb-on" size={22} color="#A08AB7" />
+            <Text style={[styles.tipsTitle, { color: isDark ? '#E5E7EB' : '#1F2937' }]}>{t('onboarding.promptsStep.proTips')}</Text>
+          </View>
+          <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboarding.promptsStep.tip1')}</Text>
+          <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboarding.promptsStep.tip2')}</Text>
+          <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboarding.promptsStep.tip3')}</Text>
+        </View>
+      )}
+    </OnboardingLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  writeOwnButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 16,
+    marginBottom: 4,
+  },
+  writeOwnText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  promptOption: {
+    paddingVertical: 16,
+  },
+  promptOptionText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  customLabel: {
+    fontSize: 15,
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  customInput: {
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    minHeight: 100,
+  },
+  charCount: {
+    fontSize: 12,
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  usePromptButton: {
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  usePromptButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  minChars: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  choosePromptButton: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    borderRadius: 24,
+  },
+  choosePromptText: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  promptHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#A08AB7',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  promptHeaderText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+    marginRight: 8,
+  },
+  answerBox: {
+    paddingTop: 16,
+    paddingHorizontal: 0,
+  },
+  answerInput: {
+    fontSize: 16,
+    minHeight: 100,
+    lineHeight: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8E3F0',
+    paddingBottom: 12,
+  },
+  tipsCard: {
+    borderRadius: 20,
+    padding: 20,
+    marginTop: 24,
+  },
+  tipsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  tipsTitle: {
+    fontWeight: '700',
+    fontSize: 17,
+  },
+  tipItem: {
+    fontSize: 14,
+    marginBottom: 6,
+    lineHeight: 20,
+    paddingLeft: 4,
+  },
+});

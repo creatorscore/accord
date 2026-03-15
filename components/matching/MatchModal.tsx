@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Modal, Dimensions } from 'react-native';
 import { Image } from '@/components/shared/ConditionalImage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,

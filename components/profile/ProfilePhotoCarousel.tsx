@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
 import { useSafeBlur } from '@/hooks/useSafeBlur';
+import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PHOTO_HEIGHT = SCREEN_WIDTH * 1.3;
@@ -64,7 +65,7 @@ export default function ProfilePhotoCarousel({
   const shouldBlur = photoBlurEnabled && !isRevealed && !isAdmin;
 
   // Safe blur hook - fallback for photos without blur_data_uri
-  const { blurRadius, showBlurOverlay, onImageLoad, onImageError } = useSafeBlur({
+  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
     shouldBlur,
     blurIntensity: 30,
   });
@@ -74,8 +75,6 @@ export default function ProfilePhotoCarousel({
     shouldBlur && photo.blur_data_uri ? photo.blur_data_uri : photo.url;
   const getBlurRadius = (photo: Photo) =>
     shouldBlur && photo.blur_data_uri ? 0 : blurRadius;
-  const getShowOverlay = (photo: Photo) =>
-    shouldBlur && photo.blur_data_uri ? false : showBlurOverlay;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
@@ -98,7 +97,7 @@ export default function ProfilePhotoCarousel({
       >
         {photos.map((photo, index) => (
           <View key={index} style={styles.photoContainer}>
-            <Image
+            <SafeBlurImage
               source={{ uri: getPhotoUri(photo) }}
               style={styles.photo}
               resizeMode="cover"
@@ -106,13 +105,6 @@ export default function ProfilePhotoCarousel({
               onLoad={onImageLoad}
               onError={onImageError}
             />
-            {/* Android blur fallback - CSS overlay instead of RenderScript */}
-            {getShowOverlay(photo) && (
-              <View
-                style={[styles.photo, { position: 'absolute', top: 0, left: 0, backgroundColor: 'rgba(20, 20, 22, 0.85)' }]}
-                pointerEvents="none"
-              />
-            )}
 
             {/* Dynamic Watermark over photo */}
             {watermarkReady && (

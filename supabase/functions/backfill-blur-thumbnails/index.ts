@@ -102,15 +102,21 @@ serve(async (req) => {
 
     for (const photo of photos) {
       try {
-        // Use Supabase Storage image transforms to get a tiny thumbnail
-        // Format: /storage/v1/render/image/public/{bucket}/{path}?width=20&quality=50
-        const transformUrl = `${supabaseUrl}/storage/v1/render/image/public/profile-photos/${photo.storage_path}?width=20&quality=50`;
+        // Use signed URL with transform params for private bucket access
+        const storagePath = photo.storage_path || photo.url;
+        const { data: signedData, error: signError } = await supabaseAdmin.storage
+          .from('profile-photos')
+          .createSignedUrl(storagePath, 600, {
+            transform: { width: 20, quality: 50 },
+          });
 
-        const response = await fetch(transformUrl, {
-          headers: {
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          },
-        });
+        if (signError || !signedData?.signedUrl) {
+          console.error(`[Backfill] Failed to sign URL for photo ${photo.id}:`, signError);
+          errors++;
+          continue;
+        }
+
+        const response = await fetch(signedData.signedUrl);
 
         if (!response.ok) {
           // If transform API fails, try fetching original and skip

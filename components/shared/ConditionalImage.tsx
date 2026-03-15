@@ -65,6 +65,9 @@ export const normalizeImageProps = (props: any) => {
 export const prefetchImages = async (urls: string[]): Promise<void> => {
   if (!urls || urls.length === 0) return;
 
+  // Filter out data URIs — Image.prefetch only supports HTTP(S) URLs
+  urls = urls.filter(url => !url.startsWith('data:'));
+
   const ownership = Constants.appOwnership as string | null;
   const isProd = ownership === 'standalone';
 

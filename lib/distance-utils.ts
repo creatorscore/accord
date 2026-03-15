@@ -74,8 +74,8 @@ export function formatDistanceSlider(value: number, unit: DistanceUnit = 'miles'
  * We store in miles internally, but display in user's preferred unit
  */
 export function getMaxDistanceForUnit(unit: DistanceUnit): number {
-  // Internal max is 500 miles
-  return 500;
+  // Internal max is 1000 miles
+  return 1000;
 }
 
 /**

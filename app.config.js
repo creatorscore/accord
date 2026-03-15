@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "Accord - Lavender Marriage",
     slug: "accord",
-    version: "2.0.2",
+    version: "2.0.3",
     orientation: "default",
     icon: "./assets/icon.png",
     userInterfaceStyle: "automatic",
@@ -17,7 +17,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.privyreviews.accord",
-      buildNumber: "66",
+      buildNumber: "67",
       icon: "./assets/icon.png",
       infoPlist: {
         NSPhotoLibraryUsageDescription: "Accord needs access to your photos to upload profile pictures.",
@@ -69,7 +69,7 @@ module.exports = {
       },
       package: "com.privyreviews.accord",
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
-      versionCode: 58,
+      versionCode: 59,
       softwareKeyboardLayoutMode: "resize",
       permissions: [
         "android.permission.CAMERA",
@@ -153,17 +153,19 @@ module.exports = {
       eas: {
         projectId: "71ca414e-ff65-488b-97f6-9150455475a0"
       },
-      supabaseUrl: "https://xcaktvlosjsaxcntxbyf.supabase.co",
-      supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjYWt0dmxvc2pzYXhjbnR4YnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODIzOTIsImV4cCI6MjA3NTM1ODM5Mn0.XFYpZEcKiH8MQPDbONBBTqmXJ9KeUbbn5-ARGavXjKg",
-      googleIosClientId: "609854216709-81grqvlc66iahvd56749ot511p9agh09.apps.googleusercontent.com",
-      googleWebClientId: "609854216709-ff54d58803kcbvpudv7aet8vo1bpq07g.apps.googleusercontent.com",
-      revenueCatAppleApiKey: "appl_enRnexAwhhNNHTGSZFUKzQBQefF",
-      revenueCatGoogleApiKey: "goog_mVpASFlCoMcDalaCseIhNnrnGto",
-      postHogApiKey: "phc_3KdZG8HkLD0v1YIGuR6khBLQGO41A8cerUmxa6EIEUG",
-      postHogHost: "https://us.i.posthog.com"
+      // Keys are read from environment variables (set via `eas secret:create` for builds).
+      // Fallbacks are provided for local development only.
+      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL || "https://xcaktvlosjsaxcntxbyf.supabase.co",
+      supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjYWt0dmxvc2pzYXhjbnR4YnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODIzOTIsImV4cCI6MjA3NTM1ODM5Mn0.XFYpZEcKiH8MQPDbONBBTqmXJ9KeUbbn5-ARGavXjKg",
+      googleIosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || "609854216709-81grqvlc66iahvd56749ot511p9agh09.apps.googleusercontent.com",
+      googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "609854216709-ff54d58803kcbvpudv7aet8vo1bpq07g.apps.googleusercontent.com",
+      revenueCatAppleApiKey: process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || "appl_enRnexAwhhNNHTGSZFUKzQBQefF",
+      revenueCatGoogleApiKey: process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || "goog_mVpASFlCoMcDalaCseIhNnrnGto",
+      postHogApiKey: process.env.EXPO_PUBLIC_POSTHOG_API_KEY || "phc_3KdZG8HkLD0v1YIGuR6khBLQGO41A8cerUmxa6EIEUG",
+      postHogHost: process.env.EXPO_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com"
     },
     owner: "vfranz",
-    runtimeVersion: "2.0.2",
+    runtimeVersion: "2.0.3",
     updates: {
       url: "https://u.expo.dev/71ca414e-ff65-488b-97f6-9150455475a0"
     }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Keyboard, ScrollView, Dimensions, InteractionManager, useWindowDimensions, Platform, Animated, AppState } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Keyboard, ScrollView, RefreshControl, Dimensions, useWindowDimensions, Platform, Animated, AppState } from 'react-native';
 import { MotiView } from 'moti';
 import Slider from '@react-native-community/slider';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -21,13 +21,16 @@ import ProfileBoostModal from '@/components/premium/ProfileBoostModal';
 import ReportUserModal from '@/components/moderation/ReportUserModal';
 // NOTE: Match and like notifications are sent via database triggers (notify_on_match, notify_on_like)
 // Do NOT import or call sendMatchNotification/sendLikeNotification from client code
-import { calculateCompatibilityScore, getCompatibilityBreakdown } from '@/lib/matching-algorithm';
+import { calculateScoreAndBreakdown } from '@/lib/matching-algorithm';
 import { initializeTracking } from '@/lib/tracking-permissions';
 import { DistanceUnit } from '@/lib/distance-utils';
+import { signProfileMediaUrls } from '@/lib/signed-urls';
 import { HeightUnit } from '@/lib/height-utils';
+import { usePreviewModeStore } from '@/stores/previewModeStore';
 import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { useColorScheme } from '@/lib/useColorScheme';
+import { COLORS } from '@/theme/colors';
 import { trackUserAction, trackFunnel, trackEvent } from '@/lib/analytics';
 import { prefetchImages } from '@/components/shared/ConditionalImage';
 import VerificationBanner from '@/components/shared/VerificationBanner';
@@ -44,9 +47,6 @@ interface Profile {
   location_state?: string;
   latitude?: number | null;
   longitude?: number | null;
-  bio?: string;
-  occupation?: string;
-  education?: string;
   height_inches?: number;
   zodiac_sign?: string;
   personality_type?: string;
@@ -56,7 +56,7 @@ interface Profile {
   political_views?: string;
   hobbies?: string[];
   interests?: any; // JSONB object with arrays
-  photos?: { url: string; is_primary: boolean; display_order?: number; blur_data_uri?: string | null }[];
+  photos?: { url: string; storage_path?: string; is_primary: boolean; display_order?: number; blur_data_uri?: string | null }[];
   compatibility_score?: number;
   compatibilityBreakdown?: {
     total: number; // Changed from 'overall' to match matching-algorithm.ts
@@ -73,7 +73,11 @@ interface Profile {
   prompt_answers?: { prompt: string; answer: string }[];
   voice_intro_url?: string;
   voice_intro_duration?: number;
+  hometown?: string;
+  occupation?: string;
+  education?: string;
   photo_blur_enabled?: boolean;
+  field_visibility?: Record<string, boolean>;
   hide_distance?: boolean;
   hide_last_active?: boolean;
   last_active_at?: string;
@@ -103,7 +107,10 @@ export default function Discover() {
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
   const { showToast } = useToast();
-  const { colors } = useColorScheme();
+  const { colors: _colors } = useColorScheme();
+  // Force light mode on discover screen
+  const colors = COLORS.light;
+  const { isPreviewMode, returnRoute, exitPreviewMode } = usePreviewModeStore();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -257,16 +264,24 @@ export default function Discover() {
   }[]>([]);
 
   // Quick filter options
-  const INTENTIONS = [
-    { label: 'All', value: null },
-    { label: 'Platonic', value: 'platonic' },
-    { label: 'Romantic', value: 'romantic' },
-    { label: 'Open', value: 'open' },
+  const INTENTIONS: { value: string | null }[] = [
+    { value: null },
+    { value: 'platonic' },
+    { value: 'romantic' },
+    { value: 'open' },
   ];
 
+  const intentionLabels: Record<string, string> = {
+    all: t('discover.intention.all'),
+    platonic: t('discover.intention.platonic'),
+    romantic: t('discover.intention.romantic'),
+    open: t('discover.intention.open'),
+  };
+
+  const getIntentionLabel = (value: string | null) => intentionLabels[value || 'all'] || intentionLabels.all;
+
   const getCurrentIntentionLabel = () => {
-    const intention = INTENTIONS.find(i => i.value === selectedIntention);
-    return intention ? intention.label : 'All';
+    return getIntentionLabel(selectedIntention);
   };
 
   useEffect(() => {
@@ -278,34 +293,18 @@ export default function Discover() {
     initializeTracking();
   }, [user?.id]);
 
-  useEffect(() => {
-    if (currentProfileId) {
-      loadSuperLikesCount();
-    }
-  }, [currentProfileId]);
-
-  // Load profiles when currentProfileId is set (triggered by loadCurrentProfile)
-  useEffect(() => {
-    if (currentProfileId) {
-      loadProfiles();
-    }
-  }, [currentProfileId]);
-
-  // Reload profiles when screen regains focus (returning from other tabs/screens)
+  // Refresh user data when screen regains focus (returning from other tabs/screens)
+  // Note: We intentionally do NOT reload profiles here to avoid resetting currentIndex
   const isFirstFocusForReload = useRef(true);
-  const filtersRef = useRef(filters);
-  filtersRef.current = filters;
   useFocusEffect(
     useCallback(() => {
       if (isFirstFocusForReload.current) {
         isFirstFocusForReload.current = false;
         return;
       }
-      // Reload profile (and filters from DB) when returning from settings
+      // Reload current user's profile and like count (e.g. after settings changes)
       loadCurrentProfile();
-      if (currentProfileIdRef.current) {
-        loadProfiles(undefined, undefined, filtersRef.current);
-      }
+      loadLikeCount();
     }, [])
   );
 
@@ -358,7 +357,9 @@ export default function Discover() {
 
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {
-        // App came to foreground
+        // App came to foreground - always refresh like count (handles day rollover)
+        loadLikeCount();
+
         // Skip on initial mount
         if (isInitialFocus.current) {
           return;
@@ -436,9 +437,9 @@ export default function Discover() {
         .map(p => {
           const photos = p.photos?.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
           const primaryPhoto = photos?.find(ph => ph.is_primary) || photos?.[0];
-          // Don't prefetch original URLs for blur-enabled profiles — use blur_data_uri instead
+          // Skip blur-enabled profiles — blur_data_uri is base64, not a prefetchable URL
           if (p.photo_blur_enabled && primaryPhoto?.blur_data_uri) {
-            return primaryPhoto.blur_data_uri;
+            return null;
           }
           return primaryPhoto?.url;
         })
@@ -520,8 +521,11 @@ export default function Discover() {
           photo_review_required,
           photo_verified,
           profile_complete,
+          super_likes_count,
+          super_likes_reset_date,
           photos (
             url,
+            storage_path,
             is_primary,
             display_order,
             blur_data_uri
@@ -538,7 +542,7 @@ export default function Discover() {
       const userGender = data.gender || null;
 
       // Get primary photo or first photo
-      const photos = data.photos?.sort((a: any, b: any) => a.display_order - b.display_order);
+      const photos = data.photos?.sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
       const primaryPhoto = photos?.find((p: any) => p.is_primary) || photos?.[0];
       const photoUrl = primaryPhoto?.url || null;
 
@@ -546,6 +550,33 @@ export default function Discover() {
       // Note: Supabase returns preferences as array even for single relationship
       const userPreferences = Array.isArray(data.preferences) ? data.preferences[0] : data.preferences;
       const df = userPreferences?.discovery_filters || {};
+
+      // Normalize stale persisted filter values (old format used display labels instead of DB values)
+      const LEGACY_VALUE_MAP: Record<string, string> = {
+        // Relationship types
+        'Platonic': 'platonic', 'Romantic': 'romantic', 'Open': 'open',
+        // Primary reasons
+        'Financial Benefits': 'financial', 'Financial Stability': 'financial',
+        'Immigration': 'immigration', 'Immigration/Visa': 'immigration',
+        'Family Pressure': 'family_pressure', 'Legal Benefits': 'legal_benefits',
+        'Companionship': 'companionship', 'Safety': 'safety', 'Safety & Protection': 'safety',
+        'Other': 'other',
+        // Housing
+        'Separate Homes': 'separate_homes', 'Separate Spaces': 'separate_spaces',
+        'Roommates': 'roommates', 'Shared Bedroom': 'shared_bedroom', 'Flexible': 'flexible',
+        // Financial
+        'Separate': 'separate', 'Shared Expenses': 'shared_expenses',
+        'Joint': 'joint', 'Prenup Required': 'prenup_required',
+        // Smoking/Drinking
+        'Never': 'never', 'Socially': 'socially', 'Regularly': 'regularly',
+        // Pets (old values were completely wrong type - discard them)
+        'Dogs': '', 'Cats': '', 'Both': '', 'Other Pets': '', 'No Pets': '',
+        // Religion partial match
+        'Spiritual': 'Spiritual but not religious',
+      };
+      const normArr = (arr: string[] | undefined): string[] =>
+        (arr || []).map(v => LEGACY_VALUE_MAP[v] ?? v).filter(Boolean);
+
       const initialFilters: FilterOptions = userPreferences ? {
         // Free filters
         ageMin: userPreferences.age_min || 18,
@@ -559,14 +590,14 @@ export default function Discover() {
         // Do NOT load from the user's own preferences columns (housing_preference,
         // relationship_type, etc.) — those are the user's OWN prefs, not filters
         // for other profiles.
-        housingPreference: df.housingPreference || [],
-        financialArrangement: df.financialArrangement || [],
-        smoking: df.smoking || [],
-        drinking: df.drinking || [],
-        pets: df.pets || [],
-        relationshipType: df.relationshipType || [],
-        primaryReason: df.primaryReason || [],
-        religion: df.religion || [],
+        housingPreference: normArr(df.housingPreference),
+        financialArrangement: normArr(df.financialArrangement),
+        smoking: normArr(df.smoking),
+        drinking: normArr(df.drinking),
+        pets: normArr(df.pets),
+        relationshipType: normArr(df.relationshipType),
+        primaryReason: normArr(df.primaryReason),
+        religion: normArr(df.religion),
         politicalViews: df.politicalViews || [],
         ethnicity: df.ethnicity || [],
         sexualOrientation: df.sexualOrientation || [],
@@ -590,6 +621,9 @@ export default function Discover() {
       setCurrentUserGender(userGender);
       setCurrentUserPhoto(photoUrl);
       setFilters(initialFilters);
+      setActiveToday(initialFilters.activeToday);
+      setTempAgeMin(initialFilters.ageMin);
+      setTempAgeMax(initialFilters.ageMax);
       setDistanceUnit(userDistanceUnit as DistanceUnit);
       setHeightUnit(userHeightUnit as HeightUnit);
       setIsAdmin(data.is_admin || false);
@@ -621,8 +655,22 @@ export default function Discover() {
         });
       }
 
-      // Profiles will be loaded by the useEffect([currentProfileId]) hook
-      // which fires when setCurrentProfileId is called above
+      // Process super likes count inline (saves a separate query)
+      const resetDate = new Date(data.super_likes_reset_date);
+      const now = new Date();
+      const daysSinceReset = Math.floor((now.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSinceReset >= 7) {
+        setSuperLikesRemaining(5);
+      } else {
+        setSuperLikesRemaining(5 - (data.super_likes_count || 0));
+      }
+
+      // Call loadProfiles directly on initial load (avoid render-cycle waterfall)
+      // loadProfiles uses currentProfileIdRef.current which is already set above
+      if (!hasInitiallyLoaded.current) {
+        hasInitiallyLoaded.current = true;
+        loadProfiles(undefined, undefined, initialFilters);
+      }
     } catch (error: any) {
       showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
       // Don't set loading=false here - keep showing loading screen until loadProfiles completes
@@ -665,41 +713,13 @@ export default function Discover() {
     }
   };
 
-  const loadSuperLikesCount = async () => {
-    if (!currentProfileId) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('super_likes_count, super_likes_reset_date')
-        .eq('id', currentProfileId)
-        .single();
-
-      if (error) throw error;
-
-      if (data) {
-        const resetDate = new Date(data.super_likes_reset_date);
-        const now = new Date();
-        const daysSinceReset = Math.floor((now.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
-
-        // Reset if week has passed
-        if (daysSinceReset >= 7) {
-          setSuperLikesRemaining(5);
-        } else {
-          setSuperLikesRemaining(5 - (data.super_likes_count || 0));
-        }
-      }
-    } catch (error) {
-      console.error('Error loading super likes count:', error);
-    }
-  };
-
   const checkLikeLimit = (): boolean => {
     // Premium users have unlimited likes
     if (isPremium) return true;
 
     // Free users have daily like limit (5 likes/day, unlimited browsing)
     if (likeCount >= DAILY_LIKE_LIMIT) {
+      showToast({ type: 'info', title: t('discover.dailyLimitTitle'), message: t('discover.dailyLimitMessage') });
       setShowPaywall(true);
 
       // Record when user hit like limit (for refresh notification)
@@ -922,21 +942,26 @@ export default function Discover() {
 
 
           if (nearbyIds.length > 0) {
+            // PERFORMANCE: Removed preferences:preferences(*) JOIN — RLS blocks other users'
+            // preferences anyway (always returns empty). Saves ~500ms on query execution.
+            // Compatibility is calculated using the current user's own preferences only.
             const { data: fullProfiles, error: profilesError } = await supabase
               .from('profiles')
               .select(`
                 *,
                 photos (
                   url,
+                  storage_path,
                   is_primary,
                   display_order,
                   blur_data_uri
-                ),
-                preferences:preferences(*)
+                )
               `)
               .in('id', nearbyIds)
-              .eq('is_active', true) // CRITICAL: Double-check banned users are filtered
-              .or('policy_restricted.is.null,policy_restricted.eq.false'); // Filter policy restricted
+              .eq('is_active', true)
+              .eq('profile_complete', true)
+              .eq('incognito_mode', false)
+              .or('policy_restricted.is.null,policy_restricted.eq.false');
 
             if (profilesError) {
               console.error('❌ Full profile fetch error:', profilesError);
@@ -959,6 +984,7 @@ export default function Discover() {
             *,
             photos (
               url,
+              storage_path,
               is_primary,
               display_order,
               blur_data_uri
@@ -994,12 +1020,9 @@ export default function Discover() {
           // Only search scalar text fields - NOT arrays
           query = query.or(
             `display_name.ilike.%${keyword}%,` +
-            `bio.ilike.%${keyword}%,` +
-            `occupation.ilike.%${keyword}%,` +
             `zodiac_sign.ilike.%${keyword}%,` +
             `location_city.ilike.%${keyword}%,` +
             `location_state.ilike.%${keyword}%,` +
-            `education.ilike.%${keyword}%,` +
             `religion.ilike.%${keyword}%,` +
             `personality_type.ilike.%${keyword}%,` +
             `political_views.ilike.%${keyword}%`
@@ -1068,89 +1091,52 @@ export default function Discover() {
         filteredData = filteredData.filter((p: any) => !swipedSet.has(p.id));
       }
 
-      // Contact blocking using server-side function for privacy
-      // This securely checks phone numbers without exposing them to the client
-      if (blockedPhoneHashes.size > 0) {
-        try {
-          // Call server-side function that has access to auth.users.phone
-          const { data: contactBlockedProfileIds, error: rpcError } = await supabase
-            .rpc('get_contact_blocked_profile_ids', {
-              requesting_profile_id: profileId
-            });
-
-          if (rpcError) {
-            console.error('Error fetching contact-blocked profiles:', rpcError);
-          } else if (contactBlockedProfileIds && contactBlockedProfileIds.length > 0) {
-            const blockedProfileIdSet = new Set(contactBlockedProfileIds);
-            const beforeCount = filteredData.length;
-            filteredData = filteredData.filter((p: any) => !blockedProfileIdSet.has(p.id));
-            const blockedCount = beforeCount - filteredData.length;
-
-            if (blockedCount > 0) {
-
-            }
-          }
-        } catch (error) {
-          console.error('Contact blocking error:', error);
-          // Don't fail the entire discovery flow if contact blocking fails
-        }
-      }
-
-      // SAFETY: Filter out profiles that have blocked viewer's country
-      // This protects users who don't want to be seen by people in specific countries
+      // PERF: Run contact blocking + country block queries in PARALLEL instead of sequentially
       const userCountry = currentUserData.location_country || 'US';
+      const profileIds = filteredData.map((p: any) => p.id);
 
-      // Only query country blocks if we have filtered data
-      if (userCountry && filteredData.length > 0) {
-        const profileIds = filteredData.map((p: any) => p.id);
+      const [contactBlockResult, countryBlockedResult, viewerBlockedResult] = await Promise.all([
+        // 1. Contact blocking using server-side function for privacy
+        blockedPhoneHashes.size > 0
+          ? supabase.rpc('get_contact_blocked_profile_ids', { requesting_profile_id: profileId })
+              .then(({ data, error }) => {
+                if (error) console.error('Error fetching contact-blocked profiles:', error);
+                return data || [];
+              })
+          : Promise.resolve([]),
+        // 2. Profiles that have blocked viewer's country
+        userCountry && profileIds.length > 0
+          ? supabase.from('country_blocks').select('profile_id')
+              .or(`country_code.eq.${userCountry},country_name.ilike.${userCountry}`)
+              .in('profile_id', profileIds)
+              .then(({ data }) => data || [])
+          : Promise.resolve([]),
+        // 3. Countries the viewer has blocked
+        supabase.from('country_blocks').select('country_code, country_name')
+          .eq('profile_id', profileId)
+          .then(({ data }) => data || []),
+      ]);
 
-        // Batch query for country blocks - check both country code AND country name
-        // This handles cases where location_country might be stored as 'Jamaica' or 'JM'
-        const { data: countryBlockedProfiles } = await supabase
-          .from('country_blocks')
-          .select('profile_id')
-          .or(`country_code.eq.${userCountry},country_name.ilike.${userCountry}`)
-          .in('profile_id', profileIds);
-
-        if (countryBlockedProfiles && countryBlockedProfiles.length > 0) {
-          const countryBlockedIds = new Set(countryBlockedProfiles.map(cb => cb.profile_id));
-          const filteredCount = filteredData.filter((p: any) => countryBlockedIds.has(p.id)).length;
-          if (filteredCount > 0) {
-
-          }
-          filteredData = filteredData.filter((p: any) => !countryBlockedIds.has(p.id));
-        }
+      // Apply contact blocking filter
+      if (contactBlockResult.length > 0) {
+        const blockedProfileIdSet = new Set(contactBlockResult);
+        filteredData = filteredData.filter((p: any) => !blockedProfileIdSet.has(p.id));
       }
 
-      // SAFETY: Filter out profiles FROM countries that the viewer has blocked
-      // This protects viewers from seeing profiles from countries they don't want to see
-      const { data: viewerBlockedCountries } = await supabase
-        .from('country_blocks')
-        .select('country_code, country_name')
-        .eq('profile_id', profileId);
+      // Apply country blocks (profiles that blocked viewer's country)
+      if (countryBlockedResult.length > 0) {
+        const countryBlockedIds = new Set(countryBlockedResult.map((cb: any) => cb.profile_id));
+        filteredData = filteredData.filter((p: any) => !countryBlockedIds.has(p.id));
+      }
 
-      if (viewerBlockedCountries && viewerBlockedCountries.length > 0) {
-        // Create sets for both country codes AND country names for flexible matching
-        const blockedCountryCodes = new Set(viewerBlockedCountries.map(cb => cb.country_code));
-        const blockedCountryNames = new Set(viewerBlockedCountries.map(cb => cb.country_name.toLowerCase()));
-
-        // Filter out profiles from blocked countries
+      // Apply viewer's blocked countries
+      if (viewerBlockedResult.length > 0) {
+        const blockedCountryCodes = new Set(viewerBlockedResult.map((cb: any) => cb.country_code));
+        const blockedCountryNames = new Set(viewerBlockedResult.map((cb: any) => cb.country_name?.toLowerCase()));
         filteredData = filteredData.filter((p: any) => {
-          // Check if profile's location_country matches either the code or name
           if (p.location_country) {
-            const profileCountry = p.location_country.toLowerCase();
-
-            // Check against country codes (e.g., 'JM')
-            if (blockedCountryCodes.has(p.location_country)) {
-
-              return false;
-            }
-
-            // Check against country names (e.g., 'Jamaica')
-            if (blockedCountryNames.has(profileCountry)) {
-
-              return false;
-            }
+            if (blockedCountryCodes.has(p.location_country)) return false;
+            if (blockedCountryNames.has(p.location_country.toLowerCase())) return false;
           }
           return true;
         });
@@ -1164,9 +1150,25 @@ export default function Discover() {
       const transformedProfiles: Profile[] = filteredData
         .map((profile: any) => {
 
-          // Start with default compatibility score for fast initial render
+          // PERF: Calculate score + breakdown in a single pass (was previously double-calculating)
           let compatibilityScore = 75;
           let compatibilityBreakdown = undefined;
+          const profilePrefs = Array.isArray(profile.preferences) ? profile.preferences[0] : profile.preferences;
+          const effectiveProfilePrefs = profilePrefs || {};
+          if (currentUserData.preferences) {
+            try {
+              const result = calculateScoreAndBreakdown(
+                currentUserData as any,
+                profile as any,
+                currentUserData.preferences,
+                effectiveProfilePrefs
+              );
+              compatibilityScore = result.score;
+              compatibilityBreakdown = result.breakdown;
+            } catch (err) {
+              console.warn('⚠️ Compatibility calculation failed for profile:', profile.id, err);
+            }
+          }
 
           // FIX #2: Calculate real distance using helper function (eliminates duplicate calculations)
           let distance = null;
@@ -1183,7 +1185,7 @@ export default function Discover() {
             ethnicity: profile.ethnicity,
             location_city: profile.location_city,
             location_state: profile.location_state,
-            bio: profile.bio,
+            hometown: profile.hometown,
             occupation: profile.occupation,
             education: profile.education,
             height_inches: profile.height_inches,
@@ -1197,13 +1199,14 @@ export default function Discover() {
             interests: profile.interests,
             is_verified: profile.is_verified,
             prompt_answers: profile.prompt_answers,
-            photos: profile.photos?.sort((a: any, b: any) => a.display_order - b.display_order),
+            photos: profile.photos?.sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0)),
             compatibility_score: compatibilityScore,
             compatibilityBreakdown: compatibilityBreakdown,
             distance: distance,
             voice_intro_url: profile.voice_intro_url,
             voice_intro_duration: profile.voice_intro_duration,
             photo_blur_enabled: profile.photo_blur_enabled || false,
+            field_visibility: profile.field_visibility,
             hide_distance: profile.hide_distance || false,
             hide_last_active: profile.hide_last_active || false,
             last_active_at: profile.last_active_at,
@@ -1255,9 +1258,6 @@ export default function Discover() {
             // Build searchable text from all profile fields
             const searchableFields = [
               profile.display_name, // Allow searching by name
-              profile.bio,
-              profile.occupation,
-              profile.education,
               profile.zodiac_sign,
               profile.personality_type,
               profile.love_language,
@@ -1270,10 +1270,10 @@ export default function Discover() {
               profile.ethnicity, // Allow searching by ethnicity
               ...(profile.hobbies || []),
               ...(profile.languages_spoken || []),
-              ...(profile.prompt_answers?.map((pa: any) => pa.answer) || []),
+              ...(profile.prompt_answers?.flatMap((pa: any) => [pa.prompt, pa.answer]) || []),
             ];
 
-            // Handle interests (JSONB object with arrays)
+            // Handle interests (JSONB object with arrays: movies, music, books, tv_shows)
             if (profile.interests && typeof profile.interests === 'object') {
               Object.values(profile.interests).forEach((arr: any) => {
                 if (Array.isArray(arr)) {
@@ -1282,16 +1282,18 @@ export default function Discover() {
               });
             }
 
-            // Handle preferences fields (if searching in preferences is desired)
+            // Handle preferences fields
             if (profile.preferences) {
               const prefs = profile.preferences;
               searchableFields.push(
                 // Support both legacy primary_reason and new primary_reasons array
                 prefs.primary_reasons ? prefs.primary_reasons.join(' ') : prefs.primary_reason,
                 prefs.relationship_type,
-                prefs.financial_arrangement,
-                prefs.housing_preference,
-                prefs.children_arrangement
+                ...(Array.isArray(prefs.financial_arrangement) ? prefs.financial_arrangement : []),
+                ...(Array.isArray(prefs.housing_preference) ? prefs.housing_preference : []),
+                ...(Array.isArray(prefs.children_arrangement) ? prefs.children_arrangement : []),
+                ...(Array.isArray(prefs.dealbreakers) ? prefs.dealbreakers : []),
+                ...(Array.isArray(prefs.must_haves) ? prefs.must_haves : []),
               );
             }
 
@@ -1328,24 +1330,14 @@ export default function Discover() {
 
 
           // 1b. RELATIONSHIP TYPE / INTENTION FILTER (quick filter)
-          if (selectedIntentionRef.current && profile.preferences?.relationship_type) {
-            if (profile.preferences.relationship_type !== selectedIntentionRef.current) {
-
+          if (selectedIntentionRef.current) {
+            if (!profile.preferences?.relationship_type || profile.preferences.relationship_type !== selectedIntentionRef.current) {
               return false;
             }
           }
 
 
-          // 1c. ACTIVE TODAY FILTER (quick filter)
-          if (effectiveFilters.activeToday && profile.last_active_at) {
-            const lastActive = new Date(profile.last_active_at);
-            const now = new Date();
-            const hoursSinceActive = (now.getTime() - lastActive.getTime()) / (1000 * 60 * 60);
-            if (hoursSinceActive > 24) {
-
-              return false;
-            }
-          }
+          // 1c. ACTIVE TODAY FILTER is applied below with other free filters
 
 
           // 2. GENDER PREFERENCE - handled by RPC (p_gender_prefs), no client-side duplicate needed
@@ -1398,24 +1390,8 @@ export default function Discover() {
           // AND profile is NOT in current user's preferred cities
           if (!userSearchGlobally && !profileInUserPreferredCity) {
 
-            // Recalculate distance in real-time (avoid stale data)
-            let realTimeDistance = profile.distance;
-            if (currentUserData.latitude && currentUserData.longitude &&
-                profile.latitude && profile.longitude) {
-              const R = 3959; // Earth's radius in miles
-              const dLat = ((profile.latitude - currentUserData.latitude) * Math.PI) / 180;
-              const dLon = ((profile.longitude - currentUserData.longitude) * Math.PI) / 180;
-              const a =
-                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos((currentUserData.latitude * Math.PI) / 180) *
-                  Math.cos((profile.latitude * Math.PI) / 180) *
-                  Math.sin(dLon / 2) *
-                  Math.sin(dLon / 2);
-              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-              realTimeDistance = Math.round(R * c);
-            }
-
-            if (realTimeDistance !== null && realTimeDistance > effectiveFilters.maxDistance) {
+            // Use pre-calculated distance (computed earlier via calculateDistance)
+            if (profile.distance !== null && profile.distance !== undefined && profile.distance > effectiveFilters.maxDistance) {
 
               return false;
             }
@@ -1622,16 +1598,22 @@ export default function Discover() {
           // PREMIUM FILTERS - Marriage Intentions
           // ====================================================================
 
-          // Primary reason filter
-          if (isPremium && effectiveFilters.primaryReason.length > 0 && profile.preferences?.primary_reason) {
-            if (!effectiveFilters.primaryReason.includes(profile.preferences.primary_reason)) {
-              return false;
+          // Primary reason filter (supports both legacy scalar and new array)
+          if (isPremium && effectiveFilters.primaryReason.length > 0) {
+            const profileReasons = profile.preferences?.primary_reasons
+              ? (Array.isArray(profile.preferences.primary_reasons) ? profile.preferences.primary_reasons : [profile.preferences.primary_reasons])
+              : (profile.preferences?.primary_reason ? [profile.preferences.primary_reason] : []);
+            if (profileReasons.length > 0) {
+              const hasMatch = profileReasons.some((r: string) => effectiveFilters.primaryReason.includes(r));
+              if (!hasMatch) {
+                return false;
+              }
             }
           }
 
           // Relationship type filter
-          if (isPremium && effectiveFilters.relationshipType.length > 0 && profile.preferences?.relationship_type) {
-            if (!effectiveFilters.relationshipType.includes(profile.preferences.relationship_type)) {
+          if (isPremium && effectiveFilters.relationshipType.length > 0) {
+            if (!profile.preferences?.relationship_type || !effectiveFilters.relationshipType.includes(profile.preferences.relationship_type)) {
               return false;
             }
           }
@@ -1709,74 +1691,43 @@ export default function Discover() {
 
 
 
-      setProfiles(sortedProfiles);
+      // PERFORMANCE: Sign first few profiles immediately, show them, then sign rest in background.
+      // This gets the first profile on screen 1-3 seconds faster than signing all 50 at once.
+      const IMMEDIATE_BATCH = 5;
+      const firstBatch = sortedProfiles.slice(0, IMMEDIATE_BATCH);
+      const restBatch = sortedProfiles.slice(IMMEDIATE_BATCH);
+
+      // Sign first batch — this is what the user sees immediately
+      const signedFirst = await signProfileMediaUrls(firstBatch);
+
+      // Show profiles NOW (first batch signed, rest unsigned but will be signed before user reaches them)
+      setProfiles([...signedFirst, ...restBatch]);
       setCurrentIndex(0);
       hasInitiallyLoaded.current = true;
 
-      // ANR FIX: Calculate compatibility scores after animations complete
-      // InteractionManager.runAfterInteractions waits for all animations/transitions to finish
-      // This prevents blocking the UI thread and avoids ANR on Android
-      InteractionManager.runAfterInteractions(() => {
-        if (currentUserData.preferences && sortedProfiles.length > 0) {
-          // Process in batches to avoid blocking main thread
-          const BATCH_SIZE = 5;
-          let currentBatch = 0;
-          const totalBatches = Math.ceil(sortedProfiles.length / BATCH_SIZE);
-          let updatedProfiles = [...sortedProfiles];
-
-          const processBatch = () => {
-            const start = currentBatch * BATCH_SIZE;
-            const end = Math.min(start + BATCH_SIZE, sortedProfiles.length);
-
-            for (let i = start; i < end; i++) {
-              const profile = sortedProfiles[i];
-              try {
-                if (profile.preferences) {
-                  const compatibilityScore = calculateCompatibilityScore(
-                    currentUserData as any,
-                    profile as any,
-                    currentUserData.preferences,
-                    profile.preferences
-                  );
-                  const compatibilityBreakdown = getCompatibilityBreakdown(
-                    currentUserData as any,
-                    profile as any,
-                    currentUserData.preferences,
-                    profile.preferences
-                  );
-                  updatedProfiles[i] = { ...profile, compatibility_score: compatibilityScore, compatibilityBreakdown };
-                }
-              } catch (err) {
-                console.error('Error calculating compatibility for profile:', profile.id, err);
-              }
-            }
-
-            currentBatch++;
-            if (currentBatch < totalBatches) {
-              // Process next batch on next frame to keep UI responsive
-              requestAnimationFrame(processBatch);
-            } else {
-              // All batches done, update state once
-              setProfiles(updatedProfiles);
-            }
-          };
-
-          processBatch();
-        }
-      });
-
       // Prefetch images for the first few profiles for instant loading
-      // For blur-enabled profiles, prefetch blur_data_uri instead of original URL to protect privacy
-      const imagesToPrefetch = sortedProfiles
-        .slice(0, 5) // Prefetch first 5 profiles
-        .flatMap(p => p.photos?.map(photo => {
-          if (p.photo_blur_enabled && photo.blur_data_uri) return photo.blur_data_uri;
-          return photo.url;
-        }) || [])
+      const imagesToPrefetch = signedFirst
+        .flatMap(p => {
+          if (p.photo_blur_enabled) return [];
+          return p.photos?.map(photo => photo.url) || [];
+        })
         .filter(Boolean);
 
       if (imagesToPrefetch.length > 0) {
         prefetchImages(imagesToPrefetch);
+      }
+
+      // Sign remaining profiles in background (non-blocking)
+      if (restBatch.length > 0) {
+        signProfileMediaUrls(restBatch).then(signedRest => {
+          setProfiles(prev => {
+            // Only update if profiles haven't been completely replaced (e.g., by a refresh)
+            if (prev.length >= IMMEDIATE_BATCH + restBatch.length) {
+              return [...prev.slice(0, IMMEDIATE_BATCH), ...signedRest];
+            }
+            return prev;
+          });
+        }).catch(err => console.warn('Background URL signing failed:', err));
       }
     } catch (error: any) {
       console.error('❌ Error loading profiles:', error);
@@ -1792,17 +1743,11 @@ export default function Discover() {
       return false;
     }
 
-    // Block swiping if profile is incomplete
+    // In preview mode, allow passing so users can browse profiles
+    // But skip recording the pass if profile is incomplete (no profile row to reference)
     if (!isProfileComplete) {
-      Alert.alert(
-        'Complete Your Profile',
-        'You need to finish setting up your profile before you can start matching.',
-        [
-          { text: 'Later', style: 'cancel' },
-          { text: 'Complete Profile', onPress: () => router.push('/(onboarding)/basic-info') }
-        ]
-      );
-      return false;
+      transitionToNextProfile();
+      return true;
     }
 
     // Passing (swiping left) is unlimited for all users
@@ -1851,7 +1796,7 @@ export default function Discover() {
       console.error('❌ Error recording pass:', error);
       return false;
     }
-  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete]);
+  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete, transitionToNextProfile]);
 
   const handleSwipeRight = useCallback(async (message?: string, likedContentData?: { type: string; prompt?: string; answer?: string; index?: number }): Promise<boolean> => {
     if (!currentProfileId || currentIndex >= profiles.length) {
@@ -1860,12 +1805,16 @@ export default function Discover() {
 
     // Block swiping if profile is incomplete
     if (!isProfileComplete) {
+      const destination = returnRoute || '/(onboarding)/basic-info';
       Alert.alert(
-        'Complete Your Profile',
-        'You need to finish setting up your profile before you can start matching.',
+        t('discover.completeProfile.title'),
+        t('discover.completeProfile.message'),
         [
-          { text: 'Later', style: 'cancel' },
-          { text: 'Complete Profile', onPress: () => router.push('/(onboarding)/basic-info') }
+          { text: t('common.later'), style: 'cancel' },
+          { text: t('discover.completeProfile.button'), onPress: () => {
+            exitPreviewMode();
+            router.replace(destination as any);
+          }}
         ]
       );
       return false;
@@ -2085,19 +2034,23 @@ export default function Discover() {
       }
       return false;
     }
-  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete]);
+  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete, returnRoute, exitPreviewMode]);
 
   const handleSwipeUp = useCallback(async (): Promise<boolean> => {
     if (!currentProfileId || currentIndex >= profiles.length) return false;
 
     // Block swiping if profile is incomplete
     if (!isProfileComplete) {
+      const destination = returnRoute || '/(onboarding)/basic-info';
       Alert.alert(
-        'Complete Your Profile',
-        'You need to finish setting up your profile before you can start matching.',
+        t('discover.completeProfile.title'),
+        t('discover.completeProfile.message'),
         [
-          { text: 'Later', style: 'cancel' },
-          { text: 'Complete Profile', onPress: () => router.push('/(onboarding)/basic-info') }
+          { text: t('common.later'), style: 'cancel' },
+          { text: t('discover.completeProfile.button'), onPress: () => {
+            exitPreviewMode();
+            router.replace(destination as any);
+          }}
         ]
       );
       return false;
@@ -2110,11 +2063,11 @@ export default function Discover() {
     if (!isPremium) {
       // Free users need to upgrade - show alert and return immediately
       Alert.alert(
-        '💜 Upgrade to Premium',
-        'Super likes are a Premium feature! Upgrade to send 5 super likes per week.',
+        t('discover.premium.upgradeTitle'),
+        t('discover.premium.superLikesMessage'),
         [
           { text: t('common.cancel'), style: 'cancel' },
-          { text: 'Upgrade', onPress: () => setShowPaywall(true) },
+          { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
         ]
       );
       return false; // Don't proceed with the swipe
@@ -2152,8 +2105,8 @@ export default function Discover() {
         if (currentCount >= weeklyLimit) {
           // Premium users hit their limit
           Alert.alert(
-            '✨ Super Like Limit Reached',
-            `You've used all 5 super likes this week. Your super likes will reset next ${getDayName((resetDate.getDay() + 7) % 7)}.`,
+            t('discover.premium.superLikeLimitTitle'),
+            t('discover.premium.superLikeLimitMessage', { day: getDayName((resetDate.getDay() + 7) % 7) }),
             [{ text: 'OK' }]
           );
           return false; // Don't proceed with the swipe
@@ -2299,23 +2252,23 @@ export default function Discover() {
       }
       return false;
     }
-  }, [currentProfileId, currentIndex, profiles, isPremium, isProfileComplete]);
+  }, [currentProfileId, currentIndex, profiles, isPremium, isProfileComplete, returnRoute, exitPreviewMode]);
 
   // Helper function to get day name
   const getDayName = (day: number) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[day];
+    const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    return t(`common.days.${dayKeys[day]}`);
   };
 
   const handleRewind = useCallback(async () => {
     // Premium-only feature
     if (!isPremium) {
       Alert.alert(
-        '💜 Upgrade to Premium',
-        'Rewind is a Premium feature! Upgrade to undo your last swipe.',
+        t('discover.premium.upgradeTitle'),
+        t('discover.premium.rewindMessage'),
         [
           { text: t('common.cancel'), style: 'cancel' },
-          { text: 'Upgrade', onPress: () => setShowPaywall(true) },
+          { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
         ]
       );
       return;
@@ -2676,7 +2629,7 @@ export default function Discover() {
     const { width } = Dimensions.get('window');
 
     return (
-      <View className="flex-1 bg-background items-center justify-center overflow-hidden">
+      <View className="flex-1 items-center justify-center overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
         {/* Floating hearts background */}
         {[...Array(8)].map((_, i) => (
           <MotiView
@@ -2771,7 +2724,7 @@ export default function Discover() {
           key={loadingMessageIndex}
           style={{ marginTop: 32 }}
         >
-          <Text className="text-muted-foreground text-base font-sans-medium text-center px-8">
+          <Text className="text-base font-sans-medium text-center px-8" style={{ color: '#6B7280' }}>
             {loadingMessages[loadingMessageIndex]}
           </Text>
         </MotiView>
@@ -2806,27 +2759,27 @@ export default function Discover() {
   // Empty state - no more profiles (only show after first load completes)
   if (hasInitiallyLoaded.current && currentIndex >= profiles.length) {
     return (
-      <View className="flex-1 bg-background">
+      <View className="flex-1" style={{ backgroundColor: '#FFFFFF' }}>
         {/* Header with Search/Filter Controls */}
-        <View className="bg-background dark:bg-background pb-4 px-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
+        <View className="pb-0" style={{ backgroundColor: '#FFFFFF', paddingTop: insets.top + 16 }}>
           {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
           <View className="flex-row items-center mb-3">
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8 }}
+              contentContainerStyle={{ gap: 6, paddingLeft: 12, paddingRight: 12, alignItems: 'center' }}
               style={{ flex: 1 }}
             >
               <TouchableOpacity
-                className="bg-muted rounded-full p-2.5"
+                style={{ backgroundColor: '#FFFFFF', height: 33, paddingHorizontal: 4, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', }}
                 onPress={() => setShowFilterModal(true)}
               >
-                <MaterialCommunityIcons name="filter-variant" size={20} color={colors.foreground} />
+                <MaterialCommunityIcons name="tune-vertical" size={26} color={colors.foreground} />
               </TouchableOpacity>
 
               {/* Age Quick Filter */}
               <TouchableOpacity
-                className="bg-muted rounded-full px-3 py-2 flex-row items-center"
+                style={{ backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#000', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => {
                   setTempAgeMin(filters.ageMin);
                   setTempAgeMax(filters.ageMax);
@@ -2834,25 +2787,25 @@ export default function Discover() {
                   setShowIntentionDropdown(false);
                 }}
               >
-                <Text className="text-foreground text-sm font-medium">Age</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.age')}</Text>
                 <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
               </TouchableOpacity>
 
               {/* Intention Quick Filter */}
               <TouchableOpacity
-                className="bg-muted rounded-full px-3 py-2 flex-row items-center"
+                style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => {
                   setShowIntentionDropdown(!showIntentionDropdown);
                   setShowAgeSlider(false);
                 }}
               >
-                <Text className="text-foreground text-sm font-medium">Dating Intentions</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.datingIntentions')}</Text>
                 <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
               </TouchableOpacity>
 
               {/* Active Today Toggle */}
               <TouchableOpacity
-                className={`rounded-full px-3 py-2 flex-row items-center ${activeToday ? 'bg-lavender-500' : 'bg-muted'}`}
+                style={{ backgroundColor: activeToday ? '#A08AB7' : '#FFFFFF', borderWidth: 1, borderColor: activeToday ? '#A08AB7' : '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => {
                   const newActiveToday = !activeToday;
                   setActiveToday(newActiveToday);
@@ -2862,38 +2815,26 @@ export default function Discover() {
                 }}
               >
                 <MaterialCommunityIcons name="clock-outline" size={16} color={activeToday ? 'white' : colors.foreground} style={{ marginRight: 4 }} />
-                <Text className={`text-sm font-medium ${activeToday ? 'text-white' : 'text-foreground'}`}>Active Today</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: activeToday ? '#fff' : '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.activeToday')}</Text>
               </TouchableOpacity>
-            </ScrollView>
 
-            {/* Right side - Search, Refresh */}
-            <View className="flex-row gap-2 ml-2">
-              {!isPremium && (
-                <TouchableOpacity
-                  className="bg-gold-500 rounded-full px-3 py-2 flex-row items-center gap-1"
-                  style={{ backgroundColor: '#FFD700' }}
-                  onPress={() => setShowPaywall(true)}
-                >
-                  <MaterialCommunityIcons name="crown" size={16} color="#A08AB7" />
-                  <Text className="text-lavender-500 font-sans-bold text-xs">Upgrade</Text>
-                </TouchableOpacity>
-              )}
+              {/* Search */}
               <TouchableOpacity
-                className="bg-muted rounded-full p-2.5"
+                style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => setShowSearchBar(!showSearchBar)}
               >
-                <MaterialCommunityIcons name="magnify" size={20} color={colors.foreground} />
+                <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.search')}</Text>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
 
           {/* Age Slider Panel */}
           {showAgeSlider && (
-            <View className="mt-3 bg-card dark:bg-card rounded-xl shadow-lg border border-border p-4">
-              <Text className="text-foreground font-semibold mb-3">Age Range: {tempAgeMin} - {tempAgeMax}</Text>
+            <View className="mt-3 rounded-xl shadow-lg p-4" style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB' }}>
+              <Text className="font-semibold mb-3" style={{ color: '#1F2937' }}>{t('discover.ageSlider.ageRange', { min: tempAgeMin, max: tempAgeMax })}</Text>
 
               <View className="mb-4">
-                <Text className="text-muted-foreground text-sm mb-2">Minimum: {tempAgeMin}</Text>
+                <Text className="text-sm mb-2" style={{ color: '#6B7280' }}>{t('discover.ageSlider.minimum', { value: tempAgeMin })}</Text>
                 <Slider
                   minimumValue={18}
                   maximumValue={80}
@@ -2907,7 +2848,7 @@ export default function Discover() {
               </View>
 
               <View className="mb-4">
-                <Text className="text-muted-foreground text-sm mb-2">Maximum: {tempAgeMax}</Text>
+                <Text className="text-sm mb-2" style={{ color: '#6B7280' }}>{t('discover.ageSlider.maximum', { value: tempAgeMax })}</Text>
                 <Slider
                   minimumValue={18}
                   maximumValue={80}
@@ -2922,10 +2863,14 @@ export default function Discover() {
 
               <View className="flex-row gap-2">
                 <TouchableOpacity
-                  className="flex-1 bg-muted rounded-full py-2"
-                  onPress={() => setShowAgeSlider(false)}
+                  className="flex-1 rounded-full py-2" style={{ backgroundColor: '#F9FAFB' }}
+                  onPress={() => {
+                    setTempAgeMin(filters.ageMin);
+                    setTempAgeMax(filters.ageMax);
+                    setShowAgeSlider(false);
+                  }}
                 >
-                  <Text className="text-center text-foreground font-medium">Cancel</Text>
+                  <Text className="text-center font-medium" style={{ color: '#1F2937' }}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   className="flex-1 bg-lavender-500 rounded-full py-2"
@@ -2936,7 +2881,7 @@ export default function Discover() {
                     loadProfiles(undefined, undefined, newFilters);
                   }}
                 >
-                  <Text className="text-center text-white font-medium">Apply</Text>
+                  <Text className="text-center text-white font-medium">{t('filters.applyFilters')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2944,7 +2889,7 @@ export default function Discover() {
 
           {/* Intention Dropdown */}
           {showIntentionDropdown && (
-            <View className="absolute top-full left-24 mt-1 bg-card dark:bg-card rounded-xl shadow-lg border border-border z-50" style={{ minWidth: 120 }}>
+            <View className="absolute top-full left-24 mt-1 rounded-xl shadow-lg z-50" style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', minWidth: 120 }}>
               {INTENTIONS.map((intention, index) => (
                 <TouchableOpacity
                   key={index}
@@ -2955,8 +2900,8 @@ export default function Discover() {
                     loadProfiles();
                   }}
                 >
-                  <Text className={`text-sm ${selectedIntention === intention.value ? 'text-lavender-500 font-semibold' : 'text-foreground'}`}>
-                    {intention.label}
+                  <Text style={{ fontSize: 12, fontWeight: selectedIntention === intention.value ? '600' : '400', color: selectedIntention === intention.value ? '#A08AB7' : '#1F2937' }}>
+                    {getIntentionLabel(intention.value)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -2966,11 +2911,11 @@ export default function Discover() {
           {/* Keyword Search Bar - Expanded when showSearchBar is true */}
           {showSearchBar && (
             <View className="mt-3">
-              <View className="flex-row items-center bg-muted rounded-full px-4 py-2">
+              <View className="flex-row items-center rounded-full px-4 py-2" style={{ backgroundColor: '#F9FAFB' }}>
                 <MaterialCommunityIcons name="magnify" size={20} color="#71717A" />
                 <TextInput
-                  className="flex-1 ml-2 text-foreground text-base"
-                  placeholder="Search by keyword (e.g., 'travel', 'vegan')"
+                  className="flex-1 ml-2 text-base" style={{ color: '#1F2937' }}
+                  placeholder={t('discover.search.placeholder')}
                   placeholderTextColor="#A1A1AA"
                   value={searchKeyword}
                   onChangeText={setSearchKeyword}
@@ -2985,7 +2930,7 @@ export default function Discover() {
                 )}
                 {!isSearchMode && searchKeyword.trim() && (
                   <TouchableOpacity onPress={handleSearch} className="ml-2 bg-lavender-500 rounded-full px-3 py-1">
-                    <Text className="text-white font-semibold text-sm">Search</Text>
+                    <Text className="text-white font-semibold text-sm">{t('discover.search.button')}</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -3001,8 +2946,8 @@ export default function Discover() {
                 </TouchableOpacity>
               </View>
               {isSearchMode && (
-                <Text className="text-muted-foreground text-xs mt-2 text-center">
-                  💡 Tip: Like or pass to continue searching. Clear search to see all profiles.
+                <Text className="text-xs mt-2 text-center" style={{ color: '#6B7280' }}>
+                  {t('discover.search.tip')}
                 </Text>
               )}
             </View>
@@ -3011,85 +2956,127 @@ export default function Discover() {
 
         {/* Smart Empty State with Dynamic Recommendations */}
         <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, justifyContent: 'center' }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#A08AB7" />
+          }
         >
           {isSearchMode ? (
             /* Search Mode Empty State */
             <View className="items-center">
               <Text className="text-6xl mb-4">🔍</Text>
-              <Text className="text-2xl font-display-bold text-foreground mb-3 text-center">
-                No results for "{searchKeyword}"
+              <Text className="text-2xl font-display-bold mb-3 text-center" style={{ color: '#1F2937' }}>
+                {t('discover.search.noResults', { keyword: searchKeyword })}
               </Text>
-              <Text className="text-muted-foreground mb-6 text-center text-base font-sans">
-                Try different keywords or adjust your filters to find more matches.
+              <Text className="mb-6 text-center text-base font-sans" style={{ color: '#6B7280' }}>
+                {t('discover.search.noResultsHint')}
               </Text>
               <TouchableOpacity
                 className="bg-lavender-500 rounded-full py-4 px-8 shadow-lg"
                 onPress={handleClearSearch}
               >
-                <Text className="text-white font-sans-bold text-lg">Clear Search</Text>
+                <Text className="text-white font-sans-bold text-lg">{t('discover.search.clearSearch')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
             /* Smart Recommendations System */
             <View>
               {/* Hero Section */}
-              <View className="items-center mb-8">
-                <Text className="text-6xl mb-4">✨</Text>
-                <Text className="text-2xl font-display-bold text-foreground mb-2 text-center">
-                  You've Seen All Available Matches!
+              <View className="items-center" style={{ marginBottom: 24 }}>
+                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(160, 138, 183, 0.12)' }} className="items-center justify-center" >
+                  <MaterialCommunityIcons name="check-circle-outline" size={32} color="#A08AB7" />
+                </View>
+                <Text className="text-center" style={{ fontSize: 24, fontWeight: '700', letterSpacing: -0.5, marginTop: 16, marginBottom: 6, color: '#1F2937' }}>
+                  {t('discover.emptyState.allCaughtUp')}
                 </Text>
-                <Text className="text-muted-foreground text-center text-base font-sans leading-6">
-                  Don't worry—we're actively looking for more perfect matches for you. Meanwhile, here are some ways to discover even more connections!
+                <Text className="text-center font-sans" style={{ fontSize: 15, lineHeight: 21, maxWidth: 280, color: '#6B7280' }}>
+                  {t('discover.emptyState.checkBack')}
                 </Text>
               </View>
 
-              {/* Smart Recommendations - Dynamically shows relevant suggestions */}
-              <View className="mb-6">
-                <Text className="text-lg font-display-bold text-foreground mb-4">
-                  Smart Suggestions to Find More Matches
+              {/* Premium CTA Banner */}
+              {!isPremium && (
+                <TouchableOpacity
+                  style={{
+                    borderRadius: 16,
+                    overflow: 'hidden',
+                    marginBottom: 24,
+                    backgroundColor: '#A08AB7',
+                    shadowColor: '#A08AB7',
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 12,
+                    elevation: 5,
+                  }}
+                  onPress={() => {
+                    trackEvent('empty_state_premium_cta_clicked', { source: 'discover_empty_state' });
+                    setShowPaywall(true);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16 }}>
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <MaterialCommunityIcons name="crown" size={18} color="rgba(255,255,255,0.9)" />
+                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginLeft: 6 }}>
+                          {t('discover.premiumCta.goPremium')}
+                        </Text>
+                      </View>
+                      <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 18 }}>
+                        {t('discover.premiumCta.description')}
+                      </Text>
+                    </View>
+                    <View style={{
+                      backgroundColor: '#fff',
+                      borderRadius: 20,
+                      paddingHorizontal: 18,
+                      paddingVertical: 10,
+                    }}>
+                      <Text style={{ color: '#A08AB7', fontSize: 14, fontWeight: '700' }}>{t('discover.premiumCta.upgrade')}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Smart Recommendations */}
+              {smartRecommendations.length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                <Text className="uppercase" style={{ fontSize: 12, fontWeight: '600', letterSpacing: 1.2, textAlign: 'center', marginBottom: 10, color: '#6B7280' }}>
+                  {t('discover.recommendations.expandReach')}
                 </Text>
 
-                <View className="gap-3">
-                  {/* Dynamic Smart Recommendations from Database */}
+                <View style={{ gap: 8 }}>
                   {smartRecommendations.map((rec, index) => {
                     const getIcon = () => {
                       switch (rec.type) {
                         case 'distance': return 'map-marker-radius';
                         case 'age': return 'calendar-range';
-                        case 'gender': return 'gender-transgender';
+                        case 'gender': return 'account-plus-outline';
                         case 'global': return 'earth';
                         default: return 'star';
                       }
                     };
 
                     const getTitle = () => {
-                      const count = rec.count || 0;
-                      const countText = count >= 1000 ? `${Math.floor(count / 1000)}k+` : `${count}`;
-
                       switch (rec.type) {
                         case 'distance':
-                          return `Increase distance by ${rec.increment} miles`;
+                          return t('discover.recommendations.increaseDistance', { count: rec.increment });
                         case 'age':
-                          return `Expand age range by ${rec.increment} years`;
+                          return t('discover.recommendations.widenAge', { count: rec.increment });
                         case 'gender':
-                          return `Add ${rec.addedGender} to your preferences`;
+                          return t('discover.recommendations.includeGender', { gender: rec.addedGender });
                         case 'global':
-                          return 'Search globally';
+                          return t('discover.recommendations.searchGlobally');
                         default:
-                          return 'Expand your search';
+                          return t('discover.recommendations.expandSearch');
                       }
                     };
 
-                    const getCountLabel = () => {
+                    const getSubtitle = () => {
                       const count = rec.count || 0;
-                      if (count >= 1000) {
-                        return `${(count / 1000).toFixed(1)}k+ matches`;
-                      } else if (count > 0) {
-                        return `${count} ${count === 1 ? 'match' : 'matches'}`;
-                      }
+                      if (count >= 1000) return t('discover.recommendations.newProfilesK', { count: parseFloat((count / 1000).toFixed(1)) });
+                      if (count === 1) return t('discover.recommendations.newProfileSingular');
+                      if (count > 0) return t('discover.recommendations.newProfiles', { count });
                       return '';
                     };
 
@@ -3098,38 +3085,33 @@ export default function Discover() {
                       try {
                         if (rec.type === 'distance' && rec.newDistance) {
 
-                          // Update state for UI and pass directly to loadProfiles to avoid React timing issue
                           setFilters({ ...filters, maxDistance: rec.newDistance });
-                          setCurrentIndex(0); // Reset to show new profiles from beginning
+                          setCurrentIndex(0);
                           trackEvent('smart_recommendation_clicked', {
                             type: 'distance',
                             increment: rec.increment,
                             count: rec.count
                           });
-                          // Pass new filter value directly to avoid stale state
                           loadProfiles(undefined, undefined, { maxDistance: rec.newDistance });
                         } else if (rec.type === 'age' && rec.newAgeMin && rec.newAgeMax) {
 
-                          // Update state for UI and pass directly to loadProfiles to avoid React timing issue
                           setFilters({ ...filters, ageMin: rec.newAgeMin, ageMax: rec.newAgeMax });
-                          setCurrentIndex(0); // Reset to show new profiles from beginning
+                          setCurrentIndex(0);
                           trackEvent('smart_recommendation_clicked', {
                             type: 'age',
                             increment: rec.increment,
                             count: rec.count
                           });
-                          // Pass new filter values directly to avoid stale state
                           loadProfiles(undefined, undefined, { ageMin: rec.newAgeMin, ageMax: rec.newAgeMax });
                         } else if (rec.type === 'gender' && rec.addedGender) {
-                          // Confirm before modifying gender preferences
                           const addedGender = rec.addedGender;
                           Alert.alert(
-                            'Update Preferences?',
-                            `Add "${addedGender}" to your gender preferences? You can change this anytime in Settings > Matching Preferences.`,
+                            t('discover.recommendations.updatePreferencesTitle'),
+                            t('discover.recommendations.updatePreferencesMessage', { gender: addedGender }),
                             [
-                              { text: 'Cancel', style: 'cancel' },
+                              { text: t('common.cancel'), style: 'cancel' },
                               {
-                                text: 'Add',
+                                text: t('discover.recommendations.add'),
                                 onPress: async () => {
                                   try {
                                     const { data: currentPrefs, error: fetchError } = await supabase
@@ -3147,7 +3129,6 @@ export default function Discover() {
                                     const currentGenderPrefs = currentPrefs?.gender_preference || [];
                                     const newGenderPrefs = [...currentGenderPrefs, addedGender];
 
-                                    // Only update gender_preference — do NOT overwrite other fields
                                     const { error: updateError } = await supabase
                                       .from('preferences')
                                       .update({ gender_preference: newGenderPrefs })
@@ -3174,7 +3155,6 @@ export default function Discover() {
                             ]
                           );
                         } else if (rec.type === 'global') {
-                          // Check premium status before enabling global search
                           if (!isPremium && !isPlatinum) {
                             Alert.alert(
                               t('toast.globalSearchPremiumTitle'),
@@ -3187,7 +3167,6 @@ export default function Discover() {
                             return;
                           }
 
-                          // Confirm before enabling global search
                           Alert.alert(
                             'Enable Global Search?',
                             'Search for matches anywhere in the world? You can change this anytime in Settings > Matching Preferences.',
@@ -3228,119 +3207,119 @@ export default function Discover() {
                       }
                     };
 
+                    const subtitle = getSubtitle();
+                    const isGlobal = rec.type === 'global';
+
                     return (
                       <TouchableOpacity
                         key={`recommendation-${index}`}
-                        className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
+                        style={{
+                          backgroundColor: isGlobal ? '#A08AB7' : colors.card,
+                          borderRadius: 14,
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          shadowColor: isGlobal ? '#A08AB7' : '#000',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: isGlobal ? 0.2 : 0.05,
+                          shadowRadius: isGlobal ? 10 : 6,
+                          elevation: isGlobal ? 4 : 2,
+                        }}
                         onPress={handlePress}
-                        activeOpacity={0.6}
+                        activeOpacity={0.7}
                       >
-                        <View className="bg-lavender-100 dark:bg-lavender-900/30 rounded-full p-3 mr-3">
-                          <MaterialCommunityIcons name={getIcon()} size={24} color="#A08AB7" />
+                        <View style={{
+                          width: 38, height: 38, borderRadius: 11,
+                          backgroundColor: isGlobal ? 'rgba(255,255,255,0.2)' : 'rgba(160, 138, 183, 0.12)',
+                          alignItems: 'center', justifyContent: 'center', marginRight: 12,
+                        }}>
+                          <MaterialCommunityIcons name={getIcon()} size={20} color={isGlobal ? '#fff' : '#A08AB7'} />
                         </View>
-                        <View className="flex-1">
-                          <View className="flex-row items-center mb-1">
-                            <Text className="text-foreground font-sans-semibold text-base">
-                              {getTitle()}
-                            </Text>
-                            {rec.type === 'global' && !isPremium && !isPlatinum && (
-                              <View className="bg-lavender-500 rounded-full px-2 py-0.5 ml-2">
-                                <Text className="text-white text-xs font-sans-bold">Premium</Text>
-                              </View>
-                            )}
-                          </View>
-                          <View className="flex-row items-center gap-2">
-                            <View className="bg-lavender-500 rounded-full px-2.5 py-1">
-                              <Text className="text-white text-xs font-sans-bold">{getCountLabel()}</Text>
-                            </View>
-                            {rec.description && (
-                              <Text className="text-muted-foreground text-sm flex-1" numberOfLines={1}>
-                                {rec.description}
-                              </Text>
-                            )}
-                          </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: isGlobal ? '#fff' : colors.foreground, fontSize: 15, fontWeight: '600' }} numberOfLines={1}>
+                            {getTitle()}
+                          </Text>
                         </View>
-                        <MaterialCommunityIcons name="chevron-right" size={24} color="#A1A1AA" />
+                        {subtitle ? (
+                          <Text style={{ color: isGlobal ? 'rgba(255,255,255,0.8)' : '#A08AB7', fontSize: 12, fontWeight: '600', marginRight: 6 }}>{subtitle}</Text>
+                        ) : null}
+                        {isGlobal && !isPremium && !isPlatinum && (
+                          <View style={{ backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, marginRight: 6 }}>
+                            <Text style={{ color: '#A08AB7', fontSize: 10, fontWeight: '700' }}>PRO</Text>
+                          </View>
+                        )}
+                        <MaterialCommunityIcons name="chevron-right" size={20} color={isGlobal ? 'rgba(255,255,255,0.6)' : '#D1D5DB'} />
                       </TouchableOpacity>
                     );
                   })}
-
-                  {/* Always show: Adjust All Filters option */}
-                  <TouchableOpacity
-                    className="bg-card dark:bg-card rounded-xl p-4 border border-border flex-row items-center"
-                    onPress={() => {
-                      trackEvent('empty_state_recommendation_clicked', { action: 'open_filters' });
-                      setShowFilterModal(true);
-                    }}
-                  >
-                    <View className="bg-lavender-100 dark:bg-lavender-900/30 rounded-full p-2 mr-3">
-                      <MaterialCommunityIcons name="tune-variant" size={20} color="#A08AB7" />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-foreground font-sans-semibold">Adjust All Filters</Text>
-                      <Text className="text-muted-foreground text-sm">Fine-tune your preferences to find better matches</Text>
-                    </View>
-                    <MaterialCommunityIcons name="chevron-right" size={20} color="#A1A1AA" />
-                  </TouchableOpacity>
                 </View>
               </View>
+              )}
 
-              {/* Secondary Actions */}
-              <View className="gap-3 mb-6">
+              {/* Quick Actions */}
+              <View style={{ gap: 8 }}>
                 <TouchableOpacity
-                  className="bg-lavender-500 rounded-full py-4 shadow-sm"
+                  style={{
+                    backgroundColor: colors.card,
+                    borderRadius: 14,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 6,
+                    elevation: 2,
+                  }}
+                  onPress={() => {
+                    trackEvent('empty_state_recommendation_clicked', { action: 'open_filters' });
+                    setShowFilterModal(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{
+                    width: 38, height: 38, borderRadius: 11,
+                    backgroundColor: 'rgba(160, 138, 183, 0.12)',
+                    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+                  }}>
+                    <MaterialCommunityIcons name="tune-variant" size={20} color="#A08AB7" />
+                  </View>
+                  <Text style={{ color: colors.foreground, fontSize: 15, fontWeight: '600', flex: 1 }}>Adjust Filters</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: colors.card,
+                    borderRadius: 14,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 6,
+                    elevation: 2,
+                  }}
                   onPress={() => {
                     trackEvent('empty_state_action_clicked', { action: 'search' });
                     setShowSearchBar(true);
                   }}
+                  activeOpacity={0.7}
                 >
-                  <Text className="text-white font-sans-bold text-base text-center">Search by Keyword</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="border-2 border-lavender-500 rounded-full py-4"
-                  onPress={() => {
-                    trackEvent('empty_state_action_clicked', { action: 'refresh' });
-                    handleRefresh();
-                  }}
-                >
-                  <Text className="text-lavender-500 font-sans-bold text-base text-center">Refresh Matches</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Premium Benefits - Subtle, non-intrusive placement */}
-              {!isPremium && (
-                <View className="mb-6 p-4 bg-card/50 dark:bg-card/30 rounded-xl border border-border/50">
-                  <View className="flex-row items-center justify-between mb-3">
-                    <View className="flex-row items-center gap-2">
-                      <MaterialCommunityIcons name="crown-outline" size={18} color="#A08AB7" />
-                      <Text className="text-foreground font-sans-semibold text-sm">Want more matches?</Text>
-                    </View>
-                    <TouchableOpacity
-                      className="bg-lavender-500 rounded-full px-4 py-2"
-                      onPress={() => {
-                        trackEvent('empty_state_premium_cta_clicked', { source: 'discover_empty_state' });
-                        setShowPaywall(true);
-                      }}
-                    >
-                      <Text className="text-white font-sans-semibold text-xs">Try Premium</Text>
-                    </TouchableOpacity>
+                  <View style={{
+                    width: 38, height: 38, borderRadius: 11,
+                    backgroundColor: 'rgba(160, 138, 183, 0.12)',
+                    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+                  }}>
+                    <MaterialCommunityIcons name="magnify" size={20} color="#A08AB7" />
                   </View>
-                  <Text className="text-muted-foreground text-xs leading-relaxed">
-                    See who liked you, get unlimited swipes, and boost your profile visibility.
-                  </Text>
-                </View>
-              )}
-
-              {/* Social Proof Footer */}
-              <View className="items-center pt-6 border-t border-border">
-                <View className="flex-row items-center gap-2 mb-2">
-                  <MaterialCommunityIcons name="check-decagram" size={16} color="#10B981" />
-                  <Text className="text-muted-foreground text-sm">Trusted by 10,000+ users</Text>
-                </View>
-                <Text className="text-muted-foreground text-xs text-center">
-                  Join the safest community for lavender marriages
-                </Text>
+                  <Text style={{ color: colors.foreground, fontSize: 15, fontWeight: '600', flex: 1 }}>Search by Keyword</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -3383,286 +3362,7 @@ export default function Discover() {
   }
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingRight: rightSafeArea }}>
-      {/* Header */}
-      <View className="bg-background dark:bg-background pb-4 px-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
-        {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
-        <View className="flex-row items-center mb-3">
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8 }}
-            style={{ flex: 1 }}
-          >
-            <TouchableOpacity
-              className="bg-muted rounded-full p-2.5"
-              onPress={() => setShowFilterModal(true)}
-            >
-              <MaterialCommunityIcons name="filter-variant" size={20} color={colors.foreground} />
-            </TouchableOpacity>
-
-            {/* Age Quick Filter */}
-            <TouchableOpacity
-              className="bg-muted rounded-full px-3 py-2 flex-row items-center"
-              onPress={() => {
-                setTempAgeMin(filters.ageMin);
-                setTempAgeMax(filters.ageMax);
-                setShowAgeSlider(!showAgeSlider);
-                setShowIntentionDropdown(false);
-              }}
-            >
-              <Text className="text-foreground text-sm font-medium">Age</Text>
-              <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
-
-            {/* Intention Quick Filter */}
-            <TouchableOpacity
-              className="bg-muted rounded-full px-3 py-2 flex-row items-center"
-              onPress={() => {
-                setShowIntentionDropdown(!showIntentionDropdown);
-                setShowAgeSlider(false);
-              }}
-            >
-              <Text className="text-foreground text-sm font-medium">Dating Intentions</Text>
-              <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
-
-            {/* Active Today Toggle */}
-            <TouchableOpacity
-              className={`rounded-full px-3 py-2 flex-row items-center ${activeToday ? 'bg-lavender-500' : 'bg-muted'}`}
-              onPress={() => {
-                const newActiveToday = !activeToday;
-                setActiveToday(newActiveToday);
-                const newFilters = { ...filters, activeToday: newActiveToday };
-                setFilters(newFilters);
-                loadProfiles(undefined, undefined, newFilters);
-              }}
-            >
-              <MaterialCommunityIcons name="clock-outline" size={16} color={activeToday ? 'white' : colors.foreground} style={{ marginRight: 4 }} />
-              <Text className={`text-sm font-medium ${activeToday ? 'text-white' : 'text-foreground'}`}>Active Today</Text>
-            </TouchableOpacity>
-          </ScrollView>
-
-          {/* Right side - Search, Refresh */}
-          <View className="flex-row gap-2 ml-2">
-            {!isPremium && (
-              <TouchableOpacity
-                className="bg-gold-500 rounded-full px-3 py-2 flex-row items-center gap-1"
-                style={{ backgroundColor: '#FFD700' }}
-                onPress={() => setShowPaywall(true)}
-              >
-                <MaterialCommunityIcons name="crown" size={16} color="#A08AB7" />
-                <Text className="text-lavender-500 font-sans-bold text-xs">Upgrade</Text>
-              </TouchableOpacity>
-            )}
-            {isPlatinum && (
-              <TouchableOpacity
-                className="rounded-full p-2.5"
-                style={{ backgroundColor: 'rgba(255, 215, 0, 0.3)' }}
-                onPress={() => setShowBoostModal(true)}
-              >
-                <MaterialCommunityIcons name="rocket" size={20} color="#FFD700" />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              className="bg-muted rounded-full p-2.5"
-              onPress={() => setShowSearchBar(!showSearchBar)}
-            >
-              <MaterialCommunityIcons name="magnify" size={20} color={colors.foreground} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Age Slider Panel */}
-        {showAgeSlider && (
-          <View className="mt-3 bg-card dark:bg-card rounded-xl shadow-lg border border-border p-4">
-            <Text className="text-foreground font-semibold mb-3">Age Range: {tempAgeMin} - {tempAgeMax}</Text>
-
-            <View className="mb-4">
-              <Text className="text-muted-foreground text-sm mb-2">Minimum: {tempAgeMin}</Text>
-              <Slider
-                minimumValue={18}
-                maximumValue={80}
-                step={1}
-                value={tempAgeMin}
-                onValueChange={(value) => setTempAgeMin(Math.min(value, tempAgeMax - 1))}
-                minimumTrackTintColor="#A08AB7"
-                maximumTrackTintColor="#E5E7EB"
-                thumbTintColor="#A08AB7"
-              />
-            </View>
-
-            <View className="mb-4">
-              <Text className="text-muted-foreground text-sm mb-2">Maximum: {tempAgeMax}</Text>
-              <Slider
-                minimumValue={18}
-                maximumValue={80}
-                step={1}
-                value={tempAgeMax}
-                onValueChange={(value) => setTempAgeMax(Math.max(value, tempAgeMin + 1))}
-                minimumTrackTintColor="#A08AB7"
-                maximumTrackTintColor="#E5E7EB"
-                thumbTintColor="#A08AB7"
-              />
-            </View>
-
-            <View className="flex-row gap-2">
-              <TouchableOpacity
-                className="flex-1 bg-muted rounded-full py-2"
-                onPress={() => setShowAgeSlider(false)}
-              >
-                <Text className="text-center text-foreground font-medium">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-1 bg-lavender-500 rounded-full py-2"
-                onPress={() => {
-                  const newFilters = { ...filters, ageMin: tempAgeMin, ageMax: tempAgeMax };
-                  setFilters(newFilters);
-                  setShowAgeSlider(false);
-                  loadProfiles(undefined, undefined, newFilters);
-                }}
-              >
-                <Text className="text-center text-white font-medium">Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Intention Dropdown */}
-        {showIntentionDropdown && (
-          <View className="absolute top-full left-24 mt-1 bg-card dark:bg-card rounded-xl shadow-lg border border-border z-50" style={{ minWidth: 120 }}>
-            {INTENTIONS.map((intention, index) => (
-              <TouchableOpacity
-                key={index}
-                className={`px-4 py-3 ${index !== INTENTIONS.length - 1 ? 'border-b border-gray-100' : ''}`}
-                onPress={() => {
-                  setSelectedIntention(intention.value);
-                  setShowIntentionDropdown(false);
-                  loadProfiles();
-                }}
-              >
-                <Text className={`text-sm ${selectedIntention === intention.value ? 'text-lavender-500 font-semibold' : 'text-foreground'}`}>
-                  {intention.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Keyword Search Bar - Expanded when showSearchBar is true */}
-        {showSearchBar && (
-          <View className="mt-3">
-            <View className="flex-row items-center bg-muted rounded-full px-4 py-2">
-              <MaterialCommunityIcons name="magnify" size={20} color="#71717A" />
-              <TextInput
-                className="flex-1 ml-2 text-foreground text-base"
-                placeholder="Search by keyword (e.g., 'travel', 'vegan')"
-                placeholderTextColor="#A1A1AA"
-                value={searchKeyword}
-                onChangeText={setSearchKeyword}
-                onSubmitEditing={handleSearch}
-                returnKeyType="search"
-                autoFocus
-              />
-              {isSearchMode && (
-                <TouchableOpacity onPress={handleClearSearch} className="ml-2">
-                  <MaterialCommunityIcons name="close-circle" size={20} color="#71717A" />
-                </TouchableOpacity>
-              )}
-              {!isSearchMode && searchKeyword.trim() && (
-                <TouchableOpacity onPress={handleSearch} className="ml-2 bg-lavender-500 rounded-full px-3 py-1">
-                  <Text className="text-white font-semibold text-sm">Search</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                onPress={() => {
-                  setShowSearchBar(false);
-                  if (isSearchMode) {
-                    handleClearSearch();
-                  }
-                }}
-                className="ml-2"
-              >
-                <MaterialCommunityIcons name="close" size={20} color="#71717A" />
-              </TouchableOpacity>
-            </View>
-            {isSearchMode && (
-              <Text className="text-muted-foreground text-xs mt-2 text-center">
-                💡 Tip: Like or pass to continue searching. Clear search to see all profiles.
-              </Text>
-            )}
-          </View>
-        )}
-      </View>
-
-      {/* Verification Banner - Prompt unverified users to verify */}
-      {showVerificationBanner && !isPhotoVerified && (
-        <VerificationBanner onDismiss={handleDismissVerificationBanner} />
-      )}
-
-      {/* Trial Expiration Banner - Warn users when trial is about to end */}
-      <TrialExpirationBanner key="trial-expiration-banner" />
-
-      {/* Photo Blur Info Banner - Explain why some photos may be blurred */}
-      {showPhotoBlurBanner && (
-        <View className="mx-4 mt-2 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
-          <View className="flex-row items-start">
-            <View className="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-full items-center justify-center mr-3">
-              <MaterialCommunityIcons name="image-off-outline" size={20} color="#3B82F6" />
-            </View>
-            <View className="flex-1">
-              <Text className="text-blue-900 dark:text-blue-100 font-semibold text-sm">Why Some Photos Are Blurred</Text>
-              <Text className="text-blue-700 dark:text-blue-300 text-xs mt-1 leading-5">
-                Some users enable Photo Blur in their privacy settings to protect their identity until they match. Photos will be revealed once you connect!
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={handleDismissPhotoBlurBanner}
-              className="ml-2 w-6 h-6 items-center justify-center"
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <MaterialCommunityIcons name="close" size={20} color="#3B82F6" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Photo Review Required Banner */}
-      {photoReviewRequired && (
-        <TouchableOpacity
-          className="mx-4 mt-2 p-4 bg-amber-50 border border-amber-200 rounded-xl flex-row items-center"
-          onPress={() => router.push('/settings/edit-profile')}
-          activeOpacity={0.8}
-        >
-          <View className="w-10 h-10 bg-amber-100 rounded-full items-center justify-center mr-3">
-            <MaterialCommunityIcons name="camera-off" size={20} color="#F59E0B" />
-          </View>
-          <View className="flex-1">
-            <Text className="text-amber-900 font-semibold text-sm">Profile Hidden</Text>
-            <Text className="text-amber-700 text-xs mt-0.5">Your profile is temporarily hidden. Tap to upload new photos.</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
-        </TouchableOpacity>
-      )}
-
-      {/* Complete Profile Banner - For users who haven't finished onboarding */}
-      {showOnboardingBanner && !isProfileComplete && (
-        <TouchableOpacity
-          className="mx-4 mt-2 p-4 bg-lavender-50 border border-lavender-200 rounded-xl flex-row items-center"
-          onPress={() => router.push('/(onboarding)/basic-info')}
-          activeOpacity={0.8}
-        >
-          <View className="w-10 h-10 bg-lavender-100 rounded-full items-center justify-center mr-3">
-            <MaterialCommunityIcons name="account-edit" size={20} color="#9B87CE" />
-          </View>
-          <View className="flex-1">
-            <Text className="text-lavender-900 font-semibold text-sm">Complete Your Profile</Text>
-            <Text className="text-lavender-700 text-xs mt-0.5">Finish setting up to start matching. You can browse but can't like or be seen yet.</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
-        </TouchableOpacity>
-      )}
-
+    <View className="flex-1" style={{ backgroundColor: '#FFFFFF', paddingRight: rightSafeArea }}>
       {/* Hinge-Style Scrollable Profile View */}
       <Animated.View style={{ flex: 1, opacity: profileOpacity }}>
         <DiscoveryProfileView
@@ -3685,6 +3385,293 @@ export default function Discover() {
           likesRemaining={DAILY_LIKE_LIMIT - likeCount}
           dailyLikeLimit={DAILY_LIKE_LIMIT}
           isPremium={isPremium}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          renderHeader={() => (
+            <>
+              {/* Header with Search/Filter Controls */}
+              <View className="pt-4 pb-0" style={{ backgroundColor: '#FFFFFF', marginHorizontal: -16 }}>
+                {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
+                <View className="flex-row items-center mb-3">
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 6, paddingLeft: 12, paddingRight: 12, alignItems: 'center' }}
+                    style={{ flex: 1 }}
+                  >
+                    <TouchableOpacity
+                      className="rounded-full p-2.5" style={{ backgroundColor: '#FFFFFF' }}
+                      onPress={() => setShowFilterModal(true)}
+                    >
+                      <MaterialCommunityIcons name="tune-vertical" size={24} color={colors.foreground} />
+                    </TouchableOpacity>
+
+                    {/* Age Quick Filter */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#000', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      onPress={() => {
+                        setTempAgeMin(filters.ageMin);
+                        setTempAgeMax(filters.ageMax);
+                        setShowAgeSlider(!showAgeSlider);
+                        setShowIntentionDropdown(false);
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.age')}</Text>
+                      <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
+                    </TouchableOpacity>
+
+                    {/* Intention Quick Filter */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      onPress={() => {
+                        setShowIntentionDropdown(!showIntentionDropdown);
+                        setShowAgeSlider(false);
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.datingIntentions')}</Text>
+                      <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
+                    </TouchableOpacity>
+
+                    {/* Active Today Toggle */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: activeToday ? '#A08AB7' : '#FFFFFF', borderWidth: 1, borderColor: activeToday ? '#A08AB7' : '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      onPress={() => {
+                        const newActiveToday = !activeToday;
+                        setActiveToday(newActiveToday);
+                        const newFilters = { ...filters, activeToday: newActiveToday };
+                        setFilters(newFilters);
+                        loadProfiles(undefined, undefined, newFilters);
+                      }}
+                    >
+                      <MaterialCommunityIcons name="clock-outline" size={16} color={activeToday ? 'white' : colors.foreground} style={{ marginRight: 4 }} />
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: activeToday ? '#fff' : '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.activeToday')}</Text>
+                    </TouchableOpacity>
+
+                    {/* Search */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      onPress={() => setShowSearchBar(!showSearchBar)}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.search')}</Text>
+                    </TouchableOpacity>
+
+                    {isPlatinum && (
+                      <TouchableOpacity
+                        className="rounded-full p-2.5"
+                        style={{ backgroundColor: 'rgba(255, 215, 0, 0.3)' }}
+                        onPress={() => setShowBoostModal(true)}
+                      >
+                        <MaterialCommunityIcons name="rocket" size={20} color="#FFD700" />
+                      </TouchableOpacity>
+                    )}
+                  </ScrollView>
+                </View>
+
+                {/* Age Slider Panel */}
+                {showAgeSlider && (
+                  <View className="mt-3 rounded-xl shadow-lg p-4" style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB' }}>
+                    <Text className="font-semibold mb-3" style={{ color: '#1F2937' }}>{t('discover.ageSlider.ageRange', { min: tempAgeMin, max: tempAgeMax })}</Text>
+
+                    <View className="mb-4">
+                      <Text className="text-sm mb-2" style={{ color: '#6B7280' }}>{t('discover.ageSlider.minimum', { value: tempAgeMin })}</Text>
+                      <Slider
+                        minimumValue={18}
+                        maximumValue={80}
+                        step={1}
+                        value={tempAgeMin}
+                        onValueChange={(value) => setTempAgeMin(Math.min(value, tempAgeMax - 1))}
+                        minimumTrackTintColor="#A08AB7"
+                        maximumTrackTintColor="#E5E7EB"
+                        thumbTintColor="#A08AB7"
+                      />
+                    </View>
+
+                    <View className="mb-4">
+                      <Text className="text-sm mb-2" style={{ color: '#6B7280' }}>{t('discover.ageSlider.maximum', { value: tempAgeMax })}</Text>
+                      <Slider
+                        minimumValue={18}
+                        maximumValue={80}
+                        step={1}
+                        value={tempAgeMax}
+                        onValueChange={(value) => setTempAgeMax(Math.max(value, tempAgeMin + 1))}
+                        minimumTrackTintColor="#A08AB7"
+                        maximumTrackTintColor="#E5E7EB"
+                        thumbTintColor="#A08AB7"
+                      />
+                    </View>
+
+                    <View className="flex-row gap-2">
+                      <TouchableOpacity
+                        className="flex-1 rounded-full py-2" style={{ backgroundColor: '#F9FAFB' }}
+                        onPress={() => {
+                          setTempAgeMin(filters.ageMin);
+                          setTempAgeMax(filters.ageMax);
+                          setShowAgeSlider(false);
+                        }}
+                      >
+                        <Text className="text-center font-medium" style={{ color: '#1F2937' }}>{t('common.cancel')}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        className="flex-1 bg-lavender-500 rounded-full py-2"
+                        onPress={() => {
+                          const newFilters = { ...filters, ageMin: tempAgeMin, ageMax: tempAgeMax };
+                          setFilters(newFilters);
+                          setShowAgeSlider(false);
+                          loadProfiles(undefined, undefined, newFilters);
+                        }}
+                      >
+                        <Text className="text-center text-white font-medium">{t('filters.applyFilters')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* Intention Dropdown */}
+                {showIntentionDropdown && (
+                  <View className="absolute top-full left-24 mt-1 rounded-xl shadow-lg z-50" style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', minWidth: 120 }}>
+                    {INTENTIONS.map((intention, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        className={`px-4 py-3 ${index !== INTENTIONS.length - 1 ? 'border-b border-gray-100' : ''}`}
+                        onPress={() => {
+                          setSelectedIntention(intention.value);
+                          setShowIntentionDropdown(false);
+                          loadProfiles();
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: selectedIntention === intention.value ? '600' : '400', color: selectedIntention === intention.value ? '#A08AB7' : '#1F2937' }}>
+                          {getIntentionLabel(intention.value)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Keyword Search Bar - Expanded when showSearchBar is true */}
+                {showSearchBar && (
+                  <View className="mt-3">
+                    <View className="flex-row items-center rounded-full px-4 py-2" style={{ backgroundColor: '#F9FAFB' }}>
+                      <MaterialCommunityIcons name="magnify" size={20} color="#71717A" />
+                      <TextInput
+                        className="flex-1 ml-2 text-base" style={{ color: '#1F2937' }}
+                        placeholder={t('discover.search.placeholder')}
+                        placeholderTextColor="#A1A1AA"
+                        value={searchKeyword}
+                        onChangeText={setSearchKeyword}
+                        onSubmitEditing={handleSearch}
+                        returnKeyType="search"
+                        autoFocus
+                      />
+                      {isSearchMode && (
+                        <TouchableOpacity onPress={handleClearSearch} className="ml-2">
+                          <MaterialCommunityIcons name="close-circle" size={20} color="#71717A" />
+                        </TouchableOpacity>
+                      )}
+                      {!isSearchMode && searchKeyword.trim() && (
+                        <TouchableOpacity onPress={handleSearch} className="ml-2 bg-lavender-500 rounded-full px-3 py-1">
+                          <Text className="text-white font-semibold text-sm">{t('discover.search.button')}</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        onPress={() => {
+                          setShowSearchBar(false);
+                          if (isSearchMode) {
+                            handleClearSearch();
+                          }
+                        }}
+                        className="ml-2"
+                      >
+                        <MaterialCommunityIcons name="close" size={20} color="#71717A" />
+                      </TouchableOpacity>
+                    </View>
+                    {isSearchMode && (
+                      <Text className="text-xs mt-2 text-center" style={{ color: '#6B7280' }}>
+                        {t('discover.search.tip')}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              {/* Verification Banner - Prompt unverified users to verify */}
+              {showVerificationBanner && !isPhotoVerified && (
+                <VerificationBanner onDismiss={handleDismissVerificationBanner} />
+              )}
+
+              {/* Trial Expiration Banner - Warn users when trial is about to end */}
+              <TrialExpirationBanner key="trial-expiration-banner" />
+
+              {/* Photo Blur Info Banner - Explain why some photos may be blurred */}
+              {showPhotoBlurBanner && (
+                <View className="mx-4 mt-2 p-4 rounded-xl" style={{ backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' }}>
+                  <View className="flex-row items-start">
+                    <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: '#DBEAFE' }}>
+                      <MaterialCommunityIcons name="image-off-outline" size={20} color="#3B82F6" />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="font-semibold text-sm" style={{ color: '#1E3A5F' }}>{t('discover.banner.photoBlurTitle')}</Text>
+                      <Text className="text-xs mt-1 leading-5" style={{ color: '#1D4ED8' }}>
+                        {t('discover.banner.photoBlurDescription')}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={handleDismissPhotoBlurBanner}
+                      className="ml-2 w-6 h-6 items-center justify-center"
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <MaterialCommunityIcons name="close" size={20} color="#3B82F6" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Photo Review Required Banner */}
+              {photoReviewRequired && (
+                <TouchableOpacity
+                  className="mx-4 mt-2 p-4 bg-amber-50 border border-amber-200 rounded-xl flex-row items-center"
+                  onPress={() => router.push('/settings/edit-profile')}
+                  activeOpacity={0.8}
+                >
+                  <View className="w-10 h-10 bg-amber-100 rounded-full items-center justify-center mr-3">
+                    <MaterialCommunityIcons name="camera-off" size={20} color="#F59E0B" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-amber-900 font-semibold text-sm">{t('discover.banner.profileHidden')}</Text>
+                    <Text className="text-amber-700 text-xs mt-0.5">{t('discover.banner.profileHiddenDescription')}</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
+                </TouchableOpacity>
+              )}
+
+              {/* Complete Profile Banner - For users who haven't finished onboarding */}
+              {showOnboardingBanner && !isProfileComplete && (
+                <TouchableOpacity
+                  className="mx-4 mt-2 p-4 bg-lavender-50 border border-lavender-200 rounded-xl flex-row items-center"
+                  onPress={() => {
+                    const destination = returnRoute || '/(onboarding)/basic-info';
+                    exitPreviewMode();
+                    router.replace(destination as any);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View className="w-10 h-10 bg-lavender-100 rounded-full items-center justify-center mr-3">
+                    <MaterialCommunityIcons name={isPreviewMode ? "arrow-left" : "account-edit"} size={20} color="#9B87CE" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-lavender-900 font-semibold text-sm">
+                      {isPreviewMode ? t('discover.banner.completeProfileToMatch') : t('discover.banner.completeProfile')}
+                    </Text>
+                    <Text className="text-lavender-700 text-xs mt-0.5">
+                      {isPreviewMode
+                        ? t('discover.banner.completeProfilePreview')
+                        : t('discover.banner.completeProfileDefault')}
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
+                </TouchableOpacity>
+              )}
+            </>
+          )}
         />
       </Animated.View>
 
@@ -3799,36 +3786,36 @@ export default function Discover() {
         onRequestClose={() => setShowPremiumLocationPrompt(false)}
       >
         <View className="flex-1 bg-black/60 justify-center items-center px-6">
-          <View className="bg-card dark:bg-card rounded-3xl w-full max-w-sm overflow-hidden">
+          <View className="rounded-3xl w-full max-w-sm overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
             {/* Header */}
             <View className="bg-lavender-500 p-6 items-center">
               <View className="w-16 h-16 rounded-full bg-white/20 items-center justify-center mb-3">
                 <MaterialCommunityIcons name="earth" size={32} color="#fff" />
               </View>
               <Text className="text-white text-xl font-sans-bold text-center">
-                Unlock Global Search
+                {t('discover.premiumLocation.title')}
               </Text>
             </View>
 
             {/* Body */}
             <View className="p-6">
-              <Text className="text-foreground dark:text-foreground text-center text-base mb-4">
-                You have location preferences saved that require Premium to use:
+              <Text className="text-center text-base mb-4" style={{ color: '#1F2937' }}>
+                {t('discover.premiumLocation.description')}
               </Text>
 
-              <View className="bg-lavender-50 dark:bg-lavender-900/30 rounded-xl p-4 mb-4">
+              <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: '#F5F3FF' }}>
                 <View className="flex-row items-center mb-2">
                   <MaterialCommunityIcons name="check-circle" size={20} color="#A08AB7" />
-                  <Text className="text-foreground dark:text-foreground ml-2">Search globally for matches</Text>
+                  <Text className="ml-2" style={{ color: '#1F2937' }}>{t('discover.premiumLocation.searchGlobally')}</Text>
                 </View>
                 <View className="flex-row items-center">
                   <MaterialCommunityIcons name="check-circle" size={20} color="#A08AB7" />
-                  <Text className="text-foreground dark:text-foreground ml-2">Match in specific cities</Text>
+                  <Text className="ml-2" style={{ color: '#1F2937' }}>{t('discover.premiumLocation.matchCities')}</Text>
                 </View>
               </View>
 
-              <Text className="text-muted-foreground dark:text-muted-foreground text-center text-sm mb-6">
-                Upgrade to Premium to activate these features and find matches anywhere in the world.
+              <Text className="text-center text-sm mb-6" style={{ color: '#6B7280' }}>
+                {t('discover.premiumLocation.upgradeMessage')}
               </Text>
 
               {/* Buttons */}
@@ -3840,7 +3827,7 @@ export default function Discover() {
                 }}
               >
                 <Text className="text-white text-center font-sans-bold text-base">
-                  Upgrade to Premium
+                  {t('discover.premiumLocation.upgradeToPremium')}
                 </Text>
               </TouchableOpacity>
 
@@ -3848,8 +3835,8 @@ export default function Discover() {
                 className="py-3"
                 onPress={() => setShowPremiumLocationPrompt(false)}
               >
-                <Text className="text-muted-foreground dark:text-muted-foreground text-center text-sm">
-                  Maybe Later
+                <Text className="text-center text-sm" style={{ color: '#6B7280' }}>
+                  {t('discover.premiumLocation.maybeLater')}
                 </Text>
               </TouchableOpacity>
             </View>

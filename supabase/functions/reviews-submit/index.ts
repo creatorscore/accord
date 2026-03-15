@@ -108,7 +108,7 @@ serve(async (req) => {
       .eq('match_id', match_id)
       .eq('reviewer_id', reviewer_id)
       .eq('reviewee_id', reviewee_id)
-      .single();
+      .maybeSingle();
 
     if (existingReview) {
       throw new Error('You have already reviewed this person');
@@ -119,7 +119,7 @@ serve(async (req) => {
       .from('profile_review_settings')
       .select('allow_new_reviews')
       .eq('profile_id', reviewee_id)
-      .single();
+      .maybeSingle();
 
     if (revieweeSettings && !revieweeSettings.allow_new_reviews) {
       throw new Error('This person is not accepting new reviews');
@@ -131,7 +131,7 @@ serve(async (req) => {
       .from('review_prompts')
       .select('*')
       .eq('match_id', match_id)
-      .single();
+      .maybeSingle();
 
     if (existingPrompt) {
       reviewPrompt = existingPrompt;

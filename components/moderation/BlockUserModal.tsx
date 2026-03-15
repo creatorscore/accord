@@ -11,6 +11,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 interface BlockUserModalProps {
   visible: boolean;
@@ -27,12 +28,13 @@ export default function BlockUserModal({
   blockedProfileName,
   onBlockSuccess,
 }: BlockUserModalProps) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
 
   const handleBlock = async () => {
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to block a user');
+      Alert.alert(t('common.error'), t('moderation.block.mustBeLoggedIn'));
       return;
     }
 
@@ -62,7 +64,7 @@ export default function BlockUserModal({
       if (blockError) {
         // Check if already blocked
         if (blockError.code === '23505') {
-          Alert.alert('Already Blocked', 'You have already blocked this user.');
+          Alert.alert(t('moderation.block.alreadyBlocked'), t('moderation.block.alreadyBlockedMessage'));
           onClose();
           return;
         }
@@ -70,11 +72,11 @@ export default function BlockUserModal({
       }
 
       Alert.alert(
-        'User Blocked',
-        `${blockedProfileName} has been blocked. Your conversation has been permanently deleted and they can no longer see your profile.`,
+        t('moderation.block.userBlocked'),
+        t('moderation.block.userBlockedMessage', { name: blockedProfileName }),
         [
           {
-            text: 'OK',
+            text: t('common.ok'),
             onPress: () => {
               onClose();
               onBlockSuccess?.();
@@ -84,7 +86,7 @@ export default function BlockUserModal({
       );
     } catch (error: any) {
       console.error('Error blocking user:', error);
-      Alert.alert('Error', 'Failed to block user. Please try again.');
+      Alert.alert(t('common.error'), t('moderation.block.error'));
     } finally {
       setLoading(false);
     }
@@ -105,42 +107,42 @@ export default function BlockUserModal({
           </View>
 
           {/* Title */}
-          <Text style={styles.title}>Block {blockedProfileName}?</Text>
+          <Text style={styles.title}>{t('moderation.block.title', { name: blockedProfileName })}</Text>
 
           {/* Description */}
           <Text style={styles.description}>
-            Blocking this user will:
+            {t('moderation.block.description')}
           </Text>
 
           <View style={styles.bulletPoints}>
             <View style={styles.bulletPoint}>
               <MaterialCommunityIcons name="check" size={20} color="#6B7280" />
               <Text style={styles.bulletText}>
-                Hide your profile from them
+                {t('moderation.block.hideProfile')}
               </Text>
             </View>
             <View style={styles.bulletPoint}>
               <MaterialCommunityIcons name="check" size={20} color="#6B7280" />
               <Text style={styles.bulletText}>
-                Prevent them from messaging you
+                {t('moderation.block.preventMessages')}
               </Text>
             </View>
             <View style={styles.bulletPoint}>
               <MaterialCommunityIcons name="check" size={20} color="#EF4444" />
               <Text style={[styles.bulletText, { color: '#EF4444', fontWeight: '600' }]}>
-                Permanently delete all messages (cannot be undone)
+                {t('moderation.block.deleteMessages')}
               </Text>
             </View>
             <View style={styles.bulletPoint}>
               <MaterialCommunityIcons name="check" size={20} color="#6B7280" />
               <Text style={styles.bulletText}>
-                They won't be notified
+                {t('moderation.block.noNotification')}
               </Text>
             </View>
           </View>
 
           <Text style={styles.note}>
-            You can unblock them later in Settings → Blocked Users
+            {t('moderation.block.unblockNote')}
           </Text>
 
           {/* Buttons */}
@@ -150,7 +152,7 @@ export default function BlockUserModal({
               onPress={onClose}
               disabled={loading}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -161,7 +163,7 @@ export default function BlockUserModal({
               {loading ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text style={styles.blockButtonText}>Block User</Text>
+                <Text style={styles.blockButtonText}>{t('moderation.block.blockUser')}</Text>
               )}
             </TouchableOpacity>
           </View>

@@ -9,32 +9,36 @@ import { router } from 'expo-router';
 // Onboarding steps in order
 export const ONBOARDING_STEPS = [
   '/(onboarding)/basic-info',           // step 0
-  '/(onboarding)/photos',               // step 1
-  '/(onboarding)/about',                // step 2
-  '/(onboarding)/personality',          // step 3
-  '/(onboarding)/interests',            // step 4
-  '/(onboarding)/prompts',              // step 5
-  '/(onboarding)/voice-intro',          // step 6
-  '/(onboarding)/marriage-preferences', // step 7
-  '/(onboarding)/matching-preferences', // step 8
+  '/(onboarding)/personality',          // step 1
+  '/(onboarding)/photos',               // step 2
+  '/(onboarding)/interests',            // step 3
+  '/(onboarding)/prompts',              // step 4
+  '/(onboarding)/voice-intro',          // step 5
+  '/(onboarding)/marriage-preferences', // step 6
+  '/(onboarding)/matching-preferences', // step 7
+  '/(onboarding)/notifications',        // step 8
 ] as const;
 
 export type OnboardingRoute = typeof ONBOARDING_STEPS[number];
 
 /**
- * Navigate to the previous onboarding step
- * Always navigates to the logically previous step based on ONBOARDING_STEPS order
- * (Do NOT use router.back() as it goes to where user came from, not the logical previous step)
+ * Navigate to the previous onboarding step.
+ * Uses router.back() since forward navigation uses router.push(),
+ * so the previous screen is always on the stack.
  */
 export function goToPreviousOnboardingStep(currentRoute: OnboardingRoute) {
   const currentIndex = ONBOARDING_STEPS.indexOf(currentRoute);
 
   if (currentIndex > 0) {
-    const previousRoute = ONBOARDING_STEPS[currentIndex - 1];
-    // Use replace to avoid building up a confusing navigation stack
-    router.replace(previousRoute);
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      // Fallback: user landed here via redirect, navigate explicitly
+      const previousRoute = ONBOARDING_STEPS[currentIndex - 1];
+      router.replace(previousRoute);
+    }
   } else {
-    // First step - sign out
+    // First step - nowhere to go back to
     console.warn('Already at first onboarding step, cannot go back');
   }
 }

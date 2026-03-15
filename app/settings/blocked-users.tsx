@@ -9,10 +9,12 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { signPhotoUrls } from '@/lib/signed-urls';
 
 interface BlockedUser {
   id: string;
@@ -29,6 +31,7 @@ interface BlockedUser {
 }
 
 export default function BlockedUsers() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
@@ -57,7 +60,7 @@ export default function BlockedUsers() {
       setCurrentProfileId(data.id);
     } catch (error: any) {
       console.error('Error loading profile:', error);
-      Alert.alert('Error', 'Failed to load your profile. Please try again.');
+      Alert.alert(t('common.error'), t('settings.blockedUsers.loadProfileError'));
     }
   };
 
@@ -77,6 +80,7 @@ export default function BlockedUsers() {
             location_city,
             photos (
               url,
+              storage_path,
               is_primary,
               display_order,
               blur_data_uri
@@ -88,12 +92,33 @@ export default function BlockedUsers() {
 
       if (error) throw error;
 
-      // Transform the data to include photo_url
-      const transformedData = data?.map((block: any) => {
-        const photos = block.blocked_profile.photos?.sort(
+      // Collect all primary photos for batch signing
+      const allPrimaryPhotos: { storage_path?: string | null; url?: string | null }[] = [];
+      const photoIndexMap: number[] = []; // maps block index → allPrimaryPhotos index (-1 if none)
+
+      const blocks = data || [];
+      for (let i = 0; i < blocks.length; i++) {
+        const photos = (blocks[i] as any).blocked_profile.photos?.sort(
           (a: any, b: any) => a.display_order - b.display_order
         );
         const primaryPhoto = photos?.find((p: any) => p.is_primary) || photos?.[0];
+        if (primaryPhoto) {
+          photoIndexMap.push(allPrimaryPhotos.length);
+          allPrimaryPhotos.push(primaryPhoto);
+        } else {
+          photoIndexMap.push(-1);
+        }
+      }
+
+      // Batch sign all photos
+      const signedPhotos = allPrimaryPhotos.length > 0
+        ? await signPhotoUrls(allPrimaryPhotos)
+        : [];
+
+      // Transform the data to include signed photo_url
+      const transformedData = blocks.map((block: any, i: number) => {
+        const photoIdx = photoIndexMap[i];
+        const signedPhotoUrl = (photoIdx >= 0 ? signedPhotos[photoIdx]?.url : undefined) ?? undefined;
 
         return {
           id: block.id,
@@ -103,7 +128,7 @@ export default function BlockedUsers() {
             id: block.blocked_profile.id,
             display_name: block.blocked_profile.display_name,
             age: block.blocked_profile.age,
-            photo_url: primaryPhoto?.url,
+            photo_url: signedPhotoUrl,
             is_verified: block.blocked_profile.is_verified,
             location_city: block.blocked_profile.location_city,
           },
@@ -113,7 +138,7 @@ export default function BlockedUsers() {
       setBlockedUsers(transformedData || []);
     } catch (error: any) {
       console.error('Error loading blocked users:', error);
-      Alert.alert('Error', 'Failed to load blocked users. Please try again.');
+      Alert.alert(t('common.error'), t('settings.blockedUsers.loadError'));
     } finally {
       setLoading(false);
     }
@@ -121,12 +146,12 @@ export default function BlockedUsers() {
 
   const handleUnblock = async (block: BlockedUser) => {
     Alert.alert(
-      'Unblock User',
-      `Are you sure you want to unblock ${block.profile.display_name}? They will be able to see your profile and send you messages again.`,
+      t('settings.blockedUsers.unblockTitle'),
+      t('settings.blockedUsers.unblockConfirm', { name: block.profile.display_name }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Unblock',
+          text: t('settings.blockedUsers.unblock'),
           style: 'default',
           onPress: async () => {
             setUnblocking(block.id);
@@ -143,12 +168,12 @@ export default function BlockedUsers() {
               setBlockedUsers((prev) => prev.filter((b) => b.id !== block.id));
 
               Alert.alert(
-                'Unblocked',
-                `${block.profile.display_name} has been unblocked.`
+                t('settings.blockedUsers.unblocked'),
+                t('settings.blockedUsers.unblockedMsg', { name: block.profile.display_name })
               );
             } catch (error: any) {
               console.error('Error unblocking user:', error);
-              Alert.alert('Error', 'Failed to unblock user. Please try again.');
+              Alert.alert(t('common.error'), t('settings.blockedUsers.unblockError'));
             } finally {
               setUnblocking(null);
             }
@@ -164,12 +189,12 @@ export default function BlockedUsers() {
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-    return `${Math.floor(diffDays / 365)} years ago`;
+    if (diffDays === 0) return t('common.time.today');
+    if (diffDays === 1) return t('common.time.yesterday');
+    if (diffDays < 7) return t('common.time.daysAgo', { count: diffDays });
+    if (diffDays < 30) return t('common.time.weeksAgo', { count: Math.floor(diffDays / 7) });
+    if (diffDays < 365) return t('common.time.monthsAgo', { count: Math.floor(diffDays / 30) });
+    return t('common.time.yearsAgo', { count: Math.floor(diffDays / 365) });
   };
 
   const renderBlockedUser = ({ item }: { item: BlockedUser }) => (
@@ -197,7 +222,7 @@ export default function BlockedUsers() {
         {item.profile.location_city && (
           <Text style={styles.location}>{item.profile.location_city}</Text>
         )}
-        <Text style={styles.blockedDate}>Blocked {getTimeAgo(item.created_at)}</Text>
+        <Text style={styles.blockedDate}>{t('settings.blockedUsers.blockedDate', { time: getTimeAgo(item.created_at) })}</Text>
       </View>
 
       <TouchableOpacity
@@ -211,7 +236,7 @@ export default function BlockedUsers() {
         {unblocking === item.id ? (
           <ActivityIndicator size="small" color="#A08AB7" />
         ) : (
-          <Text style={styles.unblockButtonText}>Unblock</Text>
+          <Text style={styles.unblockButtonText}>{t('settings.blockedUsers.unblock')}</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -221,7 +246,7 @@ export default function BlockedUsers() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#A08AB7" />
-        <Text style={styles.loadingText}>Loading blocked users...</Text>
+        <Text style={styles.loadingText}>{t('settings.blockedUsers.loading')}</Text>
       </View>
     );
   }
@@ -236,7 +261,7 @@ export default function BlockedUsers() {
         >
           <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Blocked Users</Text>
+        <Text style={styles.headerTitle}>{t('settings.blockedUsers.title')}</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -253,10 +278,9 @@ export default function BlockedUsers() {
               size={64}
               color="#D1D5DB"
             />
-            <Text style={styles.emptyTitle}>No Blocked Users</Text>
+            <Text style={styles.emptyTitle}>{t('settings.blockedUsers.emptyTitle')}</Text>
             <Text style={styles.emptyText}>
-              You haven't blocked anyone yet.{'\n'}
-              Blocked users will appear here.
+              {t('settings.blockedUsers.emptyText')}
             </Text>
           </View>
         }

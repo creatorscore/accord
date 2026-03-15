@@ -11,6 +11,7 @@ import {
   removePushToken,
   ensurePushTokenSaved,
   addPushTokenChangeListener,
+  deobfuscateId,
 } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 import { useToast } from './ToastContext';
@@ -23,6 +24,7 @@ interface NotificationContextType {
   unreadLikeCount: number;
   refreshUnreadCount: () => Promise<void>;
   refreshUnreadLikeCount: () => Promise<void>;
+  setUnreadLikeCount: (count: number) => void;
   retryPushTokenRegistration: () => Promise<void>;
 }
 
@@ -33,6 +35,7 @@ const NotificationContext = createContext<NotificationContextType>({
   unreadLikeCount: 0,
   refreshUnreadCount: async () => {},
   refreshUnreadLikeCount: async () => {},
+  setUnreadLikeCount: () => {},
   retryPushTokenRegistration: async () => {},
 });
 
@@ -58,6 +61,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const pendingNavigation = useRef<any>(null);
   const appState = useRef<AppStateStatus>(AppState.currentState);
   const retryCount = useRef<number>(0);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxRetries = 10; // Will retry up to 10 times with exponential backoff
   const permissionCheckInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<string | null>(null);
@@ -349,6 +353,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           clearInterval(permissionCheckInterval.current);
           permissionCheckInterval.current = null;
         }
+        // Cancel any pending retry timeout
+        if (retryTimeoutRef.current) {
+          clearTimeout(retryTimeoutRef.current);
+          retryTimeoutRef.current = null;
+        }
       };
     } else {
       // Clean up when user logs out (no need to remove token as user is null)
@@ -519,11 +528,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const success = await ensurePushTokenSaved(user.id, pushToken);
       if (success) {
         retryCount.current = 0; // Reset on success
+        retryTimeoutRef.current = null;
       } else {
         // Token not saved yet, schedule another retry
         retryCount.current++;
         const delay = Math.min(1000 * Math.pow(2, retryCount.current), 60000); // Exponential backoff, max 60s
-        setTimeout(retrySavePushToken, delay);
+        retryTimeoutRef.current = setTimeout(retrySavePushToken, delay);
       }
     } catch (error) {
       console.error('❌ Error in retry push token:', error);
@@ -531,7 +541,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       retryCount.current++;
       if (retryCount.current < maxRetries) {
         const delay = Math.min(1000 * Math.pow(2, retryCount.current), 60000);
-        setTimeout(retrySavePushToken, delay);
+        retryTimeoutRef.current = setTimeout(retrySavePushToken, delay);
       }
     }
   };
@@ -628,24 +638,27 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         const title = notification.request.content.title || '';
         const body = notification.request.content.body || '';
 
+        // Deobfuscate IDs from push payload
+        const fgMatchId = data?.matchId ? deobfuscateId(data.matchId as string) : undefined;
+
         // Show in-app toast based on notification type
-        if (data?.type === 'new_message' && data?.matchId) {
+        if (data?.type === 'new_message' && fgMatchId) {
           // Extract sender name from title (format: "New message from Name")
           const senderName = title.replace('New message from ', '');
-          showMessageToast(senderName, body, data.matchId as string);
-        } else if (data?.type === 'message_reaction' && data?.matchId) {
+          showMessageToast(senderName, body, fgMatchId);
+        } else if (data?.type === 'message_reaction' && fgMatchId) {
           // Extract reactor name and emoji from title (format: "Name reacted emoji")
           const match = title.match(/^(.+) reacted (.+)$/);
           if (match) {
             const reactorName = match[1];
             const emoji = match[2];
-            showReactionToast(reactorName, emoji, data.matchId as string);
+            showReactionToast(reactorName, emoji, fgMatchId);
           }
         } else if (data?.type === 'new_like') {
           const isPremium = data?.isPremium === true;
           const likerName = isPremium && title ? title.replace(' likes you!', '') : 'Someone';
           showLikeToast(likerName, isPremium);
-        } else if (data?.type === 'new_match' && data?.matchId) {
+        } else if (data?.type === 'new_match' && fgMatchId) {
           // For matches, show a toast (the full celebration modal is shown from discover screen)
           showToast({
             type: 'match',
@@ -673,10 +686,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const handleNotificationResponse = async (data: any) => {
     if (!data || !data.type) return;
 
+    // Deobfuscate IDs from push payload (backward-compatible with old payloads)
+    const matchId = data.matchId ? deobfuscateId(data.matchId) : undefined;
+    const likerProfileId = data.likerProfileId ? deobfuscateId(data.likerProfileId) : undefined;
+
     // Store the navigation data for the app to handle
     // Navigation will be handled by individual screens using useEffect
     // to check for pending notifications after mounting
-    pendingNavigation.current = data;
+    pendingNavigation.current = { ...data, matchId, likerProfileId };
 
     // Handle navigation based on notification type
     try {
@@ -693,8 +710,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         case 'new_message':
         case 'message_reaction':
           // Navigate to chat if matchId is available
-          if (data.matchId) {
-            router.push(`/chat/${data.matchId}`);
+          if (matchId) {
+            router.push(`/chat/${matchId}`);
           } else {
             router.push('/(tabs)/messages');
           }
@@ -703,11 +720,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           // For premium users, check if the liker has become a match
           // (happens when user swiped right on them from Discover before tapping notification)
           // PERFORMANCE: Use profileId from ProfileDataContext instead of querying
-          if (data.likerProfileId && profileId) {
+          if (likerProfileId && profileId) {
             try {
               // Check if there's already a match with this liker
-              const profile1Id = profileId < data.likerProfileId ? profileId : data.likerProfileId;
-              const profile2Id = profileId < data.likerProfileId ? data.likerProfileId : profileId;
+              const profile1Id = profileId < likerProfileId ? profileId : likerProfileId;
+              const profile2Id = profileId < likerProfileId ? likerProfileId : profileId;
 
               const { data: existingMatch } = await supabase
                 .from('matches')
@@ -748,6 +765,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         unreadLikeCount,
         refreshUnreadCount,
         refreshUnreadLikeCount,
+        setUnreadLikeCount,
         retryPushTokenRegistration,
       }}
     >

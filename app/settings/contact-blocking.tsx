@@ -488,13 +488,13 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#6B21A8',
+    color: '#A08AB7',
     marginBottom: 8,
     textAlign: 'center',
   },
   infoText: {
     fontSize: 14,
-    color: '#6B21A8',
+    color: '#A08AB7',
     textAlign: 'center',
     lineHeight: 20,
   },

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { decryptMessage, getPrivateKey } from '@/lib/encryption';
+import { signPhotoUrls } from '@/lib/signed-urls';
 
 export type ActivityType =
   | 'like_received'
@@ -25,8 +25,7 @@ export interface ActivityItem {
   actor?: {
     id: string;
     display_name: string;
-    photos: { url: string; is_primary: boolean }[];
-    encryption_public_key?: string;
+    photos: { url: string; storage_path?: string | null; is_primary: boolean }[];
   };
   decrypted_preview?: string; // Decrypted message preview for message_received type
 }
@@ -54,7 +53,7 @@ interface UseActivityFeedReturn {
 
 const PAGE_SIZE = 20;
 
-export function useActivityFeed(profileId: string | null, userId?: string | null): UseActivityFeedReturn {
+export function useActivityFeed(profileId: string | null, _userId?: string | null): UseActivityFeedReturn {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -62,51 +61,33 @@ export function useActivityFeed(profileId: string | null, userId?: string | null
   const [error, setError] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [privateKey, setPrivateKey] = useState<string | null>(null);
 
   if (__DEV__) {
     console.log('🔔 useActivityFeed called with profileId:', profileId);
   }
 
-  // Fetch private key for decryption
-  useEffect(() => {
-    const fetchPrivateKey = async () => {
-      if (!userId) return;
-      try {
-        const key = await getPrivateKey(userId);
-        setPrivateKey(key);
-      } catch (err) {
-        console.error('Error fetching private key for activity feed:', err);
+  // Group activities by time period (memoized to avoid recomputing on every render)
+  const groupedActivities: GroupedActivities = useMemo(() => {
+    const groups: GroupedActivities = { today: [], yesterday: [], thisWeek: [], earlier: [] };
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+    const weekStart = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    activities.forEach((activity) => {
+      const activityDate = new Date(activity.created_at);
+      if (activityDate >= todayStart) {
+        groups.today.push(activity);
+      } else if (activityDate >= yesterdayStart) {
+        groups.yesterday.push(activity);
+      } else if (activityDate >= weekStart) {
+        groups.thisWeek.push(activity);
+      } else {
+        groups.earlier.push(activity);
       }
-    };
-    fetchPrivateKey();
-  }, [userId]);
-
-  // Group activities by time period
-  const groupedActivities: GroupedActivities = {
-    today: [],
-    yesterday: [],
-    thisWeek: [],
-    earlier: [],
-  };
-
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
-  const weekStart = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-  activities.forEach((activity) => {
-    const activityDate = new Date(activity.created_at);
-    if (activityDate >= todayStart) {
-      groupedActivities.today.push(activity);
-    } else if (activityDate >= yesterdayStart) {
-      groupedActivities.yesterday.push(activity);
-    } else if (activityDate >= weekStart) {
-      groupedActivities.thisWeek.push(activity);
-    } else {
-      groupedActivities.earlier.push(activity);
-    }
-  });
+    });
+    return groups;
+  }, [activities]);
 
   const fetchActivities = useCallback(
     async (isRefresh = false) => {
@@ -137,7 +118,7 @@ export function useActivityFeed(profileId: string | null, userId?: string | null
           console.log('🔔 Fetching activities from offset:', currentOffset);
         }
 
-        // Fetch activities with actor profile info (including encryption key for message decryption)
+        // Fetch activities with actor profile info (encryption keys only fetched in chat context)
         const { data, error: fetchError } = await supabase
           .from('activity_feed')
           .select(
@@ -146,8 +127,7 @@ export function useActivityFeed(profileId: string | null, userId?: string | null
             actor:profiles!activity_feed_actor_profile_id_fkey (
               id,
               display_name,
-              photos (url, is_primary),
-              encryption_public_key,
+              photos (url, storage_path, is_primary),
               photo_blur_enabled
             )
           `
@@ -168,38 +148,28 @@ export function useActivityFeed(profileId: string | null, userId?: string | null
 
         let newActivities: ActivityItem[] = data || [];
 
-        // Decrypt message previews for message_received activities
-        if (privateKey) {
-          newActivities = await Promise.all(
-            newActivities.map(async (activity) => {
-              if (
-                activity.activity_type === 'message_received' &&
-                activity.metadata?.preview &&
-                activity.actor?.encryption_public_key
-              ) {
-                try {
-                  // Check if preview looks encrypted (contains colon separator for iv:ciphertext:tag format)
-                  const preview = activity.metadata.preview;
-                  if (preview.includes(':')) {
-                    const decrypted = await decryptMessage(
-                      preview,
-                      privateKey,
-                      activity.actor.encryption_public_key
-                    );
-                    return { ...activity, decrypted_preview: decrypted };
-                  }
-                  // If not encrypted format, use as-is
-                  return { ...activity, decrypted_preview: preview };
-                } catch (err) {
-                  console.error('Error decrypting activity preview:', err);
-                  // Return activity without decrypted preview on error
-                  return activity;
-                }
-              }
-              return activity;
-            })
-          );
+        // Batch sign all photo URLs at once (avoid N+1 sequential signing)
+        const allPhotos: { url: string; storage_path?: string }[] = [];
+        const photoIndexMap: { activityIdx: number; photoIdx: number }[] = [];
+        for (let i = 0; i < newActivities.length; i++) {
+          const photos = newActivities[i].actor?.photos;
+          if (photos?.length) {
+            for (let j = 0; j < photos.length; j++) {
+              allPhotos.push(photos[j]);
+              photoIndexMap.push({ activityIdx: i, photoIdx: j });
+            }
+          }
         }
+        if (allPhotos.length > 0) {
+          const signedPhotos = await signPhotoUrls(allPhotos);
+          for (let k = 0; k < signedPhotos.length; k++) {
+            const { activityIdx, photoIdx } = photoIndexMap[k];
+            newActivities[activityIdx].actor.photos[photoIdx] = signedPhotos[k];
+          }
+        }
+
+        // Message previews are not decrypted in the activity feed — encryption keys
+        // are only fetched in the chat context to minimize key exposure surface
 
         if (isRefresh) {
           setActivities(newActivities);
@@ -227,7 +197,7 @@ export function useActivityFeed(profileId: string | null, userId?: string | null
         setRefreshing(false);
       }
     },
-    [profileId, offset, privateKey]
+    [profileId, offset]
   );
 
   const refresh = useCallback(async () => {

@@ -119,6 +119,13 @@ export function detectGibberish(text: string): boolean {
     return false; // Too short to determine
   }
 
+  // Bypass for non-Latin scripts (Arabic, CJK, Cyrillic, Devanagari, Thai, Korean, etc.)
+  // These scripts have fundamentally different vowel/consonant patterns
+  const nonLatinPattern = /[\u0600-\u06FF\u0750-\u077F\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF\u0400-\u04FF\u0900-\u097F\u0E00-\u0E7F\u1000-\u109F\u0980-\u09FF\u0A80-\u0AFF]/;
+  if (nonLatinPattern.test(text)) {
+    return false;
+  }
+
   const cleanText = text.toLowerCase().replace(/[^a-z]/g, '');
 
   if (cleanText.length < 5) {
@@ -129,9 +136,10 @@ export function detectGibberish(text: string): boolean {
   const consonants = cleanText.match(/[bcdfghjklmnpqrstvwxyz]/g) || [];
 
   // Check vowel ratio - real English text has ~38-42% vowels
-  // Gibberish typically has <15% vowels
+  // Gibberish typically has very low vowels; threshold lowered to 0.10 for
+  // Eastern European languages (Czech, Slovak, Croatian) with consonant clusters
   const vowelRatio = vowels.length / cleanText.length;
-  if (vowelRatio < 0.15) {
+  if (vowelRatio < 0.10) {
     return true;
   }
 
@@ -179,11 +187,11 @@ export function detectGibberish(text: string): boolean {
     return cleanWord.length >= 2 && commonWords.includes(cleanWord);
   });
 
-  // If text is longer than 30 chars but has no common words, likely gibberish
-  if (cleanText.length > 30 && recognizedWords.length === 0) {
+  // If text is longer than 50 chars but has no common words, likely gibberish
+  if (cleanText.length > 50 && recognizedWords.length === 0) {
     // Double check - maybe it's a different language with proper structure
     // Real text (even non-English) will have vowel patterns
-    if (vowelRatio < 0.25) {
+    if (vowelRatio < 0.20) {
       return true;
     }
   }
@@ -252,13 +260,6 @@ export function cleanText(text: string): string {
  */
 export function validateDisplayName(displayName: string): ModerationResult {
   return moderateText(displayName);
-}
-
-/**
- * Validate profile bio
- */
-export function validateBio(bio: string): ModerationResult {
-  return moderateText(bio);
 }
 
 /**

@@ -1,24 +1,37 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
+import { useState, useEffect, useMemo } from 'react';
+import { View, Text, TouchableOpacity, Alert, StyleSheet, useColorScheme } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { GradientButton } from '@/components/shared/GradientButton';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
-import { HeightUnit, cmToInches, getHeightRange } from '@/lib/height-utils';
+import { getGlobalStep } from '@/lib/onboarding-steps';
+import { HeightUnit, cmToInches, inchesToCm, inchesToFeetAndInches } from '@/lib/height-utils';
+import * as Haptics from 'expo-haptics';
+import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
+import OnboardingChips from '@/components/onboarding/OnboardingChips';
+import VisibilityToggle from '@/components/onboarding/VisibilityToggle';
+import ScrollPicker from '@/components/onboarding/ScrollPicker';
+import { useOnboardingDraft } from '@/hooks/useOnboardingDraft';
 
-const ZODIAC_SIGNS = [
-  'Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo',
-  'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces',
-  'Prefer not to say'
-];
+interface PersonalityDraft {
+  heightInTotal: number;
+  heightUnit: string;
+  personalityType: string;
+  loveLanguage: string[];
+  selectedLanguages: string[];
+  religion: string;
+  politicalViews: string;
+  fieldVisibility: Record<string, boolean>;
+}
 
 const MBTI_TYPES = [
   'INTJ', 'INTP', 'ENTJ', 'ENTP',
   'INFJ', 'INFP', 'ENFJ', 'ENFP',
   'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ',
   'ISTP', 'ISFP', 'ESTP', 'ESFP',
-  "Don't know"
+  "Don't know",
 ];
 
 const LOVE_LANGUAGES = [
@@ -27,35 +40,117 @@ const LOVE_LANGUAGES = [
   'Receiving Gifts',
   'Acts of Service',
   'Physical Touch',
-  'Not sure'
+  'Not sure',
 ];
 
 const COMMON_LANGUAGES = [
   'English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese',
   'Mandarin', 'Cantonese', 'Japanese', 'Korean', 'Arabic', 'Hindi',
   'Russian', 'Dutch', 'Polish', 'Swedish', 'Greek', 'Hebrew',
-  'Vietnamese', 'Thai', 'Tagalog', 'ASL (Sign Language)', 'Other'
+  'Vietnamese', 'Thai', 'Tagalog', 'ASL (Sign Language)', 'Other',
 ];
 
 const RELIGIONS = [
   'Christian', 'Catholic', 'Protestant', 'Muslim', 'Jewish', 'Hindu',
   'Buddhist', 'Sikh', 'Atheist', 'Agnostic', 'Spiritual but not religious',
-  'Other', 'Prefer not to say'
+  'Other', 'Prefer not to say',
 ];
 
 const POLITICAL_VIEWS = [
   'Liberal', 'Progressive', 'Moderate', 'Conservative', 'Libertarian',
-  'Socialist', 'Apolitical', 'Other', 'Prefer not to say'
+  'Socialist', 'Apolitical', 'Other', 'Prefer not to say',
 ];
 
 export default function Personality() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
-  const [zodiacSign, setZodiacSign] = useState('');
-  const [heightFeet, setHeightFeet] = useState('');
-  const [heightInches, setHeightInches] = useState('');
-  const [heightCm, setHeightCm] = useState('');
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const LOVE_LANGUAGE_LABELS: Record<string, string> = {
+    'Words of Affirmation': t('onboarding.personality.wordsOfAffirmation'),
+    'Quality Time': t('onboarding.personality.qualityTime'),
+    'Receiving Gifts': t('onboarding.personality.receivingGifts'),
+    'Acts of Service': t('onboarding.personality.actsOfService'),
+    'Physical Touch': t('onboarding.personality.physicalTouch'),
+    'Not sure': t('onboarding.personality.notSure'),
+  };
+  const LANGUAGE_LABELS: Record<string, string> = {
+    'English': t('onboarding.personality.lang.english'),
+    'Spanish': t('onboarding.personality.lang.spanish'),
+    'French': t('onboarding.personality.lang.french'),
+    'German': t('onboarding.personality.lang.german'),
+    'Italian': t('onboarding.personality.lang.italian'),
+    'Portuguese': t('onboarding.personality.lang.portuguese'),
+    'Mandarin': t('onboarding.personality.lang.mandarin'),
+    'Japanese': t('onboarding.personality.lang.japanese'),
+    'Korean': t('onboarding.personality.lang.korean'),
+    'Arabic': t('onboarding.personality.lang.arabic'),
+    'Hindi': t('onboarding.personality.lang.hindi'),
+    'Russian': t('onboarding.personality.lang.russian'),
+    'Dutch': t('onboarding.personality.lang.dutch'),
+    'Polish': t('onboarding.personality.lang.polish'),
+    'Vietnamese': t('onboarding.personality.lang.vietnamese'),
+    'Thai': t('onboarding.personality.lang.thai'),
+    'Tagalog': t('onboarding.personality.lang.tagalog'),
+    'ASL (Sign Language)': t('onboarding.personality.lang.asl'),
+    'Other': t('onboarding.personality.lang.other'),
+  };
+  const RELIGION_LABELS: Record<string, string> = {
+    'Christian': t('onboarding.personality.religion.christian'),
+    'Muslim': t('onboarding.personality.religion.muslim'),
+    'Jewish': t('onboarding.personality.religion.jewish'),
+    'Hindu': t('onboarding.personality.religion.hindu'),
+    'Buddhist': t('onboarding.personality.religion.buddhist'),
+    'Sikh': t('onboarding.personality.religion.sikh'),
+    'Atheist': t('onboarding.personality.religion.atheist'),
+    'Agnostic': t('onboarding.personality.religion.agnostic'),
+    'Spiritual but not religious': t('onboarding.personality.religion.spiritual'),
+    'Prefer not to say': t('onboarding.personality.religion.preferNotToSay'),
+  };
+  const POLITICS_LABELS: Record<string, string> = {
+    'Liberal': t('onboarding.personality.politics.liberal'),
+    'Conservative': t('onboarding.personality.politics.conservative'),
+    'Moderate': t('onboarding.personality.politics.moderate'),
+    'Progressive': t('onboarding.personality.politics.progressive'),
+    'Libertarian': t('onboarding.personality.politics.libertarian'),
+    'Apolitical': t('onboarding.personality.politics.apolitical'),
+    'Prefer not to say': t('onboarding.personality.politics.preferNotToSay'),
+  };
+
+  const [subStep, setSubStep] = useState(0);
+  const [heightInTotal, setHeightInTotal] = useState<number>(69); // total inches, default 5'9"
   const [heightUnit, setHeightUnit] = useState<HeightUnit>('imperial');
+
+  // Imperial: combined feet+inches items (48" = 4'0" through 87" = 7'3")
+  const imperialItems = useMemo(() =>
+    Array.from({ length: 40 }, (_, i) => {
+      const totalIn = i + 48;
+      const { feet, inches } = inchesToFeetAndInches(totalIn);
+      return { label: `${feet}' ${inches}"`, value: totalIn };
+    }), []);
+
+  // Metric: cm items (120cm through 220cm)
+  const metricItems = useMemo(() =>
+    Array.from({ length: 101 }, (_, i) => ({
+      label: `${i + 120} cm`,
+      value: i + 120,
+    })), []);
+
+  // Convert between units for the picker
+  const pickerValue = useMemo(() => {
+    if (heightUnit === 'metric') return inchesToCm(heightInTotal);
+    return heightInTotal;
+  }, [heightInTotal, heightUnit]);
+
+  const handleHeightChange = (value: number) => {
+    if (heightUnit === 'metric') {
+      setHeightInTotal(cmToInches(value));
+    } else {
+      setHeightInTotal(value);
+    }
+  };
   const [personalityType, setPersonalityType] = useState('');
   const [loveLanguage, setLoveLanguage] = useState<string[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
@@ -63,6 +158,11 @@ export default function Personality() {
   const [politicalViews, setPoliticalViews] = useState('');
   const [loading, setLoading] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [fieldVisibility, setFieldVisibility] = useState<Record<string, boolean>>({
+    religion: true, political_views: true,
+  });
+
+  const { loadDraft, saveDraft, clearDraft } = useOnboardingDraft<PersonalityDraft>(user?.id, 'personality');
 
   useEffect(() => {
     loadProfile();
@@ -72,7 +172,7 @@ export default function Personality() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, zodiac_sign, height_inches, height_unit, personality_type, love_language, languages_spoken, religion, political_views')
+        .select('id, height_inches, height_unit, personality_type, love_language, languages_spoken, religion, political_views, field_visibility')
         .eq('user_id', user?.id)
         .single();
 
@@ -80,71 +180,47 @@ export default function Personality() {
 
       if (data) {
         setProfileId(data.id);
-        // Pre-fill form if data exists
-        if (data.zodiac_sign) setZodiacSign(data.zodiac_sign);
         if (data.personality_type) setPersonalityType(data.personality_type);
         if (data.love_language) setLoveLanguage(Array.isArray(data.love_language) ? data.love_language : [data.love_language]);
         if (data.languages_spoken) setSelectedLanguages(Array.isArray(data.languages_spoken) ? data.languages_spoken : [data.languages_spoken]);
         if (data.religion) setReligion(data.religion);
         if (data.political_views) setPoliticalViews(data.political_views);
+        if (data.field_visibility) {
+          setFieldVisibility(prev => ({ ...prev, ...data.field_visibility }));
+        }
 
-        // Handle height based on saved unit preference
         if (data.height_unit) setHeightUnit(data.height_unit);
         if (data.height_inches) {
-          const unit = data.height_unit || 'imperial';
-          if (unit === 'metric') {
-            // Convert inches to cm for display
-            const cm = Math.round(data.height_inches * 2.54);
-            setHeightCm(cm.toString());
-          } else {
-            // Convert total inches to feet and inches
-            const feet = Math.floor(data.height_inches / 12);
-            const inches = data.height_inches % 12;
-            setHeightFeet(feet.toString());
-            setHeightInches(inches.toString());
-          }
+          setHeightInTotal(data.height_inches);
         }
+      }
+
+      // Overlay draft on top of DB data
+      const draft = await loadDraft();
+      if (draft) {
+        const d = draft.data;
+        if (d.heightInTotal) setHeightInTotal(d.heightInTotal);
+        if (d.heightUnit) setHeightUnit(d.heightUnit as HeightUnit);
+        if (d.personalityType) setPersonalityType(d.personalityType);
+        if (d.loveLanguage?.length) setLoveLanguage(d.loveLanguage);
+        if (d.selectedLanguages?.length) setSelectedLanguages(d.selectedLanguages);
+        if (d.religion) setReligion(d.religion);
+        if (d.politicalViews) setPoliticalViews(d.politicalViews);
+        if (d.fieldVisibility) setFieldVisibility(prev => ({ ...prev, ...d.fieldVisibility }));
+        setSubStep(draft.subStep);
       }
     } catch (error: any) {
       console.error('Error loading profile:', error);
     }
   };
 
-  const toggleLanguage = (language: string) => {
-    if (selectedLanguages.includes(language)) {
-      setSelectedLanguages(selectedLanguages.filter(l => l !== language));
-    } else {
-      setSelectedLanguages([...selectedLanguages, language]);
-    }
-  };
-
-  const toggleLoveLanguage = (lang: string) => {
-    if (loveLanguage.includes(lang)) {
-      setLoveLanguage(loveLanguage.filter(l => l !== lang));
-    } else {
-      setLoveLanguage([...loveLanguage, lang]);
-    }
-  };
-
-  const handleContinue = async () => {
-    // Validation - at least some fields should be filled
-    const hasHeight = heightUnit === 'metric' ? !!heightCm : !!heightFeet;
-    if (!zodiacSign && !hasHeight && !personalityType && loveLanguage.length === 0 && selectedLanguages.length === 0) {
-      Alert.alert('Required', 'Please fill in at least a few fields to continue');
-      return;
-    }
-
+  const handleSaveAndContinue = async () => {
     try {
       setLoading(true);
 
-      // Get the current user from Supabase session
       const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+      if (userError || !currentUser) throw new Error('Not authenticated. Please sign in again.');
 
-      if (userError || !currentUser) {
-        throw new Error('Not authenticated. Please sign in again.');
-      }
-
-      // Get profile ID if not already loaded
       let activeProfileId = profileId;
       if (!activeProfileId) {
         const { data: profileData, error: profileError } = await supabase
@@ -152,26 +228,27 @@ export default function Personality() {
           .select('id')
           .eq('user_id', currentUser.id)
           .single();
-
         if (profileError) throw profileError;
         activeProfileId = profileData.id;
       }
 
-      // Calculate total height in inches based on selected unit
-      let totalHeightInches = null;
-      if (heightUnit === 'metric' && heightCm) {
-        // Convert cm to inches for storage
-        totalHeightInches = cmToInches(parseInt(heightCm) || 0);
-      } else if (heightUnit === 'imperial' && heightFeet) {
-        const feet = parseInt(heightFeet) || 0;
-        const inches = parseInt(heightInches) || 0;
-        totalHeightInches = (feet * 12) + inches;
-      }
+      const totalHeightInches = heightInTotal;
 
-      const { error} = await supabase
+      // Merge field_visibility with existing values
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('field_visibility')
+        .eq('id', activeProfileId)
+        .single();
+
+      const mergedVisibility = {
+        ...(existingProfile?.field_visibility || {}),
+        ...fieldVisibility,
+      };
+
+      const { error } = await supabase
         .from('profiles')
         .update({
-          zodiac_sign: zodiacSign || null,
           height_inches: totalHeightInches,
           height_unit: heightUnit,
           personality_type: personalityType || null,
@@ -179,339 +256,259 @@ export default function Personality() {
           languages_spoken: selectedLanguages.length > 0 ? selectedLanguages : null,
           religion: religion || null,
           political_views: politicalViews || null,
-          onboarding_step: 4,
+          field_visibility: mergedVisibility,
+          onboarding_step: 2,
         })
         .eq('id', activeProfileId);
 
       if (error) throw error;
 
-      router.push('/(onboarding)/interests');
+      await clearDraft();
+      router.push('/(onboarding)/photos');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save information');
+      Alert.alert(t('common.error'), error.message || t('onboarding.personality.saveError'));
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <ScrollView className="flex-1 bg-cream dark:bg-gray-900">
-      <View className="px-6 pb-4" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
-        {/* Progress */}
-        <View className="mb-8">
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 4 of 9</Text>
-            <Text className="text-sm text-lavender-400 dark:text-lavender-300 font-bold">44%</Text>
-          </View>
-          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <View
-              className="h-3 bg-lavender-400 dark:bg-lavender-500 rounded-full"
-              style={{ width: '44%' }}
+  const buildDraftSnapshot = (): PersonalityDraft => ({
+    heightInTotal, heightUnit, personalityType, loveLanguage,
+    selectedLanguages, religion, politicalViews, fieldVisibility,
+  });
+
+  const handleBack = () => {
+    if (subStep === 0) {
+      goToPreviousOnboardingStep('/(onboarding)/personality');
+    } else {
+      const prevStep = subStep - 1;
+      saveDraft(prevStep, buildDraftSnapshot());
+      setSubStep(prevStep);
+    }
+  };
+
+  const handleContinue = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (subStep < 5) {
+      const nextStep = subStep + 1;
+      saveDraft(nextStep, buildDraftSnapshot());
+      setSubStep(nextStep);
+    } else {
+      handleSaveAndContinue();
+    }
+  };
+
+  const handleSkip = () => {
+    if (subStep < 5) {
+      const nextStep = subStep + 1;
+      saveDraft(nextStep, buildDraftSnapshot());
+      setSubStep(nextStep);
+    } else {
+      handleSaveAndContinue();
+    }
+  };
+
+  const getStepConfig = () => {
+    switch (subStep) {
+      case 0:
+        return { title: t('onboarding.personality.heightTitle'), subtitle: "" };
+      case 1:
+        return { title: t('onboarding.personality.mbtiTitle'), subtitle: t('onboarding.personality.mbtiSubtitle') };
+      case 2:
+        return { title: t('onboarding.personality.loveLanguageTitle'), subtitle: t('onboarding.personality.loveLanguageSubtitle') };
+      case 3:
+        return { title: t('onboarding.personality.languagesTitle'), subtitle: t('onboarding.personality.languagesSubtitle') };
+      case 4:
+        return { title: t('onboarding.personality.faithTitle'), subtitle: t('onboarding.personality.faithSubtitle') };
+      case 5:
+        return { title: t('onboarding.personality.politicsTitle'), subtitle: t('onboarding.personality.politicsSubtitle') };
+      default:
+        return { title: "", subtitle: "" };
+    }
+  };
+
+  const { title, subtitle } = getStepConfig();
+
+  const renderContent = () => {
+    switch (subStep) {
+      case 0:
+        return (
+          <View>
+            <ScrollPicker
+              items={heightUnit === 'imperial' ? imperialItems : metricItems}
+              selectedValue={pickerValue}
+              onValueChange={handleHeightChange}
             />
-          </View>
-        </View>
 
-        {/* Header */}
-        <View className="mb-8 items-center">
-          <Text className="text-5xl mb-4">✨</Text>
-          <Text className="text-4xl font-bold text-charcoal dark:text-white mb-3 text-center">
-            Let's get personal
-          </Text>
-          <Text className="text-gray-600 dark:text-gray-400 text-lg text-center">
-            Share more about your personality and what makes you unique
-          </Text>
-        </View>
-
-        {/* Form */}
-        <View className="space-y-6">
-          {/* Zodiac Sign */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Zodiac Sign <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {ZODIAC_SIGNS.map((sign) => (
+            {/* FT / CM pill toggle */}
+            <View style={styles.unitToggleRow}>
+              <View style={[styles.unitPill, { backgroundColor: isDark ? '#2A2A3E' : '#F0EDF4' }]}>
                 <TouchableOpacity
-                  key={sign}
-                  className={`px-4 py-2 rounded-full border ${
-                    zodiacSign === sign
-                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => setZodiacSign(sign)}
+                  style={[
+                    styles.unitPillOption,
+                    heightUnit === 'imperial' && [styles.unitPillOptionActive, { backgroundColor: isDark ? '#3D3D52' : '#FFFFFF' }],
+                  ]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setHeightUnit('imperial'); }}
+                  activeOpacity={0.7}
                 >
-                  <Text
-                    className={`${
-                      zodiacSign === sign ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
-                    } font-medium`}
-                  >
-                    {sign}
+                  <Text style={[
+                    styles.unitPillText,
+                    { color: heightUnit === 'imperial' ? (isDark ? '#F5F5F7' : '#1A1A2E') : (isDark ? '#6B7280' : '#9CA3AF') },
+                    heightUnit === 'imperial' && { fontWeight: '700' },
+                  ]}>
+                    {t('onboarding.personality.ft')}
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Height */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Height <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
-            </Text>
-
-            {/* Height Unit Toggle */}
-            <View className="flex-row gap-2 mb-3">
-              <TouchableOpacity
-                className={`flex-1 py-3 rounded-xl border ${
-                  heightUnit === 'imperial'
-                    ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
-                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                }`}
-                onPress={() => setHeightUnit('imperial')}
-              >
-                <Text
-                  className={`text-center font-medium ${
-                    heightUnit === 'imperial' ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
-                  }`}
+                <TouchableOpacity
+                  style={[
+                    styles.unitPillOption,
+                    heightUnit === 'metric' && [styles.unitPillOptionActive, { backgroundColor: isDark ? '#3D3D52' : '#FFFFFF' }],
+                  ]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setHeightUnit('metric'); }}
+                  activeOpacity={0.7}
                 >
-                  Feet / Inches
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className={`flex-1 py-3 rounded-xl border ${
-                  heightUnit === 'metric'
-                    ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
-                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                }`}
-                onPress={() => setHeightUnit('metric')}
-              >
-                <Text
-                  className={`text-center font-medium ${
-                    heightUnit === 'metric' ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  Centimeters
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Height Input - Imperial (feet/inches) */}
-            {heightUnit === 'imperial' ? (
-              <View className="flex-row gap-3 items-center">
-                <View className="flex-1">
-                  <TextInput
-                    className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white"
-                    placeholder="Feet (e.g., 5)"
-                    placeholderTextColor="#9CA3AF"
-                    value={heightFeet}
-                    onChangeText={setHeightFeet}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                  />
-                </View>
-                <Text className="text-gray-500 dark:text-gray-400 font-bold">ft</Text>
-                <View className="flex-1">
-                  <TextInput
-                    className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white"
-                    placeholder="Inches (e.g., 10)"
-                    placeholderTextColor="#9CA3AF"
-                    value={heightInches}
-                    onChangeText={setHeightInches}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                  />
-                </View>
-                <Text className="text-gray-500 dark:text-gray-400 font-bold">in</Text>
+                  <Text style={[
+                    styles.unitPillText,
+                    { color: heightUnit === 'metric' ? (isDark ? '#F5F5F7' : '#1A1A2E') : (isDark ? '#6B7280' : '#9CA3AF') },
+                    heightUnit === 'metric' && { fontWeight: '700' },
+                  ]}>
+                    {t('onboarding.personality.cm')}
+                  </Text>
+                </TouchableOpacity>
               </View>
-            ) : (
-              /* Height Input - Metric (cm) */
-              <View className="flex-row gap-3 items-center">
-                <View className="flex-1">
-                  <TextInput
-                    className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-gray-900 dark:text-white"
-                    placeholder="Height in cm (e.g., 175)"
-                    placeholderTextColor="#9CA3AF"
-                    value={heightCm}
-                    onChangeText={setHeightCm}
-                    keyboardType="number-pad"
-                    maxLength={3}
-                  />
-                </View>
-                <Text className="text-gray-500 dark:text-gray-400 font-bold">cm</Text>
-              </View>
-            )}
-          </View>
-
-          {/* MBTI/Personality Type */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Personality Type (MBTI) <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {MBTI_TYPES.map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  className={`px-4 py-2 rounded-full border ${
-                    personalityType === type
-                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => setPersonalityType(type)}
-                >
-                  <Text
-                    className={`${
-                      personalityType === type ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
-                    } font-medium`}
-                  >
-                    {type}
-                  </Text>
-                </TouchableOpacity>
-              ))}
             </View>
-          </View>
 
-          {/* Love Language */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Love Language <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
-            </Text>
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select all that apply - most people have 2-3</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {LOVE_LANGUAGES.map((language) => (
-                <TouchableOpacity
-                  key={language}
-                  className={`px-4 py-2 rounded-full border ${
-                    loveLanguage.includes(language)
-                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => toggleLoveLanguage(language)}
-                >
-                  <Text
-                    className={`${
-                      loveLanguage.includes(language) ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
-                    } font-medium text-sm`}
-                  >
-                    {language}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {loveLanguage.length > 0 && (
-              <Text className="text-xs text-lavender-500 dark:text-lavender-300 mt-2">
-                Selected: {loveLanguage.join(', ')}
+            {/* Divider */}
+            <View style={[styles.divider, { backgroundColor: isDark ? '#2A2A3E' : '#F0EDF4' }]} />
+
+            <View style={styles.visibilityNote}>
+              <MaterialCommunityIcons name="eye-outline" size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
+              <Text style={[styles.visibilityNoteText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                {t('onboarding.visibility.alwaysVisible')}
               </Text>
-            )}
-          </View>
-
-          {/* Languages Spoken */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Languages You Speak <Text className="text-gray-400 dark:text-gray-500">(optional, select all that apply)</Text>
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {COMMON_LANGUAGES.map((language) => (
-                <TouchableOpacity
-                  key={language}
-                  className={`px-4 py-2 rounded-full border ${
-                    selectedLanguages.includes(language)
-                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => toggleLanguage(language)}
-                >
-                  <Text
-                    className={`${
-                      selectedLanguages.includes(language) ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
-                    } font-medium text-sm`}
-                  >
-                    {language}
-                  </Text>
-                </TouchableOpacity>
-              ))}
             </View>
           </View>
+        );
 
-          {/* Religion */}
+      case 1:
+        return (
+          <OnboardingChips
+            options={MBTI_TYPES.map(v => ({ label: v === "Don't know" ? t('onboarding.personality.dontKnow') : v, value: v }))}
+            value={personalityType}
+            onChange={setPersonalityType}
+          />
+        );
+
+      case 2:
+        return (
+          <OnboardingChips
+            options={LOVE_LANGUAGES.map(l => ({ label: LOVE_LANGUAGE_LABELS[l] || l, value: l }))}
+            value={loveLanguage}
+            onChange={setLoveLanguage}
+            multiSelect
+          />
+        );
+
+      case 3:
+        return (
+          <OnboardingChips
+            options={COMMON_LANGUAGES.map(l => ({ label: LANGUAGE_LABELS[l] || l, value: l }))}
+            value={selectedLanguages}
+            onChange={setSelectedLanguages}
+            multiSelect
+          />
+        );
+
+      case 4:
+        return (
           <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Religion <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {RELIGIONS.map((rel) => (
-                <TouchableOpacity
-                  key={rel}
-                  className={`px-4 py-2 rounded-full border ${
-                    religion === rel
-                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => setReligion(rel)}
-                >
-                  <Text
-                    className={`${
-                      religion === rel ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
-                    } font-medium text-sm`}
-                  >
-                    {rel}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Political Views */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Political Views <Text className="text-gray-400 dark:text-gray-500">(optional)</Text>
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {POLITICAL_VIEWS.map((view) => (
-                <TouchableOpacity
-                  key={view}
-                  className={`px-4 py-2 rounded-full border ${
-                    politicalViews === view
-                      ? 'bg-lavender-500 dark:bg-lavender-600 border-lavender-500 dark:border-lavender-600'
-                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                  }`}
-                  onPress={() => setPoliticalViews(view)}
-                >
-                  <Text
-                    className={`${
-                      politicalViews === view ? 'text-white dark:text-white' : 'text-gray-700 dark:text-gray-300'
-                    } font-medium text-sm`}
-                  >
-                    {view}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-        </View>
-
-        {/* Continue Button */}
-        <View className="flex-row gap-3 mt-8">
-          <TouchableOpacity
-            className="flex-1 py-4 rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-            onPress={() => goToPreviousOnboardingStep('/(onboarding)/personality')}
-            disabled={loading}
-          >
-            <Text className="text-gray-700 dark:text-gray-300 text-center font-bold text-lg">Back</Text>
-          </TouchableOpacity>
-
-          <View className="flex-1">
-            <GradientButton
-              title={loading ? 'Saving...' : 'Continue'}
-              onPress={handleContinue}
-              loading={loading}
+            <OnboardingChips
+              options={RELIGIONS.map(r => ({ label: RELIGION_LABELS[r] || r, value: r }))}
+              value={religion}
+              onChange={setReligion}
+            />
+            <VisibilityToggle
+              visible={fieldVisibility.religion !== false}
+              onToggle={(v) => setFieldVisibility(prev => ({ ...prev, religion: v }))}
             />
           </View>
-        </View>
+        );
 
-        {/* Note */}
-        <Text className="text-sm text-gray-600 dark:text-gray-400 text-center mt-6 px-4">
-          All fields are optional, but filling them out helps you find better matches!
-        </Text>
-      </View>
-    </ScrollView>
+      case 5:
+        return (
+          <View>
+            <OnboardingChips
+              options={POLITICAL_VIEWS.map(v => ({ label: POLITICS_LABELS[v] || v, value: v }))}
+              value={politicalViews}
+              onChange={setPoliticalViews}
+            />
+            <VisibilityToggle
+              visible={fieldVisibility.political_views !== false}
+              onToggle={(v) => setFieldVisibility(prev => ({ ...prev, political_views: v }))}
+            />
+          </View>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <OnboardingLayout
+      currentStep={getGlobalStep('personality', subStep)}
+      title={title}
+      subtitle={subtitle}
+      onBack={handleBack}
+      onContinue={handleContinue}
+      onSkip={undefined}
+      continueDisabled={loading}
+      continueLabel={loading ? t('common.saving') : t('common.continue')}
+      currentRoute="/(onboarding)/personality"
+    >
+      {renderContent()}
+    </OnboardingLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  visibilityNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 20,
+  },
+  visibilityNoteText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  unitToggleRow: {
+    alignItems: 'flex-end',
+    marginTop: 20,
+  },
+  unitPill: {
+    flexDirection: 'row',
+    borderRadius: 20,
+    padding: 3,
+  },
+  unitPillOption: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 17,
+  },
+  unitPillOptionActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  unitPillText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  divider: {
+    height: 1,
+    marginTop: 20,
+  },
+});

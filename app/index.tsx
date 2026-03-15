@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Alert } from 'react-native';
 import { Redirect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 
 export default function Index() {
+  const { t } = useTranslation();
   const { user, loading, signOut } = useAuth();
   const [checking, setChecking] = useState(true);
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null);
@@ -63,9 +65,9 @@ export default function Index() {
         setIsBanned(true);
         await signOut();
         Alert.alert(
-          'Account Restricted',
-          'This account has been restricted from using Accord. If you believe this is an error, please contact support at hello@joinaccord.app.',
-          [{ text: 'OK' }]
+          t('auth.restricted.title'),
+          t('auth.restricted.message'),
+          [{ text: t('common.ok') }]
         );
         setChecking(false);
         return;
@@ -88,9 +90,9 @@ export default function Index() {
         setIsBanned(true);
         await signOut();
         Alert.alert(
-          'Account Restricted',
-          'This account has been restricted from using Accord. If you believe this is an error, please contact support at hello@joinaccord.app.',
-          [{ text: 'OK' }]
+          t('auth.restricted.title'),
+          t('auth.restricted.message'),
+          [{ text: t('common.ok') }]
         );
         setChecking(false);
         return;
@@ -111,7 +113,7 @@ export default function Index() {
 
   if (loading || checking) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFBEB' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0A0A0B' }}>
         <ActivityIndicator size="large" color="#A78BFA" />
       </View>
     );
@@ -127,18 +129,23 @@ export default function Index() {
   }
 
   // Profile incomplete - redirect to appropriate onboarding step
-  const onboardingRoutes = [
-    '/(onboarding)/basic-info',           // step 0
-    '/(onboarding)/photos',              // step 1
-    '/(onboarding)/about',               // step 2
-    '/(onboarding)/personality',         // step 3
-    '/(onboarding)/interests',           // step 4
-    '/(onboarding)/prompts',             // step 5
-    '/(onboarding)/voice-intro',         // step 6
-    '/(onboarding)/marriage-preferences', // step 7
-    '/(onboarding)/matching-preferences', // step 8
-  ];
+  // Each screen saves the step number AFTER completing. The route map points to the
+  // NEXT screen the user should see when resuming with that saved step.
+  // Flow: basic-info(1) → personality(2) → photos(3) → interests(5) → prompts(6)
+  //       → voice-intro(7) → marriage-prefs(8) → matching-prefs(8) → notifications(9)
+  const onboardingRouteMap: Record<number, string> = {
+    0: '/(onboarding)/basic-info',           // Not started
+    1: '/(onboarding)/personality',           // basic-info done → next is personality
+    2: '/(onboarding)/photos',               // personality done → next is photos
+    3: '/(onboarding)/interests',            // photos done → next is interests
+    4: '/(onboarding)/interests',            // legacy/unused step → fallback to interests
+    5: '/(onboarding)/prompts',              // interests done → next is prompts
+    6: '/(onboarding)/voice-intro',          // prompts done → next is voice-intro
+    7: '/(onboarding)/marriage-preferences', // voice-intro done → next is marriage prefs
+    8: '/(onboarding)/matching-preferences', // marriage OR matching done → next is matching/notifications
+    9: '/(onboarding)/notifications',        // matching done → next is notifications
+  };
 
-  const targetRoute = onboardingRoutes[onboardingStep] || onboardingRoutes[0];
+  const targetRoute = onboardingRouteMap[onboardingStep] || onboardingRouteMap[0];
   return <Redirect href={targetRoute as any} />;
 }

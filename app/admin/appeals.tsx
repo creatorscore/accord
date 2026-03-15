@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { getSignedUrls } from '@/lib/signed-urls';
 
 interface FlaggedPhoto {
   url: string;
@@ -184,6 +185,28 @@ export default function AdminAppeals() {
             if (appeal.banned_profile_id && photosByProfile.has(appeal.banned_profile_id)) {
               appeal.flagged_photos = photosByProfile.get(appeal.banned_profile_id) || [];
             }
+          }
+        }
+      }
+
+      // Batch sign all flagged photo URLs across all appeals (1 RPC call)
+      const flaggedPaths: string[] = [];
+      const flaggedEntries: { appealIdx: number; fpIdx: number }[] = [];
+      for (let a = 0; a < transformedAppeals.length; a++) {
+        for (let f = 0; f < transformedAppeals[a].flagged_photos.length; f++) {
+          const fp = transformedAppeals[a].flagged_photos[f];
+          if (fp.url) {
+            flaggedPaths.push(fp.url);
+            flaggedEntries.push({ appealIdx: a, fpIdx: f });
+          }
+        }
+      }
+      if (flaggedPaths.length > 0) {
+        const signedFlagged = await getSignedUrls('profile-photos', flaggedPaths);
+        for (let j = 0; j < flaggedEntries.length; j++) {
+          if (signedFlagged[j]) {
+            const { appealIdx, fpIdx } = flaggedEntries[j];
+            transformedAppeals[appealIdx].flagged_photos[fpIdx].url = signedFlagged[j]!;
           }
         }
       }
@@ -928,7 +951,7 @@ const styles = StyleSheet.create({
   appealQuoteLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#7C3AED',
+    color: '#A08AB7',
     marginBottom: 8,
   },
   appealQuoteText: {

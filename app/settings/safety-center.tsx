@@ -16,106 +16,38 @@ import { useTranslation } from 'react-i18next';
 interface SafetyTip {
   id: string;
   icon: string;
-  title: string;
-  description: string;
-  expandedContent?: string;
+  i18nKey: string;
 }
 
 const SAFETY_TIPS: SafetyTip[] = [
-  {
-    id: 'meet-safely',
-    icon: 'shield-account',
-    title: 'Meet Safely',
-    description: 'Always meet in public places for the first few dates',
-    expandedContent:
-      'When meeting someone for the first time:\n\n• Choose a public location like a café, restaurant, or park\n• Tell a friend or family member where you\'re going\n• Share your location with someone you trust\n• Arrange your own transportation\n• Stay sober and alert\n• Trust your instincts - if something feels wrong, leave',
-  },
-  {
-    id: 'protect-info',
-    icon: 'lock',
-    title: 'Protect Your Information',
-    description: 'Keep personal details private until you build trust',
-    expandedContent:
-      'Protect yourself online:\n\n• Don\'t share your home address, workplace, or financial information\n• Be cautious about sharing your phone number\n• Avoid sharing identifying details too early\n• Use Accord\'s in-app messaging until you\'re comfortable\n• Never send money to someone you haven\'t met\n• Be wary of anyone asking for financial help',
-  },
-  {
-    id: 'verify-identity',
-    icon: 'check-decagram',
-    title: 'Verify Identity',
-    description: 'Use video calls before meeting in person',
-    expandedContent:
-      'Verify you\'re talking to a real person:\n\n• Request a video call before meeting\n• Look for verified profiles (blue checkmark)\n• Be cautious of profiles with only one photo\n• Watch for inconsistencies in their story\n• Do a reverse image search if you\'re suspicious\n• Report fake or suspicious profiles immediately',
-  },
-  {
-    id: 'lgbtq-safety',
-    icon: 'flag-variant',
-    title: 'LGBTQ+ Safety',
-    description: 'Specific safety considerations for our community',
-    expandedContent:
-      'Staying safe as an LGBTQ+ person:\n\n• Be selective about who knows your arrangement\n• Consider privacy settings carefully\n• Be aware of local laws and attitudes\n• Have an exit strategy if you feel unsafe\n• Connect with LGBTQ+ resources in your area\n• Trust your community - we\'re here to support each other',
-  },
-  {
-    id: 'legal-protection',
-    icon: 'gavel',
-    title: 'Legal Protection',
-    description: 'Consider formal agreements for lavender marriages',
-    expandedContent:
-      'Protect yourself legally:\n\n• Consult an LGBTQ+-friendly family lawyer\n• Consider a prenuptial agreement\n• Document your arrangement in writing\n• Understand immigration implications if applicable\n• Know your rights regarding property and finances\n• Keep agreements confidential and secure',
-  },
-  {
-    id: 'mental-health',
-    icon: 'brain',
-    title: 'Mental Health',
-    description: 'Take care of your emotional wellbeing',
-    expandedContent:
-      'Prioritize your mental health:\n\n• Set clear boundaries and expectations\n• Communicate openly and honestly\n• Seek therapy or counseling if needed\n• Connect with LGBTQ+ support groups\n• Remember you deserve respect and kindness\n• Take breaks from the app when needed',
-  },
-  {
-    id: 'report-block',
-    icon: 'alert-octagon',
-    title: 'Report & Block',
-    description: 'Use our safety tools to protect yourself',
-    expandedContent:
-      'Keep yourself safe on Accord:\n\n• Block users who make you uncomfortable\n• Report harassment, threats, or suspicious behavior\n• We review all reports within 24 hours\n• Your reports are anonymous\n• Serious violations result in account termination\n• Contact us directly for urgent safety concerns',
-  },
+  { id: 'meet-safely', icon: 'shield-account', i18nKey: 'meetSafely' },
+  { id: 'protect-info', icon: 'lock', i18nKey: 'protectInfo' },
+  { id: 'verify-identity', icon: 'check-decagram', i18nKey: 'verifyIdentity' },
+  { id: 'lgbtq-safety', icon: 'flag-variant', i18nKey: 'lgbtqSafety' },
+  { id: 'legal-protection', icon: 'gavel', i18nKey: 'legalProtection' },
+  { id: 'mental-health', icon: 'brain', i18nKey: 'mentalHealth' },
+  { id: 'report-block', icon: 'alert-octagon', i18nKey: 'reportBlock' },
 ];
 
-const CRISIS_RESOURCES = [
-  {
-    id: 'trevor',
-    name: 'The Trevor Project',
-    description: '24/7 crisis support for LGBTQ+ youth',
-    phone: '1-866-488-7386',
-    website: 'https://www.thetrevorproject.org',
-  },
-  {
-    id: 'trans-lifeline',
-    name: 'Trans Lifeline',
-    description: 'Support for transgender people',
-    phone: '877-565-8860',
-    website: 'https://translifeline.org',
-  },
-  {
-    id: 'glbt-hotline',
-    name: 'LGBT National Hotline',
-    description: 'Peer support and local resources',
-    phone: '1-888-843-4564',
-    website: 'https://www.glbthotline.org',
-  },
-  {
-    id: 'rainn',
-    name: 'RAINN',
-    description: 'Sexual assault support',
-    phone: '1-800-656-4673',
-    website: 'https://www.rainn.org',
-  },
+interface CrisisResource {
+  id: string;
+  i18nKey: string;
+  phone: string;
+  website: string;
+}
+
+const CRISIS_RESOURCES: CrisisResource[] = [
+  { id: 'trevor', i18nKey: 'trevor', phone: '1-866-488-7386', website: 'https://www.thetrevorproject.org' },
+  { id: 'trans-lifeline', i18nKey: 'transLifeline', phone: '877-565-8860', website: 'https://translifeline.org' },
+  { id: 'glbt-hotline', i18nKey: 'glbtHotline', phone: '1-888-843-4564', website: 'https://www.glbthotline.org' },
+  { id: 'rainn', i18nKey: 'rainn', phone: '1-800-656-4673', website: 'https://www.rainn.org' },
 ];
 
 export default function SafetyCenter() {
   const { t } = useTranslation();
   const [expandedTip, setExpandedTip] = useState<string | null>(null);
 
-  const handleCallHotline = (phone: string, name: string) => {
+  const handleCallHotline = (phone: string, name: string | undefined) => {
     Alert.alert(
       t('safetyCenter.alerts.callTitle', { name }),
       t('safetyCenter.alerts.callMessage', { phone }),
@@ -180,8 +112,8 @@ export default function SafetyCenter() {
                   />
                 </View>
                 <View style={styles.tipContent}>
-                  <Text style={styles.tipTitle}>{tip.title}</Text>
-                  <Text style={styles.tipDescription}>{tip.description}</Text>
+                  <Text style={styles.tipTitle}>{t(`safetyCenter.tips.${tip.i18nKey}.title`)}</Text>
+                  <Text style={styles.tipDescription}>{t(`safetyCenter.tips.${tip.i18nKey}.description`)}</Text>
                 </View>
                 <MaterialCommunityIcons
                   name={
@@ -192,9 +124,9 @@ export default function SafetyCenter() {
                 />
               </View>
 
-              {expandedTip === tip.id && tip.expandedContent && (
+              {expandedTip === tip.id && (
                 <View style={styles.expandedContent}>
-                  <Text style={styles.expandedText}>{tip.expandedContent}</Text>
+                  <Text style={styles.expandedText}>{t(`safetyCenter.tips.${tip.i18nKey}.expanded`)}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -216,17 +148,17 @@ export default function SafetyCenter() {
                   size={20}
                   color="#EF4444"
                 />
-                <Text style={styles.resourceName}>{resource.name}</Text>
+                <Text style={styles.resourceName}>{t(`safetyCenter.resources.${resource.i18nKey}.name`)}</Text>
               </View>
               <Text style={styles.resourceDescription}>
-                {resource.description}
+                {t(`safetyCenter.resources.${resource.i18nKey}.description`)}
               </Text>
 
               <View style={styles.resourceActions}>
                 <TouchableOpacity
                   style={styles.callButton}
                   onPress={() =>
-                    handleCallHotline(resource.phone, resource.name)
+                    handleCallHotline(resource.phone, t(`safetyCenter.resources.${resource.i18nKey}.name`))
                   }
                 >
                   <LinearGradient

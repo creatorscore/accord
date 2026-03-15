@@ -65,16 +65,17 @@ export default function AdminReports() {
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
-    checkAdminStatus();
+    // PERFORMANCE: Combine admin check + initial load into one flow (saves a render cycle + round trip)
+    initAdmin();
   }, []);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (isAdmin && filter) {
       loadReports();
     }
-  }, [isAdmin, filter]);
+  }, [filter]);
 
-  const checkAdminStatus = async () => {
+  const initAdmin = async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -91,6 +92,7 @@ export default function AdminReports() {
       }
 
       setIsAdmin(true);
+      loadReports(); // Call immediately — don't wait for state update + re-render
     } catch (error: any) {
       console.error('Error checking admin status:', error);
       Alert.alert('Error', 'Failed to verify admin access.');
@@ -774,7 +776,7 @@ export default function AdminReports() {
                       style={[styles.actionButton, styles.verifyButton]}
                       onPress={() => handleVerifyIdentity(report.id)}
                     >
-                      <MaterialCommunityIcons name="account-check" size={18} color="#8B5CF6" />
+                      <MaterialCommunityIcons name="account-check" size={18} color="#A08AB7" />
                       <Text style={styles.verifyButtonText}>Verify ID</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -1479,7 +1481,7 @@ const styles = StyleSheet.create({
   verifyButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#8B5CF6',
+    color: '#A08AB7',
   },
   // History Button
   historyButton: {

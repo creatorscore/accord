@@ -73,6 +73,11 @@ function getLikeText(lang: string, key: string, replacements?: Record<string, st
   return text;
 }
 
+/** Base64-encode a UUID to prevent casual inspection of push payloads */
+function obfuscateId(id: string): string {
+  return btoa(id);
+}
+
 /**
  * Server-side notification for new likes
  * Called by database trigger on likes INSERT
@@ -137,7 +142,7 @@ serve(async (req) => {
       .from('profiles')
       .select('display_name')
       .eq('id', liker_profile_id)
-      .single();
+      .maybeSingle();
 
     const isPremium = recipient.is_premium || recipient.is_platinum;
     const likerName = liker?.display_name || 'Someone';
@@ -148,7 +153,7 @@ serve(async (req) => {
     let body: string;
 
     if (isPremium) {
-      if (like_type === 'super') {
+      if (like_type === 'super_like') {
         title = getLikeText(lang, 'premiumSuperTitle', { name: likerName });
         body = getLikeText(lang, 'premiumSuperBody');
       } else {
@@ -156,7 +161,7 @@ serve(async (req) => {
         body = getLikeText(lang, 'premiumBody');
       }
     } else {
-      if (like_type === 'super') {
+      if (like_type === 'super_like') {
         title = getLikeText(lang, 'freeSuperTitle');
         body = getLikeText(lang, 'freeSuperBody');
       } else {
@@ -195,7 +200,7 @@ serve(async (req) => {
           body,
           data: {
             type: 'new_like',
-            likerProfileId: isPremium ? liker_profile_id : undefined,
+            likerProfileId: isPremium ? obfuscateId(liker_profile_id) : undefined,
             isPremium,
             screen: 'likes',
           },

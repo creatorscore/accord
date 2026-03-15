@@ -7,7 +7,6 @@ interface IntroMessagesProps {
   matchName: string;
   compatibilityScore?: number;
   distance?: number;
-  occupation?: string;
   city?: string;
   onSelectMessage: (message: string) => void;
   onClose: () => void;
@@ -18,7 +17,6 @@ export default function IntroMessages({
   matchName,
   compatibilityScore,
   distance,
-  occupation,
   city,
   onSelectMessage,
   onClose,
@@ -43,11 +41,6 @@ export default function IntroMessages({
       messages.push(`Hey ${matchName}! Fellow ${city} person - what's your favorite spot in the area?`);
     } else if (distance && distance < 10) {
       messages.push(`Hi ${matchName}, I see we're nearby! How long have you been in the area?`);
-    }
-
-    // Occupation-based
-    if (occupation) {
-      messages.push(`Hey ${matchName}, I noticed you're ${occupation.startsWith('a') || occupation.startsWith('an') ? occupation : `a ${occupation}`}. How's that going for you?`);
     }
 
     // Direct & honest approach

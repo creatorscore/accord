@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/lib/useColorScheme';
@@ -7,6 +8,7 @@ import { useNotifications } from '@/contexts/NotificationContext';
 import * as Haptics from 'expo-haptics';
 
 export default function TabsLayout() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -23,6 +25,7 @@ export default function TabsLayout() {
       }}
       screenOptions={{
         headerShown: false,
+        lazy: true,
         tabBarActiveTintColor: '#FFFFFF',
         tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.5)',
         tabBarStyle: {
@@ -42,7 +45,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="discover"
         options={{
-          title: 'Discover',
+          title: t('tabs.discover'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name="search" size={22} color={color} />
           ),
@@ -51,7 +54,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="likes"
         options={{
-          title: 'Likes',
+          title: t('tabs.likes'),
           tabBarIcon: ({ color, focused }) => (
             <View>
               <FontAwesome5 name="star" size={22} color={color} />
@@ -69,7 +72,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="matches"
         options={{
-          title: 'Matches',
+          title: t('tabs.matches'),
           tabBarIcon: ({ color, focused }) => (
             <FontAwesome5 name="heart" size={22} color={color} />
           ),
@@ -78,7 +81,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="messages"
         options={{
-          title: 'Messages',
+          title: t('tabs.messages'),
           tabBarIcon: ({ color, focused }) => (
             <View>
               <FontAwesome5 name="comment-alt" size={22} color={color} />
@@ -96,7 +99,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('tabs.profile'),
           tabBarIcon: ({ color, focused }) => (
             <FontAwesome5 name="user" size={22} color={color} />
           ),

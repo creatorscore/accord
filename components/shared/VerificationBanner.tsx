@@ -1,65 +1,79 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { MotiView } from 'moti';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
 
 interface VerificationBannerProps {
   onDismiss?: () => void;
 }
 
-/**
- * Compact banner prompting unverified users to verify their photos
- * Verified users get more matches and trust from other users
- */
 export default function VerificationBanner({ onDismiss }: VerificationBannerProps) {
+  const { t } = useTranslation();
+  const translateX = useSharedValue(0);
+
   const handleVerify = () => {
-    // Navigate to privacy settings and scroll to verification section
     router.push('/settings/privacy?scrollTo=verification');
   };
+
+  const dismiss = () => {
+    onDismiss?.();
+  };
+
+  const swipeGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      translateX.value = e.translationX;
+    })
+    .onEnd((e) => {
+      if (Math.abs(e.translationX) > 100) {
+        translateX.value = withTiming(e.translationX > 0 ? 400 : -400, { duration: 200 });
+        runOnJS(dismiss)();
+      } else {
+        translateX.value = withTiming(0, { duration: 200 });
+      }
+    });
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+    opacity: 1 - Math.abs(translateX.value) / 400,
+  }));
 
   return (
     <MotiView
       from={{ opacity: 0, translateY: -10 }}
       animate={{ opacity: 1, translateY: 0 }}
       transition={{ type: 'timing', duration: 300 }}
-      className="mx-4 mt-2"
+      className="mt-2"
     >
-      <View
-        className="rounded-full px-3 py-2 flex-row items-center"
-        style={{ backgroundColor: '#A08AB7' }}
-      >
-        {/* Icon */}
-        <MaterialCommunityIcons name="shield-check" size={18} color="white" />
-
-        {/* Text */}
-        <Text className="text-white font-semibold text-sm flex-1 ml-2">
-          Get verified for 3x more matches
-        </Text>
-
-        {/* CTA Button */}
-        <TouchableOpacity
-          onPress={handleVerify}
-          className="bg-white rounded-full px-3 py-1.5 flex-row items-center"
-          activeOpacity={0.8}
-        >
-          <Text className="font-bold text-sm" style={{ color: '#A08AB7' }}>
-            Verify
-          </Text>
-          <MaterialCommunityIcons name="chevron-right" size={16} color="#A08AB7" />
-        </TouchableOpacity>
-
-        {/* Dismiss Button */}
-        {onDismiss && (
+      <GestureDetector gesture={swipeGesture}>
+        <Animated.View style={animatedStyle}>
           <TouchableOpacity
-            onPress={onDismiss}
-            className="ml-2"
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            onPress={handleVerify}
+            activeOpacity={0.9}
+            style={{ backgroundColor: '#A08AB7', borderRadius: 12, padding: 16, flexDirection: 'row', alignItems: 'center' }}
           >
-            <MaterialCommunityIcons name="close" size={18} color="rgba(255,255,255,0.7)" />
+            {/* Left: Verify Button */}
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, marginRight: 12 }}>
+              <MaterialCommunityIcons name="shield-check" size={22} color="#A08AB7" />
+            </View>
+
+            {/* Right: Text */}
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 15 }}>
+                {t('verification.banner.getVerified')}
+              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 2 }}>
+                {t('verification.banner.subtitle')}
+              </Text>
+            </View>
+
+            <MaterialCommunityIcons name="chevron-right" size={22} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
-        )}
-      </View>
+        </Animated.View>
+      </GestureDetector>
     </MotiView>
   );
 }

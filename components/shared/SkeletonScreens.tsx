@@ -77,12 +77,13 @@ export function ProfileSkeleton() {
   );
 }
 
-function ChatBubbleSkeleton({ isOwn, widthPct }: { isOwn: boolean; widthPct: number }) {
+function ChatBubbleSkeleton({ isOwn, widthPct, lines = 1 }: { isOwn: boolean; widthPct: number; lines?: number }) {
+  const bubbleHeight = 20 + lines * 18;
   return (
     <View style={[styles.bubbleRow, isOwn && styles.bubbleRowOwn]}>
       <SkeletonRect
         width={width * (widthPct / 100)}
-        height={40}
+        height={bubbleHeight}
         borderRadius={18}
       />
     </View>
@@ -90,22 +91,44 @@ function ChatBubbleSkeleton({ isOwn, widthPct }: { isOwn: boolean; widthPct: num
 }
 
 export function ChatSkeleton() {
+  const insets = useSafeAreaInsets();
   const bubbles = [
-    { isOwn: false, widthPct: 55 },
-    { isOwn: false, widthPct: 35 },
-    { isOwn: true, widthPct: 45 },
-    { isOwn: false, widthPct: 60 },
-    { isOwn: true, widthPct: 50 },
-    { isOwn: true, widthPct: 30 },
-    { isOwn: false, widthPct: 40 },
-    { isOwn: true, widthPct: 55 },
+    { isOwn: false, widthPct: 55, lines: 2 },
+    { isOwn: true, widthPct: 45, lines: 1 },
+    { isOwn: false, widthPct: 35, lines: 1 },
+    { isOwn: true, widthPct: 60, lines: 2 },
+    { isOwn: false, widthPct: 50, lines: 1 },
+    { isOwn: true, widthPct: 30, lines: 1 },
+    { isOwn: false, widthPct: 40, lines: 2 },
+    { isOwn: true, widthPct: 55, lines: 1 },
   ];
 
   return (
-    <View style={styles.chatContainer}>
-      {bubbles.map((b, i) => (
-        <ChatBubbleSkeleton key={i} isOwn={b.isOwn} widthPct={b.widthPct} />
-      ))}
+    <View style={styles.chatSkeletonContainer}>
+      {/* Header skeleton */}
+      <View style={[styles.chatHeaderSkeleton, { paddingTop: insets.top + 8 }]}>
+        <SkeletonCircle size={28} />
+        <SkeletonCircle size={40} />
+        <View style={{ flex: 1 }}>
+          <SkeletonRect width={120} height={14} borderRadius={7} />
+          <SkeletonRect width={80} height={10} borderRadius={5} style={{ marginTop: 4 }} />
+        </View>
+      </View>
+
+      {/* Message bubbles pushed to bottom */}
+      <View style={styles.chatBubblesContainer}>
+        {bubbles.map((b, i) => (
+          <ChatBubbleSkeleton key={i} isOwn={b.isOwn} widthPct={b.widthPct} lines={b.lines} />
+        ))}
+      </View>
+
+      {/* Input bar skeleton */}
+      <View style={[styles.chatInputSkeleton, { paddingBottom: insets.bottom + 8 }]}>
+        <SkeletonCircle size={40} />
+        <SkeletonCircle size={40} />
+        <SkeletonRect width={0} height={40} borderRadius={20} style={{ flex: 1 }} />
+        <SkeletonCircle size={40} />
+      </View>
     </View>
   );
 }
@@ -148,11 +171,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F3F4F6',
   },
-  chatContainer: {
+  chatSkeletonContainer: {
     flex: 1,
+  },
+  chatHeaderSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingBottom: 12,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E4E4E7',
+  },
+  chatBubblesContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 12,
+    paddingBottom: 16,
+    gap: 10,
+  },
+  chatInputSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 12,
     gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
   bubbleRow: {
     alignItems: 'flex-start',

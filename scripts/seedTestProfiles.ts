@@ -136,8 +136,8 @@ async function createTestProfile(index: number) {
   console.log(`Creating test profile ${index + 1}...`);
 
   // Random data
-  const gender = randomElement(['man', 'woman', 'non-binary']);
-  const nameList = gender === 'man' ? names.male : names.female;
+  const gender = randomElement(['Man', 'Woman', 'Non-binary']);
+  const nameList = gender === 'Man' ? names.male : names.female;
   const displayName = randomElement(nameList);
   const age = randomInt(25, 40);
   const location = randomElement(cities);
@@ -181,16 +181,13 @@ async function createTestProfile(index: number) {
         user_id: userId,
         display_name: displayName,
         age,
-        gender,
-        sexual_orientation: randomElement(['lesbian', 'gay', 'bisexual', 'queer', 'pansexual']),
+        gender: [gender],
+        sexual_orientation: [randomElement(['Lesbian', 'Gay', 'Bisexual', 'Queer', 'Pansexual'])],
         location_city: location.city,
         location_state: location.state,
         location_country: 'US',
         latitude: location.lat,
         longitude: location.lon,
-        bio: randomElement(bios),
-        occupation: randomElement(occupations),
-        education: randomElement(educations),
         height_inches: heightInches,
         zodiac_sign: randomElement(['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']),
         personality_type: randomElement(['INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP', 'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP']),

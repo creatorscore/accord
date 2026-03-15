@@ -1,37 +1,24 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, useColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
-
-const HOBBY_OPTIONS = [
-  '🎨 Art & Design',
-  '📚 Reading',
-  '✈️ Travel',
-  '🎵 Music',
-  '🏃 Fitness',
-  '🎮 Gaming',
-  '🍳 Cooking',
-  '📸 Photography',
-  '🧘 Yoga',
-  '🎭 Theater',
-  '🌱 Gardening',
-  '🎬 Film',
-  '💻 Tech',
-  '✍️ Writing',
-  '🐕 Pets',
-  '🎪 Live Events',
-  '🏕️ Outdoors',
-  '🎨 Crafts',
-  '🍷 Wine Tasting',
-  '☕ Coffee',
-];
+import { getGlobalStep } from '@/lib/onboarding-steps';
+import { useTranslation } from 'react-i18next';
+import * as Haptics from 'expo-haptics';
+import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
+import { HOBBY_OPTIONS, getHobbyIcon, isPredefinedHobby, normalizeHobbies, DEFAULT_HOBBY_ICON } from '@/lib/hobby-options';
 
 export default function Interests() {
   const router = useRouter();
   const { user } = useAuth();
+  const { t } = useTranslation();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const [subStep, setSubStep] = useState(0);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -57,28 +44,18 @@ export default function Interests() {
       if (error) throw error;
       setProfileId(data.id);
 
-      // Load existing hobbies
       if (data.hobbies && data.hobbies.length > 0) {
-        setHobbies(data.hobbies);
+        setHobbies(normalizeHobbies(data.hobbies));
       }
 
-      // Load existing interests
       if (data.interests) {
-        if (data.interests.movies && data.interests.movies.length > 0) {
-          setFavoriteMovies(data.interests.movies.join(', '));
-        }
-        if (data.interests.music && data.interests.music.length > 0) {
-          setFavoriteMusic(data.interests.music.join(', '));
-        }
-        if (data.interests.books && data.interests.books.length > 0) {
-          setFavoriteBooks(data.interests.books.join(', '));
-        }
-        if (data.interests.tv_shows && data.interests.tv_shows.length > 0) {
-          setFavoriteTvShows(data.interests.tv_shows.join(', '));
-        }
+        if (data.interests.movies?.length > 0) setFavoriteMovies(data.interests.movies.join(', '));
+        if (data.interests.music?.length > 0) setFavoriteMusic(data.interests.music.join(', '));
+        if (data.interests.books?.length > 0) setFavoriteBooks(data.interests.books.join(', '));
+        if (data.interests.tv_shows?.length > 0) setFavoriteTvShows(data.interests.tv_shows.join(', '));
       }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to load profile');
+      Alert.alert(t('common.error'), t('onboarding.interests.loadError'));
     }
   };
 
@@ -87,7 +64,7 @@ export default function Interests() {
       setHobbies(hobbies.filter((h) => h !== hobby));
     } else {
       if (hobbies.length >= 10) {
-        Alert.alert('Maximum Hobbies', 'You can select up to 10 hobbies');
+        Alert.alert(t('onboarding.interests.maxHobbies'), t('onboarding.interests.maxHobbiesMsg'));
         return;
       }
       setHobbies([...hobbies, hobby]);
@@ -96,50 +73,40 @@ export default function Interests() {
 
   const addCustomHobby = () => {
     const trimmedHobby = customHobby.trim();
-
-    if (!trimmedHobby) {
-      return;
-    }
+    if (!trimmedHobby) return;
 
     if (hobbies.length >= 10) {
-      Alert.alert('Maximum Hobbies', 'You can select up to 10 hobbies');
+      Alert.alert(t('onboarding.interests.maxHobbies'), t('onboarding.interests.maxHobbiesMsg'));
       return;
     }
 
-    // Check if hobby already exists (case insensitive)
     const hobbyExists = hobbies.some(h =>
       h.toLowerCase().replace(/[^\w\s]/g, '') === trimmedHobby.toLowerCase()
     );
 
     if (hobbyExists) {
-      Alert.alert('Duplicate Hobby', 'You\'ve already added this hobby');
+      Alert.alert(t('onboarding.interests.duplicateHobby'), t('onboarding.interests.duplicateHobbyMsg'));
       return;
     }
 
-    // Add custom emoji prefix if user didn't include one
-    const hobbyWithEmoji = /\p{Emoji}/u.test(trimmedHobby)
-      ? trimmedHobby
-      : `✨ ${trimmedHobby}`;
-
-    setHobbies([...hobbies, hobbyWithEmoji]);
+    setHobbies([...hobbies, trimmedHobby]);
     setCustomHobby('');
   };
 
-  const handleContinue = async () => {
+  const handleSaveAndContinue = async () => {
     if (hobbies.length === 0) {
-      Alert.alert('Required', 'Please select at least one hobby');
+      Alert.alert(t('common.required'), t('onboarding.interests.selectOneHobby'));
       return;
     }
 
     if (!profileId) {
-      Alert.alert('Error', 'Profile not found. Please start over.');
+      Alert.alert(t('common.error'), t('onboarding.common.profileNotFound'));
       return;
     }
 
     try {
       setLoading(true);
 
-      // Parse comma-separated lists
       const movies = favoriteMovies.split(',').map(s => s.trim()).filter(Boolean);
       const music = favoriteMusic.split(',').map(s => s.trim()).filter(Boolean);
       const books = favoriteBooks.split(',').map(s => s.trim()).filter(Boolean);
@@ -149,12 +116,7 @@ export default function Interests() {
         .from('profiles')
         .update({
           hobbies,
-          interests: {
-            movies,
-            music,
-            books,
-            tv_shows: tvShows,
-          },
+          interests: { movies, music, books, tv_shows: tvShows },
           onboarding_step: 5,
         })
         .eq('id', profileId);
@@ -163,233 +125,302 @@ export default function Interests() {
 
       router.push('/(onboarding)/prompts');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save interests');
+      Alert.alert(t('common.error'), error.message || t('onboarding.interests.saveError'));
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-    >
-      <ScrollView
-        className="flex-1 bg-purple-50 dark:bg-gray-900"
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 120 }}
-      >
-        <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
-        {/* Progress */}
-        <View className="mb-8">
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 dark:text-gray-400 font-medium">Step 5 of 9</Text>
-            <Text className="text-sm text-lavender-500 dark:text-lavender-400 font-bold">56%</Text>
-          </View>
-          <View className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <View
-              className="h-3 bg-lavender-500 rounded-full"
-              style={{ width: '56%' }}
-            />
-          </View>
-        </View>
+  const handleBack = () => {
+    if (subStep === 0) {
+      goToPreviousOnboardingStep('/(onboarding)/interests');
+    } else {
+      setSubStep(subStep - 1);
+    }
+  };
 
-        {/* Header */}
-        <View className="mb-8">
-          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
-            Show your personality ✨
-          </Text>
-          <Text className="text-gray-600 dark:text-gray-400 text-lg">
-            Help matches see who you really are
-          </Text>
-        </View>
+  const handleContinue = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (subStep === 0) {
+      if (hobbies.length === 0) {
+        Alert.alert(t('common.required'), t('onboarding.interests.selectOneHobby'));
+        return;
+      }
+      setSubStep(1);
+    } else {
+      handleSaveAndContinue();
+    }
+  };
 
-        {/* Hobbies */}
-        <View className="mb-8">
-          <Text className="text-lg font-bold text-gray-900 dark:text-white mb-3">
-            What do you love doing? 💫
-          </Text>
-          <Text className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Select 1-10 hobbies • {hobbies.length} selected
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {/* Predefined hobbies */}
-            {HOBBY_OPTIONS.map((hobby) => (
-              <TouchableOpacity
-                key={hobby}
-                className={`px-4 py-3 rounded-full border-2 ${
-                  hobbies.includes(hobby)
-                    ? 'bg-lavender-500 border-lavender-500'
-                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-                }`}
-                onPress={() => toggleHobby(hobby)}
-              >
-                <Text
-                  className={`text-sm font-semibold ${
-                    hobbies.includes(hobby) ? 'text-white' : 'text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {hobby}
-                </Text>
-              </TouchableOpacity>
-            ))}
+  const handleSkip = () => {
+    handleSaveAndContinue();
+  };
 
-            {/* Custom hobbies (not in predefined list) */}
-            {hobbies
-              .filter(hobby => !HOBBY_OPTIONS.includes(hobby))
-              .map((hobby) => (
+  const renderContent = () => {
+    if (subStep === 0) {
+      return (
+        <View>
+          <Text style={[styles.counter, { color: isDark ? '#A08AB7' : '#8B72A8' }]}>
+            {t('onboarding.interests.selectedCount', { count: hobbies.length })}
+          </Text>
+
+          {/* Predefined hobby pills */}
+          <View style={styles.pillContainer}>
+            {HOBBY_OPTIONS.map((option) => {
+              const selected = hobbies.includes(option.value);
+              return (
                 <TouchableOpacity
-                  key={hobby}
-                  className="px-4 py-3 rounded-full border-2 bg-lavender-500 border-lavender-500"
-                  onPress={() => toggleHobby(hobby)}
+                  key={option.value}
+                  style={[
+                    styles.pill,
+                    selected
+                      ? styles.pillSelected
+                      : { borderColor: isDark ? '#3C3C4E' : '#E5E7EB' },
+                  ]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    toggleHobby(option.value);
+                  }}
+                  activeOpacity={0.7}
                 >
-                  <Text className="text-sm font-semibold text-white">
-                    {hobby}
+                  <MaterialCommunityIcons
+                    name={option.icon as any}
+                    size={18}
+                    color={selected ? '#FFFFFF' : isDark ? '#9CA3AF' : '#6B7280'}
+                  />
+                  <Text
+                    style={[
+                      styles.pillText,
+                      selected
+                        ? styles.pillTextSelected
+                        : { color: isDark ? '#D1D5DB' : '#374151' },
+                    ]}
+                  >
+                    {option.label}
                   </Text>
                 </TouchableOpacity>
-              ))}
+              );
+            })}
           </View>
+
+          {/* Custom hobbies not in predefined list */}
+          {hobbies.filter(h => !isPredefinedHobby(h)).length > 0 && (
+            <View style={styles.customChips}>
+              {hobbies.filter(h => !isPredefinedHobby(h)).map((hobby) => (
+                <TouchableOpacity
+                  key={hobby}
+                  style={styles.customChip}
+                  onPress={() => toggleHobby(hobby)}
+                >
+                  <MaterialCommunityIcons name={DEFAULT_HOBBY_ICON as any} size={16} color="#FFFFFF" />
+                  <Text style={styles.customChipText}>{hobby}</Text>
+                  <MaterialCommunityIcons name="close" size={14} color="#FFFFFF" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           {/* Add Custom Hobby */}
-          <View className="mt-4">
-            <View className="flex-row gap-2">
-              <TextInput
-                className="flex-1 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full px-4 py-3 text-gray-900 dark:text-white"
-                placeholder="Add your own hobby..."
-                value={customHobby}
-                onChangeText={setCustomHobby}
-                placeholderTextColor="#9CA3AF"
-                returnKeyType="done"
-                onSubmitEditing={addCustomHobby}
-                maxLength={30}
-              />
-              <TouchableOpacity
-                className={`px-6 py-3 rounded-full ${
-                  customHobby.trim() ? 'bg-lavender-500' : 'bg-gray-300 dark:bg-gray-600'
-                }`}
-                onPress={addCustomHobby}
-                disabled={!customHobby.trim()}
-              >
-                <MaterialCommunityIcons
-                  name="plus-circle"
-                  size={24}
-                  color="white"
-                />
-              </TouchableOpacity>
-            </View>
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-4">
-              Add custom hobbies not listed above
-            </Text>
+          <View style={styles.customInput}>
+            <TextInput
+              style={[styles.customInputField, {
+                backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+                color: isDark ? '#F5F5F7' : '#1A1A2E',
+              }]}
+              placeholder={t('onboarding.interests.addHobbyPlaceholder')}
+              placeholderTextColor="#9CA3AF"
+              value={customHobby}
+              onChangeText={setCustomHobby}
+              returnKeyType="done"
+              onSubmitEditing={addCustomHobby}
+              maxLength={30}
+            />
+            <TouchableOpacity
+              style={[styles.addButton, { backgroundColor: customHobby.trim() ? '#A08AB7' : isDark ? '#2C2C3E' : '#D1D5DB' }]}
+              onPress={addCustomHobby}
+              disabled={!customHobby.trim()}
+            >
+              <MaterialCommunityIcons name="plus" size={22} color="white" />
+            </TouchableOpacity>
           </View>
         </View>
+      );
+    }
 
-        {/* Favorites Section */}
-        <View className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-purple-100 dark:border-purple-900/30 mb-8">
-          <View className="flex-row items-center mb-6">
-            <MaterialCommunityIcons name="heart-multiple" size={28} color="#A08AB7" />
-            <Text className="text-2xl font-bold text-gray-900 dark:text-white ml-2">
-              Your Favorites
-            </Text>
-          </View>
-
-          {/* Movies */}
-          <View className="mb-6">
-            <View className="flex-row items-center mb-2">
-              <Text className="text-lg font-semibold text-gray-900 dark:text-white">🎬 Movies</Text>
-              <Text className="text-xs text-gray-500 dark:text-gray-400 ml-2">(optional)</Text>
-            </View>
-            <TextInput
-              className="bg-purple-50 dark:bg-purple-900/30 border-2 border-purple-200 dark:border-purple-700 rounded-2xl px-4 py-3 text-gray-900 dark:text-white"
-              placeholder="e.g., Moonlight, Carol, The Half of It"
-              value={favoriteMovies}
-              onChangeText={setFavoriteMovies}
-              placeholderTextColor="#9CA3AF"
-            />
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate with commas</Text>
-          </View>
-
-          {/* Music */}
-          <View className="mb-6">
-            <View className="flex-row items-center mb-2">
-              <Text className="text-lg font-semibold text-gray-900 dark:text-white">🎵 Music Artists</Text>
-              <Text className="text-xs text-gray-500 dark:text-gray-400 ml-2">(optional)</Text>
-            </View>
-            <TextInput
-              className="bg-pink-50 dark:bg-pink-900/30 border-2 border-pink-200 dark:border-pink-700 rounded-2xl px-4 py-3 text-gray-900 dark:text-white"
-              placeholder="e.g., Hayley Kiyoko, Troye Sivan, Chappell Roan"
-              value={favoriteMusic}
-              onChangeText={setFavoriteMusic}
-              placeholderTextColor="#9CA3AF"
-            />
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate with commas</Text>
-          </View>
-
-          {/* Books */}
-          <View className="mb-6">
-            <View className="flex-row items-center mb-2">
-              <Text className="text-lg font-semibold text-gray-900 dark:text-white">📚 Books</Text>
-              <Text className="text-xs text-gray-500 dark:text-gray-400 ml-2">(optional)</Text>
-            </View>
-            <TextInput
-              className="bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-200 dark:border-blue-700 rounded-2xl px-4 py-3 text-gray-900 dark:text-white"
-              placeholder="e.g., Red White & Royal Blue, Stone Butch Blues"
-              value={favoriteBooks}
-              onChangeText={setFavoriteBooks}
-              placeholderTextColor="#9CA3AF"
-            />
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate with commas</Text>
-          </View>
-
-          {/* TV Shows */}
-          <View>
-            <View className="flex-row items-center mb-2">
-              <Text className="text-lg font-semibold text-gray-900 dark:text-white">📺 TV Shows</Text>
-              <Text className="text-xs text-gray-500 dark:text-gray-400 ml-2">(optional)</Text>
-            </View>
-            <TextInput
-              className="bg-green-50 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-700 rounded-2xl px-4 py-3 text-gray-900 dark:text-white"
-              placeholder="e.g., Heartstopper, Pose, The L Word"
-              value={favoriteTvShows}
-              onChangeText={setFavoriteTvShows}
-              placeholderTextColor="#9CA3AF"
-            />
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate with commas</Text>
-          </View>
+    // Sub-step 1: Favorites
+    return (
+      <View>
+        {/* Movies */}
+        <View style={styles.favoriteSection}>
+          <Text style={[styles.favoriteLabel, { color: isDark ? '#F5F5F7' : '#1F2937' }]}>{t('onboarding.interests.movies')}</Text>
+          <TextInput
+            style={[styles.favoriteInput, {
+              backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+              color: isDark ? '#F5F5F7' : '#1A1A2E',
+            }]}
+            placeholder={t('onboarding.interests.moviesPlaceholder')}
+            placeholderTextColor="#9CA3AF"
+            value={favoriteMovies}
+            onChangeText={setFavoriteMovies}
+          />
+          <Text style={[styles.helperText, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>{t('onboarding.interests.separateWithCommas')}</Text>
         </View>
 
-        {/* Buttons */}
-        <View className="flex-row gap-3">
-          <TouchableOpacity
-            className="flex-1 py-4 rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-            onPress={() => goToPreviousOnboardingStep('/(onboarding)/interests')}
-            disabled={loading}
-          >
-            <Text className="text-gray-700 dark:text-gray-300 text-center font-bold text-lg">Back</Text>
-          </TouchableOpacity>
+        {/* Music */}
+        <View style={styles.favoriteSection}>
+          <Text style={[styles.favoriteLabel, { color: isDark ? '#F5F5F7' : '#1F2937' }]}>{t('onboarding.interests.musicArtists')}</Text>
+          <TextInput
+            style={[styles.favoriteInput, {
+              backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+              color: isDark ? '#F5F5F7' : '#1A1A2E',
+            }]}
+            placeholder={t('onboarding.interests.musicPlaceholder')}
+            placeholderTextColor="#9CA3AF"
+            value={favoriteMusic}
+            onChangeText={setFavoriteMusic}
+          />
+          <Text style={[styles.helperText, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>{t('onboarding.interests.separateWithCommas')}</Text>
+        </View>
 
-          <TouchableOpacity
-            className={`flex-1 py-4 rounded-full ${
-              loading || hobbies.length === 0
-                ? 'bg-gray-400 dark:bg-gray-600'
-                : 'bg-lavender-500'
-            }`}
-            style={{
-              borderRadius: 9999,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingVertical: 16,
-            }}
-            onPress={handleContinue}
-            disabled={loading || hobbies.length === 0}
-          >
-            <Text className="text-white text-center font-bold text-lg">
-              {loading ? 'Saving...' : 'Continue'}
-            </Text>
-          </TouchableOpacity>
+        {/* Books */}
+        <View style={styles.favoriteSection}>
+          <Text style={[styles.favoriteLabel, { color: isDark ? '#F5F5F7' : '#1F2937' }]}>{t('onboarding.interests.books')}</Text>
+          <TextInput
+            style={[styles.favoriteInput, {
+              backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+              color: isDark ? '#F5F5F7' : '#1A1A2E',
+            }]}
+            placeholder={t('onboarding.interests.booksPlaceholder')}
+            placeholderTextColor="#9CA3AF"
+            value={favoriteBooks}
+            onChangeText={setFavoriteBooks}
+          />
+          <Text style={[styles.helperText, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>{t('onboarding.interests.separateWithCommas')}</Text>
+        </View>
+
+        {/* TV Shows */}
+        <View style={styles.favoriteSection}>
+          <Text style={[styles.favoriteLabel, { color: isDark ? '#F5F5F7' : '#1F2937' }]}>{t('onboarding.interests.tvShows')}</Text>
+          <TextInput
+            style={[styles.favoriteInput, {
+              backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+              color: isDark ? '#F5F5F7' : '#1A1A2E',
+            }]}
+            placeholder={t('onboarding.interests.tvShowsPlaceholder')}
+            placeholderTextColor="#9CA3AF"
+            value={favoriteTvShows}
+            onChangeText={setFavoriteTvShows}
+          />
+          <Text style={[styles.helperText, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>{t('onboarding.interests.separateWithCommas')}</Text>
         </View>
       </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    );
+  };
+
+  return (
+    <OnboardingLayout
+      currentStep={getGlobalStep('interests', subStep)}
+      title={subStep === 0 ? t('onboarding.interests.title') : t('onboarding.interests.favoritesTitle')}
+      subtitle={subStep === 0 ? t('onboarding.interests.subtitle') : t('onboarding.interests.favoritesSubtitle')}
+      onBack={handleBack}
+      onContinue={handleContinue}
+      onSkip={undefined}
+      continueDisabled={loading || (subStep === 0 && hobbies.length === 0)}
+      continueLabel={loading ? t('common.saving') : t('common.continue')}
+      currentRoute="/(onboarding)/interests"
+    >
+      {renderContent()}
+    </OnboardingLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  counter: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  pillContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 100,
+    borderWidth: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  pillSelected: {
+    backgroundColor: '#A08AB7',
+    borderColor: '#A08AB7',
+  },
+  pillText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  pillTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  customChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  customChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#A08AB7',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 100,
+  },
+  customChipText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  customInput: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+  },
+  customInputField: {
+    flex: 1,
+    borderRadius: 100,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    fontSize: 15,
+  },
+  addButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  favoriteSection: {
+    marginBottom: 24,
+  },
+  favoriteLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  favoriteInput: {
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+  },
+  helperText: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+});

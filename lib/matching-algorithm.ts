@@ -34,7 +34,6 @@
  * - Physical: height_inches
  * - Personality: zodiac_sign, personality_type (MBTI), love_language
  * - Interests: hobbies[], interests{movies, music, books, tv_shows}
- * - Bio: bio (keyword extraction)
  * - Values: religion, political_views, languages_spoken[]
  *
  * Preferences Fields:
@@ -64,7 +63,6 @@ interface Profile {
   latitude: number | null;
   longitude: number | null;
   height_inches?: number | null;
-  bio?: string | null;
   hobbies: string[] | null;
   interests: {
     movies?: string[];
@@ -495,10 +493,10 @@ function calculateLifestyleScore(
   // Smoking compatibility (10 points) - NEW
   if (prefs1.lifestyle_preferences?.smoking && prefs2.lifestyle_preferences?.smoking) {
     const smokingCompatibility: { [key: string]: { [key: string]: number } } = {
-      never: { never: 10, socially: 5, regularly: 0, 'trying to quit': 7 },
-      socially: { never: 5, socially: 10, regularly: 6, 'trying to quit': 8 },
-      regularly: { never: 0, socially: 6, regularly: 10, 'trying to quit': 7 },
-      'trying to quit': { never: 7, socially: 8, regularly: 7, 'trying to quit': 10 },
+      never: { never: 10, socially: 5, regularly: 0, trying_to_quit: 7 },
+      socially: { never: 5, socially: 10, regularly: 6, trying_to_quit: 8 },
+      regularly: { never: 0, socially: 6, regularly: 10, trying_to_quit: 7 },
+      trying_to_quit: { never: 7, socially: 8, regularly: 7, trying_to_quit: 10 },
     };
     score += smokingCompatibility[prefs1.lifestyle_preferences.smoking]?.[prefs2.lifestyle_preferences.smoking] || 5;
   } else {
@@ -521,11 +519,11 @@ function calculateLifestyleScore(
   // Pets compatibility (10 points) - NEW
   if (prefs1.lifestyle_preferences?.pets && prefs2.lifestyle_preferences?.pets) {
     const petsCompatibility: { [key: string]: { [key: string]: number } } = {
-      'love them': { 'love them': 10, 'have some': 9, "don't have but open": 8, allergic: 0, "don't like": 2 },
-      'have some': { 'love them': 9, 'have some': 10, "don't have but open": 8, allergic: 1, "don't like": 3 },
-      "don't have but open": { 'love them': 8, 'have some': 8, "don't have but open": 10, allergic: 7, "don't like": 7 },
-      allergic: { 'love them': 0, 'have some': 1, "don't have but open": 7, allergic: 10, "don't like": 8 },
-      "don't like": { 'love them': 2, 'have some': 3, "don't have but open": 7, allergic: 8, "don't like": 10 },
+      love_them: { love_them: 10, like_them: 9, indifferent: 8, allergic: 0, dont_like: 2 },
+      like_them: { love_them: 9, like_them: 10, indifferent: 8, allergic: 1, dont_like: 3 },
+      indifferent: { love_them: 8, like_them: 8, indifferent: 10, allergic: 7, dont_like: 7 },
+      allergic: { love_them: 0, like_them: 1, indifferent: 7, allergic: 10, dont_like: 8 },
+      dont_like: { love_them: 2, like_them: 3, indifferent: 7, allergic: 8, dont_like: 10 },
     };
     score += petsCompatibility[prefs1.lifestyle_preferences.pets]?.[prefs2.lifestyle_preferences.pets] || 5;
   } else {
@@ -652,34 +650,7 @@ function calculatePersonalityScore(profile1: Profile, profile2: Profile): number
     }
   }
 
-  // Bio/Story text similarity (8 points) - NEW
-  // Analyze shared keywords/themes in bios (simplified version)
-  if (profile1.bio && profile2.bio) {
-    const keywords1 = extractKeywords(profile1.bio);
-    const keywords2 = extractKeywords(profile2.bio);
-    const sharedKeywords = keywords1.filter(k => keywords2.includes(k));
-    score += Math.min(8, sharedKeywords.length * 2); // 2 points per shared keyword
-  }
-
   return Math.min(score, 100);
-}
-
-/**
- * Extract meaningful keywords from text (simple implementation)
- * For a production app, you'd use NLP/ML for better keyword extraction
- */
-function extractKeywords(text: string): string[] {
-  // Remove common words and extract meaningful ones
-  const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'this', 'that', 'these', 'those', 'am', 'like', 'just', 'so', 'really', 'very', 'about', 'me', 'im']);
-
-  const words = text
-    .toLowerCase()
-    .replace(/[^\w\s]/g, ' ') // Remove punctuation
-    .split(/\s+/)
-    .filter(w => w.length > 3 && !commonWords.has(w)); // Only meaningful words
-
-  // Return unique words
-  return Array.from(new Set(words));
 }
 
 /**
@@ -974,7 +945,8 @@ export function getCompatibilityBreakdown(
   profile1: Profile,
   profile2: Profile,
   prefs1: Preferences,
-  prefs2: Preferences
+  prefs2: Preferences,
+  preCalculatedScore?: number
 ): {
   location: number;
   goals: number;
@@ -984,13 +956,46 @@ export function getCompatibilityBreakdown(
   orientation: number;
   total: number;
 } {
+  const goals = calculateGoalsScore(prefs1, prefs2);
+  const lifestyle = calculateLifestyleScore(profile1, profile2, prefs1, prefs2);
+  const location = calculateLocationScore(profile1, profile2, prefs1, prefs2);
+  const demographics = calculateDemographicsScore(profile1, profile2, prefs1, prefs2);
+  const personality = calculatePersonalityScore(profile1, profile2);
+
   return {
-    goals: calculateGoalsScore(prefs1, prefs2), // PRIMARY FACTOR (35%)
-    lifestyle: calculateLifestyleScore(profile1, profile2, prefs1, prefs2), // 25%
-    location: calculateLocationScore(profile1, profile2, prefs1, prefs2), // 20%
-    demographics: calculateDemographicsScore(profile1, profile2, prefs1, prefs2), // 15%
-    personality: calculatePersonalityScore(profile1, profile2), // 5%
+    goals, // PRIMARY FACTOR (35%)
+    lifestyle, // 25%
+    location, // 20%
+    demographics, // 15%
+    personality, // 5%
     orientation: 100, // Orientation compatibility is factored into demographics score
-    total: calculateCompatibilityScore(profile1, profile2, prefs1, prefs2),
+    total: preCalculatedScore ?? Math.round(
+      goals * 0.35 + lifestyle * 0.25 + location * 0.20 + demographics * 0.15 + personality * 0.05
+    ),
+  };
+}
+
+/**
+ * PERF: Calculate score + breakdown in a single pass (avoids double-calculating all sub-scores)
+ */
+export function calculateScoreAndBreakdown(
+  profile1: Profile,
+  profile2: Profile,
+  prefs1: Preferences,
+  prefs2: Preferences
+): { score: number; breakdown: { location: number; goals: number; lifestyle: number; personality: number; demographics: number; orientation: number; total: number } } {
+  const goals = calculateGoalsScore(prefs1, prefs2);
+  const lifestyle = calculateLifestyleScore(profile1, profile2, prefs1, prefs2);
+  const location = calculateLocationScore(profile1, profile2, prefs1, prefs2);
+  const demographics = calculateDemographicsScore(profile1, profile2, prefs1, prefs2);
+  const personality = calculatePersonalityScore(profile1, profile2);
+
+  const total = Math.round(
+    goals * 0.35 + lifestyle * 0.25 + location * 0.20 + demographics * 0.15 + personality * 0.05
+  );
+
+  return {
+    score: total,
+    breakdown: { goals, lifestyle, location, demographics, personality, orientation: 100, total },
   };
 }

@@ -53,6 +53,43 @@ Object.values(admin1Data as unknown as Record<string, Admin1Entry>).forEach((ent
 // Cache for frequently accessed country names
 const countryNameCache: Record<string, string> = {};
 
+// Lazy-initialized reverse lookup: lowercase country name -> country code
+let countryNameToCodeMap: Map<string, string> | null = null;
+
+function getCountryNameToCodeMap(): Map<string, string> {
+  if (countryNameToCodeMap) return countryNameToCodeMap;
+
+  countryNameToCodeMap = new Map();
+  const cities = citiesData as CityRaw[];
+  const seen = new Set<string>();
+
+  for (const city of cities) {
+    if (!seen.has(city.country)) {
+      seen.add(city.country);
+      const name = getCountryName(city.country).toLowerCase();
+      countryNameToCodeMap.set(name, city.country);
+    }
+  }
+
+  return countryNameToCodeMap;
+}
+
+/**
+ * Find country codes where the country name matches the search term
+ */
+function getMatchingCountryCodes(searchTerm: string): Set<string> {
+  const map = getCountryNameToCodeMap();
+  const matches = new Set<string>();
+
+  for (const [name, code] of map) {
+    if (name === searchTerm || name.startsWith(searchTerm)) {
+      matches.add(code);
+    }
+  }
+
+  return matches;
+}
+
 /**
  * Get country name from ISO 2-letter code
  */
@@ -142,9 +179,13 @@ export function searchCities(query: string, limit: number = 20): CityResult[] {
   const searchTerm = query.toLowerCase().trim();
   const cities = citiesData as CityRaw[];
 
-  // Separate exact matches, starts-with matches, and contains matches
+  // Check if search term matches a country name (e.g. "ghana" -> "GH")
+  const matchedCountryCodes = getMatchingCountryCodes(searchTerm);
+
+  // Separate exact matches, starts-with matches, country matches, and contains matches
   const exactMatches: CityRaw[] = [];
   const startsWithMatches: CityRaw[] = [];
+  const countryMatches: CityRaw[] = [];
   const containsMatches: CityRaw[] = [];
 
   for (const city of cities) {
@@ -156,18 +197,21 @@ export function searchCities(query: string, limit: number = 20): CityResult[] {
       startsWithMatches.push(city);
     } else if (cityName.includes(searchTerm)) {
       containsMatches.push(city);
+    } else if (matchedCountryCodes.size > 0 && matchedCountryCodes.has(city.country)) {
+      countryMatches.push(city);
     }
 
     // Early exit if we have enough results
-    if (exactMatches.length + startsWithMatches.length >= limit * 2) {
+    if (exactMatches.length + startsWithMatches.length + countryMatches.length >= limit * 2) {
       break;
     }
   }
 
-  // Combine and limit results (prioritize exact and starts-with matches)
+  // Combine and limit results: city name matches first, then country matches, then contains
   const combined = [
     ...exactMatches,
     ...startsWithMatches,
+    ...countryMatches,
     ...containsMatches,
   ].slice(0, limit);
 

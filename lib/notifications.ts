@@ -1,6 +1,27 @@
 import { Platform, LogBox } from 'react-native';
 import { supabase } from './supabase';
 import Constants from 'expo-constants';
+/**
+ * Obfuscate a UUID for push notification payloads.
+ * Push payloads can be intercepted on the device; base64-encoding IDs
+ * prevents casual inspection from revealing raw Supabase UUIDs.
+ */
+export function obfuscateId(id: string): string {
+  // btoa is available in React Native (Hermes)
+  return btoa(id);
+}
+
+/**
+ * Deobfuscate an ID received from a push notification payload.
+ */
+export function deobfuscateId(encoded: string): string {
+  try {
+    return atob(encoded);
+  } catch {
+    // If decoding fails, return as-is (backward compat with old payloads)
+    return encoded;
+  }
+}
 
 // Suppress Expo Go notification warning (notifications work fine in dev/production builds)
 LogBox.ignoreLogs([
@@ -226,7 +247,7 @@ export async function ensurePushTokenSaved(userId: string, token: string): Promi
       .select('id')
       .eq('profile_id', profile.id)
       .eq('push_token', token)
-      .single();
+      .maybeSingle();
 
     // Token is already saved in new system
     if (deviceToken) {
@@ -389,15 +410,19 @@ export async function sendMatchNotification(
       return;
     }
 
-    // Send notification to all devices
+    // Lock-screen safe: generic text that doesn't reveal names or relationship context
+    const title = 'You have a new connection!';
+    const body = 'Open Accord to see who it is.';
+
+    // Send notification to all devices (obfuscate IDs in payload)
     const notificationPromises = Array.from(tokens).map(token =>
       sendPushNotification(
         token,
-        "It's a Match! 💜",
-        `You matched with ${matcherName}! Start chatting now.`,
+        title,
+        body,
         {
           type: 'new_match',
-          matchId,
+          matchId: obfuscateId(matchId),
           screen: 'matches',
         }
       )
@@ -409,8 +434,8 @@ export async function sendMatchNotification(
     await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_match',
-      title: "It's a Match! 💜",
-      body: `You matched with ${matcherName}! Start chatting now.`,
+      title,
+      body,
       data: { matchId, type: 'new_match' },
     });
   } catch (error) {
@@ -472,20 +497,19 @@ export async function sendMessageNotification(
       return;
     }
 
-    // Truncate message preview
-    const preview = messagePreview.length > 50
-      ? messagePreview.substring(0, 50) + '...'
-      : messagePreview;
+    // Lock-screen safe: no names or message content visible on lock screen
+    const title = 'You have a new message';
+    const body = 'Open Accord to read it.';
 
-    // Send notification to all devices
+    // Send notification to all devices (obfuscate IDs in payload)
     const notificationPromises = Array.from(tokens).map(token =>
       sendPushNotification(
         token,
-        `New message from ${senderName}`,
-        preview,
+        title,
+        body,
         {
           type: 'new_message',
-          matchId,
+          matchId: obfuscateId(matchId),
           screen: 'chat',
         }
       )
@@ -497,8 +521,8 @@ export async function sendMessageNotification(
     await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_message',
-      title: `New message from ${senderName}`,
-      body: preview,
+      title,
+      body,
       data: { matchId, type: 'new_message' },
     });
   } catch (error) {
@@ -560,10 +584,11 @@ export async function sendReactionNotification(
       return;
     }
 
-    const title = `${reactorName} reacted ${emoji}`;
-    const body = 'Tap to view the conversation';
+    // Lock-screen safe: no names visible
+    const title = 'New reaction';
+    const body = 'Someone reacted to your message.';
 
-    // Send notification to all devices
+    // Send notification to all devices (obfuscate IDs in payload)
     const notificationPromises = Array.from(tokens).map(token =>
       sendPushNotification(
         token,
@@ -571,7 +596,7 @@ export async function sendReactionNotification(
         body,
         {
           type: 'message_reaction',
-          matchId,
+          matchId: obfuscateId(matchId),
           screen: 'chat',
         }
       )
@@ -636,24 +661,23 @@ export async function sendLikeNotification(
 
     const isPremium = profile.is_premium || profile.is_platinum;
 
-    // Different messaging based on subscription status
+    // Lock-screen safe: no names visible regardless of subscription tier
+    // Names are shown in-app only, not on lock screen where others might see
     let title: string;
     let body: string;
     let screen: string;
 
     if (isPremium) {
-      // Premium users: Show who liked them
-      title = `${likerName} likes you! 💜`;
-      body = 'See who liked you and match instantly.';
+      title = 'Someone is interested in you!';
+      body = 'Open Accord to see who likes you.';
       screen = 'likes';
     } else {
-      // Free users: FOMO message to drive upgrades
-      title = 'Someone likes you! 💜';
-      body = 'Upgrade to Premium to see who liked you and match instantly.';
+      title = 'Someone is interested in you!';
+      body = 'Open Accord to find out more.';
       screen = 'likes'; // Will show paywall when they tap
     }
 
-    // Send notification to all devices
+    // Send notification to all devices (obfuscate IDs in payload)
     const notificationPromises = Array.from(tokens).map(token =>
       sendPushNotification(
         token,
@@ -661,7 +685,7 @@ export async function sendLikeNotification(
         body,
         {
           type: 'new_like',
-          likerProfileId: isPremium ? likerProfileId : undefined, // Only send ID to premium users
+          likerProfileId: isPremium ? obfuscateId(likerProfileId) : undefined, // Only send ID to premium users
           screen,
           isPremium,
         }
@@ -832,18 +856,28 @@ export async function sendReportActionNotification(
 export async function sendBanNotification(
   bannedProfileId: string,
   banReason: string,
-  userEmail?: string // Optional email parameter
+  userEmail?: string, // Optional email parameter
+  prefetchedProfile?: { push_token: string | null; push_enabled: boolean; display_name: string } | null,
 ): Promise<void> {
   try {
-    // Get banned user's push settings
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('push_token, push_enabled, display_name')
-      .eq('id', bannedProfileId)
-      .single();
+    // Use pre-fetched profile data if available (avoids RLS issue after ban deactivates the profile)
+    let profile = prefetchedProfile ?? null;
+    if (!profile) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('push_token, push_enabled, display_name')
+        .eq('id', bannedProfileId)
+        .maybeSingle();
 
-    if (error) {
-      console.error('Error fetching profile for ban notification:', error);
+      if (error) {
+        console.error('Error fetching profile for ban notification:', error);
+        return;
+      }
+      profile = data;
+    }
+
+    if (!profile) {
+      console.warn('Profile not found for ban notification — may already be deactivated');
       return;
     }
 

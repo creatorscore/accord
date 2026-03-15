@@ -1,4 +1,4 @@
-import PostHog from 'posthog-react-native';
+import PostHog, { PostHogProvider } from 'posthog-react-native';
 import Constants from 'expo-constants';
 
 // Get PostHog config from environment OR app.json extra config (fallback)
@@ -14,11 +14,12 @@ const POSTHOG_HOST =
 let posthogClient: PostHog | null = null;
 
 /**
- * Initialize PostHog for analytics and session recording
+ * Get or create the PostHog client (synchronous after first call).
+ * The PostHog constructor is synchronous — no need for async init.
  */
-export const initializePostHog = async () => {
-  // Don't initialize without API key
-  // TODO: Re-enable __DEV__ check before production to prevent test data pollution
+export const getPostHogClient = (): PostHog | null => {
+  if (posthogClient) return posthogClient;
+
   if (!POSTHOG_API_KEY) {
     console.error('❌ PostHog not initialized: Missing EXPO_PUBLIC_POSTHOG_API_KEY');
     return null;
@@ -27,45 +28,36 @@ export const initializePostHog = async () => {
   try {
     posthogClient = new PostHog(POSTHOG_API_KEY, {
       host: POSTHOG_HOST,
-      // Enable debug mode in development
-      ...(__DEV__ ? { debug: true } : {}),
-      // Enable autocapture for automatic event tracking
+      debug: __DEV__,
       captureNativeAppLifecycleEvents: true,
+      flushAt: 5,
+      flushInterval: 30000,
     } as any);
 
-    // Send test event to verify it's working
-    if (posthogClient) {
-      posthogClient.capture('posthog_initialized', {
-        timestamp: new Date().toISOString(),
-        environment: __DEV__ ? 'development' : 'production',
-      });
-
-      // Flush events immediately to ensure they're sent
-      posthogClient.flush();
-    }
-
+    console.log('[PostHog] ✅ Client created:', POSTHOG_API_KEY.substring(0, 8) + '...', 'Host:', POSTHOG_HOST);
     return posthogClient;
   } catch (error) {
-    console.error('❌ Failed to initialize PostHog:', error);
+    console.error('❌ Failed to create PostHog client:', error);
     return null;
   }
+};
+
+/**
+ * @deprecated Use getPostHogClient() instead. Kept for backward compat.
+ */
+export const initializePostHog = async () => {
+  return getPostHogClient();
 };
 
 /**
  * Track an event
  */
 export const trackEvent = (eventName: string, properties?: Record<string, any>) => {
-  if (!posthogClient) {
-    console.warn(`⚠️  PostHog not initialized, event not sent: ${eventName}`);
-    return;
-  }
+  const client = getPostHogClient();
+  if (!client) return;
 
   try {
-    posthogClient.capture(eventName, properties);
-    if (__DEV__) {
-      // Flush in development to see events immediately
-      posthogClient.flush();
-    }
+    client.capture(eventName, properties);
   } catch (error) {
     console.error(`❌ Error sending event to PostHog: ${eventName}`, error);
   }
@@ -74,39 +66,65 @@ export const trackEvent = (eventName: string, properties?: Record<string, any>) 
 /**
  * Identify a user
  */
-export const identifyUser = (userId: string, traits?: Record<string, any>) => {
-  if (!posthogClient) return;
+const PII_KEYS = [
+  'email', 'phone', 'name', 'firstName', 'lastName', 'first_name', 'last_name',
+  // LGBTQ+ identity fields — exposure = prosecution risk in hostile jurisdictions
+  'gender', 'sexual_orientation', 'ethnicity', 'religion', 'political_views',
+  'location_city', 'location_state', 'location_country', 'display_name',
+  'occupation', 'education', 'hometown', 'latitude', 'longitude',
+  'pronouns', 'birth_date', 'bio', 'my_story',
+];
 
-  posthogClient.identify(userId, traits);
+export const identifyUser = (userId: string, traits?: Record<string, any>) => {
+  const client = getPostHogClient();
+  if (!client) return;
+
+  // Strip PII fields before sending to PostHog
+  if (traits) {
+    const sanitized = { ...traits };
+    for (const key of PII_KEYS) {
+      delete sanitized[key];
+    }
+    client.identify(userId, sanitized);
+  } else {
+    client.identify(userId);
+  }
+};
+
+/**
+ * Flush all pending events (call on app background)
+ */
+export const flushPostHog = () => {
+  const client = getPostHogClient();
+  if (!client) return;
+  client.flush();
 };
 
 /**
  * Reset user identity (on logout)
  */
 export const resetUser = () => {
-  if (!posthogClient) return;
-
-  posthogClient.reset();
+  const client = getPostHogClient();
+  if (!client) return;
+  client.reset();
 };
 
 /**
  * Track a screen view
  */
 export const trackScreen = (screenName: string, properties?: Record<string, any>) => {
-  if (!posthogClient) {
-    return;
-  }
-
-  posthogClient.screen(screenName, properties);
+  const client = getPostHogClient();
+  if (!client) return;
+  client.screen(screenName, properties);
 };
 
 /**
  * Set user properties
  */
 export const setUserProperties = (properties: Record<string, any>) => {
-  if (!posthogClient) return;
-
-  posthogClient.identify(undefined, properties);
+  const client = getPostHogClient();
+  if (!client) return;
+  client.identify(undefined, properties);
 };
 
 /**
@@ -141,23 +159,23 @@ export const trackUserAction = {
   onboardingStepCompleted: (step: number, stepName: string) =>
     trackEvent('onboarding_step_completed', { step, stepName }),
 
-  // Matching
-  profileViewed: (profileId: string) =>
-    trackEvent('profile_viewed', { profileId }),
-  swipedLeft: (profileId: string) =>
-    trackEvent('swiped_left', { profileId }),
-  swipedRight: (profileId: string) =>
-    trackEvent('swiped_right', { profileId }),
-  matched: (matchId: string) =>
-    trackEvent('matched', { matchId }),
-  unmatched: (matchId: string, reason?: string) =>
-    trackEvent('unmatched', { matchId, reason }),
+  // Matching — no profile/match IDs sent to analytics (prevents reconstructing who swiped whom)
+  profileViewed: (_profileId: string) =>
+    trackEvent('profile_viewed'),
+  swipedLeft: (_profileId: string) =>
+    trackEvent('swiped_left'),
+  swipedRight: (_profileId: string) =>
+    trackEvent('swiped_right'),
+  matched: (_matchId: string) =>
+    trackEvent('matched'),
+  unmatched: (_matchId: string, reason?: string) =>
+    trackEvent('unmatched', { reason }),
 
-  // Messaging
-  messageSent: (matchId: string, messageType: 'text' | 'image' | 'voice') =>
-    trackEvent('message_sent', { matchId, messageType }),
-  messageReceived: (matchId: string) =>
-    trackEvent('message_received', { matchId }),
+  // Messaging — no match IDs sent to analytics
+  messageSent: (_matchId: string, messageType: 'text' | 'image' | 'voice') =>
+    trackEvent('message_sent', { messageType }),
+  messageReceived: (_matchId: string) =>
+    trackEvent('message_received'),
 
   // Premium
   paywallViewed: (feature?: string) =>
@@ -177,47 +195,47 @@ export const trackUserAction = {
   verificationCompleted: (type: string, status: 'approved' | 'rejected') =>
     trackEvent('verification_completed', { type, status }),
 
-  // Safety
-  userBlocked: (blockedUserId: string, reason?: string) =>
-    trackEvent('user_blocked', { blockedUserId, reason }),
-  userReported: (reportedUserId: string, reportType: string) =>
-    trackEvent('user_reported', { reportedUserId, reportType }),
+  // Safety — no user IDs sent to analytics
+  userBlocked: (_blockedUserId: string, reason?: string) =>
+    trackEvent('user_blocked', { reason }),
+  userReported: (_reportedUserId: string, reportType: string) =>
+    trackEvent('user_reported', { reportType }),
 
   // Settings
   settingsChanged: (setting: string, value: any) =>
     trackEvent('settings_changed', { setting, value }),
 
-  // Success Milestones
-  dateScheduled: (matchId: string, daysUntilDate?: number) =>
-    trackEvent('date_scheduled', { matchId, daysUntilDate }),
-  dateCompleted: (matchId: string, rating?: number, wentWell?: boolean) =>
-    trackEvent('date_completed', { matchId, rating, wentWell }),
-  marriageArranged: (matchId: string, daysUntilMarriage?: number) =>
-    trackEvent('marriage_arranged', { matchId, daysUntilMarriage }),
-  relationshipEnded: (matchId: string, reason?: string, durationDays?: number) =>
-    trackEvent('relationship_ended', { matchId, reason, durationDays }),
+  // Success Milestones — no match IDs sent to analytics
+  dateScheduled: (_matchId: string, daysUntilDate?: number) =>
+    trackEvent('date_scheduled', { daysUntilDate }),
+  dateCompleted: (_matchId: string, rating?: number, wentWell?: boolean) =>
+    trackEvent('date_completed', { rating, wentWell }),
+  marriageArranged: (_matchId: string, daysUntilMarriage?: number) =>
+    trackEvent('marriage_arranged', { daysUntilMarriage }),
+  relationshipEnded: (_matchId: string, reason?: string, durationDays?: number) =>
+    trackEvent('relationship_ended', { reason, durationDays }),
 
-  // Reviews
-  reviewPromptShown: (matchId: string) =>
-    trackEvent('review_prompt_shown', { matchId }),
-  reviewSubmitted: (matchId: string, overallRating: number) =>
-    trackEvent('review_submitted', { matchId, overallRating }),
-  reviewViewed: (profileId: string, hasReviews: boolean) =>
-    trackEvent('review_viewed', { profileId, hasReviews }),
+  // Reviews — no match/profile IDs sent to analytics
+  reviewPromptShown: (_matchId: string) =>
+    trackEvent('review_prompt_shown'),
+  reviewSubmitted: (_matchId: string, overallRating: number) =>
+    trackEvent('review_submitted', { overallRating }),
+  reviewViewed: (_profileId: string, hasReviews: boolean) =>
+    trackEvent('review_viewed', { hasReviews }),
 
   // Boost & Premium Features
   boostActivated: (boostType: 'standard' | 'super', duration: number) =>
     trackEvent('boost_activated', { boostType, duration }),
-  superLikeUsed: (profileId: string) =>
-    trackEvent('super_like_used', { profileId }),
+  superLikeUsed: (_profileId: string) =>
+    trackEvent('super_like_used'),
   rewindUsed: () =>
     trackEvent('rewind_used'),
 
-  // Discovery & Filters
-  filtersChanged: (filters: Record<string, any>) =>
-    trackEvent('filters_changed', { filters }),
-  searchPerformed: (searchType: 'location' | 'keyword', query: string) =>
-    trackEvent('search_performed', { searchType, query }),
+  // Discovery & Filters — no filter details or search queries sent (contain sensitive preferences)
+  filtersChanged: (_filters: Record<string, any>) =>
+    trackEvent('filters_changed'),
+  searchPerformed: (searchType: 'location' | 'keyword', _query: string) =>
+    trackEvent('search_performed', { searchType }),
 
   // Engagement
   appSessionStarted: (sessionDuration?: number) =>
@@ -235,12 +253,12 @@ export const trackUserAction = {
 /**
  * Track errors (complement to Sentry)
  */
-export const trackError = (errorName: string, error: Error, context?: Record<string, any>) => {
+export const trackError = (errorName: string, error: Error, _context?: Record<string, any>) => {
+  // Only send error name and message — no stack traces (may contain file paths, user data)
+  // Sentry already captures full stack traces with proper PII scrubbing
   trackEvent('error_occurred', {
     errorName,
     errorMessage: error.message,
-    errorStack: error.stack,
-    ...context,
   });
 };
 
@@ -312,5 +330,5 @@ export const trackExperiment = (experimentName: string, variant: string) => {
   setUserProperties({ [`experiment_${experimentName}`]: variant });
 };
 
-// Export PostHog client for advanced use cases
-export { posthogClient };
+// Export PostHog client and provider for app integration
+export { posthogClient, PostHogProvider };

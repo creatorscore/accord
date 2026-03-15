@@ -13,11 +13,8 @@ const AWS_ACCESS_KEY = Deno.env.get('AWS_ACCESS_KEY_ID');
 const AWS_SECRET_KEY = Deno.env.get('AWS_SECRET_ACCESS_KEY');
 const AWS_REGION = Deno.env.get('AWS_REGION') || 'us-east-1';
 
-// Log AWS config status at startup (redacted for security)
-console.log('🔧 AWS Config Check:');
-console.log('  - AWS_ACCESS_KEY_ID:', AWS_ACCESS_KEY ? `SET (${AWS_ACCESS_KEY.substring(0, 4)}...)` : 'NOT SET');
-console.log('  - AWS_SECRET_ACCESS_KEY:', AWS_SECRET_KEY ? 'SET (hidden)' : 'NOT SET');
-console.log('  - AWS_REGION:', AWS_REGION);
+// Log AWS config status at startup (no credential details)
+console.log('AWS Config: credentials', AWS_ACCESS_KEY && AWS_SECRET_KEY ? 'OK' : 'MISSING');
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -226,9 +223,16 @@ Deno.serve(async (req) => {
 
     for (const photo of photos) {
       try {
+        // Generate signed URL for private bucket access
+        const storagePath = photo.storage_path || photo.url;
+        const { data: signedData } = await supabase.storage
+          .from('profile-photos')
+          .createSignedUrl(storagePath, 600);
+        const fetchUrl = signedData?.signedUrl || photo.url;
+
         // Download profile photo and convert to base64
-        console.log('  - Fetching photo:', photo.url);
-        const photoResponse = await fetch(photo.url);
+        console.log('  - Fetching photo:', fetchUrl.substring(0, 80));
+        const photoResponse = await fetch(fetchUrl);
 
         if (!photoResponse.ok) {
           console.error(`  - Failed to fetch photo: ${photoResponse.status} ${photoResponse.statusText}`);
@@ -355,13 +359,7 @@ Deno.serve(async (req) => {
         success: false,
         verified: false,
         error: error.message || 'Failed to verify photos',
-        details: error.toString(),
-        debug: {
-          has_aws_key: !!AWS_ACCESS_KEY,
-          has_aws_secret: !!AWS_SECRET_KEY,
-          aws_region: AWS_REGION,
-          key_prefix: AWS_ACCESS_KEY ? AWS_ACCESS_KEY.substring(0, 4) : 'MISSING'
-        }
+        aws_configured: !!(AWS_ACCESS_KEY && AWS_SECRET_KEY),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
