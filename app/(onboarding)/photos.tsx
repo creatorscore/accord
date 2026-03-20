@@ -377,6 +377,21 @@ export default function Photos() {
         )}
       </View>
 
+      {/* Upload Progress Bar */}
+      {uploading && (
+        <View style={styles.uploadProgressContainer}>
+          <View style={styles.uploadProgressRow}>
+            <ActivityIndicator size="small" color="#A08AB7" />
+            <Text style={styles.uploadProgressText}>
+              {t('onboardingPhotos.uploading', { progress: uploadProgress })}
+            </Text>
+          </View>
+          <View style={styles.uploadProgressBarBg}>
+            <View style={[styles.uploadProgressBarFill, { width: `${uploadProgress}%` }]} />
+          </View>
+        </View>
+      )}
+
       {/* Photo Counter */}
       <Text style={[styles.photoCounter, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
         {t('onboardingPhotos.counter', { count: photos.length })} {photos.length < 2 ? t('onboardingPhotos.minimumTwo') : ''}
@@ -517,5 +532,31 @@ const styles = StyleSheet.create({
   privacyDesc: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  uploadProgressContainer: {
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  uploadProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  uploadProgressText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#A08AB7',
+  },
+  uploadProgressBarBg: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  uploadProgressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: '#A08AB7',
   },
 });
