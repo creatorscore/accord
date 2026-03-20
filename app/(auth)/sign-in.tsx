@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { trackUserAction, identifyUser } from '@/lib/analytics';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SignIn() {
@@ -18,6 +18,10 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
   const { signIn, signOut } = useAuth();
 
   // Ref to prevent multiple simultaneous sign-in attempts (synchronous check for slow devices)
@@ -178,13 +182,20 @@ export default function SignIn() {
         return;
       }
 
-      // Handle email not confirmed
+      // Handle email not confirmed — show OTP verification screen
       if (errorMessage.includes('Email not confirmed')) {
-        Alert.alert(
-          t('auth.signIn.errorEmailNotConfirmed'),
-          t('auth.signIn.errorEmailNotConfirmedMessage'),
-          [{ text: 'OK' }]
-        );
+        // Resend the verification code automatically
+        try {
+          await supabase.auth.resend({
+            type: 'signup',
+            email: email.toLowerCase().trim(),
+          });
+        } catch (_) {
+          // Best-effort resend — user can manually resend from the verification screen
+        }
+        setVerificationEmail(email.toLowerCase().trim());
+        setOtpCode('');
+        setShowVerification(true);
         return;
       }
 
@@ -309,6 +320,130 @@ export default function SignIn() {
       setLoading(false);
     }
   };
+
+  // Handle OTP verification for unconfirmed emails
+  const handleVerifyOtp = async () => {
+    if (otpCode.length !== 6) {
+      Alert.alert(t('common.error'), 'Please enter the 6-digit code');
+      return;
+    }
+
+    setVerifyingOtp(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: verificationEmail,
+        token: otpCode,
+        type: 'signup',
+      });
+
+      if (error) throw error;
+
+      if (data.session) {
+        Alert.alert(
+          t('common.success'),
+          'Email verified successfully!',
+          [{
+            text: 'OK',
+            onPress: () => {
+              Keyboard.dismiss();
+              router.replace('/');
+            }
+          }]
+        );
+      }
+    } catch (error: any) {
+      Alert.alert(
+        t('common.error'),
+        error.message || 'Invalid or expired code. Please try again.'
+      );
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  // Email verification screen for unconfirmed accounts
+  if (showVerification) {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+      >
+        <ScrollView
+          contentContainerStyle={styles.verificationContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.iconContainer}>
+            <Ionicons name="mail-outline" size={40} color="#A08AB7" />
+          </View>
+          <Text style={styles.verificationTitle}>Verify Your Email</Text>
+          <Text style={styles.verificationMessage}>We sent a 6-digit verification code to</Text>
+          <Text style={styles.verificationEmail}>{verificationEmail}</Text>
+
+          <View style={styles.otpContainer}>
+            <Text style={styles.otpLabel}>Enter verification code</Text>
+            <TextInput
+              style={styles.otpInput}
+              placeholder="000000"
+              placeholderTextColor="#A1A1AA"
+              value={otpCode}
+              onChangeText={(text) => setOtpCode(text.replace(/[^0-9]/g, '').slice(0, 6))}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoFocus
+              textAlign="center"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.primaryButton, (verifyingOtp || otpCode.length !== 6) && styles.buttonDisabled]}
+            onPress={handleVerifyOtp}
+            disabled={verifyingOtp || otpCode.length !== 6}
+          >
+            <Text style={styles.primaryButtonText}>
+              {verifyingOtp ? 'Verifying...' : 'Verify Email'}
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={styles.verificationInstructions}>
+            Check your email inbox (and spam folder) for the verification code. It may take a few minutes to arrive.
+          </Text>
+
+          <TouchableOpacity
+            onPress={() => {
+              setShowVerification(false);
+              setOtpCode('');
+            }}
+            style={styles.secondaryLink}
+          >
+            <Text style={styles.linkText}>Back to Sign In</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tertiaryLink}
+            onPress={async () => {
+              try {
+                setLoading(true);
+                await supabase.auth.resend({
+                  type: 'signup',
+                  email: verificationEmail,
+                });
+                Alert.alert(t('common.success'), 'Verification code resent!');
+              } catch (error) {
+                Alert.alert(t('common.error'), 'Failed to resend code. Please try again.');
+              } finally {
+                setLoading(false);
+              }
+            }}
+            disabled={loading}
+          >
+            <Text style={styles.tertiaryLinkText}>
+              {loading ? 'Sending...' : 'Resend verification code'}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -594,5 +729,88 @@ const styles = StyleSheet.create({
     color: '#A08AB7',
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
+  },
+  // Verification screen styles
+  verificationContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F5F2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  verificationTitle: {
+    fontSize: 28,
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#1F2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  verificationMessage: {
+    fontSize: 17,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  verificationEmail: {
+    fontSize: 17,
+    fontFamily: 'Inter-SemiBold',
+    color: '#A08AB7',
+    marginBottom: 24,
+  },
+  verificationInstructions: {
+    fontSize: 16,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    textAlign: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 16,
+    lineHeight: 24,
+  },
+  secondaryLink: {
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+  tertiaryLink: {
+    paddingVertical: 8,
+    marginTop: 16,
+  },
+  tertiaryLinkText: {
+    color: '#71717A',
+    fontFamily: 'Inter',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+  otpContainer: {
+    width: '100%',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  otpLabel: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#1F2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  otpInput: {
+    borderWidth: 2,
+    borderColor: '#A08AB7',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    color: '#1F2937',
+    fontSize: 28,
+    fontFamily: 'Inter-Bold',
+    letterSpacing: 8,
   },
 });

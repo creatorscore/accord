@@ -87,6 +87,32 @@ export default function SignUp() {
         } else if (provider === 'apple') {
           errorMessage = t('auth.signUp.errorAccountExistsApple');
         } else if (provider === 'email') {
+          // Check if email is unconfirmed — offer to resend verification
+          const isUnconfirmed = emailCheck[0].email_confirmed === false;
+          if (isUnconfirmed) {
+            Alert.alert(
+              'Email Not Verified',
+              'An account with this email exists but hasn\'t been verified yet. Would you like us to resend the verification code?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Resend Code',
+                  onPress: async () => {
+                    try {
+                      await supabase.auth.resend({
+                        type: 'signup',
+                        email: email.toLowerCase().trim(),
+                      });
+                    } catch (_) {}
+                    setUserEmail(email.toLowerCase().trim());
+                    setShowVerificationMessage(true);
+                  }
+                }
+              ]
+            );
+            setLoading(false);
+            return;
+          }
           errorMessage = t('auth.signUp.errorAccountExistsEmail');
         }
 
