@@ -31,13 +31,14 @@ export default function WelcomeInfo() {
           onPress: async () => {
             try {
               setDeleting(true);
-              await supabase.functions.invoke('delete-account', {
+              const { error } = await supabase.functions.invoke('delete-account', {
                 body: { reason: 'not_target_audience', feedback: 'Opted out at welcome screen' },
               });
+              // Sign out regardless — even if the function errors, the account may already be deleted
               await signOut();
             } catch (error: any) {
-              Alert.alert('Error', 'Failed to delete account. Contact hello@joinaccord.app');
-              setDeleting(false);
+              // Still sign out — account may have been deleted even if we got an error
+              try { await signOut(); } catch {}
             }
           },
         },

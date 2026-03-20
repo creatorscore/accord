@@ -304,13 +304,28 @@ export default function PrivacySettings() {
             {isLocked && t('privacySettings.incognitoMode.requiresPremium')}
           </Text>
         </View>
-        <Switch
-          value={value}
-          onValueChange={(v) => { Haptics.selectionAsync(); onValueChange(v); }}
-          trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
-          thumbColor={value ? '#A08AB7' : '#F3F4F6'}
-          disabled={saving || isLocked}
-        />
+        {isLocked ? (
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); onValueChange(true); }}
+            activeOpacity={0.7}
+          >
+            <Switch
+              value={false}
+              trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
+              thumbColor="#F3F4F6"
+              disabled={true}
+              pointerEvents="none"
+            />
+          </TouchableOpacity>
+        ) : (
+          <Switch
+            value={value}
+            onValueChange={(v) => { Haptics.selectionAsync(); onValueChange(v); }}
+            trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
+            thumbColor={value ? '#A08AB7' : '#F3F4F6'}
+            disabled={saving}
+          />
+        )}
       </MotiView>
     );
   };

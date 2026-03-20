@@ -142,7 +142,7 @@ const FreeLikeCard = React.memo(({ like, onPass, onLikeBack, onUpgrade }: {
   return (
     <View className="w-[47%]">
       <View style={styles.likeCard}>
-        <View className="aspect-[3/4] overflow-hidden bg-card">
+        <TouchableOpacity onPress={onUpgrade} activeOpacity={0.8} className="aspect-[3/4] overflow-hidden bg-card">
           <SafeBlurImage source={{ uri: imageUri }} className="w-full h-full" resizeMode="cover" blurRadius={privacyBlurRadius} onLoad={onImageLoad} onError={onImageError} />
           {like.like_type === 'super_like' && (
             <View style={styles.superLikeBadge}>
@@ -152,11 +152,11 @@ const FreeLikeCard = React.memo(({ like, onPass, onLikeBack, onUpgrade }: {
           )}
           <View className="absolute inset-0 items-center justify-center">
             <Ionicons name="heart" size={32} color="white" />
-            <TouchableOpacity onPress={onUpgrade} className="mt-2 bg-white/20 px-3 py-1 rounded-full">
+            <View className="mt-2 bg-white/20 px-3 py-1 rounded-full">
               <Text className="text-white text-xs font-sans-bold">{t('likes.freeUser.revealPhoto')}</Text>
-            </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </TouchableOpacity>
         <LikedContentSection parsedContent={parsedContent} message={like.message} />
       </View>
       <View className="flex-row gap-2 mt-3">
@@ -188,8 +188,8 @@ const LikedContentSection = React.memo(({ parsedContent, message }: { parsedCont
         </View>
       )}
       {parsedContent?.type === 'photo' && parsedContent.url && (
-        <View style={styles.likedPhotoThumbnail}>
-          <SafeBlurImage source={{ uri: parsedContent.url }} style={styles.likedPhotoImage} resizeMode="cover" blurRadius={0} />
+        <View style={styles.likedPhotoThumb}>
+          <SafeBlurImage source={{ uri: parsedContent.url }} style={{ width: '100%', height: '100%', borderRadius: 8 }} resizeMode="cover" blurRadius={0} />
         </View>
       )}
       {message && (
@@ -378,8 +378,6 @@ export default function Likes() {
 
         if (cancelled) return;
 
-        if (likesResult.error) throw likesResult.error;
-
         const matchedProfileIds = new Set(
           matchesResult.data?.flatMap(m => [m.profile1_id, m.profile2_id]) || []
         );
@@ -539,11 +537,10 @@ export default function Likes() {
           `)
           .eq('liked_profile_id', profileId)
           .order('created_at', { ascending: false }),
-        // 3. Filter out users we have an ACTIVE match with
+        // 3. Filter out users we have ANY match with (active, unmatched, or blocked)
         supabase
           .from('matches')
           .select('profile1_id, profile2_id')
-          .eq('status', 'active')
           .or(`profile1_id.eq.${profileId},profile2_id.eq.${profileId}`),
         // 4. Filter out users we've passed on
         supabase
@@ -750,17 +747,35 @@ export default function Likes() {
       const profile1Id = currentProfileId < likeProfileId ? currentProfileId : likeProfileId;
       const profile2Id = currentProfileId < likeProfileId ? likeProfileId : currentProfileId;
 
-      // Check if match already exists first
+      // Check if match already exists first (including unmatched ones)
       const { data: existingMatch } = await supabase
         .from('matches')
-        .select('id')
+        .select('id, status')
         .eq('profile1_id', profile1Id)
         .eq('profile2_id', profile2Id)
         .maybeSingle();
 
       let matchData = existingMatch;
 
-      if (!existingMatch) {
+      if (existingMatch && existingMatch.status === 'unmatched') {
+        // Reactivate a previously unmatched match
+        const { data: reactivated, error: reactivateError } = await supabase
+          .from('matches')
+          .update({
+            status: 'active',
+            unmatched_by: null,
+            unmatched_at: null,
+            unmatch_reason: null,
+            matched_at: new Date().toISOString(),
+            compatibility_score: compatibilityScore,
+          })
+          .eq('id', existingMatch.id)
+          .select('id')
+          .single();
+
+        if (reactivateError) throw reactivateError;
+        matchData = reactivated;
+      } else if (!existingMatch) {
         // Create new match
         const { data: newMatch, error: matchError } = await supabase
           .from('matches')
@@ -784,6 +799,10 @@ export default function Likes() {
               .eq('profile2_id', profile2Id)
               .single();
             matchData = raceMatch;
+          } else if (matchError.message?.includes('MATCH_LIMIT_REACHED')) {
+            // Free user hit match cap — show paywall
+            setShowPaywall(true);
+            return;
           } else {
             throw matchError;
           }
@@ -900,6 +919,12 @@ export default function Likes() {
                 : t('likes.freeUser.noLikesRemaining')}
             </Text>
           </View>
+          <TouchableOpacity
+            onPress={() => setShowPaywall(true)}
+            style={{ padding: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: 12 }}
+          >
+            <MaterialCommunityIcons name="eye-outline" size={24} color="#F59E0B" />
+          </TouchableOpacity>
         </View>
 
         {loading ? (
@@ -980,6 +1005,12 @@ export default function Likes() {
           </Text>
           <Text className="text-body-lg font-sans text-muted-foreground">{t('likes.subtitleWithCount')}</Text>
         </View>
+        <TouchableOpacity
+          onPress={() => router.push('/activity/viewers' as any)}
+          style={{ padding: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: 12 }}
+        >
+          <MaterialCommunityIcons name="eye-outline" size={24} color="#F59E0B" />
+        </TouchableOpacity>
       </View>
 
       {loading ? (

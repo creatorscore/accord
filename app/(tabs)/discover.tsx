@@ -136,6 +136,7 @@ export default function Discover() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [likeCount, setLikeCount] = useState(0); // Daily likes used (5/day for free users)
   const [superLikesRemaining, setSuperLikesRemaining] = useState(5);
+  const [pendingLikesCount, setPendingLikesCount] = useState(0); // Likes received (for teaser banner)
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
     // Free filters
@@ -459,6 +460,10 @@ export default function Discover() {
       setCurrentProfilePreferences(prefs);
       // Track profile view
       trackUserAction.profileViewed(targetProfile.id);
+      // Record view for "Who viewed me" feature (non-blocking)
+      if (currentProfileId) {
+        Promise.resolve(supabase.rpc('record_profile_view', { p_viewer_id: currentProfileId, p_viewed_id: targetProfile.id })).catch(() => {});
+      }
     }
   }, [currentIndex, profiles]);
 
@@ -670,6 +675,10 @@ export default function Discover() {
       if (!hasInitiallyLoaded.current) {
         hasInitiallyLoaded.current = true;
         loadProfiles(undefined, undefined, initialFilters);
+        // Fetch pending likes count for teaser banner (non-blocking)
+        supabase.rpc('count_unmatched_received_likes').then(({ data }) => {
+          if (data != null) setPendingLikesCount(data);
+        });
       }
     } catch (error: any) {
       showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
@@ -913,38 +922,49 @@ export default function Discover() {
       let error: any = null;
 
       if (!isSearchingGlobally && !effectiveSearchMode && currentUserData.latitude && currentUserData.longitude) {
-        // LOCAL SEARCH: Use RPC function to get profiles filtered by distance at DATABASE level
-
-        // FIX #3: Limit initial load to 50 profiles to prevent ANR on low-end devices
-        const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_profiles', {
-          p_user_lat: currentUserData.latitude,
-          p_user_lon: currentUserData.longitude,
-          p_max_distance_miles: effectiveFilters.maxDistance,
-          p_user_profile_id: profileId,
-          p_min_age: Math.max(18, effectiveFilters.ageMin),
-          p_max_age: effectiveFilters.ageMax,
-          p_gender_prefs: effectiveFilters.genderPreference?.length > 0 ? effectiveFilters.genderPreference : (currentUserData.preferences?.gender_preference || []),
-          p_result_limit: 50  // FIX #3: Reduced from 500 to 50 for better performance
+        // PERFORMANCE: Try cached discovery feed first (pre-computed every 30min)
+        // Falls back to live RPC if cache is empty/stale
+        const { data: cachedFeed, error: cacheError } = await supabase.rpc('get_cached_discovery_feed', {
+          p_profile_id: profileId,
+          p_limit: 50,
         });
 
-        if (rpcError) {
-          console.error('RPC error:', rpcError);
-          throw rpcError;
+        let nearbyIds: string[] = [];
+
+        if (!cacheError && cachedFeed && cachedFeed.length > 0) {
+          // Cache hit — use pre-computed feed (skips 9 exclusion queries + RPC)
+          console.log(`✅ Discovery cache hit: ${cachedFeed.length} candidates`);
+          const swipedSet = new Set(swipedIds);
+          nearbyIds = cachedFeed
+            .map((c: any) => c.candidate_id)
+            .filter((id: string) => !swipedSet.has(id));
+        } else {
+          // Cache miss — fall back to live RPC
+          console.log('⚠️ Discovery cache miss, using live RPC');
+          const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_profiles', {
+            p_user_lat: currentUserData.latitude,
+            p_user_lon: currentUserData.longitude,
+            p_max_distance_miles: effectiveFilters.maxDistance,
+            p_user_profile_id: profileId,
+            p_min_age: Math.max(18, effectiveFilters.ageMin),
+            p_max_age: effectiveFilters.ageMax,
+            p_gender_prefs: effectiveFilters.genderPreference?.length > 0 ? effectiveFilters.genderPreference : (currentUserData.preferences?.gender_preference || []),
+            p_result_limit: 50
+          });
+
+          if (rpcError) {
+            console.error('RPC error:', rpcError);
+            throw rpcError;
+          }
+
+          if (rpcData && rpcData.length > 0) {
+            const swipedSet = new Set(swipedIds);
+            nearbyIds = rpcData.map((p: any) => p.id).filter((id: string) => !swipedSet.has(id));
+          }
         }
 
-        // Fetch full profile data with photos and preferences for each nearby profile
-
-        if (rpcData && rpcData.length > 0) {
-
-          // Filter out already-swiped profiles from RPC results
-          const swipedSet = new Set(swipedIds);
-          const nearbyIds = rpcData.map((p: any) => p.id).filter((id: string) => !swipedSet.has(id));
-
-
-          if (nearbyIds.length > 0) {
-            // PERFORMANCE: Removed preferences:preferences(*) JOIN — RLS blocks other users'
-            // preferences anyway (always returns empty). Saves ~500ms on query execution.
-            // Compatibility is calculated using the current user's own preferences only.
+        // Fetch full profile data with photos for the candidate IDs
+        if (nearbyIds.length > 0) {
             const { data: fullProfiles, error: profilesError } = await supabase
               .from('profiles')
               .select(`
@@ -969,11 +989,20 @@ export default function Discover() {
             }
 
             data = fullProfiles || [];
-          } else {
 
-          }
-        } else {
-
+            // Fetch preference fields for filtering (relationship_type, etc.)
+            // SECURITY DEFINER RPC bypasses preferences RLS
+            if (data.length > 0) {
+              const profileIds = data.map((p: any) => p.id);
+              const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: profileIds });
+              if (prefsData) {
+                const prefsMap = new Map(prefsData.map((p: any) => [p.profile_id, p]));
+                data = data.map((profile: any) => ({
+                  ...profile,
+                  preferences: prefsMap.get(profile.id) || null,
+                }));
+              }
+            }
         }
       } else {
         // GLOBAL SEARCH or SEARCH MODE: Use standard query
@@ -1079,6 +1108,19 @@ export default function Discover() {
         if (queryError) throw queryError;
         data = queryData || [];
         error = queryError;
+
+        // Fetch preference fields for global search results too
+        if (data.length > 0) {
+          const profileIds = data.map((p: any) => p.id);
+          const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: profileIds });
+          if (prefsData) {
+            const prefsMap = new Map(prefsData.map((p: any) => [p.profile_id, p]));
+            data = data.map((profile: any) => ({
+              ...profile,
+              preferences: prefsMap.get(profile.id) || null,
+            }));
+          }
+        }
       }
 
       if (error) throw error;
@@ -1911,6 +1953,11 @@ export default function Discover() {
               .single();
 
             if (matchError) {
+              // Check if it's the match limit error
+              if (matchError.message?.includes('MATCH_LIMIT_REACHED')) {
+                setShowPaywall(true);
+                return true;
+              }
               console.error('❌ Match error:', matchError);
             } else {
               trackUserAction.matched(newMatch?.id || '');
@@ -2953,6 +3000,33 @@ export default function Discover() {
             </View>
           )}
         </View>
+
+        {/* Likes Teaser Banner — drive free users to upgrade */}
+        {pendingLikesCount > 0 && !isPremium && !isPlatinum && (
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/likes')}
+            activeOpacity={0.85}
+            style={{
+              marginHorizontal: 12, marginBottom: 8, borderRadius: 14,
+              backgroundColor: '#A08AB7', paddingVertical: 12, paddingHorizontal: 16,
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <MaterialCommunityIcons name="heart-multiple" size={22} color="#FFD700" />
+              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>
+                {pendingLikesCount === 1
+                  ? t('likesTeaser.personLikesYou')
+                  : t('likesTeaser.peopleLikeYou', { count: pendingLikesCount })}
+              </Text>
+            </View>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 12 }}>
+                {t('likesTeaser.seeWho', { defaultValue: 'See Who' })}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* Smart Empty State with Dynamic Recommendations */}
         <ScrollView

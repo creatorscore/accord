@@ -6,7 +6,6 @@
 
 export const ONBOARDING_STEP_COUNTS: Record<string, number> = {
   'basic-info': 10,          // name, birthday, gender, pronouns, orientation, ethnicity, location, hometown, occupation, education
-  'personality': 6,          // height, mbti, love-language, languages, religion, politics
   'photos': 1,               // photos + blur toggle
   'interests': 2,            // hobbies, favorites
   'prompts': 3,              // 3 prompt slots
@@ -18,7 +17,6 @@ export const ONBOARDING_STEP_COUNTS: Record<string, number> = {
 
 const SCREEN_ORDER = [
   'basic-info',
-  'personality',
   'photos',
   'interests',
   'prompts',

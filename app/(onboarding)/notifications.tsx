@@ -6,7 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { supabase } from '@/lib/supabase';
-import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
+import { goToPreviousOnboardingStep, skipToDiscovery } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { registerForPushNotifications, ensurePushTokenSaved } from '@/lib/notifications';
 import { openAppSettings } from '@/lib/open-settings';
@@ -182,7 +182,7 @@ export default function Notifications() {
       subtitle={t('onboarding.notifications.subtitle')}
       onBack={handleBack}
       onContinue={handleFinish}
-      onSkip={undefined}
+      onSkip={skipToDiscovery}
       continueDisabled={loading}
       continueLabel={loading ? t('onboarding.notifications.finishing') : t('onboarding.notifications.startMatching')}
       currentRoute="/(onboarding)/notifications"

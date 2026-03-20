@@ -97,23 +97,45 @@ export default function PhotoVerificationCard() {
   const verifySelfie = async (imageUri: string) => {
     setVerifying(true);
     try {
-      // Resize and compress image to reduce payload size
-      // AWS Rekognition works well with 800x800 images
-      const manipulated = await ImageManipulator.manipulateAsync(
-        imageUri,
-        [{ resize: { width: 800, height: 800 } }],
-        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-      );
+      // Step 1: Resize and compress image to reduce payload size
+      console.log('[Verification] Step 1: Resizing image...', imageUri);
+      let manipulated;
+      try {
+        manipulated = await ImageManipulator.manipulateAsync(
+          imageUri,
+          [{ resize: { width: 800, height: 800 } }],
+          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        console.log('[Verification] Resized OK:', manipulated.uri);
+      } catch (manipError: any) {
+        console.error('[Verification] ImageManipulator failed:', manipError);
+        throw new Error(`Image resize failed: ${manipError.message}`);
+      }
 
-      // Read resized image as base64
-      const base64 = await FileSystem.readAsStringAsync(manipulated.uri, {
-        encoding: 'base64',
-      });
+      // Step 2: Read resized image as base64
+      console.log('[Verification] Step 2: Reading as base64...');
+      let base64;
+      try {
+        base64 = await FileSystem.readAsStringAsync(manipulated.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        console.log('[Verification] Base64 length:', base64?.length || 0);
+      } catch (readError: any) {
+        console.error('[Verification] FileSystem read failed:', readError);
+        throw new Error(`File read failed: ${readError.message}`);
+      }
 
-      // Call Edge Function
+      if (!base64 || base64.length === 0) {
+        throw new Error('Empty base64 image data');
+      }
+
+      // Step 3: Call Edge Function
+      console.log('[Verification] Step 3: Calling edge function...');
       const { data, error } = await supabase.functions.invoke('photo-verification-start', {
         body: { selfie_base64: base64 },
       });
+
+      console.log('[Verification] Response:', { data: data ? 'received' : 'null', error: error?.message || 'none' });
 
       if (error) {
         // Attach any additional data from the response to the error
@@ -177,6 +199,12 @@ export default function PhotoVerificationCard() {
         );
       } else if (errorMessage?.includes('Profile not found')) {
         Alert.alert(t('verification.error'), t('verification.profileNotFound'));
+      } else if (errorMessage?.includes('Image resize failed') || errorMessage?.includes('File read failed')) {
+        Alert.alert(
+          t('verification.error'),
+          'There was an issue processing your photo. Please try again — make sure you take a new selfie (not from gallery) and that the app has camera permission.',
+          [{ text: t('verification.tryAgain'), onPress: takeSelfie }, { text: t('common.cancel'), style: 'cancel' }]
+        );
       } else {
         Alert.alert(t('verification.error'), t('verification.errorMessage'));
       }

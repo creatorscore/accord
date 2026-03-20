@@ -63,6 +63,11 @@ export default function PremiumPaywall({
 
   const [trialEligibility, setTrialEligibility] = useState<Record<string, { eligible: boolean; trialInfo: TrialInfo }>>({});
 
+  // Reset closing state when paywall opens
+  useEffect(() => {
+    if (visible) setIsClosing(false);
+  }, [visible]);
+
   // Check trial eligibility when paywall becomes visible
   useEffect(() => {
     if (!visible || __DEV__) return;
@@ -363,16 +368,14 @@ export default function PremiumPaywall({
               style={[styles.closeButton, { top: insets.top + 8 }]}
               onPress={() => {
                 setIsClosing(true);
-                // Small delay to allow blur to cleanly unmount
                 setTimeout(onClose, 100);
               }}
               disabled={isClosing}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              {!isClosing && (
-                <SafeBlurView intensity={40} tint="dark" style={styles.closeBlur}>
-                  <MaterialCommunityIcons name="close" size={24} color="white" />
-                </SafeBlurView>
-              )}
+              <View style={[styles.closeBlur, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+                <MaterialCommunityIcons name="close" size={24} color="white" />
+              </View>
             </TouchableOpacity>
 
             <ScrollView

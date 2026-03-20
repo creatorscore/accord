@@ -279,7 +279,7 @@ export default function Personality() {
 
   const handleBack = () => {
     if (subStep === 0) {
-      goToPreviousOnboardingStep('/(onboarding)/personality');
+      goToPreviousOnboardingStep('/(onboarding)/basic-info' as any);
     } else {
       const prevStep = subStep - 1;
       saveDraft(prevStep, buildDraftSnapshot());

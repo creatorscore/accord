@@ -23,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { formatDistanceSlider, DistanceUnit } from '@/lib/distance-utils';
 import { GENDER_PREF_OPTIONS, expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
 import * as Haptics from 'expo-haptics';
+import PremiumPaywall from '@/components/premium/PremiumPaywall';
 
 interface MatchingPreferences {
   gender_preference: string[];
@@ -146,6 +147,7 @@ export default function MatchingPreferences() {
   const [saving, setSaving] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   const [newCity, setNewCity] = useState('');
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
@@ -678,7 +680,7 @@ export default function MatchingPreferences() {
                   thumbColor={preferences.search_globally ? '#A08AB7' : '#F3F4F6'}
                 />
               ) : (
-                <TouchableOpacity onPress={() => router.push('/settings/subscription')}>
+                <TouchableOpacity onPress={() => setShowPaywall(true)}>
                   <MaterialCommunityIcons name="lock" size={24} color="#A08AB7" />
                 </TouchableOpacity>
               )}
@@ -933,6 +935,15 @@ export default function MatchingPreferences() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Premium Paywall Modal */}
+      {showPaywall && (
+        <PremiumPaywall
+          visible={showPaywall}
+          onClose={() => setShowPaywall(false)}
+          feature="search_globally"
+        />
+      )}
     </View>
   );
 }
