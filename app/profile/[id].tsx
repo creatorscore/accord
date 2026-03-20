@@ -231,6 +231,10 @@ export default function ProfileView() {
     if (id && currentProfileId) {
       loadProfile();
       checkIfMatched();
+      // Record profile view (non-blocking, skip own profile)
+      if (id !== currentProfileId) {
+        Promise.resolve(supabase.rpc('record_profile_view', { p_viewer_id: currentProfileId, p_viewed_id: id })).catch(() => {});
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, currentProfileId, currentPreferences]);
@@ -679,7 +683,18 @@ export default function ProfileView() {
             expires_at: expiresAt.toISOString(),
           }).select('id').single();
 
-          if (matchError) throw matchError;
+          if (matchError) {
+            if (matchError.message?.includes('MATCH_LIMIT_REACHED')) {
+              Alert.alert(
+                t('common.premiumRequired') || 'Premium Required',
+                'You\'ve reached the free match limit (5). Upgrade to Premium for unlimited matches!',
+                [{ text: t('common.ok') }]
+              );
+              setIsLiked(false);
+              return;
+            }
+            throw matchError;
+          }
 
           setMatchModalMatchId(newMatch.id);
           setTimeout(() => setShowMatchModal(true), 500);

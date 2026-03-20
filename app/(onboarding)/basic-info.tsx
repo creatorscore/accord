@@ -111,7 +111,7 @@ const SUB_STEPS = [
   { key: 'location',    title: "Where are you based?",          subtitle: "We use this to find people near you." },
   { key: 'hometown',    title: "Where are you from?",           subtitle: "Your hometown helps others connect with you." },
   { key: 'occupation',  title: "What do you do?",               subtitle: "Share your occupation or profession." },
-  { key: 'education',   title: "Where did you study?",          subtitle: "Your school, university, or program." },
+  { key: 'education',   title: "What's your education?",        subtitle: "Your school, trade program, or self-taught journey." },
 ] as const;
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -624,7 +624,11 @@ export default function BasicInfo() {
           device_id: deviceFingerprint,
           field_visibility: fieldVisibility,
           preferred_language: i18n.language || 'en',
+          terms_accepted_at: new Date().toISOString(),
+          terms_version: '1.0',
           onboarding_step: 1,
+          // profile_complete is set after photos are uploaded (enforce_minimum_photos
+          // trigger requires at least 2 photos before profile_complete can be true)
         }, { onConflict: 'user_id' });
 
       if (error) throw error;
@@ -632,7 +636,7 @@ export default function BasicInfo() {
       await clearDraft();
       trackUserAction.onboardingStepCompleted(1, 'basic-info');
       trackFunnel.onboardingStep1_BasicInfo();
-      router.push('/(onboarding)/personality');
+      router.push('/(onboarding)/photos');
     } catch (error: any) {
       showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profileSaveError') });
     } finally {

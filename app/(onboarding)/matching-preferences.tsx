@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
+import { goToPreviousOnboardingStep, skipToDiscovery } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { formatDistanceSlider, DistanceUnit } from '@/lib/distance-utils';
 import Slider from '@react-native-community/slider';
@@ -134,7 +134,7 @@ export default function MatchingPreferences() {
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
-          onboarding_step: 8,
+          onboarding_step: 9,
         })
         .eq('id', profileId);
 
@@ -315,6 +315,7 @@ export default function MatchingPreferences() {
       onContinue={handleContinue}
       continueDisabled={loading || (subStep === 2 && genderPreference.length === 0)}
       continueLabel={t('common.continue')}
+      onSkip={skipToDiscovery}
       currentRoute="/(onboarding)/matching-preferences"
     >
       {renderContent()}

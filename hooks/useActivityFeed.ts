@@ -149,7 +149,7 @@ export function useActivityFeed(profileId: string | null, _userId?: string | nul
         let newActivities: ActivityItem[] = data || [];
 
         // Batch sign all photo URLs at once (avoid N+1 sequential signing)
-        const allPhotos: { url: string; storage_path?: string }[] = [];
+        const allPhotos: { url: string; storage_path?: string | null; is_primary: boolean }[] = [];
         const photoIndexMap: { activityIdx: number; photoIdx: number }[] = [];
         for (let i = 0; i < newActivities.length; i++) {
           const photos = newActivities[i].actor?.photos;
@@ -164,7 +164,7 @@ export function useActivityFeed(profileId: string | null, _userId?: string | nul
           const signedPhotos = await signPhotoUrls(allPhotos);
           for (let k = 0; k < signedPhotos.length; k++) {
             const { activityIdx, photoIdx } = photoIndexMap[k];
-            newActivities[activityIdx].actor.photos[photoIdx] = signedPhotos[k];
+            newActivities[activityIdx].actor!.photos[photoIdx] = signedPhotos[k];
           }
         }
 

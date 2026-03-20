@@ -472,9 +472,7 @@ export default function ImmersiveProfileCard({
               <Text style={styles.headerName} numberOfLines={1}>
                 {profile.display_name}, {profile.age}
               </Text>
-              {profile.compatibility_score && (
-                <Text style={styles.headerMatch}>{t('profileCard.compatibility.matchLabel', { score: profile.compatibility_score })}</Text>
-              )}
+              {/* TODO: Re-enable when server-side compatibility scoring is implemented */}
             </View>
           </SafeAreaView>
         </SafeBlurView>
@@ -625,26 +623,7 @@ export default function ImmersiveProfileCard({
             </View>
           )}
 
-          {/* Compatibility Score */}
-          {profile.compatibility_score && (
-            <View style={styles.compatibilityCard}>
-              <View style={styles.compatibilityHeader}>
-                <MaterialCommunityIcons name="heart-circle" size={36} color="#A08AB7" />
-                <View style={styles.compatibilityTextBox}>
-                  <Text style={styles.compatibilityScore}>{profile.compatibility_score}%</Text>
-                  <Text style={styles.compatibilityLabel}>{t('profileCard.compatibility.label')}</Text>
-                </View>
-              </View>
-              {compatibilityBreakdown && (
-                <View style={styles.compatibilityBreakdown}>
-                  <CompFactorBar label={t('profileCard.compatibility.marriageGoals')} score={Math.round(compatibilityBreakdown.goals || 0)} color="#A08AB7" />
-                  <CompFactorBar label={t('profileCard.compatibility.location')} score={Math.round(compatibilityBreakdown.location || 0)} color="#A08AB7" />
-                  <CompFactorBar label={t('profileCard.compatibility.lifestyle')} score={Math.round(compatibilityBreakdown.lifestyle || 0)} color="#A08AB7" />
-                  <CompFactorBar label={t('profileCard.compatibility.personality')} score={Math.round(compatibilityBreakdown.personality || 0)} color="#A08AB7" />
-                </View>
-              )}
-            </View>
-          )}
+          {/* TODO: Re-enable when server-side compatibility scoring is implemented */}
 
           {/* Reviews Section */}
           <ProfileReviewDisplay

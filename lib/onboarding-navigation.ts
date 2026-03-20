@@ -6,17 +6,16 @@
 
 import { router } from 'expo-router';
 
-// Onboarding steps in order
+// Onboarding steps in order (personality removed — users can skip to discovery after basic-info)
 export const ONBOARDING_STEPS = [
   '/(onboarding)/basic-info',           // step 0
-  '/(onboarding)/personality',          // step 1
-  '/(onboarding)/photos',               // step 2
-  '/(onboarding)/interests',            // step 3
-  '/(onboarding)/prompts',              // step 4
-  '/(onboarding)/voice-intro',          // step 5
-  '/(onboarding)/marriage-preferences', // step 6
-  '/(onboarding)/matching-preferences', // step 7
-  '/(onboarding)/notifications',        // step 8
+  '/(onboarding)/photos',               // step 1
+  '/(onboarding)/interests',            // step 2
+  '/(onboarding)/prompts',              // step 3
+  '/(onboarding)/voice-intro',          // step 4
+  '/(onboarding)/marriage-preferences', // step 5
+  '/(onboarding)/matching-preferences', // step 6
+  '/(onboarding)/notifications',        // step 7
 ] as const;
 
 export type OnboardingRoute = typeof ONBOARDING_STEPS[number];
@@ -56,4 +55,12 @@ export function goToNextOnboardingStep(currentRoute: OnboardingRoute) {
     // Last step - go to main app
     router.replace('/(tabs)/discover');
   }
+}
+
+/**
+ * Skip remaining onboarding and go directly to discovery.
+ * Only available after basic-info (profile_complete is already true).
+ */
+export function skipToDiscovery() {
+  router.replace('/(tabs)/discover');
 }

@@ -18,7 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri, cleanupOptimizedImages } from '@/lib/image-optimization';
 import { signPhotoUrls } from '@/lib/signed-urls';
-import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
+import { goToPreviousOnboardingStep, skipToDiscovery } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
@@ -294,6 +294,7 @@ export default function Photos() {
         .update({
           onboarding_step: 3,
           photo_blur_enabled: photoBlurEnabled,
+          profile_complete: true, // Enable discovery access after photos (trigger requires 2+ photos)
         })
         .eq('id', profileId);
 
@@ -324,6 +325,7 @@ export default function Photos() {
       title={t('onboarding.photos.title')}
       subtitle={t('onboardingPhotos.subtitle')}
       onBack={() => goToPreviousOnboardingStep('/(onboarding)/photos')}
+      onSkip={skipToDiscovery}
       onContinue={handleContinue}
       continueDisabled={uploading || photos.length < 2}
       continueLabel={uploading ? t('onboardingPhotos.uploading', { progress: uploadProgress }) : t('common.continue')}

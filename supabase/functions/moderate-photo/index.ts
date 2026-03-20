@@ -81,15 +81,6 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // SECURITY: JWT is already verified by Supabase gateway (verify_jwt: true).
-    // Use a user-scoped client to verify profile ownership through RLS.
-    const authHeader = req.headers.get('Authorization') || '';
-    const supabaseUser = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
     // Get request body
     const { photo_url, storage_path, photo_id, profile_id } = await req.json();
 
@@ -100,18 +91,34 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify the caller owns the profile (RLS ensures only own profile is returned)
-    const { data: callerProfile } = await supabaseUser
-      .from('profiles')
-      .select('id')
-      .eq('id', profile_id)
-      .maybeSingle();
+    // SECURITY: Detect if caller is service_role (cron/internal) vs regular user.
+    // Service_role calls come from retry_pending_photo_moderation cron — trusted.
+    const authHeader = req.headers.get('Authorization') || '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const isServiceRole = authHeader === `Bearer ${serviceRoleKey}`;
 
-    if (!callerProfile) {
-      return new Response(
-        JSON.stringify({ error: 'Not authorized to moderate this profile' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+    if (!isServiceRole) {
+      // Regular user call — verify profile ownership through RLS
+      const supabaseUser = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } }
       );
+
+      const { data: callerProfile } = await supabaseUser
+        .from('profiles')
+        .select('id')
+        .eq('id', profile_id)
+        .maybeSingle();
+
+      if (!callerProfile) {
+        return new Response(
+          JSON.stringify({ error: 'Not authorized to moderate this profile' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+        );
+      }
+    } else {
+      console.log('🔑 Service role call (cron retry) — skipping ownership check');
     }
 
     console.log(`🔍 Moderating photo for profile ${profile_id}`);
@@ -315,23 +322,40 @@ Deno.serve(async (req) => {
     }
 
     if (isSuggestive) {
-      console.log('⚠️ Suggestive content detected - Flagging for review');
+      console.log('⚠️ Suggestive content detected - Approving photo, logging for review');
 
-      // Update photo status to pending review
+      // Approve the photo (suggestive != explicit) but log for admin review.
+      // Marking as 'pending' made photos invisible via RLS (only 'approved' are shown),
+      // which silently blocked users from discovery and photo verification.
       if (photo_id) {
         await supabaseAdmin
           .from('photos')
           .update({
-            moderation_status: 'pending',
-            moderation_reason: `Suggestive content flagged for review: ${flaggedLabels.join(', ')}`,
+            moderation_status: 'approved',
+            moderation_reason: `Suggestive content logged for review: ${flaggedLabels.join(', ')}`,
+            moderated_at: new Date().toISOString(),
           })
           .eq('id', photo_id);
       }
 
+      // Log for admin review without blocking the user
+      await supabaseAdmin
+        .from('moderation_logs')
+        .insert({
+          profile_id,
+          action: 'photo_suggestive_review',
+          reason: `Suggestive content detected (approved, flagged for review): ${flaggedLabels.join(', ')}`,
+          details: {
+            photo_url,
+            photo_id,
+            labels: moderationResult.ModerationLabels,
+          },
+        });
+
       return new Response(
         JSON.stringify({
-          approved: false,
-          reason: 'needs_review',
+          approved: true,
+          reason: 'suggestive_flagged_for_review',
           labels: flaggedLabels,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }

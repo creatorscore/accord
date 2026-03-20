@@ -34,7 +34,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
 import { Audio } from 'expo-av';
-import { sendMessageNotification, sendReactionNotification } from '@/lib/notifications';
+import { sendReactionNotification } from '@/lib/notifications';
 import BlockModal from '@/components/safety/BlockModal';
 import { optimizeImage, uriToArrayBuffer, validateImage, IMAGE_CONFIG } from '@/lib/image-optimization';
 import ReportModal from '@/components/safety/ReportModal';
@@ -101,6 +101,7 @@ interface MatchProfile {
   photo_blur_data_uri?: string | null;
   is_verified?: boolean;
   photo_verified?: boolean;
+  encryption_public_key?: string;
   location_city?: string;
   compatibility_score?: number;
   distance?: number;
@@ -125,6 +126,10 @@ export default function Chat() {
   const { isPremium } = useSubscription();
   const { refreshUnreadCount } = useNotifications();
   const flatListRef = useRef<FlatList>(null);
+  // Ref-based set to track message IDs we've already added to state.
+  // This survives React state batching and prevents duplicates from
+  // optimistic updates + Realtime events racing each other.
+  const knownMessageIds = useRef(new Set<string>());
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -511,6 +516,7 @@ export default function Chat() {
         const signedMessages = await signMessageMediaUrls(quickMessages);
 
         // Show UI immediately with plaintext + placeholders
+        signedMessages.forEach(m => knownMessageIds.current.add(m.id));
         setMessages(signedMessages);
         setLoading(false);
         initialLoadDone.current = true;
@@ -654,6 +660,7 @@ export default function Chat() {
       keyboardDidHideListener.remove();
       unsubMessages?.();
       unsubReactions?.();
+      knownMessageIds.current.clear();
       // Clean up all scroll timeouts
       scrollTimeoutRefs.current.forEach(clearTimeout);
       scrollTimeoutRefs.current = [];
@@ -1100,12 +1107,11 @@ export default function Chat() {
           }
 
           setMessages((prev) => {
-            // Check if message already exists to avoid duplicates
-            const exists = prev.some(msg => msg.id === decryptedMessage.id);
-            if (exists) {
-
+            // Check ref-based set first (survives React batching), then state
+            if (knownMessageIds.current.has(decryptedMessage.id)) {
               return prev;
             }
+            knownMessageIds.current.add(decryptedMessage.id);
 
             // Look up reply-to message from local state
             let replyToMessage = null;
@@ -1207,9 +1213,9 @@ export default function Chat() {
     };
   };
 
-  // Subscribe to typing indicator events (Premium feature)
+  // Subscribe to typing indicator channel (all users join to broadcast; premium users see indicators)
   const subscribeToTypingIndicator = useCallback(() => {
-    if (!isPremium || !matchId || !currentProfileId) return;
+    if (!matchId || !currentProfileId) return;
 
     const channel = supabase.channel(`typing-${matchId}`, {
       config: {
@@ -1244,11 +1250,11 @@ export default function Chat() {
       }
       channel.unsubscribe();
     };
-  }, [isPremium, matchId, currentProfileId]);
+  }, [matchId, currentProfileId]);
 
-  // Broadcast typing event with debounce (Premium feature)
+  // Broadcast typing event with debounce (all users broadcast, premium users see)
   const broadcastTyping = useCallback(() => {
-    if (!isPremium || !typingChannelRef.current || !currentProfileId) return;
+    if (!typingChannelRef.current || !currentProfileId) return;
 
     const now = Date.now();
     // Only broadcast every 2 seconds to avoid spamming
@@ -1260,22 +1266,21 @@ export default function Chat() {
       event: 'typing',
       payload: { profileId: currentProfileId },
     });
-  }, [isPremium, currentProfileId]);
+  }, [currentProfileId]);
 
-  // Subscribe to typing indicator for premium users
+  // Subscribe to typing indicator channel for all users (premium users see it, all users broadcast)
   // Note: We intentionally exclude subscribeToTypingIndicator from deps to avoid resubscription loop
   useEffect(() => {
-    if (isPremium && currentProfileId && matchId) {
+    if (currentProfileId && matchId) {
       const unsubscribe = subscribeToTypingIndicator();
       return () => {
         if (unsubscribe) {
-
           unsubscribe();
         }
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPremium, currentProfileId, matchId]);
+  }, [currentProfileId, matchId]);
 
   const markMessagesAsRead = async () => {
     const profileId = currentProfileIdRef.current || currentProfileId;
@@ -1534,7 +1539,12 @@ export default function Chat() {
             media_url: replyingTo.media_url,
           } : null,
         } as Message;
-        setMessages((prev) => [displayMessage, ...prev]);
+        setMessages((prev) => {
+          // Prevent duplicate if Realtime already delivered this message
+          if (knownMessageIds.current.has(displayMessage.id)) return prev;
+          knownMessageIds.current.add(displayMessage.id);
+          return [displayMessage, ...prev];
+        });
 
         // Clear reply state
         setReplyingTo(null);
@@ -1546,13 +1556,7 @@ export default function Chat() {
         }
       }
 
-      // Send push notification to recipient (non-blocking — don't wait for it)
-      sendMessageNotification(
-        matchProfile.id,
-        currentProfileName,
-        messageContent,
-        matchId as string
-      ).catch(() => {});
+      // Push notification handled by database trigger (notify-new-message edge function)
     } catch (error: any) {
       console.error('Error sending message:', error);
       setNewMessage(messageContent); // Restore message on error
@@ -1677,17 +1681,7 @@ export default function Chat() {
             });
           }
 
-          // Send push notification (skip in Expo Go)
-          try {
-            await sendMessageNotification(
-              matchProfile.id,
-              currentProfileName,
-              `📷 ${t('chat.chatNotification.sentPhoto')}`,
-              matchId as string
-            );
-          } catch (notifError) {
-    
-          }
+          // Push notification handled by database trigger (notify-new-message edge function)
         } catch (uploadError: any) {
           console.error('Error uploading image:', uploadError);
           showToast({ type: 'error', title: t('common.error'), message: t('chat.sendPhotoError') });
@@ -1891,17 +1885,7 @@ export default function Chat() {
           .eq('id', matchId);
       }
 
-      // Send push notification
-      try {
-        await sendMessageNotification(
-          matchProfile.id,
-          currentProfileName,
-          `🎤 ${t('chat.chatNotification.sentVoice')}`,
-          matchId as string
-        );
-      } catch (notifError) {
-
-      }
+      // Push notification handled by database trigger (notify-new-message edge function)
     } catch (error: any) {
       console.error('Error sending voice message:', error);
       if (error?.code === 'P0001' && error?.message?.includes('Premium subscription')) {
@@ -1997,17 +1981,7 @@ export default function Chat() {
 
         setHasRevealedPhotos(true);
 
-        // Send push notification
-        try {
-          await sendMessageNotification(
-            matchProfile.id,
-            currentProfileName,
-            `${currentProfileName} revealed their photos to you! 👀`,
-            matchId as string
-          );
-        } catch (notifError) {
-  
-        }
+        // Push notification handled by database trigger (notify-new-message edge function)
 
         showToast({ type: 'success', title: t('toast.photosRevealed'), message: t('toast.photosRevealed', { name: matchProfile.display_name }) });
       }
@@ -2354,10 +2328,13 @@ export default function Chat() {
   // Search within conversation
   const handleSearchToggle = () => {
     if (isSearching) {
-      setIsSearching(false);
+      // Clear search state in a single batch to avoid intermediate re-renders
+      // that can cause removeClippedSubviews to hide all messages on Android
       setSearchQuery('');
       setSearchResultIds([]);
       setCurrentSearchIndex(0);
+      // Delay closing search UI to let the FlatList settle
+      setTimeout(() => setIsSearching(false), 50);
     } else {
       setIsSearching(true);
       setTimeout(() => searchInputRef.current?.focus(), 100);
@@ -2371,15 +2348,18 @@ export default function Chat() {
       setCurrentSearchIndex(0);
       return;
     }
-    const lowerQuery = query.toLowerCase();
+    // Use word boundary matching: match whole words only
+    // Escape regex special chars in query, then wrap with \b (word boundary)
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const wordRegex = new RegExp(`\\b${escaped}\\b`, 'i');
     const results = messages
       .filter((m) => {
         const text = m.decrypted_content || m.encrypted_content;
-        return text.toLowerCase().includes(lowerQuery);
+        return wordRegex.test(text);
       })
       .map((m) => m.id);
     setSearchResultIds(results);
-    setCurrentSearchIndex(results.length > 0 ? 0 : 0);
+    setCurrentSearchIndex(0);
     // Scroll to first result
     if (results.length > 0) {
       scrollToMessage(results[0]);
@@ -2528,7 +2508,7 @@ export default function Chat() {
         {/* Message Bubble */}
         <View style={[
           styles.messageBubble,
-          isMine ? styles.messageBubbleMine : [styles.messageBubbleTheirs, { backgroundColor: colors.card }],
+          isMine ? styles.messageBubbleMine : styles.messageBubbleTheirs,
           isSearchHighlighted && styles.searchHighlightedBubble,
           isCurrentSearchResult && styles.searchCurrentBubble,
         ]}>
@@ -2567,13 +2547,19 @@ export default function Chat() {
                 <Text style={[styles.messageTime, isMine && styles.messageTimeMine, styles.imageMessageTime]}>
                   {getTimeDisplay(item.created_at)}
                 </Text>
-                {isMine && isPremium && (
-                  <MaterialCommunityIcons
-                    name={item.read_at ? "check-all" : "check"}
-                    size={12}
-                    color={item.read_at ? "#3B82F6" : "rgba(255,255,255,0.8)"}
-                    style={styles.readReceipt}
-                  />
+                {isMine && (
+                  isPremium ? (
+                    <MaterialCommunityIcons
+                      name={item.read_at ? "check-all" : "check"}
+                      size={12}
+                      color={item.read_at ? "#3B82F6" : "rgba(0,0,0,0.3)"}
+                      style={styles.readReceipt}
+                    />
+                  ) : (
+                    <TouchableOpacity onPress={() => setShowPaywall(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <MaterialCommunityIcons name="check" size={12} color="rgba(0,0,0,0.2)" style={styles.readReceipt} />
+                    </TouchableOpacity>
+                  )
                 )}
               </View>
             </TouchableOpacity>
@@ -2617,13 +2603,17 @@ export default function Chat() {
                           <Text style={[styles.messageTime, styles.messageTimeMine, { marginTop: 0 }]}>
                             {getTimeDisplay(item.created_at)}
                           </Text>
-                          {isPremium && (
+                          {isPremium ? (
                             <MaterialCommunityIcons
                               name={item.read_at ? "check-all" : "check"}
                               size={12}
-                              color={item.read_at ? "#60A5FA" : "rgba(255,255,255,0.7)"}
+                              color={item.read_at ? "#3B82F6" : "rgba(0,0,0,0.3)"}
                               style={styles.readReceipt}
                             />
+                          ) : (
+                            <TouchableOpacity onPress={() => setShowPaywall(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                              <MaterialCommunityIcons name="check" size={12} color="rgba(0,0,0,0.2)" style={styles.readReceipt} />
+                            </TouchableOpacity>
                           )}
                         </View>
                       </View>
@@ -2705,13 +2695,17 @@ export default function Chat() {
                       <Text style={[styles.messageTime, styles.messageTimeMine]}>
                         {getTimeDisplay(item.created_at)}
                       </Text>
-                      {isPremium && (
+                      {isPremium ? (
                         <MaterialCommunityIcons
                           name={item.read_at ? "check-all" : "check"}
                           size={14}
-                          color={item.read_at ? "#60A5FA" : "rgba(255,255,255,0.7)"}
+                          color={item.read_at ? "#3B82F6" : "rgba(0,0,0,0.3)"}
                           style={styles.readReceipt}
                         />
+                      ) : (
+                        <TouchableOpacity onPress={() => setShowPaywall(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <MaterialCommunityIcons name="check" size={14} color="rgba(0,0,0,0.2)" style={styles.readReceipt} />
+                        </TouchableOpacity>
                       )}
                     </View>
                   </View>
@@ -2730,20 +2724,20 @@ export default function Chat() {
                         <Image source={{ uri: item.link_preview.image }} style={styles.linkPreviewImage} resizeMode="cover" />
                       )}
                       <View style={styles.linkPreviewTextContainer}>
-                        <Text style={[styles.linkPreviewTitleTheirs, { color: colors.foreground }]} numberOfLines={2}>{item.link_preview.title}</Text>
+                        <Text style={styles.linkPreviewTitleTheirs} numberOfLines={2}>{item.link_preview.title}</Text>
                         {item.link_preview.description && (
-                          <Text style={[styles.linkPreviewDescTheirs, { color: colors.mutedForeground }]} numberOfLines={2}>{item.link_preview.description}</Text>
+                          <Text style={styles.linkPreviewDescTheirs} numberOfLines={2}>{item.link_preview.description}</Text>
                         )}
-                        <Text style={[styles.linkPreviewHostTheirs, { color: colors.mutedForeground }]} numberOfLines={1}>
+                        <Text style={styles.linkPreviewHostTheirs} numberOfLines={1}>
                           {new URL(item.link_preview.url).hostname}
                         </Text>
                       </View>
                     </TouchableOpacity>
                   )}
-                  <Text style={[styles.messageTextTheirs, { color: colors.foreground }]}>{item.decrypted_content || item.encrypted_content}</Text>
+                  <Text style={styles.messageTextTheirs}>{item.decrypted_content || item.encrypted_content}</Text>
                   <View style={styles.bubbleFooter}>
                     <View style={styles.inlineTimeStamp}>
-                      <Text style={[styles.messageTime, { color: colors.mutedForeground }]}>
+                      <Text style={styles.messageTime}>
                         {getTimeDisplay(item.created_at)}
                       </Text>
                     </View>
@@ -3099,8 +3093,34 @@ export default function Chat() {
         initialNumToRender={20}
         maxToRenderPerBatch={10}
         windowSize={11}
-        removeClippedSubviews={true}
+        removeClippedSubviews={Platform.OS === 'ios'}
         updateCellsBatchingPeriod={50}
+        ListHeaderComponent={isOtherUserTyping && isPremium ? (
+          <View style={styles.typingBubbleContainer}>
+            <View style={[styles.messageBubble, styles.messageBubbleTheirs, styles.typingBubble]}>
+              <View style={styles.typingBubbleDots}>
+                <MotiView
+                  from={{ opacity: 0.3, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: 'timing', duration: 500, loop: true }}
+                  style={styles.typingBubbleDot}
+                />
+                <MotiView
+                  from={{ opacity: 0.3, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: 'timing', duration: 500, delay: 150, loop: true }}
+                  style={styles.typingBubbleDot}
+                />
+                <MotiView
+                  from={{ opacity: 0.3, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: 'timing', duration: 500, delay: 300, loop: true }}
+                  style={styles.typingBubbleDot}
+                />
+              </View>
+            </View>
+          </View>
+        ) : null}
         onScrollToIndexFailed={(info) => {
           // Fallback: scroll to closest visible offset then retry
           flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
@@ -3699,21 +3719,16 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   messageBubbleTheirs: {
-    backgroundColor: '#fff',
+    backgroundColor: '#E8E8ED',
     borderBottomLeftRadius: 4,
     padding: 12,
-    // iOS: subtle shadow. Android: skip elevation to avoid GPU overdraw per-message during scroll.
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
-      android: {},
-    }),
   },
   messageBubbleGradient: {
     padding: 12,
   },
   messageTextMine: {
     fontSize: 15,
-    color: '#fff',
+    color: '#111827',
     lineHeight: 20,
     flexShrink: 1,
   },
@@ -3725,10 +3740,10 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: '#6B7280',
   },
   messageTimeMine: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(0,0,0,0.5)',
   },
   messageFooter: {
     flexDirection: 'row',
@@ -4162,6 +4177,28 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 2.5,
     backgroundColor: '#A08AB7',
+  },
+  typingBubbleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  typingBubble: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    minWidth: 64,
+  },
+  typingBubbleDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  typingBubbleDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#9CA3AF',
   },
   typingText: {
     fontSize: 12,

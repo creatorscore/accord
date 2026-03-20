@@ -406,8 +406,8 @@
       "hometownSubtitle": "Your hometown helps others connect with you.",
       "occupationTitle": "What do you do?",
       "occupationSubtitle": "Share your occupation or profession.",
-      "educationTitle": "Where did you study?",
-      "educationSubtitle": "Your school, university, or program.",
+      "educationTitle": "What's your education?",
+      "educationSubtitle": "Your school, trade program, or self-taught journey.",
       "namePlaceholder": "Your first name",
       "nameHint": "This can't be changed later, so pick a good one.",
       "selectBirthDate": "Select your birth date",
@@ -417,7 +417,7 @@
       "hometownPlaceholder": "e.g. Los Angeles, CA",
       "hometownHint": "This can be different from where you currently live.",
       "occupationPlaceholder": "e.g. Software Engineer",
-      "educationPlaceholder": "e.g. UCLA, Harvard Business School"
+      "educationPlaceholder": "e.g. UCLA, self-taught, trade school"
     },
     "genderOptions": {
       "man": "Man",

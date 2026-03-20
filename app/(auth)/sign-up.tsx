@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet, Keyboard } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet, Keyboard, Linking } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { trackUserAction, identifyUser } from '@/lib/analytics';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SignUp() {
@@ -20,6 +20,7 @@ export default function SignUp() {
   const [loading, setLoading] = useState(false);
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [verifyingOtp, setVerifyingOtp] = useState(false);
@@ -38,6 +39,11 @@ export default function SignUp() {
   };
 
   const handleSignUp = async () => {
+    if (!termsAccepted) {
+      Alert.alert('Terms Required', 'Please accept the Terms of Service and Privacy Policy to create an account.');
+      return;
+    }
+
     if (!email || !password || !confirmPassword) {
       if (Platform.OS === 'web') {
         alert(t('auth.signUp.errorMissingFields'));
@@ -177,6 +183,10 @@ export default function SignUp() {
   };
 
   const handleGoogleSignUp = async () => {
+    if (!termsAccepted) {
+      Alert.alert('Terms Required', 'Please accept the Terms of Service and Privacy Policy to create an account.');
+      return;
+    }
     // Synchronous check to prevent ANR from multiple rapid taps on slow devices
     if (isSigningIn.current) {
       return;
@@ -211,6 +221,10 @@ export default function SignUp() {
   };
 
   const handleAppleSignUp = async () => {
+    if (!termsAccepted) {
+      Alert.alert('Terms Required', 'Please accept the Terms of Service and Privacy Policy to create an account.');
+      return;
+    }
     // Synchronous check to prevent ANR from multiple rapid taps on slow devices
     if (isSigningIn.current) {
       return;
@@ -451,13 +465,29 @@ export default function SignUp() {
             </Text>
           </TouchableOpacity>
 
-          {/* Terms */}
-          <Text style={styles.terms}>
-            {t('auth.signUp.termsAgree')}
-            <Text style={styles.termsLink}>{t('auth.signUp.termsOfService')}</Text>
-            {t('auth.signUp.and')}
-            <Text style={styles.termsLink}>{t('auth.signUp.privacyPolicy')}</Text>
-          </Text>
+          {/* Terms Checkbox */}
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 16, gap: 10 }}
+            onPress={() => setTermsAccepted(!termsAccepted)}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons
+              name={termsAccepted ? 'checkbox-marked' : 'checkbox-blank-outline'}
+              size={24}
+              color={termsAccepted ? '#A08AB7' : '#6B7280'}
+              style={{ marginTop: 1 }}
+            />
+            <Text style={[styles.terms, { flex: 1 }]}>
+              I agree to the{' '}
+              <Text style={styles.termsLink} onPress={() => Linking.openURL('https://joinaccord.app/terms')}>
+                Terms of Service
+              </Text>
+              {' '}and{' '}
+              <Text style={styles.termsLink} onPress={() => Linking.openURL('https://joinaccord.app/privacy')}>
+                Privacy Policy
+              </Text>
+            </Text>
+          </TouchableOpacity>
 
           {/* Divider */}
           <View style={styles.divider}>

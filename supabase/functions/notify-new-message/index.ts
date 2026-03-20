@@ -1,6 +1,18 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0';
-import { t } from '../_shared/translations.ts';
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+// Inline translation for deploy independence from _shared
+function t(lang: string, key: string, vars?: Record<string, string>): string {
+  const msgs: Record<string, Record<string, string>> = {
+    en: { 'message.title': 'New message from {{name}}', 'message.bodyText': 'Sent you a message', 'message.bodyPhoto': 'Sent you a photo', 'message.bodyVoice': 'Sent you a voice message', 'message.bodyVideo': 'Sent you a video' },
+    fr: { 'message.title': 'Nouveau message de {{name}}', 'message.bodyText': "T'a envoyé un message", 'message.bodyPhoto': "T'a envoyé une photo", 'message.bodyVoice': "T'a envoyé un message vocal", 'message.bodyVideo': "T'a envoyé une vidéo" },
+    es: { 'message.title': 'Nuevo mensaje de {{name}}', 'message.bodyText': 'Te envió un mensaje', 'message.bodyPhoto': 'Te envió una foto', 'message.bodyVoice': 'Te envió un mensaje de voz', 'message.bodyVideo': 'Te envió un video' },
+    ar: { 'message.title': 'رسالة جديدة من {{name}}', 'message.bodyText': 'أرسل لك رسالة', 'message.bodyPhoto': 'أرسل لك صورة', 'message.bodyVoice': 'أرسل لك رسالة صوتية', 'message.bodyVideo': 'أرسل لك فيديو' },
+    de: { 'message.title': 'Neue Nachricht von {{name}}', 'message.bodyText': 'Hat dir eine Nachricht geschickt', 'message.bodyPhoto': 'Hat dir ein Foto geschickt', 'message.bodyVoice': 'Hat dir eine Sprachnachricht geschickt', 'message.bodyVideo': 'Hat dir ein Video geschickt' },
+  };
+  let text = msgs[lang]?.[key] || msgs.en[key] || key;
+  if (vars) Object.entries(vars).forEach(([k, v]) => { text = text.replace(`{{${k}}}`, v); });
+  return text;
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,7 +31,7 @@ function obfuscateId(id: string): string {
  * Skips notification if user was active in the last 30 seconds
  * (they're likely in-app and will see the realtime notification)
  */
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -30,7 +42,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { sender_profile_id, receiver_profile_id, match_id, content_type } = await req.json();
+    const reqBody = await req.json();
+    // Support both direct payload and trigger payload (nested in "record")
+    const record = reqBody.record || reqBody;
+    const { sender_profile_id, receiver_profile_id, match_id, content_type } = record;
 
     if (!sender_profile_id || !receiver_profile_id || !match_id) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -42,11 +57,12 @@ serve(async (req) => {
     console.log(`[Message Notification] Processing message from ${sender_profile_id} to ${receiver_profile_id}`);
 
     // Get receiver's profile (including preferred_language for localization)
+    // Use maybeSingle() to avoid throwing if the receiver profile was deleted
     const { data: receiver, error: receiverError } = await supabaseAdmin
       .from('profiles')
       .select('push_token, push_enabled, last_active_at, preferred_language')
       .eq('id', receiver_profile_id)
-      .single();
+      .maybeSingle();
 
     if (receiverError || !receiver?.push_enabled) {
       console.log('[Message Notification] Receiver not found or notifications disabled');

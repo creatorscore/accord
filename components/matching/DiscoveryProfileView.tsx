@@ -1132,25 +1132,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           />
         ))}
 
-        {/* Compatibility Score */}
-        {!hideCompatibilityScore && profile.compatibility_score != null && profile.compatibility_score > 0 && (
-          <View style={styles.compatSection}>
-            <View style={styles.compatHeader}>
-              <MaterialCommunityIcons name="heart-circle" size={32} color="#A08AB7" />
-              <View>
-                <Text style={styles.compatScore}>{profile.compatibility_score}%</Text>
-                <Text style={styles.compatLabel}>{t('profileCard.compatibility.compatible')}</Text>
-              </View>
-            </View>
-            {compatibilityBreakdown && (
-              <View style={styles.compatBars}>
-                <CompatBar label={t('profileCard.compatibility.goals')} score={compatibilityBreakdown.goals || 0} />
-                <CompatBar label={t('profileCard.compatibility.location')} score={compatibilityBreakdown.location || 0} />
-                <CompatBar label={t('profileCard.compatibility.lifestyle')} score={compatibilityBreakdown.lifestyle || 0} />
-              </View>
-            )}
-          </View>
-        )}
+        {/* TODO: Re-enable when server-side compatibility scoring is implemented */}
 
         {/* Reviews */}
         <ProfileReviewDisplay profileId={profile.id} isMatched={false} compact={false} />

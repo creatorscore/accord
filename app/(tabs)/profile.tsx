@@ -77,6 +77,7 @@ export default function Profile() {
   const [showPreview, setShowPreview] = useState(false);
   const [preferences, setPreferences] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [profileViewCount, setProfileViewCount] = useState(0);
   const [showActivityNewBadge, setShowActivityNewBadge] = useState(false);
   const [showUpdatePreview, setShowUpdatePreview] = useState(false);
   const initialLoadDone = useRef(false);
@@ -189,6 +190,11 @@ export default function Profile() {
 
       // Set admin status
       setIsAdmin(data.is_admin || false);
+
+      // Fetch profile view count (non-blocking)
+      Promise.resolve(supabase.rpc('get_profile_view_count', { p_profile_id: data.id }))
+        .then(({ data: count }) => { if (count != null) setProfileViewCount(count); })
+        .catch(() => {});
 
       initialLoadDone.current = true;
     } catch (error: any) {
@@ -459,6 +465,40 @@ export default function Profile() {
                 )}
               </View>
               <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
+            </TouchableOpacity>
+
+            {/* Who Viewed Me */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: isPremium ? '#FFF7ED' : colors.card, borderColor: isPremium ? '#F59E0B' : colors.border }]}
+              onPress={() => {
+                if (!isPremium) {
+                  setShowPaywall(true);
+                } else {
+                  router.push('/activity/viewers' as any);
+                }
+              }}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="eye-outline" size={24} color="#F59E0B" />
+                <View>
+                  <Text style={[styles.menuItemText, { color: '#F59E0B', fontWeight: '600' }]}>
+                    Who Viewed Me
+                  </Text>
+                  {profileViewCount > 0 && (
+                    <Text style={{ fontSize: 12, color: '#92400E', marginTop: 2 }}>
+                      {profileViewCount} {profileViewCount === 1 ? 'person' : 'people'} this week
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {!isPremium && (
+                  <View style={{ backgroundColor: '#F59E0B', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ color: 'white', fontSize: 10, fontWeight: '700' }}>PRO</Text>
+                  </View>
+                )}
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
+              </View>
             </TouchableOpacity>
 
             {/* Matching Preferences */}

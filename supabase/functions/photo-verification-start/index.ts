@@ -47,6 +47,12 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    // Admin client for operations that need elevated permissions (e.g., signing private storage URLs)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       return new Response(
@@ -65,11 +71,12 @@ Deno.serve(async (req) => {
     }
 
     // Get user's profile
+    // Use maybeSingle() to avoid throwing if profile doesn't exist
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, photo_verified, photo_verification_status, photo_verification_attempts')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (profileError || !profile) {
       return new Response(
@@ -98,7 +105,7 @@ Deno.serve(async (req) => {
     }
 
     // Update verification status to pending
-    await supabase
+    await supabaseAdmin
       .from('profiles')
       .update({
         photo_verification_status: 'pending',
@@ -117,7 +124,7 @@ Deno.serve(async (req) => {
       .limit(3); // Compare against top 3 photos
 
     if (photosError || !photos || photos.length === 0) {
-      await supabase
+      await supabaseAdmin
         .from('profiles')
         .update({ photo_verification_status: 'failed' })
         .eq('id', profile.id);
@@ -165,7 +172,7 @@ Deno.serve(async (req) => {
     }
 
     if (!detectFacesResult.FaceDetails || detectFacesResult.FaceDetails.length === 0) {
-      await supabase
+      await supabaseAdmin
         .from('profiles')
         .update({ photo_verification_status: 'failed' })
         .eq('id', profile.id);
@@ -181,7 +188,7 @@ Deno.serve(async (req) => {
     }
 
     if (detectFacesResult.FaceDetails.length > 1) {
-      await supabase
+      await supabaseAdmin
         .from('profiles')
         .update({ photo_verification_status: 'failed' })
         .eq('id', profile.id);
@@ -200,8 +207,8 @@ Deno.serve(async (req) => {
     console.log('✅ Face detected. Quality:', faceDetails.Quality);
 
     // Check face quality
-    if (faceDetails.Quality.Brightness < 40 || faceDetails.Quality.Sharpness < 40) {
-      await supabase
+    if (faceDetails.Quality.Brightness < 25 || faceDetails.Quality.Sharpness < 25) {
+      await supabaseAdmin
         .from('profiles')
         .update({ photo_verification_status: 'failed' })
         .eq('id', profile.id);
@@ -223,11 +230,15 @@ Deno.serve(async (req) => {
 
     for (const photo of photos) {
       try {
-        // Generate signed URL for private bucket access
+        // Generate signed URL for private bucket access (must use admin client)
         const storagePath = photo.storage_path || photo.url;
-        const { data: signedData } = await supabase.storage
+        const { data: signedData, error: signError } = await supabaseAdmin.storage
           .from('profile-photos')
           .createSignedUrl(storagePath, 600);
+
+        if (signError) {
+          console.error('  - Failed to sign photo URL:', signError.message);
+        }
         const fetchUrl = signedData?.signedUrl || photo.url;
 
         // Download profile photo and convert to base64
@@ -258,7 +269,7 @@ Deno.serve(async (req) => {
         const compareResult = await callRekognition('CompareFaces', {
           SourceImage: { Bytes: selfie_base64 },
           TargetImage: { Bytes: photoBase64 },
-          SimilarityThreshold: 80
+          SimilarityThreshold: 70
         });
 
         console.log('  - CompareFaces response:', JSON.stringify(compareResult).substring(0, 200));
@@ -284,7 +295,7 @@ Deno.serve(async (req) => {
     }
 
     // Step 3: Determine verification result
-    const VERIFICATION_THRESHOLD = 80;
+    const VERIFICATION_THRESHOLD = 70;
     const isVerified = highestSimilarity >= VERIFICATION_THRESHOLD;
 
     console.log(`📊 Highest similarity: ${highestSimilarity}%`);
@@ -307,13 +318,13 @@ Deno.serve(async (req) => {
       console.log('✅ Clearing photo_review_required - user passed verification');
     }
 
-    await supabase
+    await supabaseAdmin
       .from('profiles')
       .update(updateData)
       .eq('id', profile.id);
 
-    // Send notification
-    await supabase.from('notification_queue').insert({
+    // Send notification (admin client - notification_queue has no user INSERT policy)
+    await supabaseAdmin.from('notification_queue').insert({
       recipient_profile_id: profile.id,
       notification_type: isVerified ? 'photo_verification_success' : 'photo_verification_failed',
       title: isVerified ? 'Photos Verified! ✓' : 'Verification Unsuccessful',
@@ -378,8 +389,9 @@ async function callRekognition(action: string, params: any) {
   console.log(`  - Body length: ${body.length}`);
 
   const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
-  const dateStamp = amzDate.substring(0, 8);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateStamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
+  const amzDate = `${dateStamp}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
 
   // Create canonical request
   const payloadHash = await sha256(body);
