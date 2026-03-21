@@ -128,26 +128,12 @@ export default function Index() {
     return <Redirect href="/(tabs)/discover" />;
   }
 
-  // Profile incomplete - redirect to appropriate onboarding step
-  // Each screen saves the step number AFTER completing. The route map points to the
-  // NEXT screen the user should see when resuming with that saved step.
-  // Flow: basic-info(1) → photos(3) → interests(5) → prompts(6)
-  //       → voice-intro(7) → marriage-prefs(8) → matching-prefs(9) → notifications
-  // Note: After basic-info, profile_complete=true so users CAN skip to discovery.
-  // Remaining steps enhance their profile but aren't required.
-  const onboardingRouteMap: Record<number, string> = {
-    0: '/(onboarding)/welcome-info',         // Not started — show lavender marriage explanation
-    1: '/(onboarding)/photos',               // basic-info done → next is photos
-    2: '/(onboarding)/photos',               // legacy personality step → send to photos
-    3: '/(onboarding)/interests',            // photos done → next is interests
-    4: '/(onboarding)/interests',            // legacy step → fallback to interests
-    5: '/(onboarding)/prompts',              // interests done → next is prompts
-    6: '/(onboarding)/voice-intro',          // prompts done → next is voice-intro
-    7: '/(onboarding)/marriage-preferences', // voice-intro done → next is marriage prefs
-    8: '/(onboarding)/matching-preferences', // marriage-prefs done → next is matching-prefs
-    9: '/(onboarding)/notifications',        // matching-prefs done → next is notifications
-  };
+  // Profile incomplete — redirect to onboarding.
+  // Step 0 = never started → show lavender marriage explanation first.
+  // Otherwise resume at the saved step in the unified onboarding flow.
+  if (onboardingStep === 0) {
+    return <Redirect href="/(onboarding)/welcome-info" />;
+  }
 
-  const targetRoute = onboardingRouteMap[onboardingStep] || onboardingRouteMap[0];
-  return <Redirect href={targetRoute as any} />;
+  return <Redirect href={`/(onboarding)/onboarding?resumeStep=${onboardingStep}` as any} />;
 }

@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { goToPreviousOnboardingStep, skipToDiscovery } from '@/lib/onboarding-navigation';
+import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
@@ -324,10 +324,9 @@ export default function Interests() {
       subtitle={subStep === 0 ? t('onboarding.interests.subtitle') : t('onboarding.interests.favoritesSubtitle')}
       onBack={handleBack}
       onContinue={handleContinue}
-      onSkip={skipToDiscovery}
+      onSkip={() => goToNextOnboardingStep('/(onboarding)/interests')}
       continueDisabled={loading || (subStep === 0 && hobbies.length === 0)}
       continueLabel={loading ? t('common.saving') : t('common.continue')}
-      currentRoute="/(onboarding)/interests"
     >
       {renderContent()}
     </OnboardingLayout>

@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { goToPreviousOnboardingStep, skipToDiscovery } from '@/lib/onboarding-navigation';
+import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { formatDistanceSlider, DistanceUnit } from '@/lib/distance-utils';
 import Slider from '@react-native-community/slider';
@@ -315,8 +315,7 @@ export default function MatchingPreferences() {
       onContinue={handleContinue}
       continueDisabled={loading || (subStep === 2 && genderPreference.length === 0)}
       continueLabel={t('common.continue')}
-      onSkip={skipToDiscovery}
-      currentRoute="/(onboarding)/matching-preferences"
+      onSkip={() => goToNextOnboardingStep('/(onboarding)/matching-preferences')}
     >
       {renderContent()}
     </OnboardingLayout>

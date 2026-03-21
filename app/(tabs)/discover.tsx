@@ -1847,7 +1847,7 @@ export default function Discover() {
 
     // Block swiping if profile is incomplete
     if (!isProfileComplete) {
-      const destination = returnRoute || '/(onboarding)/basic-info';
+      const destination = returnRoute || '/(onboarding)/onboarding';
       Alert.alert(
         t('discover.completeProfile.title'),
         t('discover.completeProfile.message'),
@@ -2088,7 +2088,7 @@ export default function Discover() {
 
     // Block swiping if profile is incomplete
     if (!isProfileComplete) {
-      const destination = returnRoute || '/(onboarding)/basic-info';
+      const destination = returnRoute || '/(onboarding)/onboarding';
       Alert.alert(
         t('discover.completeProfile.title'),
         t('discover.completeProfile.message'),
@@ -3722,7 +3722,7 @@ export default function Discover() {
                 <TouchableOpacity
                   className="mx-4 mt-2 p-4 bg-lavender-50 border border-lavender-200 rounded-xl flex-row items-center"
                   onPress={() => {
-                    const destination = returnRoute || '/(onboarding)/basic-info';
+                    const destination = returnRoute || '/(onboarding)/onboarding';
                     exitPreviewMode();
                     router.replace(destination as any);
                   }}

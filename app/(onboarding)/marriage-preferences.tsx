@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { goToPreviousOnboardingStep, skipToDiscovery } from '@/lib/onboarding-navigation';
+import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
@@ -612,10 +612,9 @@ export default function MarriagePreferences() {
       subtitle={subtitle}
       onBack={handleBack}
       onContinue={handleContinue}
-      onSkip={skipToDiscovery}
+      onSkip={() => goToNextOnboardingStep('/(onboarding)/marriage-preferences')}
       continueDisabled={loading || !canContinue()}
       continueLabel={loading ? t('common.loading') : t('common.continue')}
-      currentRoute="/(onboarding)/marriage-preferences"
     >
       {renderContent()}
     </OnboardingLayout>
