@@ -73,6 +73,7 @@ export default function OnboardingLayout() {
       }}
     >
       <Stack.Screen name="welcome-info" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
     </Stack>
   );
 }

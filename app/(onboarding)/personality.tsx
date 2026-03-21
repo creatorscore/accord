@@ -464,7 +464,6 @@ export default function Personality() {
       onSkip={undefined}
       continueDisabled={loading}
       continueLabel={loading ? t('common.saving') : t('common.continue')}
-      currentRoute="/(onboarding)/personality"
     >
       {renderContent()}
     </OnboardingLayout>

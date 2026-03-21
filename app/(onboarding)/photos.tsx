@@ -18,7 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri, cleanupOptimizedImages } from '@/lib/image-optimization';
 import { signPhotoUrls } from '@/lib/signed-urls';
-import { goToPreviousOnboardingStep, skipToDiscovery } from '@/lib/onboarding-navigation';
+import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
@@ -325,11 +325,9 @@ export default function Photos() {
       title={t('onboarding.photos.title')}
       subtitle={t('onboardingPhotos.subtitle')}
       onBack={() => goToPreviousOnboardingStep('/(onboarding)/photos')}
-      onSkip={skipToDiscovery}
       onContinue={handleContinue}
       continueDisabled={uploading || photos.length < 2}
       continueLabel={uploading ? t('onboardingPhotos.uploading', { progress: uploadProgress }) : t('common.continue')}
-      currentRoute="/(onboarding)/photos"
     >
       {/* Photo Grid */}
       <View style={styles.photoGrid}>

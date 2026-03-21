@@ -8,7 +8,7 @@ import { Waveform, type IWaveformRef, PlayerState, RecorderState } from '@/compo
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
-import { goToPreviousOnboardingStep, skipToDiscovery } from '@/lib/onboarding-navigation';
+import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { openAppSettings } from '@/lib/open-settings';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -262,10 +262,9 @@ export default function VoiceIntro() {
       subtitle={t('onboarding.voiceIntro.subtitle')}
       onBack={() => goToPreviousOnboardingStep('/(onboarding)/voice-intro')}
       onContinue={handleContinue}
-      onSkip={skipToDiscovery}
+      onSkip={() => goToNextOnboardingStep('/(onboarding)/voice-intro')}
       continueDisabled={loading || isRecording}
       continueLabel={loading ? t('common.saving') : recordingUri ? t('common.continue') : t('common.skipForNow')}
-      currentRoute="/(onboarding)/voice-intro"
     >
       {/* Prompt Selection */}
       <View style={styles.section}>

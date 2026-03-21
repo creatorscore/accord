@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { goToPreviousOnboardingStep, skipToDiscovery } from '@/lib/onboarding-navigation';
+import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { validateContent } from '@/lib/content-moderation';
 import { PROMPT_KEYS } from '@/lib/prompt-options';
@@ -231,10 +231,9 @@ export default function Prompts() {
       subtitle={subtitle}
       onBack={handleBack}
       onContinue={handleContinue}
-      onSkip={skipToDiscovery}
+      onSkip={() => goToNextOnboardingStep('/(onboarding)/prompts')}
       continueDisabled={loading || (subStep === 0 && !hasAtLeastOnePrompt && (!currentPrompt.prompt || !currentPrompt.answer.trim()))}
       continueLabel={loading ? t('common.saving') : t('common.continue')}
-      currentRoute="/(onboarding)/prompts"
     >
       {/* Prompt Picker View */}
       {showPicker ? (
