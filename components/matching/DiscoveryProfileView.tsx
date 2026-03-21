@@ -14,7 +14,7 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { getHobbyIcon } from '@/lib/hobby-options';
+import IdealMarriageCard from '@/components/profile/IdealMarriageCard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomSheetModal, BottomSheetView, BottomSheetTextInput, BottomSheetBackdrop, BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
@@ -935,23 +935,15 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           />
         )}
 
-        {/* Hobbies Section */}
-        {profile.hobbies && profile.hobbies.length > 0 && (
-          <View style={styles.hobbiesSection}>
-            <View style={styles.hobbiesSectionHeader}>
-              <MaterialCommunityIcons name="palette" size={24} color="#A08AB7" />
-              <Text style={styles.hobbiesSectionTitle}>{t('profileCard.section.hobbiesInterests')}</Text>
-            </View>
-            <View style={styles.hobbiesContainer}>
-              {profile.hobbies.map((hobby, index) => (
-                <View key={index} style={styles.hobbyTag}>
-                  <MaterialCommunityIcons name={getHobbyIcon(hobby) as any} size={16} color="#A08AB7" />
-                  <Text style={styles.hobbyText}>{hobby}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
+        {/* Ideal Lavender Marriage */}
+        <IdealMarriageCard
+          primaryReasons={profile.preferences?.primary_reasons}
+          wantsChildren={profile.preferences?.wants_children}
+          childrenArrangement={profile.preferences?.children_arrangement}
+          housingPreference={profile.preferences?.housing_preference}
+          financialArrangement={profile.preferences?.financial_arrangement}
+          relationshipType={profile.preferences?.relationship_type}
+        />
 
         {/* Favorites Section */}
         {profile.interests && (

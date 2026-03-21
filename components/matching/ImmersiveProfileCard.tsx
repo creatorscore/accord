@@ -15,7 +15,7 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { getHobbyIcon } from '@/lib/hobby-options';
+import IdealMarriageCard from '@/components/profile/IdealMarriageCard';
 import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -855,20 +855,15 @@ export default function ImmersiveProfileCard({
             </View>
           </View>
 
-          {/* Hobbies & Interests */}
-          {profile.hobbies && profile.hobbies.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{t('profileCard.section.hobbiesInterests')}</Text>
-              <View style={styles.hobbiesContainer}>
-                {profile.hobbies.map((hobby, index) => (
-                  <View key={index} style={styles.hobbyTag}>
-                    <MaterialCommunityIcons name={getHobbyIcon(hobby) as any} size={16} color="#A08AB7" />
-                    <Text style={styles.hobbyText}>{hobby}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
+          {/* Ideal Lavender Marriage */}
+          <IdealMarriageCard
+            primaryReasons={profile.preferences?.primary_reasons}
+            wantsChildren={profile.preferences?.wants_children}
+            childrenArrangement={profile.preferences?.children_arrangement}
+            housingPreference={profile.preferences?.housing_preference}
+            financialArrangement={profile.preferences?.financial_arrangement}
+            relationshipType={profile.preferences?.relationship_type}
+          />
 
           {/* Favorites - Movies, Music, Books, TV Shows */}
           {profile.interests && (
