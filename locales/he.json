@@ -2739,5 +2739,23 @@
       "locationSuccessGeneric": "המיקום שלכם עודכן!",
       "locationError": "עדכון המיקום נכשל. אנא נסו שוב."
     }
+  },
+  "passed": {
+    "title": "פרופילים שדילגת עליהם",
+    "loading": "טוען...",
+    "subtitle": "{{count}} פרופילים ב-30 הימים האחרונים",
+    "empty": "אין פרופילים שדילגת עליהם",
+    "emptyDescription": "פרופילים שתדלג עליהם יופיעו כאן.",
+    "like": "לייק",
+    "undone": "לייק!",
+    "undoneMessage": "עשית לייק ל-{{name}}.",
+    "likeLimitReached": "הגעת למגבלה היומית",
+    "errorUndoing": "שגיאה. נסה שוב.",
+    "passedTime": "דולג {{time}}",
+    "timeJustNow": "עכשיו",
+    "timeMinutes": "לפני {{count}}ד",
+    "timeHours": "לפני {{count}}ש",
+    "timeYesterday": "אתמול",
+    "timeDays": "לפני {{count}}י"
   }
 }

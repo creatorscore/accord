@@ -2737,5 +2737,23 @@
       "locationSuccessGeneric": "Twoja lokalizacja została zaktualizowana!",
       "locationError": "Nie udało się zaktualizować lokalizacji. Spróbuj ponownie."
     }
+  },
+  "passed": {
+    "title": "Pominięte profile",
+    "loading": "Ładowanie...",
+    "subtitle": "{{count}} profili w ciągu ostatnich 30 dni",
+    "empty": "Brak pominiętych profili",
+    "emptyDescription": "Profile, które pominiesz, pojawią się tutaj.",
+    "like": "Polub",
+    "undone": "Polubiono!",
+    "undoneMessage": "Polubiono {{name}}.",
+    "likeLimitReached": "Osiągnięto dzienny limit",
+    "errorUndoing": "Błąd. Spróbuj ponownie.",
+    "passedTime": "Pominięto {{time}}",
+    "timeJustNow": "przed chwilą",
+    "timeMinutes": "{{count}}m temu",
+    "timeHours": "{{count}}g temu",
+    "timeYesterday": "wczoraj",
+    "timeDays": "{{count}}d temu"
   }
 }

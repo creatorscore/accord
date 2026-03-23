@@ -2737,5 +2737,23 @@
       "locationSuccessGeneric": "თქვენი მდებარეობა განახლდა!",
       "locationError": "მდებარეობის განახლება ვერ მოხერხდა. გთხოვთ, სცადოთ ხელახლა."
     }
+  },
+  "passed": {
+    "title": "გამოტოვებული პროფილები",
+    "loading": "იტვირთება...",
+    "subtitle": "ბოლო 30 დღეში {{count}} პროფილი",
+    "empty": "გამოტოვებული პროფილები არ არის",
+    "emptyDescription": "გამოტოვებული პროფილები აქ გამოჩნდება.",
+    "like": "მოწონება",
+    "undone": "მოწონებულია!",
+    "undoneMessage": "{{name}} მოწონებულია.",
+    "likeLimitReached": "დღიური ლიმიტი ამოიწურა",
+    "errorUndoing": "შეცდომა. სცადეთ ხელახლა.",
+    "passedTime": "გამოტოვებული {{time}}",
+    "timeJustNow": "ახლახანს",
+    "timeMinutes": "{{count}}წ წინ",
+    "timeHours": "{{count}}სთ წინ",
+    "timeYesterday": "გუშინ",
+    "timeDays": "{{count}}დ წინ"
   }
 }

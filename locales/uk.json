@@ -2737,5 +2737,23 @@
       "locationSuccessGeneric": "Ваше місцезнаходження оновлено!",
       "locationError": "Не вдалося оновити місцезнаходження. Будь ласка, спробуйте знову."
     }
+  },
+  "passed": {
+    "title": "Пропущені профілі",
+    "loading": "Завантаження...",
+    "subtitle": "{{count}} профілів за останні 30 днів",
+    "empty": "Немає пропущених профілів",
+    "emptyDescription": "Пропущені профілі з'являться тут.",
+    "like": "Лайк",
+    "undone": "Лайк!",
+    "undoneMessage": "Ви лайкнули {{name}}.",
+    "likeLimitReached": "Денний ліміт досягнуто",
+    "errorUndoing": "Помилка. Спробуйте знову.",
+    "passedTime": "Пропущено {{time}}",
+    "timeJustNow": "щойно",
+    "timeMinutes": "{{count}}хв тому",
+    "timeHours": "{{count}}год тому",
+    "timeYesterday": "вчора",
+    "timeDays": "{{count}}д тому"
   }
 }

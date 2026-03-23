@@ -2808,5 +2808,23 @@
       "locationSuccessGeneric": "Konumunuz güncellendi!",
       "locationError": "Konum güncellenemedi. Lütfen tekrar deneyin."
     }
+  },
+  "passed": {
+    "title": "Geçilen Profiller",
+    "loading": "Yükleniyor...",
+    "subtitle": "Son 30 günde {{count}} profil",
+    "empty": "Geçilen Profil Yok",
+    "emptyDescription": "Geçtiğin profiller burada görünecek.",
+    "like": "Beğen",
+    "undone": "Beğenildi!",
+    "undoneMessage": "{{name}} beğenildi.",
+    "likeLimitReached": "Günlük sınıra ulaşıldı",
+    "errorUndoing": "Hata. Tekrar deneyin.",
+    "passedTime": "{{time}} geçildi",
+    "timeJustNow": "az önce",
+    "timeMinutes": "{{count}}dk önce",
+    "timeHours": "{{count}}sa önce",
+    "timeYesterday": "dün",
+    "timeDays": "{{count}}g önce"
   }
 }

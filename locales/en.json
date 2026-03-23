@@ -1432,6 +1432,24 @@
     },
     "likedYourPhoto": "Liked your photo"
   },
+  "passed": {
+    "title": "Passed Profiles",
+    "loading": "Loading...",
+    "subtitle": "{{count}} profiles in the last 30 days",
+    "empty": "No Passed Profiles",
+    "emptyDescription": "Profiles you pass on in discovery will appear here. You can undo a pass to like them instead.",
+    "like": "Like",
+    "undone": "Liked!",
+    "undoneMessage": "{{name}} has been liked. If they like you back, you'll match!",
+    "likeLimitReached": "Daily like limit reached",
+    "errorUndoing": "Failed to undo pass. Please try again.",
+    "passedTime": "Passed {{time}}",
+    "timeJustNow": "just now",
+    "timeMinutes": "{{count}}m ago",
+    "timeHours": "{{count}}h ago",
+    "timeYesterday": "yesterday",
+    "timeDays": "{{count}}d ago"
+  },
   "activity": {
     "title": "Activity",
     "back": "Back",

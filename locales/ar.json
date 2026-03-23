@@ -2739,5 +2739,23 @@
       "locationSuccessGeneric": "تم تحديث موقعك!",
       "locationError": "فشل تحديث الموقع. يرجى المحاولة مرة أخرى."
     }
+  },
+  "passed": {
+    "title": "الملفات المرفوضة",
+    "loading": "جار التحميل...",
+    "subtitle": "{{count}} ملف خلال آخر 30 يوم",
+    "empty": "لا توجد ملفات مرفوضة",
+    "emptyDescription": "الملفات التي ترفضها ستظهر هنا.",
+    "like": "إعجاب",
+    "undone": "تم الإعجاب!",
+    "undoneMessage": "تم الإعجاب بـ {{name}}.",
+    "likeLimitReached": "تم الوصول إلى الحد اليومي",
+    "errorUndoing": "فشل. حاول مرة أخرى.",
+    "passedTime": "رُفض {{time}}",
+    "timeJustNow": "الآن",
+    "timeMinutes": "منذ {{count}}د",
+    "timeHours": "منذ {{count}}س",
+    "timeYesterday": "أمس",
+    "timeDays": "منذ {{count}}ي"
   }
 }

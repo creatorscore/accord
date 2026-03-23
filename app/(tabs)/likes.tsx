@@ -947,12 +947,20 @@ export default function Likes() {
                 : t('likes.freeUser.noLikesRemaining')}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={() => setShowPaywall(true)}
-            style={{ padding: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: 12 }}
-          >
-            <MaterialCommunityIcons name="eye-outline" size={24} color="#F59E0B" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => router.push('/activity/passed' as any)}
+              style={{ padding: 8, backgroundColor: 'rgba(160, 138, 183, 0.1)', borderRadius: 12 }}
+            >
+              <MaterialCommunityIcons name="undo-variant" size={24} color="#A08AB7" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowPaywall(true)}
+              style={{ padding: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: 12 }}
+            >
+              <MaterialCommunityIcons name="eye-outline" size={24} color="#F59E0B" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {loading ? (
@@ -1033,12 +1041,20 @@ export default function Likes() {
           </Text>
           <Text className="text-body-lg font-sans text-muted-foreground">{t('likes.subtitleWithCount')}</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => router.push('/activity/viewers' as any)}
-          style={{ padding: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: 12 }}
-        >
-          <MaterialCommunityIcons name="eye-outline" size={24} color="#F59E0B" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => router.push('/activity/passed' as any)}
+            style={{ padding: 8, backgroundColor: 'rgba(160, 138, 183, 0.1)', borderRadius: 12 }}
+          >
+            <MaterialCommunityIcons name="undo-variant" size={24} color="#A08AB7" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push('/activity/viewers' as any)}
+            style={{ padding: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: 12 }}
+          >
+            <MaterialCommunityIcons name="eye-outline" size={24} color="#F59E0B" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (

@@ -2737,5 +2737,23 @@
       "locationSuccessGeneric": "Votre localisation a été mise à jour !",
       "locationError": "Impossible de mettre à jour la localisation. Veuillez réessayer."
     }
+  },
+  "passed": {
+    "title": "Profils refusés",
+    "loading": "Chargement...",
+    "subtitle": "{{count}} profils au cours des 30 derniers jours",
+    "empty": "Aucun profil refusé",
+    "emptyDescription": "Les profils que vous refusez apparaîtront ici. Vous pouvez annuler un refus pour les aimer.",
+    "like": "Aimer",
+    "undone": "Aimé !",
+    "undoneMessage": "{{name}} a été aimé.",
+    "likeLimitReached": "Limite quotidienne atteinte",
+    "errorUndoing": "Échec. Veuillez réessayer.",
+    "passedTime": "Refusé {{time}}",
+    "timeJustNow": "à l'instant",
+    "timeMinutes": "il y a {{count}}m",
+    "timeHours": "il y a {{count}}h",
+    "timeYesterday": "hier",
+    "timeDays": "il y a {{count}}j"
   }
 }
