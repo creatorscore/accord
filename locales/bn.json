@@ -2802,5 +2802,23 @@
       "locationSuccessGeneric": "আপনার অবস্থান আপডেট হয়েছে!",
       "locationError": "অবস্থান আপডেট করতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন।"
     }
+  },
+  "passed": {
+    "title": "প্রত্যাখ্যাত প্রোফাইল",
+    "loading": "লোড হচ্ছে...",
+    "subtitle": "গত ৩০ দিনে {{count}} প্রোফাইল",
+    "empty": "কোনো প্রত্যাখ্যাত প্রোফাইল নেই",
+    "emptyDescription": "আপনি যেসব প্রোফাইল প্রত্যাখ্যান করবেন সেগুলো এখানে দেখা যাবে।",
+    "like": "লাইক",
+    "undone": "লাইক দেওয়া হয়েছে!",
+    "undoneMessage": "{{name}}-কে লাইক দেওয়া হয়েছে।",
+    "likeLimitReached": "দৈনিক সীমায় পৌঁছেছে",
+    "errorUndoing": "ব্যর্থ। আবার চেষ্টা করুন।",
+    "passedTime": "{{time}} আগে প্রত্যাখ্যান",
+    "timeJustNow": "এইমাত্র",
+    "timeMinutes": "{{count}}মি আগে",
+    "timeHours": "{{count}}ঘ আগে",
+    "timeYesterday": "গতকাল",
+    "timeDays": "{{count}}দি আগে"
   }
 }

@@ -2737,5 +2737,23 @@
       "locationSuccessGeneric": "¡Tu ubicación ha sido actualizada!",
       "locationError": "Error al actualizar la ubicación. Por favor, inténtalo de nuevo."
     }
+  },
+  "passed": {
+    "title": "Perfiles rechazados",
+    "loading": "Cargando...",
+    "subtitle": "{{count}} perfiles en los últimos 30 días",
+    "empty": "Sin perfiles rechazados",
+    "emptyDescription": "Los perfiles que rechaces aparecerán aquí.",
+    "like": "Like",
+    "undone": "¡Liked!",
+    "undoneMessage": "Le diste like a {{name}}.",
+    "likeLimitReached": "Límite diario alcanzado",
+    "errorUndoing": "Error. Inténtalo de nuevo.",
+    "passedTime": "Rechazado {{time}}",
+    "timeJustNow": "ahora mismo",
+    "timeMinutes": "hace {{count}}m",
+    "timeHours": "hace {{count}}h",
+    "timeYesterday": "ayer",
+    "timeDays": "hace {{count}}d"
   }
 }

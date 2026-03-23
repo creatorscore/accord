@@ -2739,5 +2739,23 @@
       "locationSuccessGeneric": "موقعیت شما به‌روزرسانی شد!",
       "locationError": "به‌روزرسانی موقعیت ناموفق بود. لطفاً دوباره تلاش کنید."
     }
+  },
+  "passed": {
+    "title": "پروفایل‌های رد شده",
+    "loading": "در حال بارگذاری...",
+    "subtitle": "{{count}} پروفایل در ۳۰ روز گذشته",
+    "empty": "پروفایل رد شده‌ای نیست",
+    "emptyDescription": "پروفایل‌هایی که رد می‌کنید اینجا نمایش داده می‌شوند.",
+    "like": "لایک",
+    "undone": "لایک شد!",
+    "undoneMessage": "{{name}} لایک شد.",
+    "likeLimitReached": "به حد روزانه رسیده‌اید",
+    "errorUndoing": "خطا. دوباره تلاش کنید.",
+    "passedTime": "رد شده {{time}}",
+    "timeJustNow": "همین الان",
+    "timeMinutes": "{{count}}د پیش",
+    "timeHours": "{{count}}س پیش",
+    "timeYesterday": "دیروز",
+    "timeDays": "{{count}}ر پیش"
   }
 }

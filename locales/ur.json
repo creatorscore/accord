@@ -2745,5 +2745,23 @@
       "locationSuccessGeneric": "آپ کا مقام اپ ڈیٹ ہو گیا ہے!",
       "locationError": "مقام اپ ڈیٹ کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔"
     }
+  },
+  "passed": {
+    "title": "نظرانداز کیے گئے پروفائلز",
+    "loading": "لوڈ ہو رہا ہے...",
+    "subtitle": "پچھلے 30 دنوں میں {{count}} پروفائلز",
+    "empty": "کوئی نظرانداز شدہ پروفائل نہیں",
+    "emptyDescription": "نظرانداز شدہ پروفائلز یہاں دکھائی دیں گے۔",
+    "like": "لائک",
+    "undone": "لائک کیا!",
+    "undoneMessage": "{{name}} کو لائک کیا گیا۔",
+    "likeLimitReached": "روزانہ کی حد پوری",
+    "errorUndoing": "ناکام۔ دوبارہ کوشش کریں۔",
+    "passedTime": "{{time}} پہلے نظرانداز",
+    "timeJustNow": "ابھی",
+    "timeMinutes": "{{count}}م پہلے",
+    "timeHours": "{{count}}گھ پہلے",
+    "timeYesterday": "کل",
+    "timeDays": "{{count}}د پہلے"
   }
 }

@@ -2737,5 +2737,23 @@
       "locationSuccessGeneric": "Sua localização foi atualizada!",
       "locationError": "Falha ao atualizar localização. Por favor, tente novamente."
     }
+  },
+  "passed": {
+    "title": "Perfis recusados",
+    "loading": "Carregando...",
+    "subtitle": "{{count}} perfis nos últimos 30 dias",
+    "empty": "Sem perfis recusados",
+    "emptyDescription": "Perfis que você recusar aparecerão aqui.",
+    "like": "Curtir",
+    "undone": "Curtido!",
+    "undoneMessage": "Você curtiu {{name}}.",
+    "likeLimitReached": "Limite diário atingido",
+    "errorUndoing": "Falha. Tente novamente.",
+    "passedTime": "Recusado {{time}}",
+    "timeJustNow": "agora",
+    "timeMinutes": "{{count}}m atrás",
+    "timeHours": "{{count}}h atrás",
+    "timeYesterday": "ontem",
+    "timeDays": "{{count}}d atrás"
   }
 }

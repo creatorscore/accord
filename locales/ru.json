@@ -2802,5 +2802,23 @@
       "locationSuccessGeneric": "Ваше местоположение обновлено!",
       "locationError": "Не удалось обновить местоположение. Пожалуйста, попробуйте снова."
     }
+  },
+  "passed": {
+    "title": "Пропущенные профили",
+    "loading": "Загрузка...",
+    "subtitle": "{{count}} профилей за последние 30 дней",
+    "empty": "Нет пропущенных профилей",
+    "emptyDescription": "Профили, которые вы пропустили, появятся здесь.",
+    "like": "Лайк",
+    "undone": "Лайк!",
+    "undoneMessage": "Вы лайкнули {{name}}.",
+    "likeLimitReached": "Дневной лимит достигнут",
+    "errorUndoing": "Ошибка. Попробуйте снова.",
+    "passedTime": "Пропущено {{time}}",
+    "timeJustNow": "только что",
+    "timeMinutes": "{{count}}м назад",
+    "timeHours": "{{count}}ч назад",
+    "timeYesterday": "вчера",
+    "timeDays": "{{count}}д назад"
   }
 }

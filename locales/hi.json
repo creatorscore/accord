@@ -2739,5 +2739,23 @@
       "locationSuccessGeneric": "आपका स्थान अपडेट कर दिया गया है!",
       "locationError": "स्थान अपडेट करने में विफल। कृपया पुनः प्रयास करें।"
     }
+  },
+  "passed": {
+    "title": "पास किए गए प्रोफ़ाइल",
+    "loading": "लोड हो रहा है...",
+    "subtitle": "पिछले 30 दिनों में {{count}} प्रोफ़ाइल",
+    "empty": "कोई पास किए गए प्रोफ़ाइल नहीं",
+    "emptyDescription": "जिन प्रोफ़ाइल को आप पास करेंगे वे यहां दिखाई देंगे।",
+    "like": "लाइक",
+    "undone": "लाइक किया!",
+    "undoneMessage": "{{name}} को लाइक किया गया।",
+    "likeLimitReached": "दैनिक सीमा पूरी",
+    "errorUndoing": "विफल। पुनः प्रयास करें।",
+    "passedTime": "{{time}} पहले पास किया",
+    "timeJustNow": "अभी",
+    "timeMinutes": "{{count}}मि पहले",
+    "timeHours": "{{count}}घं पहले",
+    "timeYesterday": "कल",
+    "timeDays": "{{count}}दि पहले"
   }
 }

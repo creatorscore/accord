@@ -2737,5 +2737,23 @@
       "locationSuccessGeneric": "Dein Standort wurde aktualisiert!",
       "locationError": "Standort konnte nicht aktualisiert werden. Bitte versuche es erneut."
     }
+  },
+  "passed": {
+    "title": "Abgelehnte Profile",
+    "loading": "Laden...",
+    "subtitle": "{{count}} Profile in den letzten 30 Tagen",
+    "empty": "Keine abgelehnten Profile",
+    "emptyDescription": "Profile, die du ablehnst, erscheinen hier.",
+    "like": "Liken",
+    "undone": "Geliked!",
+    "undoneMessage": "{{name}} wurde geliked.",
+    "likeLimitReached": "Tägliches Limit erreicht",
+    "errorUndoing": "Fehler. Bitte erneut versuchen.",
+    "passedTime": "Abgelehnt {{time}}",
+    "timeJustNow": "gerade eben",
+    "timeMinutes": "vor {{count}}m",
+    "timeHours": "vor {{count}}h",
+    "timeYesterday": "gestern",
+    "timeDays": "vor {{count}}T"
   }
 }

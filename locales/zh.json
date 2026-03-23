@@ -2802,5 +2802,23 @@
       "locationSuccessGeneric": "您的位置已更新！",
       "locationError": "更新位置失败。请重试。"
     }
+  },
+  "passed": {
+    "title": "跳过的用户",
+    "loading": "加载中...",
+    "subtitle": "最近30天内{{count}}个用户",
+    "empty": "没有跳过的用户",
+    "emptyDescription": "你跳过的用户将显示在这里。你可以撤销跳过并点赞。",
+    "like": "点赞",
+    "undone": "已点赞！",
+    "undoneMessage": "已对{{name}}点赞。",
+    "likeLimitReached": "已达每日上限",
+    "errorUndoing": "撤销失败，请重试。",
+    "passedTime": "{{time}}跳过",
+    "timeJustNow": "刚刚",
+    "timeMinutes": "{{count}}分钟前",
+    "timeHours": "{{count}}小时前",
+    "timeYesterday": "昨天",
+    "timeDays": "{{count}}天前"
   }
 }

@@ -2802,5 +2802,23 @@
       "locationSuccessGeneric": "Lokasi Anda telah diperbarui!",
       "locationError": "Gagal memperbarui lokasi. Silakan coba lagi."
     }
+  },
+  "passed": {
+    "title": "Profil yang Dilewati",
+    "loading": "Memuat...",
+    "subtitle": "{{count}} profil dalam 30 hari terakhir",
+    "empty": "Tidak Ada Profil yang Dilewati",
+    "emptyDescription": "Profil yang kamu lewati akan muncul di sini.",
+    "like": "Suka",
+    "undone": "Disukai!",
+    "undoneMessage": "{{name}} telah disukai.",
+    "likeLimitReached": "Batas harian tercapai",
+    "errorUndoing": "Gagal. Coba lagi.",
+    "passedTime": "Dilewati {{time}}",
+    "timeJustNow": "baru saja",
+    "timeMinutes": "{{count}}m lalu",
+    "timeHours": "{{count}}j lalu",
+    "timeYesterday": "kemarin",
+    "timeDays": "{{count}}h lalu"
   }
 }

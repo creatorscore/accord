@@ -2737,5 +2737,23 @@
       "locationSuccessGeneric": "La tua posizione è stata aggiornata!",
       "locationError": "Impossibile aggiornare la posizione. Riprova."
     }
+  },
+  "passed": {
+    "title": "Profili rifiutati",
+    "loading": "Caricamento...",
+    "subtitle": "{{count}} profili negli ultimi 30 giorni",
+    "empty": "Nessun profilo rifiutato",
+    "emptyDescription": "I profili che rifiuti appariranno qui.",
+    "like": "Like",
+    "undone": "Liked!",
+    "undoneMessage": "Hai messo like a {{name}}.",
+    "likeLimitReached": "Limite giornaliero raggiunto",
+    "errorUndoing": "Errore. Riprova.",
+    "passedTime": "Rifiutato {{time}}",
+    "timeJustNow": "adesso",
+    "timeMinutes": "{{count}}m fa",
+    "timeHours": "{{count}}h fa",
+    "timeYesterday": "ieri",
+    "timeDays": "{{count}}g fa"
   }
 }
