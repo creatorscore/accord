@@ -662,9 +662,28 @@ export default function Likes() {
   const handleLikeBack = async (likeProfileId: string) => {
     if (!currentProfileId) return;
 
-    // Check daily like limit for free users
     if (!isPremium && !isPlatinum) {
-      // Refresh count in case it changed on discover tab
+      // Check active match limit BEFORE consuming a daily like
+      const { count: activeMatches } = await supabase
+        .from('matches')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active')
+        .or(`profile1_id.eq.${currentProfileId},profile2_id.eq.${currentProfileId}`);
+
+      if ((activeMatches || 0) >= 5) {
+        Alert.alert(
+          t('likes.matchLimitTitle'),
+          t('likes.matchLimitMessage'),
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('likes.goToMatches'), onPress: () => router.push('/(tabs)/matches') },
+            { text: t('likes.freeUser.revealPhoto'), onPress: () => setShowPaywall(true) },
+          ]
+        );
+        return;
+      }
+
+      // Check daily like limit
       await loadDailyLikeCount();
       const stored = await AsyncStorage.getItem('like_data');
       const currentCount = stored ? (() => { const d = JSON.parse(stored); return d.date === new Date().toDateString() ? d.count : 0; })() : 0;
@@ -800,8 +819,17 @@ export default function Likes() {
               .single();
             matchData = raceMatch;
           } else if (matchError.message?.includes('MATCH_LIMIT_REACHED')) {
-            // Free user hit match cap — show paywall
-            setShowPaywall(true);
+            // Free user hit match cap — restore UI and show clear message
+            loadLikes();
+            Alert.alert(
+              t('likes.matchLimitTitle'),
+              t('likes.matchLimitMessage'),
+              [
+                { text: t('common.cancel'), style: 'cancel' },
+                { text: t('likes.goToMatches'), onPress: () => router.push('/(tabs)/matches') },
+                { text: t('likes.freeUser.revealPhoto'), onPress: () => setShowPaywall(true) },
+              ]
+            );
             return;
           } else {
             throw matchError;

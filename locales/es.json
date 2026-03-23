@@ -1373,6 +1373,8 @@
     "goToMatches": "Ir a Coincidencias",
     "errorLoadingLikes": "Error al cargar los me gusta. Por favor, inténtalo de nuevo.",
     "errorCreatingMatch": "Error al crear la coincidencia. Por favor, inténtalo de nuevo.",
+    "matchLimitTitle": "Límite de matches alcanzado",
+    "matchLimitMessage": "Las cuentas gratuitas pueden tener hasta 5 matches activos. Deshaz el match con alguien que ya no te interese, o actualiza a Premium para matches ilimitados.",
     "freeUser": {
       "dailyLimitTitle": "Límite diario alcanzado",
       "dailyLimitMessage": "¡Has usado los 5 likes de hoy. Mejora para likes ilimitados!",

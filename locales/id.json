@@ -1301,6 +1301,8 @@
     "goToMatches": "Ke Kecocokan",
     "errorLoadingLikes": "Gagal memuat suka. Silakan coba lagi.",
     "errorCreatingMatch": "Gagal membuat kecocokan. Silakan coba lagi.",
+    "matchLimitTitle": "Batas kecocokan tercapai",
+    "matchLimitMessage": "Akun gratis dapat memiliki hingga 5 kecocokan aktif. Batalkan kecocokan dengan seseorang yang tidak lagi Anda minati, atau upgrade ke Premium untuk kecocokan tanpa batas.",
     "freeUser": {
       "dailyLimitTitle": "Batas harian tercapai",
       "dailyLimitMessage": "Anda telah menggunakan semua 5 suka hari ini. Tingkatkan untuk tanpa batas!",

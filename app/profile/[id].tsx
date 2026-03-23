@@ -686,8 +686,8 @@ export default function ProfileView() {
           if (matchError) {
             if (matchError.message?.includes('MATCH_LIMIT_REACHED')) {
               Alert.alert(
-                t('common.premiumRequired') || 'Premium Required',
-                'You\'ve reached the free match limit (5). Upgrade to Premium for unlimited matches!',
+                t('likes.matchLimitTitle'),
+                t('likes.matchLimitMessage'),
                 [{ text: t('common.ok') }]
               );
               setIsLiked(false);
