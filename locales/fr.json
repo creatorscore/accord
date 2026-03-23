@@ -2743,6 +2743,7 @@
     "loading": "Chargement...",
     "subtitle": "{{count}} profils au cours des 30 derniers jours",
     "empty": "Aucun profil refusé",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "Les profils que vous refusez apparaîtront ici. Vous pouvez annuler un refus pour les aimer.",
     "like": "Aimer",
     "undone": "Aimé !",

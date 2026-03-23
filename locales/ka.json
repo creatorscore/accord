@@ -2743,6 +2743,7 @@
     "loading": "იტვირთება...",
     "subtitle": "ბოლო 30 დღეში {{count}} პროფილი",
     "empty": "გამოტოვებული პროფილები არ არის",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "გამოტოვებული პროფილები აქ გამოჩნდება.",
     "like": "მოწონება",
     "undone": "მოწონებულია!",

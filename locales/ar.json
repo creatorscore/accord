@@ -2745,6 +2745,7 @@
     "loading": "جار التحميل...",
     "subtitle": "{{count}} ملف خلال آخر 30 يوم",
     "empty": "لا توجد ملفات مرفوضة",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "الملفات التي ترفضها ستظهر هنا.",
     "like": "إعجاب",
     "undone": "تم الإعجاب!",

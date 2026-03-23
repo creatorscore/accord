@@ -2808,6 +2808,7 @@
     "loading": "Загрузка...",
     "subtitle": "{{count}} профилей за последние 30 дней",
     "empty": "Нет пропущенных профилей",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "Профили, которые вы пропустили, появятся здесь.",
     "like": "Лайк",
     "undone": "Лайк!",

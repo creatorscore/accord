@@ -2814,6 +2814,7 @@
     "loading": "Yükleniyor...",
     "subtitle": "Son 30 günde {{count}} profil",
     "empty": "Geçilen Profil Yok",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "Geçtiğin profiller burada görünecek.",
     "like": "Beğen",
     "undone": "Beğenildi!",

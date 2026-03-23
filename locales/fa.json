@@ -2745,6 +2745,7 @@
     "loading": "در حال بارگذاری...",
     "subtitle": "{{count}} پروفایل در ۳۰ روز گذشته",
     "empty": "پروفایل رد شده‌ای نیست",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "پروفایل‌هایی که رد می‌کنید اینجا نمایش داده می‌شوند.",
     "like": "لایک",
     "undone": "لایک شد!",

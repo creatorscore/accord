@@ -2808,6 +2808,7 @@
     "loading": "Memuat...",
     "subtitle": "{{count}} profil dalam 30 hari terakhir",
     "empty": "Tidak Ada Profil yang Dilewati",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "Profil yang kamu lewati akan muncul di sini.",
     "like": "Suka",
     "undone": "Disukai!",

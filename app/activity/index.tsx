@@ -217,12 +217,57 @@ export default function ActivityScreen() {
             <Text style={styles.emptyDescription} className="text-muted-foreground">
               {t('activity.noActivityDescription')}
             </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/activity/passed' as any)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                padding: 16,
+                marginTop: 24,
+                borderRadius: 12,
+                backgroundColor: 'rgba(160, 138, 183, 0.08)',
+                width: '100%',
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(160, 138, 183, 0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialCommunityIcons name="undo-variant" size={24} color="#A08AB7" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600' }} className="text-foreground">{t('passed.title')}</Text>
+                <Text style={{ fontSize: 13, marginTop: 1 }} className="text-muted-foreground">{t('passed.activityDescription')}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={22} color="#9CA3AF" />
+            </TouchableOpacity>
           </View>
         ) : (
           <FlatList
             data={listData}
             keyExtractor={(item, index) =>
               item.type === 'header' ? `header-${item.title}-${index}` : `item-${item.item?.id}-${index}`
+            }
+            ListHeaderComponent={
+              <TouchableOpacity
+                onPress={() => router.push('/activity/passed' as any)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 16,
+                  marginBottom: 8,
+                  borderRadius: 12,
+                  backgroundColor: 'rgba(160, 138, 183, 0.08)',
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(160, 138, 183, 0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialCommunityIcons name="undo-variant" size={24} color="#A08AB7" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: colors.foreground }}>{t('passed.title')}</Text>
+                  <Text style={{ fontSize: 13, color: colors.mutedForeground, marginTop: 1 }}>{t('passed.activityDescription')}</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={22} color={colors.mutedForeground} />
+              </TouchableOpacity>
             }
             renderItem={({ item }) => {
               if (item.type === 'header') {

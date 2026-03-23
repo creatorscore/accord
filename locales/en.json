@@ -1437,6 +1437,7 @@
     "loading": "Loading...",
     "subtitle": "{{count}} profiles in the last 30 days",
     "empty": "No Passed Profiles",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "Profiles you pass on in discovery will appear here. You can undo a pass to like them instead.",
     "like": "Like",
     "undone": "Liked!",
