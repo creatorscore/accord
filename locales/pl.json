@@ -1373,6 +1373,8 @@
     "goToMatches": "Idź do Dopasowań",
     "errorLoadingLikes": "Nie udało się załadować polubień. Spróbuj ponownie.",
     "errorCreatingMatch": "Nie udało się utworzyć dopasowania. Spróbuj ponownie.",
+    "matchLimitTitle": "Osiągnięto limit dopasowań",
+    "matchLimitMessage": "Darmowe konta mogą mieć maksymalnie 5 aktywnych dopasowań. Cofnij dopasowanie z kimś, kto Cię już nie interesuje, lub przejdź na Premium, aby mieć nieograniczone dopasowania.",
     "freeUser": {
       "dailyLimitTitle": "Dzienny limit osiągnięty",
       "dailyLimitMessage": "Wykorzystałeś/aś wszystkie 5 polubień na dzisiaj. Ulepsz dla nielimitowanych polubień!",

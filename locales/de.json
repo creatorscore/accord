@@ -1373,6 +1373,8 @@
     "goToMatches": "Zu Matches Gehen",
     "errorLoadingLikes": "Likes konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
     "errorCreatingMatch": "Match konnte nicht erstellt werden. Bitte versuchen Sie es erneut.",
+    "matchLimitTitle": "Match-Limit erreicht",
+    "matchLimitMessage": "Kostenlose Konten können bis zu 5 aktive Matches haben. Löse ein Match mit jemandem auf, der dich nicht mehr interessiert, oder upgrade auf Premium für unbegrenzte Matches.",
     "freeUser": {
       "dailyLimitTitle": "Tageslimit erreicht",
       "dailyLimitMessage": "Sie haben alle 5 Likes für heute verbraucht. Upgraden Sie für unbegrenzte Likes!",

@@ -1307,6 +1307,8 @@
     "goToMatches": "Eşleşmelere Git",
     "errorLoadingLikes": "Beğeniler yüklenemedi. Lütfen tekrar deneyin.",
     "errorCreatingMatch": "Eşleşme oluşturulamadı. Lütfen tekrar deneyin.",
+    "matchLimitTitle": "Eşleşme sınırına ulaşıldı",
+    "matchLimitMessage": "Ücretsiz hesaplar en fazla 5 aktif eşleşmeye sahip olabilir. Artık ilgilenmediğiniz biriyle eşleşmeyi kaldırın veya sınırsız eşleşme için Premium'a yükseltin.",
     "freeUser": {
       "dailyLimitTitle": "Günlük limite ulaşıldı",
       "dailyLimitMessage": "Bugünkü 5 beğeninizin hepsini kullandınız. Sınırsız beğeni için yükseltin!",

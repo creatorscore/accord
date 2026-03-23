@@ -1301,6 +1301,8 @@
     "goToMatches": "前往配对",
     "errorLoadingLikes": "加载点赞失败。请重试。",
     "errorCreatingMatch": "创建配对失败。请重试。",
+    "matchLimitTitle": "已达配对上限",
+    "matchLimitMessage": "免费账户最多可拥有 5 个活跃配对。取消与不再感兴趣的人的配对，或升级至 Premium 以获得无限配对。",
     "freeUser": {
       "dailyLimitTitle": "每日限额已用完",
       "dailyLimitMessage": "你今天的 5 个喜欢已全部用完。升级获取无限喜欢！",

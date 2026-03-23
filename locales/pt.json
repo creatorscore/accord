@@ -1373,6 +1373,8 @@
     "goToMatches": "Ir para Matches",
     "errorLoadingLikes": "Falha ao carregar curtidas. Por favor, tente novamente.",
     "errorCreatingMatch": "Falha ao criar match. Por favor, tente novamente.",
+    "matchLimitTitle": "Limite de matches atingido",
+    "matchLimitMessage": "Contas gratuitas podem ter até 5 matches ativos. Desfaça o match com alguém em quem não tem mais interesse, ou atualize para Premium para matches ilimitados.",
     "freeUser": {
       "dailyLimitTitle": "Limite diário atingido",
       "dailyLimitMessage": "Você usou todos os 5 likes de hoje. Melhore para likes ilimitados!",

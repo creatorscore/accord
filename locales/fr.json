@@ -1373,6 +1373,8 @@
     "goToMatches": "Aller aux Matchs",
     "errorLoadingLikes": "Échec du chargement des j'aime. Veuillez réessayer.",
     "errorCreatingMatch": "Échec de la création du match. Veuillez réessayer.",
+    "matchLimitTitle": "Limite de matchs atteinte",
+    "matchLimitMessage": "Les comptes gratuits peuvent avoir jusqu'à 5 matchs actifs. Supprimez le match avec une personne qui ne vous intéresse plus, ou passez à Premium pour des matchs illimités.",
     "freeUser": {
       "dailyLimitTitle": "Limite quotidienne atteinte",
       "dailyLimitMessage": "Vous avez utilisé vos 5 likes pour aujourd'hui. Passez à Premium pour des likes illimités !",

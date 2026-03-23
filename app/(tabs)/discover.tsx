@@ -1955,7 +1955,14 @@ export default function Discover() {
             if (matchError) {
               // Check if it's the match limit error
               if (matchError.message?.includes('MATCH_LIMIT_REACHED')) {
-                setShowPaywall(true);
+                Alert.alert(
+                  t('likes.matchLimitTitle'),
+                  t('likes.matchLimitMessage'),
+                  [
+                    { text: t('common.ok') },
+                    { text: t('likes.freeUser.revealPhoto'), onPress: () => setShowPaywall(true) },
+                  ]
+                );
                 return true;
               }
               console.error('❌ Match error:', matchError);
