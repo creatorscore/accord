@@ -844,6 +844,7 @@
     "subtitle": "Koneksi Anda",
     "connections": "{{count}} koneksi",
     "connection": "{{count}} koneksi",
+    "matchCount": "{{current}}/{{limit}} kecocokan digunakan",
     "loadingMatches": "Memuat kecocokan Anda...",
     "noMatchesYet": "Belum ada kecocokan",
     "noMatchesText": "Terus geser untuk menemukan kecocokan sempurna Anda!\nKoneksi Anda akan muncul di sini.",
@@ -1302,7 +1303,7 @@
     "errorLoadingLikes": "Gagal memuat suka. Silakan coba lagi.",
     "errorCreatingMatch": "Gagal membuat kecocokan. Silakan coba lagi.",
     "matchLimitTitle": "Batas kecocokan tercapai",
-    "matchLimitMessage": "Akun gratis dapat memiliki hingga 5 kecocokan aktif. Batalkan kecocokan dengan seseorang yang tidak lagi Anda minati, atau upgrade ke Premium untuk kecocokan tanpa batas.",
+    "matchLimitMessage": "Akun gratis dapat memiliki hingga 10 kecocokan aktif. Batalkan kecocokan dengan seseorang yang tidak lagi Anda minati, atau upgrade ke Premium untuk kecocokan tanpa batas.",
     "freeUser": {
       "dailyLimitTitle": "Batas harian tercapai",
       "dailyLimitMessage": "Anda telah menggunakan semua 5 suka hari ini. Tingkatkan untuk tanpa batas!",

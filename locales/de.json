@@ -923,6 +923,7 @@
     "subtitle": "Ihre Verbindungen",
     "connections": "{{count}} Verbindungen",
     "connection": "{{count}} Verbindung",
+    "matchCount": "{{current}}/{{limit}} Matches verwendet",
     "loadingMatches": "Ihre Matches werden geladen...",
     "noMatchesYet": "Noch keine Matches",
     "noMatchesText": "Swipen Sie weiter, um Ihr perfektes Match zu finden!\nIhre Verbindungen erscheinen hier.",
@@ -1374,7 +1375,7 @@
     "errorLoadingLikes": "Likes konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
     "errorCreatingMatch": "Match konnte nicht erstellt werden. Bitte versuchen Sie es erneut.",
     "matchLimitTitle": "Match-Limit erreicht",
-    "matchLimitMessage": "Kostenlose Konten können bis zu 5 aktive Matches haben. Löse ein Match mit jemandem auf, der dich nicht mehr interessiert, oder upgrade auf Premium für unbegrenzte Matches.",
+    "matchLimitMessage": "Kostenlose Konten können bis zu 10 aktive Matches haben. Löse ein Match mit jemandem auf, der dich nicht mehr interessiert, oder upgrade auf Premium für unbegrenzte Matches.",
     "freeUser": {
       "dailyLimitTitle": "Tageslimit erreicht",
       "dailyLimitMessage": "Sie haben alle 5 Likes für heute verbraucht. Upgraden Sie für unbegrenzte Likes!",

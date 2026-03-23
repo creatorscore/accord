@@ -969,6 +969,7 @@
     "subtitle": "Your connections",
     "connections": "{{count}} connections",
     "connection": "{{count}} connection",
+    "matchCount": "{{current}}/{{limit}} matches used",
     "loadingMatches": "Loading your matches...",
     "noMatchesYet": "No matches yet",
     "noMatchesText": "Keep browsing to find your perfect match!\nYour connections will appear here.",
@@ -1420,7 +1421,7 @@
     "errorLoadingLikes": "Failed to load likes. Please try again.",
     "errorCreatingMatch": "Failed to create match. Please try again.",
     "matchLimitTitle": "Match limit reached",
-    "matchLimitMessage": "Free accounts can have up to 5 active matches. Unmatch someone you're no longer interested in, or upgrade to Premium for unlimited matches.",
+    "matchLimitMessage": "Free accounts can have up to 10 active matches. Unmatch someone you're no longer interested in, or upgrade to Premium for unlimited matches.",
     "freeUser": {
       "dailyLimitTitle": "Daily limit reached",
       "dailyLimitMessage": "You've used all 5 likes for today. Upgrade for unlimited!",

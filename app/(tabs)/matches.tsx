@@ -1025,8 +1025,22 @@ export default function Matches() {
     );
   };
 
+  const FREE_MATCH_LIMIT = 10;
+
   const listHeader = useMemo(() => (
     <>
+      {!isPremium && matches.length > 0 && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 10, marginHorizontal: 16, marginTop: 8, marginBottom: 4, backgroundColor: matches.length >= FREE_MATCH_LIMIT ? '#FEF2F2' : '#F5F0FF', borderRadius: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: matches.length >= FREE_MATCH_LIMIT ? '#DC2626' : '#7C3AED' }}>
+              {t('matches.matchCount', { current: matches.length, limit: FREE_MATCH_LIMIT })}
+            </Text>
+          </View>
+          {matches.length >= FREE_MATCH_LIMIT && (
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#DC2626" style={{ marginLeft: 8 }} />
+          )}
+        </View>
+      )}
       {renderExpirationWarning()}
       {renderLikesCard()}
     </>

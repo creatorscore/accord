@@ -844,6 +844,7 @@
     "subtitle": "您的联系",
     "connections": "{{count}} 个联系",
     "connection": "{{count}} 个联系",
+    "matchCount": "已使用 {{current}}/{{limit}} 个配对",
     "loadingMatches": "正在加载您的配对...",
     "noMatchesYet": "暂无配对",
     "noMatchesText": "继续滑动以寻找您的完美配对！\n您的联系将出现在这里。",
@@ -1302,7 +1303,7 @@
     "errorLoadingLikes": "加载点赞失败。请重试。",
     "errorCreatingMatch": "创建配对失败。请重试。",
     "matchLimitTitle": "已达配对上限",
-    "matchLimitMessage": "免费账户最多可拥有 5 个活跃配对。取消与不再感兴趣的人的配对，或升级至 Premium 以获得无限配对。",
+    "matchLimitMessage": "免费账户最多可拥有 10 个活跃配对。取消与不再感兴趣的人的配对，或升级至 Premium 以获得无限配对。",
     "freeUser": {
       "dailyLimitTitle": "每日限额已用完",
       "dailyLimitMessage": "你今天的 5 个喜欢已全部用完。升级获取无限喜欢！",

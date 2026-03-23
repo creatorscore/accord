@@ -844,6 +844,7 @@
     "subtitle": "Bağlantılarınız",
     "connections": "{{count}} bağlantı",
     "connection": "{{count}} bağlantı",
+    "matchCount": "{{current}}/{{limit}} eşleşme kullanıldı",
     "loadingMatches": "Eşleşmeleriniz yükleniyor...",
     "noMatchesYet": "Henüz eşleşme yok",
     "noMatchesText": "Mükemmel eşleşmenizi bulmak için kaydırmaya devam edin!\nBağlantılarınız burada görünecek.",
@@ -1308,7 +1309,7 @@
     "errorLoadingLikes": "Beğeniler yüklenemedi. Lütfen tekrar deneyin.",
     "errorCreatingMatch": "Eşleşme oluşturulamadı. Lütfen tekrar deneyin.",
     "matchLimitTitle": "Eşleşme sınırına ulaşıldı",
-    "matchLimitMessage": "Ücretsiz hesaplar en fazla 5 aktif eşleşmeye sahip olabilir. Artık ilgilenmediğiniz biriyle eşleşmeyi kaldırın veya sınırsız eşleşme için Premium'a yükseltin.",
+    "matchLimitMessage": "Ücretsiz hesaplar en fazla 10 aktif eşleşmeye sahip olabilir. Artık ilgilenmediğiniz biriyle eşleşmeyi kaldırın veya sınırsız eşleşme için Premium'a yükseltin.",
     "freeUser": {
       "dailyLimitTitle": "Günlük limite ulaşıldı",
       "dailyLimitMessage": "Bugünkü 5 beğeninizin hepsini kullandınız. Sınırsız beğeni için yükseltin!",

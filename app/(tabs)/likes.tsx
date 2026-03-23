@@ -670,7 +670,7 @@ export default function Likes() {
         .eq('status', 'active')
         .or(`profile1_id.eq.${currentProfileId},profile2_id.eq.${currentProfileId}`);
 
-      if ((activeMatches || 0) >= 5) {
+      if ((activeMatches || 0) >= 10) {
         Alert.alert(
           t('likes.matchLimitTitle'),
           t('likes.matchLimitMessage'),

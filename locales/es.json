@@ -923,6 +923,7 @@
     "subtitle": "Tus conexiones",
     "connections": "{{count}} conexiones",
     "connection": "{{count}} conexión",
+    "matchCount": "{{current}}/{{limit}} matches usados",
     "loadingMatches": "Cargando tus coincidencias...",
     "noMatchesYet": "Sin coincidencias aún",
     "noMatchesText": "¡Sigue deslizando para encontrar tu coincidencia perfecta!\nTus conexiones aparecerán aquí.",
@@ -1374,7 +1375,7 @@
     "errorLoadingLikes": "Error al cargar los me gusta. Por favor, inténtalo de nuevo.",
     "errorCreatingMatch": "Error al crear la coincidencia. Por favor, inténtalo de nuevo.",
     "matchLimitTitle": "Límite de matches alcanzado",
-    "matchLimitMessage": "Las cuentas gratuitas pueden tener hasta 5 matches activos. Deshaz el match con alguien que ya no te interese, o actualiza a Premium para matches ilimitados.",
+    "matchLimitMessage": "Las cuentas gratuitas pueden tener hasta 10 matches activos. Deshaz el match con alguien que ya no te interese, o actualiza a Premium para matches ilimitados.",
     "freeUser": {
       "dailyLimitTitle": "Límite diario alcanzado",
       "dailyLimitMessage": "¡Has usado los 5 likes de hoy. Mejora para likes ilimitados!",
