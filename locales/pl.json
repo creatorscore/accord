@@ -923,6 +923,7 @@
     "subtitle": "Twoje połączenia",
     "connections": "{{count}} połączeń",
     "connection": "{{count}} połączenie",
+    "matchCount": "{{current}}/{{limit}} dopasowań wykorzystanych",
     "loadingMatches": "Ładowanie dopasowań...",
     "noMatchesYet": "Brak dopasowań",
     "noMatchesText": "Przesuwaj dalej, aby znaleźć swoje idealne dopasowanie!\nTwoje połączenia pojawią się tutaj.",
@@ -1374,7 +1375,7 @@
     "errorLoadingLikes": "Nie udało się załadować polubień. Spróbuj ponownie.",
     "errorCreatingMatch": "Nie udało się utworzyć dopasowania. Spróbuj ponownie.",
     "matchLimitTitle": "Osiągnięto limit dopasowań",
-    "matchLimitMessage": "Darmowe konta mogą mieć maksymalnie 5 aktywnych dopasowań. Cofnij dopasowanie z kimś, kto Cię już nie interesuje, lub przejdź na Premium, aby mieć nieograniczone dopasowania.",
+    "matchLimitMessage": "Darmowe konta mogą mieć maksymalnie 10 aktywnych dopasowań. Cofnij dopasowanie z kimś, kto Cię już nie interesuje, lub przejdź na Premium, aby mieć nieograniczone dopasowania.",
     "freeUser": {
       "dailyLimitTitle": "Dzienny limit osiągnięty",
       "dailyLimitMessage": "Wykorzystałeś/aś wszystkie 5 polubień na dzisiaj. Ulepsz dla nielimitowanych polubień!",
