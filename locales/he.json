@@ -2745,6 +2745,7 @@
     "loading": "טוען...",
     "subtitle": "{{count}} פרופילים ב-30 הימים האחרונים",
     "empty": "אין פרופילים שדילגת עליהם",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "פרופילים שתדלג עליהם יופיעו כאן.",
     "like": "לייק",
     "undone": "לייק!",

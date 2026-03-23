@@ -2743,6 +2743,7 @@
     "loading": "Caricamento...",
     "subtitle": "{{count}} profili negli ultimi 30 giorni",
     "empty": "Nessun profilo rifiutato",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "I profili che rifiuti appariranno qui.",
     "like": "Like",
     "undone": "Liked!",

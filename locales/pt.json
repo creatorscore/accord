@@ -2743,6 +2743,7 @@
     "loading": "Carregando...",
     "subtitle": "{{count}} perfis nos últimos 30 dias",
     "empty": "Sem perfis recusados",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "Perfis que você recusar aparecerão aqui.",
     "like": "Curtir",
     "undone": "Curtido!",

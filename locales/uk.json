@@ -2743,6 +2743,7 @@
     "loading": "Завантаження...",
     "subtitle": "{{count}} профілів за останні 30 днів",
     "empty": "Немає пропущених профілів",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "Пропущені профілі з'являться тут.",
     "like": "Лайк",
     "undone": "Лайк!",

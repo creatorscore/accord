@@ -2808,6 +2808,7 @@
     "loading": "加载中...",
     "subtitle": "最近30天内{{count}}个用户",
     "empty": "没有跳过的用户",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "你跳过的用户将显示在这里。你可以撤销跳过并点赞。",
     "like": "点赞",
     "undone": "已点赞！",

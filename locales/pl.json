@@ -2743,6 +2743,7 @@
     "loading": "Ładowanie...",
     "subtitle": "{{count}} profili w ciągu ostatnich 30 dni",
     "empty": "Brak pominiętych profili",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "Profile, które pominiesz, pojawią się tutaj.",
     "like": "Polub",
     "undone": "Polubiono!",

@@ -2751,6 +2751,7 @@
     "loading": "لوڈ ہو رہا ہے...",
     "subtitle": "پچھلے 30 دنوں میں {{count}} پروفائلز",
     "empty": "کوئی نظرانداز شدہ پروفائل نہیں",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "نظرانداز شدہ پروفائلز یہاں دکھائی دیں گے۔",
     "like": "لائک",
     "undone": "لائک کیا!",

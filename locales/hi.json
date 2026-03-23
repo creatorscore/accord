@@ -2745,6 +2745,7 @@
     "loading": "लोड हो रहा है...",
     "subtitle": "पिछले 30 दिनों में {{count}} प्रोफ़ाइल",
     "empty": "कोई पास किए गए प्रोफ़ाइल नहीं",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "जिन प्रोफ़ाइल को आप पास करेंगे वे यहां दिखाई देंगे।",
     "like": "लाइक",
     "undone": "लाइक किया!",

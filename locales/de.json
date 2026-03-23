@@ -2743,6 +2743,7 @@
     "loading": "Laden...",
     "subtitle": "{{count}} Profile in den letzten 30 Tagen",
     "empty": "Keine abgelehnten Profile",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "Profile, die du ablehnst, erscheinen hier.",
     "like": "Liken",
     "undone": "Geliked!",

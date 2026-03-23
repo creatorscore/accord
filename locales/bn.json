@@ -2808,6 +2808,7 @@
     "loading": "লোড হচ্ছে...",
     "subtitle": "গত ৩০ দিনে {{count}} প্রোফাইল",
     "empty": "কোনো প্রত্যাখ্যাত প্রোফাইল নেই",
+    "activityDescription": "Review and like profiles you passed on",
     "emptyDescription": "আপনি যেসব প্রোফাইল প্রত্যাখ্যান করবেন সেগুলো এখানে দেখা যাবে।",
     "like": "লাইক",
     "undone": "লাইক দেওয়া হয়েছে!",
