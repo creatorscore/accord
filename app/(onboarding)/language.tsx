@@ -60,7 +60,7 @@ export default function LanguageSelection() {
               Choose Your Language
             </Text>
             <Text className="text-gray-600 dark:text-gray-400 text-lg text-center">
-              Accord is available in 12 languages.{'\n'}Select your preferred language to continue.
+              Accord is available in 19 languages.{'\n'}Select your preferred language to continue.
             </Text>
           </View>
         </View>

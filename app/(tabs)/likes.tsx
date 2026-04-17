@@ -789,7 +789,7 @@ export default function Likes() {
             compatibility_score: compatibilityScore,
           })
           .eq('id', existingMatch.id)
-          .select('id')
+          .select('id, status')
           .single();
 
         if (reactivateError) throw reactivateError;
@@ -804,7 +804,7 @@ export default function Likes() {
             initiated_by: currentProfileId,
             compatibility_score: compatibilityScore,
           })
-          .select('id')
+          .select('id, status')
           .single();
 
         if (matchError) {
@@ -813,7 +813,7 @@ export default function Likes() {
           if (matchError.code === '23505' || matchError.message?.includes('duplicate')) {
             const { data: raceMatch } = await supabase
               .from('matches')
-              .select('id')
+              .select('id, status')
               .eq('profile1_id', profile1Id)
               .eq('profile2_id', profile2Id)
               .single();

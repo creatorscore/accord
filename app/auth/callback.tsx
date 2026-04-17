@@ -1,83 +1,133 @@
 import { useEffect } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
+
+type ParsedLink = {
+  access_token?: string;
+  refresh_token?: string;
+  token_hash?: string;
+  type?: string;
+  error?: string;
+  error_description?: string;
+};
+
+function parseAuthLink(url: string): ParsedLink {
+  const result: ParsedLink = {};
+  try {
+    // Pull both query and fragment, since Supabase uses either depending on flow.
+    const queryIdx = url.indexOf('?');
+    const fragIdx = url.indexOf('#');
+
+    const collect = (segment: string) => {
+      const params = new URLSearchParams(segment);
+      for (const [k, v] of params.entries()) {
+        if (v && !(k in result)) (result as any)[k] = v;
+      }
+    };
+
+    if (queryIdx !== -1) {
+      const end = fragIdx !== -1 && fragIdx > queryIdx ? fragIdx : url.length;
+      collect(url.slice(queryIdx + 1, end));
+    }
+    if (fragIdx !== -1) {
+      collect(url.slice(fragIdx + 1));
+    }
+  } catch (e) {
+    console.warn('[auth/callback] parse error:', e);
+  }
+  return result;
+}
 
 export default function AuthCallback() {
   const router = useRouter();
-  const params = useLocalSearchParams();
 
   useEffect(() => {
-    handleCallback();
-  }, []);
+    let cancelled = false;
 
-  const handleCallback = async () => {
-    try {
-      // The params will contain the OAuth tokens from the redirect
-      const { access_token, refresh_token, type, error, error_description } = params;
+    const handleUrl = async (url: string | null) => {
+      if (!url || cancelled) return;
+      console.log('[auth/callback] handling url:', url);
 
-      if (error) {
-        console.error('OAuth error:', error_description || error);
+      const parsed = parseAuthLink(url);
+
+      if (parsed.error) {
+        console.error('[auth/callback] provider error:', parsed.error_description || parsed.error);
         router.replace('/(auth)/sign-in');
         return;
       }
 
-      // Check if this is a password recovery callback
-      if (type === 'recovery' || type === 'magiclink') {
-        if (access_token && typeof access_token === 'string') {
-          // Set the session with the tokens from the password reset link
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: access_token,
-            refresh_token: (refresh_token as string) || '',
-          });
+      const isRecovery = parsed.type === 'recovery';
 
-          if (sessionError) {
-            console.error('Session error:', sessionError);
-            router.replace('/(auth)/sign-in');
-            return;
-          }
-
-          // Redirect to password reset screen
-          router.replace('/(auth)/reset-password');
-          return;
-        }
-      }
-
-      if (access_token && typeof access_token === 'string') {
-        // Set the session with the tokens from the OAuth callback
-        const { data, error: sessionError } = await supabase.auth.setSession({
-          access_token: access_token,
-          refresh_token: (refresh_token as string) || '',
+      // PKCE / token_hash flow (Supabase default for email links)
+      if (parsed.token_hash && parsed.type) {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: parsed.token_hash,
+          type: parsed.type as any,
         });
-
-        if (sessionError) {
-          console.error('Session error:', sessionError);
+        if (error) {
+          console.error('[auth/callback] verifyOtp error:', error);
           router.replace('/(auth)/sign-in');
           return;
         }
-
-        // Check if profile exists
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('profile_complete')
-          .eq('user_id', data.user?.id)
-          .single();
-
-        // Redirect based on profile completion
-        if (profile?.profile_complete) {
-          router.replace('/(tabs)/discover');
+        if (isRecovery) {
+          router.replace('/(auth)/reset-password');
         } else {
-          router.replace('/(onboarding)/basic-info');
+          await routeAfterAuth();
         }
-      } else {
-        // No tokens found, redirect to sign in
-        router.replace('/(auth)/sign-in');
+        return;
       }
-    } catch (error) {
-      console.error('Callback handling error:', error);
+
+      // Implicit flow: tokens in fragment
+      if (parsed.access_token) {
+        const { error } = await supabase.auth.setSession({
+          access_token: parsed.access_token,
+          refresh_token: parsed.refresh_token || '',
+        });
+        if (error) {
+          console.error('[auth/callback] setSession error:', error);
+          router.replace('/(auth)/sign-in');
+          return;
+        }
+        if (isRecovery) {
+          router.replace('/(auth)/reset-password');
+        } else {
+          await routeAfterAuth();
+        }
+        return;
+      }
+
+      console.warn('[auth/callback] no tokens found in url');
       router.replace('/(auth)/sign-in');
-    }
-  };
+    };
+
+    const routeAfterAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.replace('/(auth)/sign-in');
+        return;
+      }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('profile_complete')
+        .eq('user_id', user.id)
+        .single();
+      if (profile?.profile_complete) {
+        router.replace('/(tabs)/discover');
+      } else {
+        router.replace('/(onboarding)/onboarding');
+      }
+    };
+
+    Linking.getInitialURL().then(handleUrl);
+    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+
+    return () => {
+      cancelled = true;
+      sub.remove();
+    };
+  }, [router]);
 
   return (
     <View className="flex-1 items-center justify-center bg-cream">

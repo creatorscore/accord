@@ -28,7 +28,11 @@ export default function TextInputStep({
   return (
     <View style={styles.container}>
       <TextInput
-        style={[styles.input, { color: isDark ? '#F5F5F7' : '#1F2937', borderColor: isDark ? '#374151' : '#E4E4E7', backgroundColor: isDark ? '#1F2937' : '#FFFFFF' }]}
+        style={[styles.input, {
+          color: isDark ? '#F5F5F7' : '#1F2937',
+          borderColor: isDark ? '#374151' : '#E4E4E7',
+          backgroundColor: isDark ? '#1A1A2D' : '#FAFAFA',
+        }]}
         placeholder={placeholder}
         placeholderTextColor={isDark ? '#6B7280' : '#A1A1AA'}
         value={value}
@@ -36,10 +40,12 @@ export default function TextInputStep({
         autoCapitalize={autoCapitalize}
         maxLength={maxLength}
         returnKeyType="done"
+        autoFocus
+        accessibilityLabel={placeholder}
       />
 
       {showVisibility && (
-        <View style={[styles.visibilityRow, { borderTopColor: isDark ? '#374151' : '#F3F4F6' }]}>
+        <View style={[styles.visibilityRow, { borderTopColor: isDark ? '#2C2C3E' : '#F0EDF4' }]}>
           <Text style={[styles.visibilityLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
             Show on profile
           </Text>
@@ -59,8 +65,27 @@ export default function TextInputStep({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 8 },
-  input: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 18, fontSize: 18, fontWeight: '500' },
-  visibilityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, paddingTop: 16, borderTopWidth: 1 },
-  visibilityLabel: { fontSize: 15, fontWeight: '500' },
+  container: {
+    paddingTop: 24,
+  },
+  input: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    fontSize: 18,
+    fontWeight: '500',
+  },
+  visibilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 28,
+    paddingTop: 16,
+    borderTopWidth: 1,
+  },
+  visibilityLabel: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
 });

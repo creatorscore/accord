@@ -1,21 +1,58 @@
-import { View, Text, StyleSheet, useColorScheme } from 'react-native';
+import { useCallback } from 'react';
+import { View, Text, Switch, StyleSheet, useColorScheme } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 
+/**
+ * Non-linear distance mapping: more resolution at 5-100mi, less at 100-500mi.
+ * Slider position 0-1 maps to distance via exponential curve.
+ */
+const DISTANCE_MIN = 5;
+const DISTANCE_MAX = 500;
+
+function distanceToSlider(miles: number): number {
+  if (miles <= DISTANCE_MIN) return 0;
+  if (miles >= DISTANCE_MAX) return 1;
+  return Math.log(miles / DISTANCE_MIN) / Math.log(DISTANCE_MAX / DISTANCE_MIN);
+}
+
+function sliderToDistance(position: number): number {
+  if (position <= 0) return DISTANCE_MIN;
+  if (position >= 1) return DISTANCE_MAX;
+  const raw = DISTANCE_MIN * Math.pow(DISTANCE_MAX / DISTANCE_MIN, position);
+  if (raw <= 25) return Math.round(raw);
+  if (raw <= 100) return Math.round(raw / 5) * 5;
+  if (raw <= 250) return Math.round(raw / 10) * 10;
+  return Math.round(raw / 25) * 25;
+}
+
 export default function MatchingPrefsStep() {
-  const { ageMin, ageMax, maxDistanceMiles } = useOnboardingStore();
+  const { ageMin, ageMax, maxDistanceMiles, willingToRelocate } = useOnboardingStore();
   const setField = useOnboardingStore((s) => s.setField);
   const isDark = useColorScheme() === 'dark';
   const textColor = isDark ? '#F5F5F7' : '#1F2937';
   const mutedColor = isDark ? '#9CA3AF' : '#6B7280';
+  const cardBg = isDark ? '#1A1A2D' : '#F9F8FB';
+  const cardBorder = isDark ? '#2C2C3E' : '#F0EDF4';
+
+  const distanceSliderValue = distanceToSlider(maxDistanceMiles);
+
+  const handleDistanceChange = useCallback((v: number) => {
+    const miles = sliderToDistance(v);
+    setField('maxDistanceMiles', miles);
+  }, [setField]);
+
+  const distanceLabel = maxDistanceMiles >= DISTANCE_MAX ? 'Anywhere' : `${maxDistanceMiles} mi`;
 
   return (
     <View style={styles.container}>
       {/* Age Range */}
-      <View style={styles.section}>
+      <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
         <View style={styles.labelRow}>
           <Text style={[styles.label, { color: textColor }]}>Age Range</Text>
-          <Text style={[styles.valueText, { color: mutedColor }]}>{ageMin} – {ageMax}</Text>
+          <Text style={[styles.valueChip, { color: '#A08AB7', backgroundColor: isDark ? '#2C2C3E' : '#F0EDF4' }]}>
+            {ageMin} – {ageMax}
+          </Text>
         </View>
         <View style={styles.sliderRow}>
           <Text style={[styles.sliderLabel, { color: mutedColor }]}>Min</Text>
@@ -32,6 +69,8 @@ export default function MatchingPrefsStep() {
             minimumTrackTintColor="#A08AB7"
             maximumTrackTintColor={isDark ? '#374151' : '#E5E7EB'}
             thumbTintColor="#A08AB7"
+            accessibilityLabel={`Minimum age: ${ageMin}`}
+            accessibilityValue={{ min: 18, max: 65, now: ageMin }}
           />
         </View>
         <View style={styles.sliderRow}>
@@ -49,41 +88,113 @@ export default function MatchingPrefsStep() {
             minimumTrackTintColor="#A08AB7"
             maximumTrackTintColor={isDark ? '#374151' : '#E5E7EB'}
             thumbTintColor="#A08AB7"
+            accessibilityLabel={`Maximum age: ${ageMax}`}
+            accessibilityValue={{ min: 18, max: 65, now: ageMax }}
           />
         </View>
       </View>
 
-      {/* Distance */}
-      <View style={styles.section}>
+      {/* Distance — non-linear scale */}
+      <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
         <View style={styles.labelRow}>
           <Text style={[styles.label, { color: textColor }]}>Maximum Distance</Text>
-          <Text style={[styles.valueText, { color: mutedColor }]}>
-            {maxDistanceMiles >= 500 ? 'Anywhere' : `${maxDistanceMiles} mi`}
+          <Text style={[styles.valueChip, { color: '#A08AB7', backgroundColor: isDark ? '#2C2C3E' : '#F0EDF4' }]}>
+            {distanceLabel}
           </Text>
         </View>
         <Slider
           style={styles.slider}
-          minimumValue={5}
-          maximumValue={500}
-          step={5}
-          value={maxDistanceMiles}
-          onValueChange={(v) => setField('maxDistanceMiles', Math.round(v))}
+          minimumValue={0}
+          maximumValue={1}
+          step={0.005}
+          value={distanceSliderValue}
+          onValueChange={handleDistanceChange}
           minimumTrackTintColor="#A08AB7"
           maximumTrackTintColor={isDark ? '#374151' : '#E5E7EB'}
           thumbTintColor="#A08AB7"
+          accessibilityLabel={`Maximum distance: ${distanceLabel}`}
+          accessibilityValue={{ min: DISTANCE_MIN, max: DISTANCE_MAX, now: maxDistanceMiles }}
         />
+        <View style={styles.distanceMarkers}>
+          <Text style={[styles.markerText, { color: mutedColor }]}>5 mi</Text>
+          <Text style={[styles.markerText, { color: mutedColor }]}>25</Text>
+          <Text style={[styles.markerText, { color: mutedColor }]}>100</Text>
+          <Text style={[styles.markerText, { color: mutedColor }]}>500+</Text>
+        </View>
+      </View>
+
+      {/* Willing to Relocate */}
+      <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+        <View style={styles.labelRow}>
+          <Text style={[styles.label, { color: textColor }]}>Willing to relocate?</Text>
+          <Switch
+            value={willingToRelocate}
+            onValueChange={(v) => setField('willingToRelocate', v)}
+            trackColor={{ false: isDark ? '#374151' : '#E5E7EB', true: '#A08AB7' }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+        <Text style={[styles.hint, { color: mutedColor }]}>
+          Let others know you're open to moving for the right match.
+        </Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', gap: 32 },
-  section: { gap: 8 },
-  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 },
-  label: { fontSize: 17, fontWeight: '700' },
-  valueText: { fontSize: 15, fontWeight: '600' },
-  sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sliderLabel: { fontSize: 13, fontWeight: '500', width: 30 },
-  slider: { flex: 1, height: 40 },
+  container: {
+    gap: 16,
+  },
+  card: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
+    gap: 12,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  label: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  valueChip: {
+    fontSize: 14,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  sliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sliderLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    width: 30,
+  },
+  slider: {
+    flex: 1,
+    height: 40,
+  },
+  hint: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  distanceMarkers: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    marginTop: -4,
+  },
+  markerText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
 });

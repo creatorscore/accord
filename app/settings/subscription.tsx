@@ -4,12 +4,14 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
+import { useColorScheme } from '@/lib/useColorScheme';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { restorePurchases, getCustomerInfo, getOfferings, purchasePackage, presentCodeRedemptionSheet, checkTrialEligibility, TrialInfo } from '@/lib/revenue-cat';
 import { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 export default function SubscriptionManagement() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, isDarkColorScheme } = useColorScheme();
   const { customerInfo, isSubscribed, isPremium, isPlatinum, subscriptionTier, refreshSubscription, syncWithDatabase } = useSubscription();
 
   const [loading, setLoading] = useState(false);
@@ -274,7 +276,7 @@ export default function SubscriptionManagement() {
   const expirationDate = getExpirationDate();
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView className="flex-1" style={{ backgroundColor: isDarkColorScheme ? '#0F0F1A' : '#FFFFFF' }}>
       <View className="px-6 pt-16 pb-8">
         {/* Header */}
         <View className="flex-row items-center mb-6">
@@ -282,9 +284,9 @@ export default function SubscriptionManagement() {
             onPress={() => router.back()}
             className="mr-4 w-10 h-10 items-center justify-center"
           >
-            <MaterialCommunityIcons name="arrow-left" size={24} color="#111827" />
+            <MaterialCommunityIcons name="arrow-left" size={24} color={isDarkColorScheme ? '#F5F5F7' : '#111827'} />
           </TouchableOpacity>
-          <Text className="text-2xl font-bold text-gray-900">{t('subscriptionSettings.title')}</Text>
+          <Text className="text-2xl font-bold" style={{ color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>{t('subscriptionSettings.title')}</Text>
         </View>
 
         {/* Current Status Card */}
@@ -316,16 +318,16 @@ export default function SubscriptionManagement() {
         {/* Subscription Plans */}
         {!isSubscribed && offerings && !loadingOfferings && (
           <View className="mb-6">
-            <Text className="text-xl font-bold text-gray-900 mb-4">{t('subscriptionSettings.chooseYourPlan')}</Text>
+            <Text className="text-xl font-bold mb-4" style={{ color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>{t('subscriptionSettings.chooseYourPlan')}</Text>
 
             {/* Billing Period Toggle */}
-            <View className="flex-row bg-gray-100 rounded-2xl p-1 mb-6">
+            <View className="flex-row rounded-2xl p-1 mb-6" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#F3F4F6' }}>
               <TouchableOpacity
                 onPress={() => setBillingPeriod('monthly')}
                 className="flex-1"
               >
                 <View className={`py-3 px-2 rounded-xl ${billingPeriod === 'monthly' ? 'bg-lavender-500' : 'bg-transparent'}`}>
-                  <Text className={`text-center font-bold text-sm ${billingPeriod === 'monthly' ? 'text-white' : 'text-gray-600'}`}>
+                  <Text className={`text-center font-bold text-sm ${billingPeriod === 'monthly' ? 'text-white' : (isDarkColorScheme ? 'text-gray-400' : 'text-gray-600')}`}>
                     {t('subscriptionSettings.periods.monthly')}
                   </Text>
                 </View>
@@ -335,7 +337,7 @@ export default function SubscriptionManagement() {
                 className="flex-1"
               >
                 <View className={`py-3 px-2 rounded-xl ${billingPeriod === 'quarterly' ? 'bg-lavender-500' : 'bg-transparent'}`}>
-                  <Text className={`text-center font-bold text-sm ${billingPeriod === 'quarterly' ? 'text-white' : 'text-gray-600'}`}>
+                  <Text className={`text-center font-bold text-sm ${billingPeriod === 'quarterly' ? 'text-white' : (isDarkColorScheme ? 'text-gray-400' : 'text-gray-600')}`}>
                     {t('subscriptionSettings.periods.threeMonths')}
                   </Text>
                   <Text className={`text-center text-xs ${billingPeriod === 'quarterly' ? 'text-white/90' : 'text-green-600'}`}>
@@ -348,7 +350,7 @@ export default function SubscriptionManagement() {
                 className="flex-1"
               >
                 <View className={`py-3 px-2 rounded-xl ${billingPeriod === 'annual' ? 'bg-lavender-500' : 'bg-transparent'}`}>
-                  <Text className={`text-center font-bold text-sm ${billingPeriod === 'annual' ? 'text-white' : 'text-gray-600'}`}>
+                  <Text className={`text-center font-bold text-sm ${billingPeriod === 'annual' ? 'text-white' : (isDarkColorScheme ? 'text-gray-400' : 'text-gray-600')}`}>
                     {t('subscriptionSettings.periods.annual')}
                   </Text>
                   <Text className={`text-center text-xs ${billingPeriod === 'annual' ? 'text-white/90' : 'text-green-600'}`}>
@@ -362,7 +364,7 @@ export default function SubscriptionManagement() {
             <View className="mb-6">
               <View className="flex-row items-center mb-3">
                 <MaterialCommunityIcons name="star" size={24} color="#A08AB7" />
-                <Text className="text-lg font-bold text-gray-900 ml-2">{t('subscriptionSettings.plans.premium')}</Text>
+                <Text className="text-lg font-bold ml-2" style={{ color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>{t('subscriptionSettings.plans.premium')}</Text>
               </View>
 
               {(() => {
@@ -409,7 +411,7 @@ export default function SubscriptionManagement() {
                     onPress={() => handlePurchasePackage(displayPackage)}
                     disabled={loading}
                   >
-                    <View className="bg-white border-2 border-lavender-300 rounded-2xl p-6">
+                    <View className="border-2 border-lavender-300 rounded-2xl p-6" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#FFFFFF' }}>
                       {billingPeriod === 'quarterly' && (
                         <View className="absolute -top-2 right-4 bg-green-500 px-3 py-1 rounded-full">
                           <Text className="text-white text-xs font-bold">{t('subscriptionSettings.bestValueSave22')}</Text>
@@ -424,7 +426,7 @@ export default function SubscriptionManagement() {
                         <Text className="text-4xl font-bold text-lavender-600">
                           {displayPackage.product.priceString}
                         </Text>
-                        <Text className="text-gray-600 ml-2">
+                        <Text className="ml-2" style={{ color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }}>
                           /{billingPeriod === 'monthly' ? t('subscriptionSettings.perMonth') : billingPeriod === 'quarterly' ? t('subscriptionSettings.perThreeMonths') : t('subscriptionSettings.perYear')}
                         </Text>
                       </View>
@@ -444,9 +446,9 @@ export default function SubscriptionManagement() {
                           })()}
                         </Text>
                       </View>
-                      <View className="bg-lavender-50 rounded-xl p-4">
-                        <Text className="text-xs text-gray-700 font-semibold mb-2">{t('subscriptionSettings.premiumIncludes')}</Text>
-                        <Text className="text-xs text-gray-600 leading-5">
+                      <View className="rounded-xl p-4" style={{ backgroundColor: isDarkColorScheme ? '#2C2C3E' : '#F5F3FF' }}>
+                        <Text className="text-xs font-semibold mb-2" style={{ color: isDarkColorScheme ? '#D1D5DB' : '#374151' }}>{t('subscriptionSettings.premiumIncludes')}</Text>
+                        <Text className="text-xs leading-5" style={{ color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }}>
                           {t('subscriptionSettings.premiumFeaturesList')}
                         </Text>
                       </View>
@@ -481,7 +483,7 @@ export default function SubscriptionManagement() {
                   <View className="mb-6">
                     <View className="flex-row items-center mb-3">
                       <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
-                      <Text className="text-lg font-bold text-gray-900 ml-2">{t('subscriptionSettings.plans.platinum')}</Text>
+                      <Text className="text-lg font-bold ml-2" style={{ color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>{t('subscriptionSettings.plans.platinum')}</Text>
                       <View className="bg-blue-100 px-2 py-0.5 rounded-full ml-2">
                         <Text className="text-blue-700 text-xs font-bold">{t('subscriptionSettings.comingSoon')}</Text>
                       </View>
@@ -492,19 +494,19 @@ export default function SubscriptionManagement() {
                         <Text className="text-4xl font-bold text-gray-400">
                           {billingPeriod === 'monthly' ? '$24.99' : '$199.99'}
                         </Text>
-                        <Text className="text-gray-500 ml-2">
+                        <Text className="ml-2" style={{ color: isDarkColorScheme ? '#6B7280' : '#6B7280' }}>
                           /{billingPeriod === 'monthly' ? t('subscriptionSettings.perMonth') : t('subscriptionSettings.perYear')}
                         </Text>
                       </View>
                       <View className="bg-gray-300 rounded-xl py-4 mb-4">
                         <Text className="text-gray-600 text-center text-lg font-bold">{t('subscriptionSettings.comingSoon')}</Text>
                       </View>
-                      <View className="bg-white/50 rounded-xl p-4">
-                        <Text className="text-xs text-gray-700 font-semibold mb-2">{t('subscriptionSettings.everythingInPremiumPlus')}</Text>
-                        <Text className="text-xs text-gray-600 leading-5">
+                      <View className="rounded-xl p-4" style={{ backgroundColor: isDarkColorScheme ? 'rgba(28,28,46,0.5)' : 'rgba(255,255,255,0.5)' }}>
+                        <Text className="text-xs font-semibold mb-2" style={{ color: isDarkColorScheme ? '#D1D5DB' : '#374151' }}>{t('subscriptionSettings.everythingInPremiumPlus')}</Text>
+                        <Text className="text-xs leading-5" style={{ color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }}>
                           {t('subscriptionSettings.platinumFeaturesList')}
                         </Text>
-                        <Text className="text-xs text-gray-500 italic mt-2">
+                        <Text className="text-xs italic mt-2" style={{ color: isDarkColorScheme ? '#6B7280' : '#6B7280' }}>
                           {t('subscriptionSettings.platinumComingSoonMessage')}
                         </Text>
                       </View>
@@ -518,14 +520,14 @@ export default function SubscriptionManagement() {
                 <View className="mb-6">
                   <View className="flex-row items-center mb-3">
                     <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
-                    <Text className="text-lg font-bold text-gray-900 ml-2">{t('subscriptionSettings.plans.platinum')}</Text>
+                    <Text className="text-lg font-bold ml-2" style={{ color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>{t('subscriptionSettings.plans.platinum')}</Text>
                   </View>
 
                   <TouchableOpacity
                     onPress={() => handlePurchasePackage(platinumPackage)}
                     disabled={loading}
                   >
-                    <View className="bg-white border-2 border-yellow-300 rounded-2xl p-6">
+                    <View className="border-2 border-yellow-300 rounded-2xl p-6" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#FFFFFF' }}>
                       {billingPeriod === 'annual' && (
                         <View className="absolute -top-2 right-4 bg-green-500 px-3 py-1 rounded-full">
                           <Text className="text-white text-xs font-bold">{t('subscriptionSettings.save33')}</Text>
@@ -535,7 +537,7 @@ export default function SubscriptionManagement() {
                         <Text className="text-4xl font-bold text-yellow-600">
                           {platinumPackage.product.priceString}
                         </Text>
-                        <Text className="text-gray-600 ml-2">
+                        <Text className="ml-2" style={{ color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }}>
                           /{billingPeriod === 'monthly' ? t('subscriptionSettings.perMonth') : t('subscriptionSettings.perYear')}
                         </Text>
                       </View>
@@ -550,9 +552,9 @@ export default function SubscriptionManagement() {
                           })()}
                         </Text>
                       </View>
-                      <View className="bg-yellow-50 rounded-xl p-4">
-                        <Text className="text-xs text-gray-700 font-semibold mb-2">{t('subscriptionSettings.everythingInPremiumPlus')}</Text>
-                        <Text className="text-xs text-gray-600 leading-5">
+                      <View className="rounded-xl p-4" style={{ backgroundColor: isDarkColorScheme ? '#2C2C3E' : '#FFFBEB' }}>
+                        <Text className="text-xs font-semibold mb-2" style={{ color: isDarkColorScheme ? '#D1D5DB' : '#374151' }}>{t('subscriptionSettings.everythingInPremiumPlus')}</Text>
+                        <Text className="text-xs leading-5" style={{ color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }}>
                           {t('subscriptionSettings.platinumFeaturesList')}
                         </Text>
                       </View>
@@ -567,7 +569,7 @@ export default function SubscriptionManagement() {
         {loadingOfferings && (
           <View className="py-8 items-center">
             <ActivityIndicator size="large" color="#A08AB7" />
-            <Text className="text-gray-600 mt-2">{t('subscriptionSettings.loadingPlans')}</Text>
+            <Text className="mt-2" style={{ color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }}>{t('subscriptionSettings.loadingPlans')}</Text>
           </View>
         )}
 
@@ -602,9 +604,9 @@ export default function SubscriptionManagement() {
 
         {/* Features List */}
         <View className="mb-6">
-          <Text className="text-xl font-bold text-gray-900 mb-4">{t('subscriptionSettings.premiumFeaturesTitle')}</Text>
+          <Text className="text-xl font-bold mb-4" style={{ color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>{t('subscriptionSettings.premiumFeaturesTitle')}</Text>
 
-          <View className="bg-lavender-50 rounded-3xl p-6">
+          <View className="rounded-3xl p-6" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#F5F3FF' }}>
             {[
               { icon: 'infinity', text: t('subscriptionSettings.features.unlimitedSwipes'), tier: 'premium' },
               { icon: 'eye', text: t('subscriptionSettings.features.seeWhoLikedYou'), tier: 'premium' },
@@ -625,7 +627,7 @@ export default function SubscriptionManagement() {
                   size={24}
                   color={feature.tier === 'platinum' ? '#FFD700' : '#A08AB7'}
                 />
-                <Text className="text-gray-800 text-base ml-3 flex-1">{feature.text}</Text>
+                <Text className="text-base ml-3 flex-1" style={{ color: isDarkColorScheme ? '#D1D5DB' : '#1F2937' }}>{feature.text}</Text>
                 {feature.tier === 'platinum' && (
                   <View className="bg-yellow-400 px-2 py-1 rounded-full">
                     <Text className="text-yellow-900 text-xs font-bold">{t('subscriptionSettings.plans.platinum').toUpperCase()}</Text>
@@ -642,7 +644,8 @@ export default function SubscriptionManagement() {
           <TouchableOpacity
             onPress={handleRestorePurchases}
             disabled={restoring}
-            className="bg-white border-2 border-lavender-500 rounded-full py-4 px-6"
+            className="border-2 border-lavender-500 rounded-full py-4 px-6"
+            style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#FFFFFF' }}
           >
             {restoring ? (
               <View className="flex-row items-center justify-center">
@@ -662,7 +665,8 @@ export default function SubscriptionManagement() {
             <TouchableOpacity
               onPress={handleRedeemCode}
               disabled={redeeming}
-              className="bg-white border-2 border-green-500 rounded-full py-4 px-6"
+              className="border-2 border-green-500 rounded-full py-4 px-6"
+            style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#FFFFFF' }}
             >
               {redeeming ? (
                 <View className="flex-row items-center justify-center">
@@ -682,11 +686,12 @@ export default function SubscriptionManagement() {
           {isSubscribed && (
             <TouchableOpacity
               onPress={handleManageSubscription}
-              className="bg-gray-100 rounded-full py-4 px-6"
+              className="rounded-full py-4 px-6"
+              style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#F3F4F6' }}
             >
               <View className="flex-row items-center justify-center">
-                <MaterialCommunityIcons name="cog" size={20} color="#4B5563" />
-                <Text className="text-gray-700 font-bold text-lg ml-2">
+                <MaterialCommunityIcons name="cog" size={20} color={isDarkColorScheme ? '#9CA3AF' : '#4B5563'} />
+                <Text className="font-bold text-lg ml-2" style={{ color: isDarkColorScheme ? '#D1D5DB' : '#374151' }}>
                   {t('subscriptionSettings.manageSubscription')}
                 </Text>
               </View>
@@ -695,11 +700,11 @@ export default function SubscriptionManagement() {
         </View>
 
         {/* Info Text */}
-        <View className="mt-8 bg-blue-50 rounded-2xl p-4">
+        <View className="mt-8 rounded-2xl p-4" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#EFF6FF' }}>
           <View className="flex-row items-start">
             <MaterialCommunityIcons name="information" size={20} color="#3B82F6" />
             <View className="flex-1 ml-3">
-              <Text className="text-blue-900 text-sm">
+              <Text className="text-sm" style={{ color: isDarkColorScheme ? '#93C5FD' : '#1E3A5F' }}>
                 {Platform.OS === 'ios'
                   ? t('subscriptionSettings.infoTextIOS')
                   : t('subscriptionSettings.infoTextAndroid')}
@@ -716,7 +721,7 @@ export default function SubscriptionManagement() {
           >
             <Text className="text-lavender-600 text-sm font-medium underline">{t('subscriptionSettings.termsOfUse')}</Text>
           </TouchableOpacity>
-          <Text className="text-gray-400">•</Text>
+          <Text style={{ color: isDarkColorScheme ? '#6B7280' : '#9CA3AF' }}>•</Text>
           <TouchableOpacity
             onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}
             className="py-2"

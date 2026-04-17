@@ -321,7 +321,8 @@ serve(async (req) => {
           token,
           message: {
             to: token,
-            sound: 'default',
+            sound: 'notification_sound.wav',
+            channelId: 'default',
             title: notification.title,
             body: notification.body,
             data: notification.data || {},

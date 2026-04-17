@@ -2,29 +2,43 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useColorScheme } from '@/lib/useColorScheme';
 
 export default function ResetPassword() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { updatePassword } = useAuth();
+  const { isDarkColorScheme } = useColorScheme();
+
+  // Dynamic theme colors
+  const themeColors = {
+    background: isDarkColorScheme ? '#0F0F1A' : '#FFFFFF',
+    text: isDarkColorScheme ? '#F5F5F7' : '#1F2937',
+    mutedText: isDarkColorScheme ? '#9CA3AF' : '#71717A',
+    inputBg: isDarkColorScheme ? '#1C1C2E' : '#FFFFFF',
+    inputBorder: isDarkColorScheme ? '#2C2C3E' : '#E4E4E7',
+    iconContainerBg: isDarkColorScheme ? '#2C2C3E' : '#F5F2F7',
+  };
 
   const handleResetPassword = async () => {
     if (!password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert(t('auth.resetPassword.errorTitle'), t('auth.resetPassword.fillAllFields'));
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert(t('auth.resetPassword.errorTitle'), t('auth.resetPassword.passwordsMismatch'));
       return;
     }
 
     if (password.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters');
+      Alert.alert(t('auth.resetPassword.errorTitle'), t('auth.resetPassword.passwordTooShort'));
       return;
     }
 
@@ -32,8 +46,8 @@ export default function ResetPassword() {
     try {
       await updatePassword(password);
       Alert.alert(
-        'Success',
-        'Your password has been reset successfully',
+        t('auth.resetPassword.successTitle'),
+        t('auth.resetPassword.resetSuccess'),
         [
           {
             text: 'OK',
@@ -42,7 +56,7 @@ export default function ResetPassword() {
         ]
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to reset password');
+      Alert.alert(t('auth.resetPassword.errorTitle'), error.message || t('auth.resetPassword.resetFailed'));
     } finally {
       setLoading(false);
     }
@@ -51,7 +65,7 @@ export default function ResetPassword() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[styles.container, { paddingTop: insets.top }]}
+      style={[styles.container, { paddingTop: insets.top, backgroundColor: themeColors.background }]}
     >
       <ScrollView
         style={styles.scrollView}
@@ -61,38 +75,38 @@ export default function ResetPassword() {
       >
         {/* Header Icon */}
         <View style={styles.iconWrapper}>
-          <View style={styles.iconContainer}>
+          <View style={[styles.iconContainer, { backgroundColor: themeColors.iconContainerBg }]}>
             <Ionicons name="lock-closed-outline" size={32} color="#A08AB7" />
           </View>
         </View>
 
         {/* Header */}
-        <Text style={styles.title}>Reset Password</Text>
-        <Text style={styles.subtitle}>Enter your new password</Text>
+        <Text style={[styles.title, { color: themeColors.text }]}>{t('auth.resetPassword.title')}</Text>
+        <Text style={[styles.subtitle, { color: themeColors.mutedText }]}>{t('auth.resetPassword.subtitle')}</Text>
 
         {/* Form */}
         <View style={styles.form}>
           {/* New Password Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>New Password</Text>
+            <Text style={[styles.label, { color: themeColors.text }]}>{t('auth.resetPassword.newPasswordLabel')}</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Enter new password"
+              style={[styles.input, { backgroundColor: themeColors.inputBg, borderColor: themeColors.inputBorder, color: themeColors.text }]}
+              placeholder={t('auth.resetPassword.newPasswordPlaceholder')}
               placeholderTextColor="#A1A1AA"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
               autoFocus
             />
-            <Text style={styles.hint}>At least 8 characters</Text>
+            <Text style={[styles.hint, { color: themeColors.mutedText }]}>{t('auth.resetPassword.passwordHint')}</Text>
           </View>
 
           {/* Confirm Password Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Confirm New Password</Text>
+            <Text style={[styles.label, { color: themeColors.text }]}>{t('auth.resetPassword.confirmPasswordLabel')}</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Confirm new password"
+              style={[styles.input, { backgroundColor: themeColors.inputBg, borderColor: themeColors.inputBorder, color: themeColors.text }]}
+              placeholder={t('auth.resetPassword.confirmPasswordPlaceholder')}
               placeholderTextColor="#A1A1AA"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
@@ -107,7 +121,7 @@ export default function ResetPassword() {
             disabled={loading}
           >
             <Text style={styles.primaryButtonText}>
-              {loading ? 'Resetting...' : 'Reset Password'}
+              {loading ? t('auth.resetPassword.resetting') : t('auth.resetPassword.resetButton')}
             </Text>
           </TouchableOpacity>
         </View>

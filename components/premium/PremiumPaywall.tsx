@@ -62,6 +62,7 @@ export default function PremiumPaywall({
   const [isClosing, setIsClosing] = useState(false);
 
   const [trialEligibility, setTrialEligibility] = useState<Record<string, { eligible: boolean; trialInfo: TrialInfo }>>({});
+  const [livePrices, setLivePrices] = useState<Record<string, string>>({});
 
   // Reset closing state when paywall opens
   useEffect(() => {
@@ -81,6 +82,13 @@ export default function PremiumPaywall({
         const eligibility = await checkTrialEligibility(offerings.availablePackages);
         if (!cancelled) {
           setTrialEligibility(eligibility);
+          // Extract live prices from RevenueCat packages
+          const prices: Record<string, string> = {};
+          for (const pkg of offerings.availablePackages) {
+            const id = pkg.product.identifier.toLowerCase();
+            prices[id] = pkg.product.priceString;
+          }
+          setLivePrices(prices);
         }
       } catch (error) {
         console.warn('⚠️ Failed to check trial eligibility:', error);
@@ -124,9 +132,26 @@ export default function PremiumPaywall({
   const isPlatinum = variant === 'platinum';
   const featureKeys = isPlatinum ? [...PREMIUM_FEATURE_KEYS, ...PLATINUM_EXTRA_KEYS] : PREMIUM_FEATURE_KEYS;
   const title = isPlatinum ? t('premiumPaywall.accordPlatinum') : t('premiumPaywall.accordPremium');
-  const monthlyPrice = isPlatinum ? '$24.99' : '$14.99';
-  const quarterlyPrice = isPlatinum ? '$54.99' : '$34.99';
-  const annualPrice = isPlatinum ? '$199.99' : '$119.99';
+
+  // Look up live price from RevenueCat, fall back to hardcoded defaults
+  const getLivePrice = (tier: string, period: string, fallback: string): string => {
+    for (const [id, price] of Object.entries(livePrices)) {
+      const tierMatch = tier === 'platinum' ? id.includes('platinum') : (id.includes('premium') && !id.includes('platinum'));
+      if (!tierMatch) continue;
+      const isMonthly = (id.includes('month') || id.includes('1m')) && !id.includes('3m') && !id.includes('3_month');
+      const isQuarterly = id.includes('quarter') || id.includes('3m') || id.includes('3_month');
+      const isAnnual = id.includes('annual') || id.includes('year') || id.includes('12m');
+      if (period === 'monthly' && isMonthly && !isQuarterly) return price;
+      if (period === 'quarterly' && isQuarterly) return price;
+      if (period === 'annual' && isAnnual) return price;
+    }
+    return fallback;
+  };
+
+  const tier = isPlatinum ? 'platinum' : 'premium';
+  const monthlyPrice = getLivePrice(tier, 'monthly', isPlatinum ? '$24.99' : '$14.99');
+  const quarterlyPrice = getLivePrice(tier, 'quarterly', isPlatinum ? '$54.99' : '$34.99');
+  const annualPrice = getLivePrice(tier, 'annual', isPlatinum ? '$199.99' : '$119.99');
   const quarterlySavings = '22%';
   const annualSavings = '33%';
 
@@ -235,7 +260,18 @@ export default function PremiumPaywall({
       if (customerInfo) {
         // Purchase successful - sync to database and refresh
         await refreshSubscription();
-        await syncWithDatabase(customerInfo);
+        const synced = await syncWithDatabase(customerInfo);
+        if (!synced) {
+          // Purchase went through on RevenueCat but DB sync failed. The periodic
+          // reconcile-subscriptions cron + next app launch will self-heal, but
+          // tell the user so they don't panic if features don't unlock immediately.
+          Alert.alert(
+            t('premiumPaywall.alerts.successTitle'),
+            'Your purchase went through! It may take a minute to activate — if it doesn\'t appear right away, please reopen the app.',
+            [{ text: t('premiumPaywall.alerts.letsGo'), onPress: onClose }]
+          );
+          return;
+        }
         Alert.alert(
           t('premiumPaywall.alerts.successTitle'),
           t('premiumPaywall.alerts.welcomeTier', { tier: isPlatinum ? t('premiumPaywall.platinum') : 'Premium' }),

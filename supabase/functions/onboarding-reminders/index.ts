@@ -28,14 +28,14 @@ function getStepName(step: number): string {
   const steps: Record<number, string> = {
     0: 'basic information',
     1: 'about yourself',
-    2: 'your interests',
-    3: 'personality details',
-    4: 'matching preferences',
-    5: 'marriage preferences',
+    2: 'your identity',
+    3: 'your goals',
+    4: 'your background',
+    5: 'lifestyle preferences',
     6: 'profile photos',
     7: 'profile prompts',
     8: 'voice introduction',
-    9: 'language settings',
+    9: 'matching preferences',
   };
   return steps[step] || 'your profile';
 }

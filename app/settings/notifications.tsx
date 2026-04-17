@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Pla
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useColorScheme } from '@/lib/useColorScheme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { registerForPushNotifications, savePushToken } from '@/lib/notifications';
@@ -44,6 +45,7 @@ const defaultPreferences: NotificationPreferences = {
 
 export default function NotificationSettings() {
   const { t } = useTranslation();
+  const { colors, isDarkColorScheme } = useColorScheme();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -228,7 +230,7 @@ export default function NotificationSettings() {
     const isLocked = premiumOnly && !isPremium;
 
     return (
-      <View className={`flex-row items-center py-4 border-b border-gray-100 ${disabled ? 'opacity-50' : ''}`}>
+      <View className={`flex-row items-center py-4 ${disabled ? 'opacity-50' : ''}`} style={{ borderBottomWidth: 1, borderBottomColor: isDarkColorScheme ? '#2C2C3E' : '#F3F4F6' }}>
         <View
           className="w-10 h-10 rounded-full items-center justify-center mr-3"
           style={{ backgroundColor: `${iconColor}20` }}
@@ -237,14 +239,14 @@ export default function NotificationSettings() {
         </View>
         <View className="flex-1 mr-3">
           <View className="flex-row items-center">
-            <Text className="text-gray-900 font-medium">{label}</Text>
+            <Text className="font-medium" style={{ color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>{label}</Text>
             {isLocked && (
               <View className="ml-2 bg-amber-100 px-2 py-0.5 rounded">
                 <Text className="text-amber-700 text-xs font-semibold">{t('common.premium')}</Text>
               </View>
             )}
           </View>
-          <Text className="text-gray-500 text-sm mt-0.5">{description}</Text>
+          <Text className="text-sm mt-0.5" style={{ color: isDarkColorScheme ? '#9CA3AF' : '#6B7280' }}>{description}</Text>
         </View>
         {isLocked ? (
           <TouchableOpacity
@@ -268,14 +270,14 @@ export default function NotificationSettings() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-white items-center justify-center">
+      <View className="flex-1 items-center justify-center" style={{ backgroundColor: isDarkColorScheme ? '#0F0F1A' : '#FFFFFF' }}>
         <ActivityIndicator size="large" color="#A08AB7" />
       </View>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView className="flex-1" style={{ backgroundColor: isDarkColorScheme ? '#0F0F1A' : '#FFFFFF' }}>
       {/* Header */}
       <View className="px-6 pt-16 pb-6 bg-lavender-500">
         <TouchableOpacity
@@ -292,21 +294,22 @@ export default function NotificationSettings() {
 
       <View className="px-6 py-6">
         {/* Master Push Toggle */}
-        <View className="bg-gray-50 rounded-2xl p-5 mb-6">
+        <View className="rounded-2xl p-5 mb-6" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#F8F7FA' }}>
           <View className="flex-row items-center">
-            <View className="w-12 h-12 bg-lavender-100 rounded-full items-center justify-center mr-3">
+            <View className="w-12 h-12 rounded-full items-center justify-center mr-3" style={{ backgroundColor: isDarkColorScheme ? '#2C2C3E' : '#EDE9FE' }}>
               <MaterialCommunityIcons name="bell" size={24} color="#A08AB7" />
             </View>
             <View className="flex-1">
-              <Text className="text-lg font-bold text-gray-900 mb-1">{t('notificationSettings.pushNotifications')}</Text>
-              <Text className="text-sm text-gray-600">
+              <Text className="text-lg font-bold mb-1" style={{ color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>{t('notificationSettings.pushNotifications')}</Text>
+              <Text className="text-sm" style={{ color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }}>
                 {pushEnabled ? t('notificationSettings.enabled') : t('notificationSettings.disabled')} {!hasToken && pushEnabled && t('notificationSettings.noToken')}
               </Text>
             </View>
             <TouchableOpacity
               onPress={handleToggleNotifications}
               disabled={saving}
-              className={`w-14 h-8 rounded-full justify-center ${pushEnabled ? 'bg-lavender-500' : 'bg-gray-300'}`}
+              className={`w-14 h-8 rounded-full justify-center ${pushEnabled ? 'bg-lavender-500' : ''}`}
+              style={!pushEnabled ? { backgroundColor: isDarkColorScheme ? '#3F3F46' : '#D1D5DB' } : undefined}
             >
               <View className={`w-6 h-6 rounded-full bg-white ${pushEnabled ? 'ml-7' : 'ml-1'}`} />
             </TouchableOpacity>
@@ -317,8 +320,8 @@ export default function NotificationSettings() {
         {/* Push Notification Types */}
         {pushEnabled && (
           <View className="mb-6">
-            <Text className="text-lg font-bold text-gray-900 mb-4">{t('notificationSettings.pushNotifications')}</Text>
-            <View className="bg-gray-50 rounded-2xl px-4">
+            <Text className="text-lg font-bold mb-4" style={{ color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>{t('notificationSettings.pushNotifications')}</Text>
+            <View className="rounded-2xl px-4" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#F8F7FA' }}>
               {renderToggle(t('notificationSettings.push.newMatches'), t('notificationSettings.push.newMatchesDesc'), 'push_new_match', 'heart', '#F43F5E')}
               {renderToggle(t('notificationSettings.push.newMessages'), t('notificationSettings.push.newMessagesDesc'), 'push_new_message', 'message', '#A08AB7')}
               {renderToggle(t('notificationSettings.push.newLikes'), t('notificationSettings.push.newLikesDesc'), 'push_new_like', 'star', '#F59E0B')}
@@ -332,8 +335,8 @@ export default function NotificationSettings() {
 
         {/* Email Notification Types */}
         <View className="mb-6">
-          <Text className="text-lg font-bold text-gray-900 mb-4">{t('notificationSettings.emailNotifications')}</Text>
-          <View className="bg-gray-50 rounded-2xl px-4">
+          <Text className="text-lg font-bold mb-4" style={{ color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>{t('notificationSettings.emailNotifications')}</Text>
+          <View className="rounded-2xl px-4" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#F8F7FA' }}>
             {renderToggle(t('notificationSettings.email.newMatch'), t('notificationSettings.email.newMatchDesc'), 'email_new_match', 'heart', '#F43F5E')}
             {renderToggle(t('notificationSettings.email.unreadMessages'), t('notificationSettings.email.unreadMessagesDesc'), 'email_unread_messages', 'email', '#A08AB7')}
             {renderToggle(t('notificationSettings.email.weeklySummary'), t('notificationSettings.email.weeklySummaryDesc'), 'email_weekly_summary', 'calendar-week', '#10B981')}
@@ -345,10 +348,10 @@ export default function NotificationSettings() {
 
         {/* Status Info */}
         <View className="mb-6">
-          <Text className="text-sm font-semibold text-gray-700 mb-3">{t('notificationSettings.status')}</Text>
-          <View className="bg-gray-50 rounded-xl p-4">
-            <View className="flex-row items-center justify-between py-2 border-b border-gray-200">
-              <Text className="text-gray-600">{t('notificationSettings.devicePermissions')}</Text>
+          <Text className="text-sm font-semibold mb-3" style={{ color: isDarkColorScheme ? '#D1D5DB' : '#374151' }}>{t('notificationSettings.status')}</Text>
+          <View className="rounded-xl p-4" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#F8F7FA' }}>
+            <View className="flex-row items-center justify-between py-2" style={{ borderBottomWidth: 1, borderBottomColor: isDarkColorScheme ? '#2C2C3E' : '#E5E7EB' }}>
+              <Text style={{ color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }}>{t('notificationSettings.devicePermissions')}</Text>
               <View className={`px-3 py-1 rounded-full ${permissionStatus === 'granted' ? 'bg-green-100' : 'bg-yellow-100'}`}>
                 <Text className={`text-xs font-semibold ${permissionStatus === 'granted' ? 'text-green-800' : 'text-yellow-800'}`}>
                   {permissionStatus === 'granted' ? t('notificationSettings.allowed') : permissionStatus === 'denied' ? t('notificationSettings.denied') : t('notificationSettings.notSet')}
@@ -356,7 +359,7 @@ export default function NotificationSettings() {
               </View>
             </View>
             <View className="flex-row items-center justify-between py-2">
-              <Text className="text-gray-600">{t('notificationSettings.pushToken')}</Text>
+              <Text style={{ color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }}>{t('notificationSettings.pushToken')}</Text>
               <View className={`px-3 py-1 rounded-full ${hasToken ? 'bg-green-100' : 'bg-gray-200'}`}>
                 <Text className={`text-xs font-semibold ${hasToken ? 'text-green-800' : 'text-gray-600'}`}>
                   {hasToken ? t('notificationSettings.registered') : t('notificationSettings.notRegistered')}
@@ -367,12 +370,12 @@ export default function NotificationSettings() {
         </View>
 
         {/* Help Text */}
-        <View className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+        <View className="rounded-xl p-4 mb-6" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#EFF6FF', borderWidth: 1, borderColor: isDarkColorScheme ? '#2C2C3E' : '#BFDBFE' }}>
           <View className="flex-row items-start">
             <MaterialCommunityIcons name="information" size={20} color="#3B82F6" style={{ marginTop: 2, marginRight: 8 }} />
             <View className="flex-1">
-              <Text className="text-blue-900 font-semibold mb-1">{t('notificationSettings.aboutTitle')}</Text>
-              <Text className="text-blue-800 text-sm leading-5">
+              <Text className="font-semibold mb-1" style={{ color: isDarkColorScheme ? '#93C5FD' : '#1E3A5F' }}>{t('notificationSettings.aboutTitle')}</Text>
+              <Text className="text-sm leading-5" style={{ color: isDarkColorScheme ? '#93C5FD' : '#1E40AF' }}>
                 {t('notificationSettings.aboutDescription')}
               </Text>
             </View>

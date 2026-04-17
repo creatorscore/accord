@@ -122,7 +122,8 @@ serve(async (req) => {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 to: profile.push_token,
-                sound: 'default',
+                sound: 'notification_sound.wav',
+                channelId: 'default',
                 title: 'Reminder: 7 Days Remaining',
                 body: 'Your Accord profile is still hidden. Update your profile to remain on the platform.',
                 data: { type: 'policy_restriction_reminder' },

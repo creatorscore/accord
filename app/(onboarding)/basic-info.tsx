@@ -216,6 +216,9 @@ export default function BasicInfo() {
   const [locationSuggestions, setLocationSuggestions] = useState<CityResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [hometown, setHometown] = useState('');
+  const [hometownSuggestions, setHometownSuggestions] = useState<CityResult[]>([]);
+  const [showHometownSuggestions, setShowHometownSuggestions] = useState(false);
+  const hometownSearchRef = useRef<NodeJS.Timeout>(null);
   const [occupation, setOccupation] = useState('');
   const [education, setEducation] = useState('');
   const [loading, setLoading] = useState(false);
@@ -798,10 +801,6 @@ export default function BasicInfo() {
                 {t('onboarding.basicInfoSteps.genderInfoText')}
               </Text>
             </View>
-            <VisibilityToggle
-              visible={fieldVisibility.gender !== false}
-              onToggle={(v) => setFieldVisibility(prev => ({ ...prev, gender: v }))}
-            />
           </View>
         );
 
@@ -823,10 +822,6 @@ export default function BasicInfo() {
               options={getAvailableOrientations(gender).map(o => ({ label: orientationLabel(o), value: o }))}
               value={orientation[0] || ''}
               onChange={(v: string) => setOrientation(v ? [v] : [])}
-            />
-            <VisibilityToggle
-              visible={fieldVisibility.sexual_orientation !== false}
-              onToggle={(v) => setFieldVisibility(prev => ({ ...prev, sexual_orientation: v }))}
             />
           </View>
         );
@@ -965,21 +960,79 @@ export default function BasicInfo() {
       case 'hometown':
         return (
           <View>
-            <TextInput
-              style={[s.textInput, {
-                backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
-                color: isDark ? '#F5F5F7' : '#1A1A2E',
-              }]}
-              placeholder={t('onboarding.basicInfoSteps.hometownPlaceholder')}
-              placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
-              value={hometown}
-              onChangeText={setHometown}
-              maxLength={100}
-              autoFocus
-            />
-            <Text style={[s.hint, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
+            <View style={[s.searchInput, {
+              backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+            }]}>
+              <MaterialCommunityIcons name="magnify" size={20} color="#9CA3AF" />
+              <TextInput
+                style={[s.searchInputField, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}
+                placeholder={t('onboarding.basicInfoSteps.hometownPlaceholder')}
+                placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+                value={hometown}
+                onChangeText={(text) => {
+                  setHometown(text);
+                  if (hometownSearchRef.current) clearTimeout(hometownSearchRef.current);
+                  if (text.trim().length < 2) {
+                    setHometownSuggestions([]);
+                    setShowHometownSuggestions(false);
+                    return;
+                  }
+                  hometownSearchRef.current = setTimeout(() => {
+                    try {
+                      const results = searchCities(text, 12);
+                      setHometownSuggestions(results);
+                      setShowHometownSuggestions(results.length > 0);
+                    } catch {
+                      setHometownSuggestions([]);
+                      setShowHometownSuggestions(false);
+                    }
+                  }, 150);
+                }}
+                maxLength={100}
+                autoFocus
+                autoCapitalize="words"
+              />
+              {hometown.length > 0 && (
+                <TouchableOpacity onPress={() => { setHometown(''); setShowHometownSuggestions(false); }}>
+                  <MaterialCommunityIcons name="close-circle" size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {showHometownSuggestions && hometownSuggestions.length > 0 && (
+              <View style={[s.suggestions, {
+                backgroundColor: isDark ? '#1C1C2E' : '#FFFFFF',
+              }]}>
+                {hometownSuggestions.map((sug, i) => (
+                  <TouchableOpacity
+                    key={`${sug.city}-${sug.state}-${sug.countryCode}-${i}`}
+                    style={s.suggestionRow}
+                    onPress={() => {
+                      const formatted = sug.state ? `${sug.city}, ${sug.state}` : `${sug.city}, ${sug.country}`;
+                      setHometown(formatted);
+                      setShowHometownSuggestions(false);
+                      setHometownSuggestions([]);
+                    }}
+                  >
+                    <MaterialCommunityIcons name="map-marker" size={18} color="#A08AB7" />
+                    <View style={{ marginLeft: 8, flex: 1 }}>
+                      <Text style={{ color: isDark ? '#F5F5F7' : '#1A1A2E', fontWeight: '500' }}>
+                        {sug.city}{sug.state ? `, ${sug.state}` : ''}
+                      </Text>
+                      <Text style={{ color: isDark ? '#6B7280' : '#9CA3AF', fontSize: 12 }}>{sug.country}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <Text style={[s.hint, { color: isDark ? '#6B7280' : '#9CA3AF', marginTop: 12 }]}>
               {t('onboarding.basicInfoSteps.hometownHint')}
             </Text>
+            <VisibilityToggle
+              visible={fieldVisibility.hometown !== false}
+              onToggle={(v) => setFieldVisibility(prev => ({ ...prev, hometown: v }))}
+            />
           </View>
         );
 
@@ -1042,6 +1095,7 @@ export default function BasicInfo() {
       onSkip={undefined}
       continueDisabled={!canContinue()}
       continueLabel={subStep === SUB_STEPS.length - 1 && loading ? t('common.saving') : t('common.continue')}
+      hideBack={subStep === 0}
     >
       {renderContent()}
     </OnboardingLayout>

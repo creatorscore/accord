@@ -52,15 +52,6 @@ interface Profile {
   height_inches?: number;
   languages?: string[];
   zodiac_sign?: string;
-  personality_type?: string;
-  love_language?: string | string[]; // Multi-select support
-  hobbies?: string[];
-  interests?: {
-    movies?: string[];
-    music?: string[];
-    books?: string[];
-    tv_shows?: string[];
-  };
   voice_intro_url?: string;
   voice_intro_duration?: number;
   religion?: string;
@@ -69,6 +60,7 @@ interface Profile {
   occupation?: string;
   education?: string;
   photo_blur_enabled?: boolean;
+  field_visibility?: Record<string, boolean>;
 }
 
 interface Preferences {
@@ -490,14 +482,10 @@ export default function ProfileView() {
             is_verified,
             photo_verified,
             prompt_answers,
-            interests,
-            hobbies,
             voice_intro_url,
             voice_intro_duration,
             height_inches,
             zodiac_sign,
-            personality_type,
-            love_language,
             languages_spoken,
             hometown,
             occupation,
@@ -568,8 +556,6 @@ export default function ProfileView() {
         height_cm: profileData.height_inches ? profileData.height_inches * 2.54 : undefined,
         languages: profileData.languages_spoken || [],
         zodiac_sign: profileData.zodiac_sign,
-        personality_type: profileData.personality_type,
-        love_language: profileData.love_language,
       };
 
       // Calculate real compatibility score if we have both profiles and preferences
@@ -882,7 +868,7 @@ export default function ProfileView() {
   // Use viewer's height unit preference to display height
   const viewerHeightUnit: HeightUnit = currentProfile?.height_unit || 'imperial';
   const quickFacts = [];
-  if (profile.height_inches) {
+  if (profile.height_inches && profile.field_visibility?.height !== false) {
     quickFacts.push({
       emoji: '📏',
       label: t('profileCard.vitals.height'),
@@ -894,20 +880,6 @@ export default function ProfileView() {
       emoji: '✨',
       label: t('profileCard.vitals.zodiac'),
       value: translateProfileValue(t, 'zodiac_sign', profile.zodiac_sign),
-    });
-  }
-  if (profile.personality_type) {
-    quickFacts.push({
-      emoji: '🧠',
-      label: t('profileCard.vitals.personality'),
-      value: profile.personality_type,
-    });
-  }
-  if (profile.love_language) {
-    quickFacts.push({
-      emoji: '💖',
-      label: t('profileCard.vitals.loveLanguage'),
-      value: translateProfileArray(t, 'love_language', profile.love_language),
     });
   }
   if (profile.languages?.length) {

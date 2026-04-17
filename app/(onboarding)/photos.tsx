@@ -32,7 +32,13 @@ interface Photo {
   blurDataUri?: string;
 }
 
-export default function Photos() {
+interface PhotosProps {
+  embedded?: boolean;
+  onContinue?: () => void;
+  onBack?: () => void;
+}
+
+export default function Photos({ embedded, onContinue: parentContinue, onBack: parentBack }: PhotosProps = {}) {
   const router = useRouter();
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -45,6 +51,11 @@ export default function Photos() {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [photoBlurEnabled, setPhotoBlurEnabled] = useState(false);
   const [processingImage, setProcessingImage] = useState(false);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
+  // Skeleton slots shown while existing photos load — prevents grid pop-in flicker.
+  // Start at 3 (the minimum required) so first paint never shows an empty grid.
+  const [skeletonCount, setSkeletonCount] = useState(3);
+  const [initialLoading, setInitialLoading] = useState(true);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -63,6 +74,7 @@ export default function Photos() {
         .single();
 
       if (error) throw error;
+      if (!isMounted.current) return;
       setProfileId(data.id);
 
       if (data.photo_blur_enabled !== null) {
@@ -72,6 +84,8 @@ export default function Photos() {
       await loadExistingPhotos(data.id);
     } catch (error: any) {
       showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
+    } finally {
+      if (isMounted.current) setInitialLoading(false);
     }
   };
 
@@ -85,19 +99,27 @@ export default function Photos() {
 
       if (error) {
         console.error('Error loading existing photos:', error);
+        setSkeletonCount(0);
         return;
       }
 
       if (existingPhotos && existingPhotos.length > 0) {
+        // Reserve skeleton slots immediately so the grid doesn't jump from 0 → N
+        setSkeletonCount(existingPhotos.length);
         const signedPhotos = await signPhotoUrls(existingPhotos);
+        if (!isMounted.current) return;
         const photoUris = signedPhotos.map(photo => ({
           uri: photo.url!,
           contentHash: photo.content_hash,
         }));
         setPhotos(photoUris);
+        setSkeletonCount(0);
+      } else {
+        setSkeletonCount(0);
       }
     } catch (error) {
       console.error('Failed to load existing photos:', error);
+      setSkeletonCount(0);
     }
   };
 
@@ -185,11 +207,32 @@ export default function Photos() {
 
   const removePhoto = (index: number) => {
     setPhotos(photos.filter((_, i) => i !== index));
+    setSelectedPhotoIndex(null);
+  };
+
+  const handlePhotoTap = (index: number) => {
+    if (selectedPhotoIndex === null) {
+      // First tap: select this photo for reorder
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setSelectedPhotoIndex(index);
+    } else if (selectedPhotoIndex === index) {
+      // Tap same photo: deselect
+      setSelectedPhotoIndex(null);
+    } else {
+      // Tap different photo: swap positions
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const newPhotos = [...photos];
+      const temp = newPhotos[selectedPhotoIndex];
+      newPhotos[selectedPhotoIndex] = newPhotos[index];
+      newPhotos[index] = temp;
+      setPhotos(newPhotos);
+      setSelectedPhotoIndex(null);
+    }
   };
 
   const handleContinue = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (photos.length < 2) {
+    if (photos.length < 3) {
       showToast({ type: 'info', title: t('toast.morePhotosNeeded'), message: t('toast.morePhotosNeeded') });
       return;
     }
@@ -289,17 +332,24 @@ export default function Photos() {
         }
       }
 
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          onboarding_step: 3,
-          photo_blur_enabled: photoBlurEnabled,
-          profile_complete: true, // Enable discovery access after photos (trigger requires 2+ photos)
-        })
-        .eq('id', profileId);
+      if (!embedded) {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            onboarding_step: 3,
+            photo_blur_enabled: photoBlurEnabled,
+          })
+          .eq('id', profileId);
 
-      if (updateError) {
-        console.error('Error updating onboarding step:', updateError);
+        if (updateError) {
+          console.error('Error updating onboarding step:', updateError);
+        }
+      } else {
+        // In embedded mode, just save blur preference
+        await supabase
+          .from('profiles')
+          .update({ photo_blur_enabled: photoBlurEnabled })
+          .eq('id', profileId);
       }
 
       // Clean up persisted optimized images now that they're uploaded
@@ -308,7 +358,11 @@ export default function Photos() {
       setUploading(false);
       setUploadProgress(0);
 
-      router.push('/(onboarding)/interests');
+      if (embedded && parentContinue) {
+        parentContinue();
+      } else {
+        router.push('/(onboarding)/onboarding');
+      }
     } catch (error: any) {
       console.error('Upload failed:', error);
       if (isMounted.current) {
@@ -319,36 +373,88 @@ export default function Photos() {
     }
   };
 
-  return (
-    <OnboardingLayout
-      currentStep={getGlobalStep('photos', 0)}
-      title={t('onboarding.photos.title')}
-      subtitle={t('onboardingPhotos.subtitle')}
-      onBack={() => goToPreviousOnboardingStep('/(onboarding)/photos')}
-      onContinue={handleContinue}
-      continueDisabled={uploading || photos.length < 2}
-      continueLabel={uploading ? t('onboardingPhotos.uploading', { progress: uploadProgress }) : t('common.continue')}
-    >
-      {/* Photo Grid */}
-      <View style={styles.photoGrid}>
-        {photos.map((photo, index) => (
-          <View key={index} style={styles.photoWrapper}>
-            <Image
-              source={{ uri: photo.uri }}
-              style={[styles.photoImage, { backgroundColor: isDark ? '#374151' : '#E5E7EB' }]}
-            />
-            <TouchableOpacity style={styles.removeButton} onPress={() => removePhoto(index)}>
-              <MaterialCommunityIcons name="close" size={14} color="white" />
-            </TouchableOpacity>
-            {index === 0 && (
-              <View style={styles.primaryBadge}>
-                <Text style={styles.primaryBadgeText}>{t('onboardingPhotos.primary')}</Text>
-              </View>
-            )}
-          </View>
-        ))}
+  const showSkeleton = initialLoading && photos.length === 0;
+  const hintText = selectedPhotoIndex !== null
+    ? 'Tap another photo to swap positions'
+    : photos.length < 3
+      ? `Add ${3 - photos.length} more — 3 required, up to 6. First photo is your primary.`
+      : 'Tap a photo to reorder. First photo is your primary.';
 
-        {photos.length < 6 && (
+  const content = (
+    <>
+      {/* Single hint line (replaces counter + reorder tip + tips card) */}
+      <View style={styles.hintRow}>
+        <MaterialCommunityIcons
+          name={selectedPhotoIndex !== null ? 'swap-horizontal' : 'information-outline'}
+          size={14}
+          color={isDark ? '#D4C4E8' : '#8B72A8'}
+        />
+        <Text style={[styles.hintText, { color: isDark ? '#D4C4E8' : '#8B72A8' }]} numberOfLines={2}>
+          {hintText}
+        </Text>
+        {selectedPhotoIndex !== null && (
+          <TouchableOpacity onPress={() => setSelectedPhotoIndex(null)}>
+            <Text style={[styles.reorderCancel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>Cancel</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Photo Grid — tap to select, tap another to swap */}
+      <View style={styles.photoGrid}>
+        {showSkeleton && Array.from({ length: skeletonCount }).map((_, i) => (
+          <View
+            key={`skeleton-${i}`}
+            style={[styles.photoImage, styles.photoSkeleton, { backgroundColor: isDark ? '#1F2937' : '#E5E7EB' }]}
+          />
+        ))}
+        {!showSkeleton && photos.map((photo, index) => {
+          const isSelected = selectedPhotoIndex === index;
+          const isSwapTarget = selectedPhotoIndex !== null && selectedPhotoIndex !== index;
+          return (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.photoWrapper,
+                isSelected && styles.photoSelected,
+                isSwapTarget && styles.photoSwapTarget,
+              ]}
+              onPress={() => handlePhotoTap(index)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`Photo ${index + 1}${index === 0 ? ', primary' : ''}${isSelected ? ', selected for reorder' : ''}`}
+              accessibilityHint={isSelected ? 'Tap another photo to swap' : 'Tap to select for reordering'}
+            >
+              <Image
+                source={{ uri: photo.uri }}
+                style={[styles.photoImage, { backgroundColor: isDark ? '#374151' : '#E5E7EB' }]}
+              />
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => removePhoto(index)}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove photo ${index + 1}`}
+              >
+                <MaterialCommunityIcons name="close" size={14} color="white" />
+              </TouchableOpacity>
+              {index === 0 && (
+                <View style={styles.primaryBadge}>
+                  <Text style={styles.primaryBadgeText}>{t('onboardingPhotos.primary')}</Text>
+                </View>
+              )}
+              {isSelected && (
+                <View style={styles.selectedOverlay}>
+                  <MaterialCommunityIcons name="swap-horizontal" size={24} color="#FFFFFF" />
+                </View>
+              )}
+              {/* Position indicator */}
+              <View style={styles.positionBadge}>
+                <Text style={styles.positionText}>{index + 1}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+
+        {!showSkeleton && photos.length < 6 && (
           <TouchableOpacity
             style={[
               styles.addPhotoButton,
@@ -359,6 +465,9 @@ export default function Photos() {
             ]}
             onPress={pickImage}
             disabled={processingImage}
+            accessibilityRole="button"
+            accessibilityLabel={processingImage ? 'Processing photo' : `Add photo. ${photos.length} of 6 added`}
+            accessibilityState={{ disabled: processingImage }}
           >
             {processingImage ? (
               <>
@@ -390,53 +499,75 @@ export default function Photos() {
         </View>
       )}
 
-      {/* Photo Counter */}
-      <Text style={[styles.photoCounter, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
-        {t('onboardingPhotos.counter', { count: photos.length })} {photos.length < 2 ? t('onboardingPhotos.minimumTwo') : ''}
-      </Text>
-
-      {/* Tips */}
-      <View style={[styles.card, { backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA', borderColor: isDark ? '#2C2C3E' : '#E8E3F0' }]}>
-        <View style={styles.cardHeader}>
-          <MaterialCommunityIcons name="lightbulb-outline" size={22} color="#A08AB7" />
-          <Text style={[styles.cardTitle, { color: isDark ? '#E5E7EB' : '#1F2937' }]}>{t('onboardingPhotos.tipsTitle')}</Text>
+      {/* Compact privacy toggle row (no card wrapper) */}
+      <View style={styles.privacyRowCompact}>
+        <MaterialCommunityIcons name="eye-off-outline" size={18} color="#A08AB7" />
+        <View style={styles.privacyTextCompact}>
+          <Text style={[styles.privacyLabel, { color: isDark ? '#E5E7EB' : '#1F2937' }]} numberOfLines={1}>
+            {t('onboarding.photos.privacyMode')}
+          </Text>
+          <Text style={[styles.privacyDescCompact, { color: isDark ? '#9CA3AF' : '#6B7280' }]} numberOfLines={1}>
+            {t('onboarding.photos.privacyModeDesc')}
+          </Text>
         </View>
-        <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboardingPhotos.tip1')}</Text>
-        <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboardingPhotos.tip2')}</Text>
-        <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboardingPhotos.tip3')}</Text>
-        <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboardingPhotos.tip4')}</Text>
-      </View>
-
-      {/* Privacy Toggle */}
-      <View style={[styles.card, { backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA', borderColor: isDark ? '#2C2C3E' : '#E8E3F0' }]}>
-        <View style={styles.privacyRow}>
-          <View style={styles.privacyTextContainer}>
-            <View style={styles.cardHeader}>
-              <MaterialCommunityIcons name="eye-off-outline" size={22} color="#A08AB7" />
-              <Text style={[styles.cardTitle, { color: isDark ? '#E5E7EB' : '#1F2937' }]}>{t('onboarding.photos.privacyMode')}</Text>
-            </View>
-            <Text style={[styles.privacyDesc, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
-              {t('onboarding.photos.privacyModeDesc')}
-            </Text>
-          </View>
-          <Switch
-            value={photoBlurEnabled}
-            onValueChange={async (value) => {
-              setPhotoBlurEnabled(value);
-              if (profileId) {
-                try {
-                  await supabase.from('profiles').update({ photo_blur_enabled: value }).eq('id', profileId);
-                } catch (error) {
-                  console.error('Error saving photo blur preference:', error);
-                  setPhotoBlurEnabled(!value);
-                }
+        <Switch
+          value={photoBlurEnabled}
+          onValueChange={async (value) => {
+            setPhotoBlurEnabled(value);
+            if (profileId) {
+              try {
+                await supabase.from('profiles').update({ photo_blur_enabled: value }).eq('id', profileId);
+              } catch (error) {
+                console.error('Error saving photo blur preference:', error);
+                setPhotoBlurEnabled(!value);
               }
-            }}
-            trackColor={{ false: '#D1D5DB', true: '#A08AB7' }}
-            thumbColor={photoBlurEnabled ? '#ffffff' : '#f4f3f4'}
-          />
+            }
+          }}
+          trackColor={{ false: '#D1D5DB', true: '#A08AB7' }}
+          thumbColor={photoBlurEnabled ? '#ffffff' : '#f4f3f4'}
+        />
+      </View>
+    </>
+  );
+
+  if (embedded) {
+    const continueDisabled = uploading || photos.length < 3;
+    return (
+      <View style={{ flex: 1 }}>
+        {/* Embedded title */}
+        <Text style={styles.embeddedTitle}>{t('onboarding.photos.title')}</Text>
+        <Text style={styles.embeddedSubtitle}>{t('onboardingPhotos.subtitle')}</Text>
+        {content}
+        {/* Bottom bar matching OnboardingLayout */}
+        <View style={styles.embeddedBottomBar}>
+          <TouchableOpacity style={styles.embeddedBackCircle} onPress={parentBack} activeOpacity={0.8}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.embeddedContinueCircle, continueDisabled && styles.embeddedButtonDisabled]}
+            onPress={handleContinue}
+            disabled={continueDisabled}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="arrow-right" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
       </View>
+    );
+  }
+
+  return (
+    <OnboardingLayout
+      currentStep={getGlobalStep('photos', 0)}
+      title={t('onboarding.photos.title')}
+      subtitle={t('onboardingPhotos.subtitle')}
+      onBack={() => goToPreviousOnboardingStep('/(onboarding)/photos')}
+      onContinue={handleContinue}
+      continueDisabled={uploading || photos.length < 3}
+      continueLabel={uploading ? t('onboardingPhotos.uploading', { progress: uploadProgress }) : t('common.continue')}
+      noScroll
+    >
+      {content}
     </OnboardingLayout>
   );
 }
@@ -445,16 +576,68 @@ const styles = StyleSheet.create({
   photoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
     marginBottom: 12,
+    justifyContent: 'flex-start',
   },
   photoWrapper: {
     position: 'relative',
   },
   photoImage: {
-    width: 112,
-    height: 144,
+    width: 98,
+    height: 126,
+    borderRadius: 14,
+  },
+  photoSkeleton: {
+    opacity: 0.6,
+  },
+  photoSelected: {
+    borderWidth: 3,
+    borderColor: '#A08AB7',
+    borderRadius: 17,
+  },
+  photoSwapTarget: {
+    opacity: 0.7,
+  },
+  selectedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(160, 138, 183, 0.4)',
     borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  positionBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  positionText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  hintText: {
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 18,
+  },
+  reorderCancel: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   removeButton: {
     position: 'absolute',
@@ -479,9 +662,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   addPhotoButton: {
-    width: 112,
-    height: 144,
-    borderRadius: 16,
+    width: 98,
+    height: 126,
+    borderRadius: 14,
     borderWidth: 2,
     borderStyle: 'dashed',
     alignItems: 'center',
@@ -491,45 +674,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  photoCounter: {
-    textAlign: 'center',
-    fontSize: 14,
-    marginBottom: 24,
-  },
-  card: {
-    borderRadius: 20,
-    borderWidth: 1.5,
-    padding: 20,
-    marginBottom: 16,
-  },
-  cardHeader: {
+  privacyRowCompact: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
+    gap: 10,
+    marginTop: 'auto',
+    paddingTop: 8,
   },
-  cardTitle: {
-    fontWeight: '700',
-    fontSize: 17,
-  },
-  tipItem: {
-    fontSize: 14,
-    marginBottom: 6,
-    lineHeight: 20,
-    paddingLeft: 4,
-  },
-  privacyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  privacyTextContainer: {
+  privacyTextCompact: {
     flex: 1,
-    marginRight: 16,
   },
-  privacyDesc: {
+  privacyLabel: {
     fontSize: 14,
-    lineHeight: 20,
+    fontWeight: '600',
+  },
+  privacyDescCompact: {
+    fontSize: 12,
+    marginTop: 1,
   },
   uploadProgressContainer: {
     marginBottom: 16,
@@ -556,5 +717,49 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
     backgroundColor: '#A08AB7',
+  },
+  embeddedTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    lineHeight: 32,
+    letterSpacing: -0.5,
+    color: '#1A1A2E',
+    marginBottom: 6,
+  },
+  embeddedSubtitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    color: '#71717A',
+    marginBottom: 20,
+  },
+  embeddedBottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    marginTop: 8,
+  },
+  embeddedBackCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#F5F3F8',
+    borderWidth: 1.5,
+    borderColor: '#E8E3F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  embeddedContinueCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#A08AB7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  embeddedButtonDisabled: {
+    opacity: 0.4,
   },
 });

@@ -33,13 +33,10 @@ export interface FilterOptions {
   ethnicity: string[];
   sexualOrientation: string[];
 
-  // Premium filters (new - Physical & Personality)
+  // Premium filters (new - Physical & Zodiac)
   heightMin: number;
   heightMax: number;
   zodiacSign: string[];
-  personalityType: string[];
-  loveLanguage: string[];
-
   // Premium filters (new - Lifestyle)
   languagesSpoken: string[];
   smoking: string[];
@@ -69,8 +66,6 @@ const GENDERS: ChipOption[] = ['Man', 'Woman', 'Non-binary'].map(s => ({ value: 
 const ETHNICITIES: ChipOption[] = ['Asian', 'Black/African', 'Hispanic/Latinx', 'Indigenous/Native', 'Middle Eastern/North African', 'Pacific Islander', 'South Asian', 'White/Caucasian', 'Multiracial', 'Other'].map(s => ({ value: s, label: s }));
 const SEXUAL_ORIENTATIONS: ChipOption[] = ['Straight', 'Lesbian', 'Gay', 'Bisexual', 'Queer', 'Asexual', 'Pansexual', 'Other'].map(s => ({ value: s, label: s }));
 const ZODIAC_SIGNS: ChipOption[] = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'].map(s => ({ value: s, label: s }));
-const PERSONALITY_TYPES: ChipOption[] = ['INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP', 'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP'].map(s => ({ value: s, label: s }));
-const LOVE_LANGUAGES: ChipOption[] = ['Words of Affirmation', 'Quality Time', 'Receiving Gifts', 'Acts of Service', 'Physical Touch'].map(s => ({ value: s, label: s }));
 const LANGUAGES: ChipOption[] = ['English', 'Spanish', 'French', 'Mandarin', 'Cantonese', 'Japanese', 'Korean', 'Vietnamese', 'Tagalog', 'Hindi', 'Arabic', 'Portuguese', 'German', 'Italian', 'Russian', 'Other'].map(s => ({ value: s, label: s }));
 
 // Options where DB value differs from display label - must match onboarding/settings values exactly
@@ -220,8 +215,6 @@ export default function FilterModal({
       heightMin: 48, // 4'0"
       heightMax: 84, // 7'0"
       zodiacSign: [],
-      personalityType: [],
-      loveLanguage: [],
       languagesSpoken: [],
       smoking: [],
       drinking: [],
@@ -511,7 +504,7 @@ export default function FilterModal({
             'physical',
             t('filters.physicalPersonality'),
             'account-heart-outline',
-            getSelectedCount([filters.zodiacSign, filters.personalityType, filters.loveLanguage]) +
+            getSelectedCount([filters.zodiacSign]) +
               (localHeightMin !== 48 || localHeightMax !== 84 ? 1 : 0),
             <>
               {renderSubsection(t('filters.heightRange'), (
@@ -547,8 +540,6 @@ export default function FilterModal({
                 </>
               ))}
               {renderSubsection(t('filters.zodiacSign'), renderChips(ZODIAC_SIGNS, filters.zodiacSign, 'zodiacSign'))}
-              {renderSubsection(t('filters.mbtiPersonality'), renderChips(PERSONALITY_TYPES, filters.personalityType, 'personalityType'))}
-              {renderSubsection(t('filters.loveLanguage'), renderChips(LOVE_LANGUAGES, filters.loveLanguage, 'loveLanguage'))}
             </>
           )}
 

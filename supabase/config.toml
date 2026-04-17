@@ -40,3 +40,15 @@ verify_jwt = false
 
 [functions.notify-new-message]
 verify_jwt = false
+
+# Resend webhook (called by Resend for bounce/spam/delivery events)
+[functions.resend-webhook]
+verify_jwt = false
+
+# Win-back expired subscribers (daily cron)
+[functions.winback-subscribers]
+verify_jwt = false
+
+# Photo moderation (called by cron retry + user uploads with internal auth check)
+[functions.moderate-photo]
+verify_jwt = false

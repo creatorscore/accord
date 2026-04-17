@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({ error: 'AWS credentials not configured', approved: false, reason: 'needs_review' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 503 }
       );
     }
 
@@ -247,6 +247,7 @@ Deno.serve(async (req) => {
             photo_id,
             labels: moderationResult.ModerationLabels,
             highest_confidence: highestExplicitConfidence,
+            deferred_scan: isServiceRole,
           },
         });
 
@@ -269,43 +270,82 @@ Deno.serve(async (req) => {
           });
       }
 
-      // Auto-ban if very high confidence explicit content
+      // Auto-ban only on real-time uploads (user-initiated).
+      // Deferred scans (cron retry) escalate to manual admin review instead —
+      // the user already made it past onboarding because moderation was down,
+      // so banning them without warning is unfair.
       if (highestExplicitConfidence >= AUTO_BAN_THRESHOLD) {
-        console.log('🚨🚨 AUTO-BAN TRIGGERED - Very high confidence NSFW');
+        if (isServiceRole) {
+          // DEFERRED SCAN: escalate to admin review, notify user
+          console.log('⚠️ DEFERRED SCAN - High confidence NSFW, escalating to manual review (not auto-banning)');
 
-        // Get user_id for ban
-        const { data: profile } = await supabaseAdmin
-          .from('profiles')
-          .select('user_id')
-          .eq('id', profile_id)
-          .maybeSingle();
+          await supabaseAdmin
+            .from('moderation_logs')
+            .insert({
+              profile_id,
+              action: 'photo_admin_review',
+              reason: `Deferred scan: Very high confidence NSFW (${Math.round(highestExplicitConfidence)}%) — escalated to manual review instead of auto-ban: ${flaggedLabels.join(', ')}`,
+              details: {
+                photo_url,
+                photo_id,
+                labels: moderationResult.ModerationLabels,
+                highest_confidence: highestExplicitConfidence,
+                deferred_scan: true,
+              },
+            });
 
-        if (profile?.user_id) {
-          // Check if already banned
-          const { data: existingBan } = await supabaseAdmin
-            .from('bans')
-            .select('id')
-            .eq('banned_profile_id', profile_id)
+          // Hide profile from discovery until admin reviews
+          await supabaseAdmin
+            .from('profiles')
+            .update({ profile_complete: false })
+            .eq('id', profile_id);
+
+          // Notify the user that their photos are under review
+          await supabaseAdmin.from('notification_queue').insert({
+            recipient_profile_id: profile_id,
+            notification_type: 'photo_flagged_review',
+            title: 'Photos Under Review',
+            body: 'One or more of your photos have been flagged and require manual review. Your profile is hidden until the review is complete. Contact hello@joinaccord.app for more information.',
+            data: { type: 'photo_flagged_review', screen: 'settings' },
+            status: 'pending',
+          });
+
+          console.log('✅ Profile hidden + user notified, awaiting admin review');
+        } else {
+          // REAL-TIME UPLOAD: auto-ban as before
+          console.log('🚨🚨 AUTO-BAN TRIGGERED - Very high confidence NSFW');
+
+          const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select('user_id')
+            .eq('id', profile_id)
             .maybeSingle();
 
-          if (!existingBan) {
-            await supabaseAdmin
+          if (profile?.user_id) {
+            const { data: existingBan } = await supabaseAdmin
               .from('bans')
-              .insert({
-                banned_profile_id: profile_id,
-                banned_user_id: profile.user_id,
-                ban_reason: `Auto-ban: Explicit NSFW content detected with ${Math.round(highestExplicitConfidence)}% confidence. Labels: ${flaggedLabels.join(', ')}`,
-                is_permanent: true,
-                admin_notes: 'Automatic ban by AWS Rekognition moderation system',
-              });
+              .select('id')
+              .eq('banned_profile_id', profile_id)
+              .maybeSingle();
 
-            // Set profile as incomplete to hide from discovery
-            await supabaseAdmin
-              .from('profiles')
-              .update({ profile_complete: false })
-              .eq('id', profile_id);
+            if (!existingBan) {
+              await supabaseAdmin
+                .from('bans')
+                .insert({
+                  banned_profile_id: profile_id,
+                  banned_user_id: profile.user_id,
+                  ban_reason: `Auto-ban: Explicit NSFW content detected with ${Math.round(highestExplicitConfidence)}% confidence. Labels: ${flaggedLabels.join(', ')}`,
+                  is_permanent: true,
+                  admin_notes: 'Automatic ban by AWS Rekognition moderation system',
+                });
 
-            console.log('✅ User auto-banned for explicit content');
+              await supabaseAdmin
+                .from('profiles')
+                .update({ profile_complete: false })
+                .eq('id', profile_id);
+
+              console.log('✅ User auto-banned for explicit content');
+            }
           }
         }
       }
@@ -315,7 +355,8 @@ Deno.serve(async (req) => {
           approved: false,
           reason: 'explicit_content',
           labels: flaggedLabels,
-          auto_banned: highestExplicitConfidence >= AUTO_BAN_THRESHOLD,
+          auto_banned: !isServiceRole && highestExplicitConfidence >= AUTO_BAN_THRESHOLD,
+          deferred_review: isServiceRole && highestExplicitConfidence >= AUTO_BAN_THRESHOLD,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );

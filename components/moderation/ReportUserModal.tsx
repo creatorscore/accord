@@ -26,6 +26,7 @@ interface ReportUserModalProps {
   onClose: () => void;
   reportedProfileId: string;
   reportedProfileName: string;
+  onReportSuccess?: (reportedProfileId: string, didBlock: boolean) => void;
 }
 
 const REPORT_REASON_IDS = [
@@ -45,6 +46,7 @@ export default function ReportUserModal({
   onClose,
   reportedProfileId,
   reportedProfileName,
+  onReportSuccess,
 }: ReportUserModalProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -173,17 +175,50 @@ export default function ReportUserModal({
 
       if (reportError) throw reportError;
 
+      const resetAndClose = () => {
+        setSelectedReason(null);
+        setDetails('');
+        setEvidencePhotos([]);
+        onClose();
+      };
+
       Alert.alert(
         t('moderation.report.submitted'),
-        t('moderation.report.submittedMessage'),
+        t('moderation.report.blockPrompt', { name: reportedProfileName, defaultValue: `Would you also like to block ${reportedProfileName}? They won't be able to see your profile or contact you.` }),
         [
           {
-            text: t('common.ok'),
+            text: t('moderation.report.noThanks', { defaultValue: 'No thanks' }),
+            style: 'cancel',
             onPress: () => {
-              setSelectedReason(null);
-              setDetails('');
-              setEvidencePhotos([]);
-              onClose();
+              onReportSuccess?.(reportedProfileId, false);
+              resetAndClose();
+            },
+          },
+          {
+            text: t('moderation.report.blockUser', { defaultValue: 'Block user' }),
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const { data: reporterProfile } = await supabase
+                  .from('profiles')
+                  .select('id')
+                  .eq('user_id', user!.id)
+                  .single();
+
+                if (reporterProfile) {
+                  await supabase.from('blocks').insert({
+                    blocker_profile_id: reporterProfile.id,
+                    blocked_profile_id: reportedProfileId,
+                  });
+                }
+              } catch (blockErr: any) {
+                // Duplicate block is fine (code 23505)
+                if (blockErr?.code !== '23505') {
+                  console.error('Error blocking user:', blockErr);
+                }
+              }
+              onReportSuccess?.(reportedProfileId, true);
+              resetAndClose();
             },
           },
         ]

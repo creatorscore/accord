@@ -87,13 +87,20 @@ serve(async (req) => {
       throw fetchError;
     }
 
-    // Filter to only exclusively male-identifying users
+    // Filter to only exclusively straight, exclusively male-identifying users.
+    // Users who selected BOTH "Straight" and another orientation (e.g. Bisexual)
+    // are NOT straight men — they belong on the platform.
     const menOnlyGenders = ['Man'];
     const targetProfiles = (straightMen || []).filter(profile => {
       if (!profile.gender || !Array.isArray(profile.gender)) return false;
-      // Check if ALL genders are male-identifying
-      return profile.gender.length > 0 &&
+      if (!profile.sexual_orientation || !Array.isArray(profile.sexual_orientation)) return false;
+      // Must be exclusively male-identifying (gender = ['Man'] only)
+      const isExclusivelyMale = profile.gender.length > 0 &&
              profile.gender.every((g: string) => menOnlyGenders.includes(g));
+      // Must be exclusively straight (orientation = ['Straight'] only, no other orientations)
+      const isExclusivelyStraight = profile.sexual_orientation.length === 1 &&
+             profile.sexual_orientation[0] === 'Straight';
+      return isExclusivelyMale && isExclusivelyStraight;
     });
 
     console.log(`[Policy Restrict] Found ${targetProfiles.length} straight men to restrict`);
@@ -192,7 +199,8 @@ serve(async (req) => {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 to: profile.push_token,
-                sound: 'default',
+                sound: 'notification_sound.wav',
+                channelId: 'default',
                 title: 'Action Required: Profile Update',
                 body: 'Your profile has been hidden. Please check your email for important information about your Accord account.',
                 data: { type: 'policy_restriction' },

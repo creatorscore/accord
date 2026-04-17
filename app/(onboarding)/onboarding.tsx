@@ -4,6 +4,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
+import { captureException } from '@/lib/sentry';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import {
   ONBOARDING_STEPS,
@@ -19,6 +20,7 @@ import {
   PRIMARY_REASONS,
   CHILDREN_OPTIONS,
   FAMILY_PLANS,
+  PETS_OPTIONS,
   HOUSING_PREFERENCES,
   FINANCIAL_ARRANGEMENTS,
   EDUCATION_LEVELS,
@@ -29,7 +31,7 @@ import {
   getAvailableOrientations,
   mapOldStepToNew,
 } from '@/lib/onboarding-config';
-import { ensurePushTokenSaved } from '@/lib/notifications';
+import { ensurePushTokenSaved, registerForPushNotifications } from '@/lib/notifications';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { usePreviewModeStore } from '@/stores/previewModeStore';
@@ -44,6 +46,7 @@ import {
   MatchingPrefsStep,
   ChipSelect,
   TextInputStep,
+  CityAutocompleteStep,
 } from '@/components/onboarding/steps';
 
 // Lazy imports for heavy steps
@@ -122,6 +125,7 @@ export default function Onboarding() {
             politicalViews: profile.political_views || '',
             financialArrangement: prefs?.financial_arrangement || [],
             housingPreference: prefs?.housing_preference || [],
+            pets: prefs?.lifestyle_preferences?.pets || '',
             drinking: prefs?.lifestyle_preferences?.drinking || '',
             smoking: prefs?.lifestyle_preferences?.smoking || '',
             smokesWeed: profile.smokes_weed || '',
@@ -129,6 +133,7 @@ export default function Onboarding() {
             ageMin: prefs?.age_min || 22,
             ageMax: prefs?.age_max || 45,
             maxDistanceMiles: prefs?.max_distance_miles || 50,
+            willingToRelocate: prefs?.willing_to_relocate ?? false,
             fieldVisibility: profile.field_visibility || {},
           });
 
@@ -139,6 +144,17 @@ export default function Onboarding() {
             ? mapOldStepToNew(profile.onboarding_step || 0)
             : Math.min(rawStep, TOTAL_ONBOARDING_STEPS - 1);
           setSubStep(mappedStep);
+
+          // Warn if resuming past identity steps but critical prefs are missing
+          // (indicates a previous save failure)
+          if (mappedStep > 14 && prefs) {
+            const missing: string[] = [];
+            if (!prefs.gender_preference?.length) missing.push('gender preference');
+            if (!prefs.relationship_type) missing.push('relationship type');
+            if (missing.length > 0) {
+              showToast({ type: 'info', title: 'Review needed', message: `Your ${missing.join(' and ')} may not have saved. Please review previous steps.` });
+            }
+          }
         } else {
           // No profile yet — start from step 0
           setSubStep(parseInt(resumeStep || '0', 10) || 0);
@@ -154,7 +170,7 @@ export default function Onboarding() {
     switch (subStep) {
       case 0: return store.displayName.trim().length >= 1;
       case 1: return store.birthDate !== null && store.age !== null && store.age >= 18;
-      case 2: return notificationsGranted;
+      case 2: return true; // notifications now skippable
       case 3: return !!(store.locationCity || store.locationState);
       case 4: return true; // pronouns skippable
       case 5: return store.gender.length > 0;
@@ -166,25 +182,39 @@ export default function Onboarding() {
       case 11: return true; // ethnicity skippable
       case 12: return store.wantsChildren !== '';
       case 13: return true; // family plans skippable
-      case 14: return true; // hometown skippable
-      case 15: return true; // job title skippable
-      case 16: return true; // school skippable
-      case 17: return true; // education level skippable
-      case 18: return true; // religion skippable
-      case 19: return true; // politics skippable
-      case 20: return store.financialArrangement.length > 0;
-      case 21: return store.housingPreference.length > 0;
-      case 22: return true; // drinking skippable
-      case 23: return true; // smoking skippable
-      case 24: return true; // weed skippable
-      case 25: return true; // drugs skippable
-      case 26: return true; // photos handled by its own component
-      case 27: return true; // prompts handled by its own component
-      case 28: return true; // voice note skippable
-      case 29: return true; // matching prefs always valid (has defaults)
+      case 14: return true; // pets skippable
+      case 15: return true; // hometown skippable
+      case 16: return true; // job title skippable
+      case 17: return true; // school skippable
+      case 18: return true; // education level skippable
+      case 19: return true; // religion skippable
+      case 20: return true; // politics skippable
+      case 21: return store.financialArrangement.length > 0;
+      case 22: return store.housingPreference.length > 0;
+      case 23: return true; // drinking skippable
+      case 24: return true; // smoking skippable
+      case 25: return true; // weed skippable
+      case 26: return true; // drugs skippable
+      case 27: return true; // photos handled by its own component
+      case 28: return true; // prompts handled by its own component
+      case 29: return true; // voice note skippable
+      case 30: return true; // matching prefs always valid (has defaults)
       default: return true;
     }
   }, [subStep, store, notificationsGranted]);
+
+  // ── Retry helper for transient failures ──
+  const withRetry = async <T,>(fn: () => PromiseLike<T>, retries = 1, delayMs = 1000): Promise<T> => {
+    try {
+      return await fn();
+    } catch (error: any) {
+      if (retries > 0 && (error?.message?.includes('network') || error?.message?.includes('timeout') || error?.code === 'PGRST301' || error?.code === '503')) {
+        await new Promise(r => setTimeout(r, delayMs));
+        return withRetry(fn, retries - 1, delayMs * 2);
+      }
+      throw error;
+    }
+  };
 
   // ── Save checkpoint to DB ──
   const saveCheckpoint = useCallback(async (step: number) => {
@@ -228,12 +258,14 @@ export default function Onboarding() {
         ...(step >= TOTAL_ONBOARDING_STEPS - 1 ? { profile_complete: true } : {}),
       };
 
-      // Upsert profile
-      const { data: upserted, error: profileError } = await supabase
-        .from('profiles')
-        .upsert(profileData, { onConflict: 'user_id' })
-        .select('id')
-        .single();
+      // Upsert profile (with 1 retry on transient failures)
+      const { data: upserted, error: profileError } = await withRetry(() =>
+        supabase
+          .from('profiles')
+          .upsert(profileData, { onConflict: 'user_id' })
+          .select('id')
+          .single()
+      );
 
       if (profileError) throw profileError;
 
@@ -245,33 +277,49 @@ export default function Onboarding() {
         const prefsData: Record<string, any> = {
           profile_id: pid,
           gender_preference: store.genderPreference,
-          relationship_type: store.relationshipType || null,
+          relationship_type: store.relationshipType || 'platonic',
           primary_reasons: store.primaryReasons.length > 0 ? store.primaryReasons : null,
+          // Legacy column — keep in sync to avoid NOT NULL constraint on older schema
+          primary_reason: store.primaryReasons.length > 0 ? store.primaryReasons[0] : 'other',
           wants_children: store.wantsChildren === 'yes' ? true : store.wantsChildren === 'no' ? false : null,
           children_arrangement: store.childrenArrangement.length > 0 ? store.childrenArrangement : null,
           financial_arrangement: store.financialArrangement.length > 0 ? store.financialArrangement : null,
           housing_preference: store.housingPreference.length > 0 ? store.housingPreference : null,
           lifestyle_preferences: {
+            pets: store.pets || null,
             drinking: store.drinking || null,
             smoking: store.smoking || null,
+            smokes_weed: store.smokesWeed || null,
+            does_drugs: store.doesDrugs || null,
           },
           age_min: store.ageMin,
           age_max: store.ageMax,
           max_distance_miles: store.maxDistanceMiles,
+          distance_unit: store.distanceUnit || 'miles',
+          willing_to_relocate: store.willingToRelocate,
         };
 
-        await supabase
-          .from('preferences')
-          .upsert(prefsData, { onConflict: 'profile_id' });
+        const { error: prefsError } = await withRetry(() =>
+          supabase
+            .from('preferences')
+            .upsert(prefsData, { onConflict: 'profile_id' })
+        );
+
+        if (prefsError) throw prefsError;
       }
 
       // Save push token if granted
       if (notificationsGranted && pid) {
-        await ensurePushTokenSaved(pid).catch(() => {});
+        const token = await registerForPushNotifications().catch(() => null);
+        if (token) {
+          await ensurePushTokenSaved(pid, token).catch(() => {});
+        }
       }
     } catch (error: any) {
       console.error('Checkpoint save error:', error);
-      showToast({ type: 'error', title: 'Error', message: error.message || 'Failed to save progress' });
+      captureException(error instanceof Error ? error : new Error(error?.message || 'Checkpoint save failed'), { step, context: 'onboarding_checkpoint' });
+      showToast({ type: 'error', title: 'Error', message: error.message || 'Failed to save progress. Please try again.' });
+      throw error; // Re-throw so callers know the save failed
     } finally {
       setSaving(false);
     }
@@ -287,15 +335,43 @@ export default function Onboarding() {
       return;
     }
 
-    // Save at checkpoints: after location (3), after family plans (13), after drugs (25), final (29)
-    const checkpoints = [3, 13, 25, 29];
+    // Save at checkpoints: after location (3), after pets (14), after drugs (26), final (30)
+    const checkpoints = [3, 14, 26, 30];
     if (checkpoints.includes(subStep)) {
-      await saveCheckpoint(subStep + 1);
+      try {
+        await saveCheckpoint(subStep + 1);
+      } catch {
+        // Save failed — toast already shown by saveCheckpoint. Stay on current step.
+        return;
+      }
     }
 
     if (subStep >= TOTAL_ONBOARDING_STEPS - 1) {
       // Final step — save and exit
-      await saveCheckpoint(TOTAL_ONBOARDING_STEPS);
+      try {
+        await saveCheckpoint(TOTAL_ONBOARDING_STEPS);
+      } catch {
+        // Save failed — stay on current step so user can retry
+        return;
+      }
+
+      // Post-save validation: verify critical preferences made it to DB
+      if (profileId) {
+        const { data: savedPrefs } = await supabase
+          .from('preferences')
+          .select('gender_preference, relationship_type, age_min, age_max')
+          .eq('profile_id', profileId)
+          .maybeSingle();
+
+        const missing: string[] = [];
+        if (!savedPrefs?.gender_preference?.length) missing.push('gender preference');
+        if (!savedPrefs?.relationship_type) missing.push('relationship type');
+        if (missing.length > 0) {
+          showToast({ type: 'error', title: 'Preferences may not have saved', message: `Please check your ${missing.join(' and ')} in settings.` });
+          captureException(new Error('Post-onboarding validation failed'), { missing, profileId });
+        }
+      }
+
       trackUserAction.onboardingCompleted?.();
       router.replace('/(tabs)/discover');
     } else {
@@ -332,7 +408,7 @@ export default function Onboarding() {
     switch (subStep) {
       case 0: return <NameStep />;
       case 1: return <DOBStep />;
-      case 2: return <NotificationsStep onGranted={() => setNotificationsGranted(true)} />;
+      case 2: return <NotificationsStep onGranted={() => setNotificationsGranted(true)} granted={notificationsGranted} />;
       case 3: return <LocationStep />;
       case 4: // Pronouns
         return <ChipSelect options={PRONOUNS} selected={store.pronouns ? [store.pronouns] : []} onSelect={(v) => setField('pronouns', v[0] || '')} multi={false} />;
@@ -353,40 +429,44 @@ export default function Onboarding() {
         return <ChipSelect options={CHILDREN_OPTIONS} selected={store.wantsChildren ? [store.wantsChildren] : []} onSelect={(v) => setField('wantsChildren', v[0] || '')} multi={false} />;
       case 13: // Family Plans
         return <ChipSelect options={FAMILY_PLANS} selected={store.childrenArrangement} onSelect={(v) => setField('childrenArrangement', v)} />;
-      case 14: // Hometown
-        return <TextInputStep value={store.hometown} onChangeText={(v) => setField('hometown', v)} placeholder="e.g. Los Angeles, CA" showVisibility visible={vis('hometown')} onVisibilityChange={(v) => setVis('hometown', v)} />;
-      case 15: // Job Title
+      case 14: // Pets
+        return <ChipSelect options={PETS_OPTIONS} selected={store.pets ? [store.pets] : []} onSelect={(v) => setField('pets', v[0] || '')} multi={false} showVisibility visible={vis('pets')} onVisibilityChange={(v) => setVis('pets', v)} />;
+      case 15: // Hometown
+        return <CityAutocompleteStep value={store.hometown} onSelect={(v) => setField('hometown', v)} placeholder="e.g. Los Angeles, CA" showVisibility visible={vis('hometown')} onVisibilityChange={(v) => setVis('hometown', v)} />;
+      case 16: // Job Title
         return <TextInputStep value={store.jobTitle} onChangeText={(v) => setField('jobTitle', v)} placeholder="e.g. Software Engineer" showVisibility visible={vis('job_title')} onVisibilityChange={(v) => setVis('job_title', v)} />;
-      case 16: // School
+      case 17: // School
         return <TextInputStep value={store.education} onChangeText={(v) => setField('education', v)} placeholder="e.g. UCLA, Harvard" showVisibility visible={vis('education')} onVisibilityChange={(v) => setVis('education', v)} />;
-      case 17: // Education Level
+      case 18: // Education Level
         return <ChipSelect options={EDUCATION_LEVELS} selected={store.educationLevel ? [store.educationLevel] : []} onSelect={(v) => setField('educationLevel', v[0] || '')} multi={false} showVisibility visible={vis('education_level')} onVisibilityChange={(v) => setVis('education_level', v)} />;
-      case 18: // Religion
+      case 19: // Religion
         return <ChipSelect options={RELIGIONS} selected={store.religion ? [store.religion] : []} onSelect={(v) => setField('religion', v[0] || '')} multi={false} showVisibility visible={vis('religion')} onVisibilityChange={(v) => setVis('religion', v)} />;
-      case 19: // Politics
+      case 20: // Politics
         return <ChipSelect options={POLITICAL_VIEWS} selected={store.politicalViews ? [store.politicalViews] : []} onSelect={(v) => setField('politicalViews', v[0] || '')} multi={false} showVisibility visible={vis('political_views')} onVisibilityChange={(v) => setVis('political_views', v)} />;
-      case 20: // Financial Arrangement
+      case 21: // Financial Arrangement
         return <ChipSelect options={FINANCIAL_ARRANGEMENTS} selected={store.financialArrangement} onSelect={(v) => setField('financialArrangement', v)} />;
-      case 21: // Housing
+      case 22: // Housing
         return <ChipSelect options={HOUSING_PREFERENCES} selected={store.housingPreference} onSelect={(v) => setField('housingPreference', v)} />;
-      case 22: // Drinking
+      case 23: // Drinking
         return <ChipSelect options={DRINKING_OPTIONS} selected={store.drinking ? [store.drinking] : []} onSelect={(v) => setField('drinking', v[0] || '')} multi={false} showVisibility visible={vis('drinking')} onVisibilityChange={(v) => setVis('drinking', v)} />;
-      case 23: // Smoking
+      case 24: // Smoking
         return <ChipSelect options={SMOKING_OPTIONS} selected={store.smoking ? [store.smoking] : []} onSelect={(v) => setField('smoking', v[0] || '')} multi={false} showVisibility visible={vis('smoking')} onVisibilityChange={(v) => setVis('smoking', v)} />;
-      case 24: // Weed
+      case 25: // Weed
         return <ChipSelect options={WEED_OPTIONS} selected={store.smokesWeed ? [store.smokesWeed] : []} onSelect={(v) => setField('smokesWeed', v[0] || '')} multi={false} showVisibility visible={vis('smokes_weed')} onVisibilityChange={(v) => setVis('smokes_weed', v)} />;
-      case 25: // Drugs
+      case 26: // Drugs
         return <ChipSelect options={DRUG_OPTIONS} selected={store.doesDrugs ? [store.doesDrugs] : []} onSelect={(v) => setField('doesDrugs', v[0] || '')} multi={false} showVisibility visible={vis('does_drugs')} onVisibilityChange={(v) => setVis('does_drugs', v)} />;
-      case 26: // Photos (uses existing component)
-        return <Suspense fallback={<StepFallback />}><PhotosStep /></Suspense>;
-      case 27: // Prompts (uses existing component)
-        return <Suspense fallback={<StepFallback />}><PromptsStep /></Suspense>;
-      case 28: // Voice Note (uses existing component)
-        return <Suspense fallback={<StepFallback />}><VoiceStep /></Suspense>;
-      case 29: return <MatchingPrefsStep />;
+      case 27: // Photos (embedded — manages its own continue)
+        return <Suspense fallback={<StepFallback />}><PhotosStep embedded onContinue={handleContinue} onBack={handleBack} /></Suspense>;
+      case 28: // Prompts (embedded — has internal sub-steps)
+        return <Suspense fallback={<StepFallback />}><PromptsStep embedded onContinue={handleContinue} onBack={handleBack} /></Suspense>;
+      case 29: // Voice Note (embedded — manages its own continue)
+        return <Suspense fallback={<StepFallback />}><VoiceStep embedded onContinue={handleContinue} onBack={handleBack} /></Suspense>;
+      case 30: return <MatchingPrefsStep />;
       default: return null;
     }
   };
+
+  const isEmbeddedStep = subStep >= 27 && subStep <= 29;
 
   return (
     <OnboardingLayout
@@ -398,6 +478,10 @@ export default function Onboarding() {
       onSkip={stepConfig?.skippable ? handleSkip : undefined}
       continueDisabled={saving || !isStepValid()}
       continueLabel={saving ? 'Saving...' : undefined}
+      hideContinue={isEmbeddedStep}
+      hideBack={subStep === 0}
+      hideTitle={isEmbeddedStep}
+      noScroll={subStep === 28 || subStep === 29}
       currentRoute={currentRoute}
     >
       {renderStepContent()}

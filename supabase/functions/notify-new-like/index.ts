@@ -195,7 +195,8 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           to: token,
-          sound: 'default',
+          sound: 'notification_sound.wav',
+          channelId: 'default',
           title,
           body,
           data: {

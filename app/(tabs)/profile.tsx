@@ -44,14 +44,10 @@ interface ProfileData {
   height_inches?: number;
   height_unit?: string;
   zodiac_sign?: string;
-  personality_type?: string;
   is_verified: boolean;
   photo_verified?: boolean;
   photos?: { url: string; is_primary?: boolean; display_order?: number; caption?: string; storage_path?: string | null }[];
   prompt_answers?: { prompt: string; answer: string }[];
-  interests?: string[];
-  hobbies?: string[];
-  love_language?: string;
   languages_spoken?: string[];
   religion?: string;
   political_views?: string;
@@ -135,14 +131,10 @@ export default function Profile() {
           height_inches,
           height_unit,
           zodiac_sign,
-          personality_type,
           is_verified,
           photo_verified,
           is_admin,
           prompt_answers,
-          interests,
-          hobbies,
-          love_language,
           languages_spoken,
           religion,
           political_views,

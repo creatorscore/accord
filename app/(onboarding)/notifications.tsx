@@ -34,6 +34,23 @@ export default function Notifications() {
     }
   }, [contextPushToken]);
 
+  // Check actual permission status on mount so state persists across back/forward navigation
+  useEffect(() => {
+    (async () => {
+      try {
+        const Notifications = require('expo-notifications');
+        const result = await Notifications.getPermissionsAsync();
+        console.log('[Notifications] Permission check on mount:', JSON.stringify(result));
+        if (result.status === 'granted') {
+          console.log('[Notifications] Already granted, setting enabled');
+          setNotificationsEnabled(true);
+        }
+      } catch (e: any) {
+        console.error('[Notifications] Permission check error:', e.message);
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     loadProfile();
   }, []);
@@ -54,8 +71,10 @@ export default function Notifications() {
   };
 
   const handleEnableNotifications = async () => {
+    console.log('[Notifications] Enable button pressed');
     try {
       const token = await registerForPushNotifications();
+      console.log('[Notifications] registerForPushNotifications returned:', token);
       if (token) {
         setNotificationToken(token);
         setNotificationsEnabled(true);
@@ -92,7 +111,7 @@ export default function Notifications() {
 
       if (photosError) throw photosError;
 
-      if (!photos || photos.length < 2) {
+      if (!photos || photos.length < 3) {
         Alert.alert(
           t('onboarding.notifications.photosRequired'),
           t('onboarding.notifications.photosRequiredMsg'),
@@ -127,7 +146,7 @@ export default function Notifications() {
         Alert.alert(
           t('common.error'),
           `Please complete your profile before continuing. Missing: ${missing.join(', ')}`,
-          [{ text: t('common.ok'), onPress: () => router.push('/(onboarding)/basic-info') }]
+          [{ text: t('common.ok'), onPress: () => router.push('/(onboarding)/onboarding') }]
         );
         setLoading(false);
         return;
@@ -174,6 +193,7 @@ export default function Notifications() {
   };
 
   const isEnabled = notificationsEnabled || contextNotificationsEnabled;
+  console.log('[Notifications] render — isEnabled:', isEnabled, 'local:', notificationsEnabled, 'context:', contextNotificationsEnabled);
 
   return (
     <OnboardingLayout

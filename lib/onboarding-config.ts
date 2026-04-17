@@ -1,5 +1,5 @@
 /**
- * Onboarding configuration — 31 steps (0-30), one question per screen.
+ * Onboarding configuration — 31 steps (0-30), one question per screen. Pets added after family plans.
  * Each step defines its key, UI metadata, validation rules, and save behavior.
  */
 
@@ -17,75 +17,86 @@ export interface OnboardingStepConfig {
   hasVisibility: boolean;
   /** The field_visibility key (if hasVisibility is true) */
   visibilityKey?: string;
+  /** Section this step belongs to (for grouped progress display) */
+  section: OnboardingSection;
+}
+
+/** Logical sections for grouped progress display */
+export type OnboardingSection = 'basics' | 'identity' | 'goals' | 'background' | 'lifestyle' | 'profile' | 'preferences';
+
+export const ONBOARDING_SECTIONS: { key: OnboardingSection; label: string }[] = [
+  { key: 'basics', label: 'Basics' },
+  { key: 'identity', label: 'Identity' },
+  { key: 'goals', label: 'Goals' },
+  { key: 'background', label: 'About You' },
+  { key: 'lifestyle', label: 'Lifestyle' },
+  { key: 'profile', label: 'Profile' },
+  { key: 'preferences', label: 'Preferences' },
+];
+
+/** Get the section index and progress within that section for a given step */
+export function getSectionProgress(stepIndex: number): { sectionIndex: number; sectionLabel: string; sectionProgress: number; totalSections: number } {
+  const step = ONBOARDING_STEPS[stepIndex];
+  if (!step) return { sectionIndex: 0, sectionLabel: 'Basics', sectionProgress: 0, totalSections: ONBOARDING_SECTIONS.length };
+
+  const sectionIndex = ONBOARDING_SECTIONS.findIndex(s => s.key === step.section);
+  const sectionSteps = ONBOARDING_STEPS.filter(s => s.section === step.section);
+  const stepWithinSection = sectionSteps.findIndex(s => s.key === step.key);
+  const sectionProgress = (stepWithinSection + 1) / sectionSteps.length;
+
+  return {
+    sectionIndex,
+    sectionLabel: ONBOARDING_SECTIONS[sectionIndex]?.label || '',
+    sectionProgress,
+    totalSections: ONBOARDING_SECTIONS.length,
+  };
 }
 
 export const ONBOARDING_STEPS: OnboardingStepConfig[] = [
-  // 0 - Name
-  { key: 'name', title: "What's your first name?", subtitle: "This can't be changed later, so pick a good one.", skippable: false, previewAvailable: false, hasVisibility: false },
-  // 1 - DOB
-  { key: 'dob', title: "When's your birthday?", subtitle: "Your age will be shown on your profile. We'll also grab your zodiac sign.", skippable: false, previewAvailable: false, hasVisibility: false },
-  // 2 - Push Notifications
-  { key: 'notifications', title: 'Turn on notifications', subtitle: "Get notified when you get a match, message, or like.", skippable: false, previewAvailable: false, hasVisibility: false },
-  // 3 - Location
-  { key: 'location', title: 'Where are you based?', subtitle: "We use this to find people near you.", skippable: false, previewAvailable: true, hasVisibility: false },
-  // 4 - Pronouns
-  { key: 'pronouns', title: 'What are your pronouns?', subtitle: "This helps others know how to refer to you.", skippable: true, previewAvailable: true, hasVisibility: false },
-  // 5 - Gender
-  { key: 'gender', title: 'Choose your gender', subtitle: "Select all that apply.", skippable: false, previewAvailable: true, hasVisibility: false },
-  // 6 - Sexuality
-  { key: 'sexuality', title: "What's your sexuality?", subtitle: "Select all that apply.", skippable: false, previewAvailable: true, hasVisibility: false },
-  // 7 - Gender Preference
-  { key: 'gender_pref', title: 'Who would you like to date?', subtitle: "Who would you like to see in your feed?", skippable: false, previewAvailable: true, hasVisibility: false },
-  // 8 - Relationship Type
-  { key: 'relationship_type', title: 'What type of relationship are you looking for?', subtitle: "This helps us match you with compatible people.", skippable: false, previewAvailable: true, hasVisibility: false },
-  // 9 - Intention / Primary Reasons
-  { key: 'intention', title: 'What brings you to Accord?', subtitle: "Select all that apply.", skippable: false, previewAvailable: true, hasVisibility: false },
-  // 10 - Height
-  { key: 'height', title: 'How tall are you?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'height' },
-  // 11 - Ethnicity
-  { key: 'ethnicity', title: "What's your ethnicity?", subtitle: "Select all that apply.", skippable: true, previewAvailable: true, hasVisibility: false },
-  // 12 - Children
-  { key: 'children', title: 'Do you want children?', subtitle: "This is important for compatibility.", skippable: false, previewAvailable: true, hasVisibility: false },
-  // 13 - Family Plans
-  { key: 'family_plans', title: 'What are your family plans?', subtitle: "How would you like to grow your family?", skippable: true, previewAvailable: true, hasVisibility: false },
-  // 14 - Hometown
-  { key: 'hometown', title: 'Where are you from?', subtitle: "Your hometown helps others connect with you.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'hometown' },
-  // 15 (index 15) - Job Title
-  { key: 'job_title', title: "What's your job title?", subtitle: "Share your role or profession.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'job_title' },
-  // 16 (index 16) - School
-  { key: 'school', title: 'Where did you go to school?', subtitle: "Your school, university, or program.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'education' },
-  // 17 (index 17) - Education Level
-  { key: 'education_level', title: "What's the highest level you attained?", subtitle: "Select your education level.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'education_level' },
-  // 18 (index 18) - Religion
-  { key: 'religion', title: 'Are you religious?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'religion' },
-  // 19 (index 19) - Political Beliefs
-  { key: 'politics', title: 'Political beliefs?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'political_views' },
-  // 20 (index 20) - Financial Arrangement
-  { key: 'financial', title: 'Financial arrangement?', subtitle: "How would you like to handle finances?", skippable: false, previewAvailable: true, hasVisibility: false },
-  // 21 (index 21) - Housing
-  { key: 'housing', title: 'Housing preference?', subtitle: "What living arrangement works for you?", skippable: false, previewAvailable: true, hasVisibility: false },
-  // 22 (index 22) - Drinking
-  { key: 'drinking', title: 'Do you drink?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'drinking' },
-  // 23 (index 23) - Smoking
-  { key: 'smoking', title: 'Do you smoke?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'smoking' },
-  // 24 (index 24) - Weed
-  { key: 'weed', title: 'Do you smoke weed?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'smokes_weed' },
-  // 25 (index 25) - Drugs
-  { key: 'drugs', title: 'Do you do drugs?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'does_drugs' },
-  // 26 (index 26) - Photos
-  { key: 'photos', title: 'Add your photos', subtitle: "Add at least 2 photos. Your first photo is your main profile photo.", skippable: false, previewAvailable: true, hasVisibility: false },
-  // 27 (index 27) - Prompts
-  { key: 'prompts', title: 'Answer some prompts', subtitle: "Choose at least 2 prompts to help others get to know you.", skippable: false, previewAvailable: true, hasVisibility: false },
-  // 28 (index 28) - Voice Note
-  { key: 'voice_note', title: 'Record a voice intro', subtitle: "Let others hear your voice. 30 seconds max.", skippable: true, previewAvailable: true, hasVisibility: false },
-  // 29 (index 29) - Matching Preferences
-  { key: 'matching_prefs', title: 'Set your preferences', subtitle: "Set your age range and distance preferences.", skippable: false, previewAvailable: true, hasVisibility: false },
+  // ── Basics (0-3) ──
+  { key: 'name', title: "What's your first name?", subtitle: "This can't be changed later, so pick a good one.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'basics' },
+  { key: 'dob', title: "When's your birthday?", subtitle: "Your age will be shown on your profile. We'll also grab your zodiac sign.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'basics' },
+  { key: 'notifications', title: 'Turn on notifications', subtitle: "Get notified when you get a match, message, or like.", skippable: true, previewAvailable: false, hasVisibility: false, section: 'basics' },
+  { key: 'location', title: 'Where are you based?', subtitle: "We use this to find people near you.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'basics' },
+  // ── Identity (4-7) ──
+  { key: 'pronouns', title: 'What are your pronouns?', subtitle: "This helps others know how to refer to you.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
+  { key: 'gender', title: 'Choose your gender', subtitle: "Select all that apply.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
+  { key: 'sexuality', title: "What's your sexuality?", subtitle: "Select all that apply.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
+  { key: 'gender_pref', title: 'Who would you like to date?', subtitle: "Who would you like to see in your feed?", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
+  // ── Goals (8-13) ──
+  { key: 'relationship_type', title: 'What type of relationship are you looking for?', subtitle: "This helps us match you with compatible people.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'goals' },
+  { key: 'intention', title: 'What brings you to Accord?', subtitle: "Select all that apply.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'goals' },
+  { key: 'height', title: 'How tall are you?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'height', section: 'goals' },
+  { key: 'ethnicity', title: "What's your ethnicity?", subtitle: "Select all that apply.", skippable: true, previewAvailable: true, hasVisibility: false, section: 'goals' },
+  { key: 'children', title: 'Do you want children?', subtitle: "This is important for compatibility.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'goals' },
+  { key: 'family_plans', title: 'What are your family plans?', subtitle: "How would you like to grow your family?", skippable: true, previewAvailable: true, hasVisibility: false, section: 'goals' },
+  { key: 'pets', title: 'How do you feel about pets?', subtitle: "This helps with lifestyle compatibility.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'pets', section: 'goals' },
+  // ── Background (15-20) ──
+  { key: 'hometown', title: 'Where are you from?', subtitle: "Your hometown helps others connect with you.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'hometown', section: 'background' },
+  { key: 'job_title', title: "What's your job title?", subtitle: "Share your role or profession.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'job_title', section: 'background' },
+  { key: 'school', title: 'Where did you go to school?', subtitle: "Your school, university, or program.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'education', section: 'background' },
+  { key: 'education_level', title: "What's the highest level you attained?", subtitle: "Select your education level.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'education_level', section: 'background' },
+  { key: 'religion', title: 'Are you religious?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'religion', section: 'background' },
+  { key: 'politics', title: 'Political beliefs?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'political_views', section: 'background' },
+  // ── Lifestyle (20-25) ──
+  { key: 'financial', title: 'Financial arrangement?', subtitle: "How would you like to handle finances?", skippable: false, previewAvailable: true, hasVisibility: false, section: 'lifestyle' },
+  { key: 'housing', title: 'Housing preference?', subtitle: "What living arrangement works for you?", skippable: false, previewAvailable: true, hasVisibility: false, section: 'lifestyle' },
+  { key: 'drinking', title: 'Do you drink?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'drinking', section: 'lifestyle' },
+  { key: 'smoking', title: 'Do you smoke?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'smoking', section: 'lifestyle' },
+  { key: 'weed', title: 'Do you smoke weed?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'smokes_weed', section: 'lifestyle' },
+  { key: 'drugs', title: 'Do you do drugs?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'does_drugs', section: 'lifestyle' },
+  // ── Profile (26-28) ──
+  { key: 'photos', title: 'Add your photos', subtitle: "Add at least 3 photos. Your first photo is your main profile photo.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'profile' },
+  { key: 'prompts', title: 'Answer some prompts', subtitle: "Choose at least 2 prompts to help others get to know you.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'profile' },
+  { key: 'voice_note', title: 'Record a voice intro', subtitle: "Let others hear your voice. 30 seconds max.", skippable: true, previewAvailable: true, hasVisibility: false, section: 'profile' },
+  // ── Preferences (29) ──
+  { key: 'matching_prefs', title: 'Set your preferences', subtitle: "Set your age range and distance preferences.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'preferences' },
 ];
 
-export const TOTAL_ONBOARDING_STEPS = ONBOARDING_STEPS.length; // 30
+export const TOTAL_ONBOARDING_STEPS = ONBOARDING_STEPS.length; // 31
 
 /** Checkpoint steps where accumulated form state is saved to DB */
-export const SAVE_CHECKPOINTS = [3, 13, 25] as const;
+export const SAVE_CHECKPOINTS = [3, 14, 26] as const;
 
 // ─── Option Constants ────────────────────────────────────────────────────────
 
@@ -154,6 +165,14 @@ export const FAMILY_PLANS = [
   { value: 'already_have', label: 'Already Have Children' },
   { value: 'open_discussion', label: 'Open to Discussion' },
   { value: 'other', label: 'Other' },
+] as const;
+
+export const PETS_OPTIONS = [
+  { value: 'love_them', label: 'Love Them' },
+  { value: 'like_them', label: 'Like Them' },
+  { value: 'indifferent', label: 'Indifferent' },
+  { value: 'allergic', label: 'Allergic' },
+  { value: 'dont_like', label: "Don't Like Them" },
 ] as const;
 
 export const HOUSING_PREFERENCES = [
@@ -273,7 +292,7 @@ export function getHeightOptions(unit: 'imperial' | 'metric'): { value: number; 
  */
 export function mapOldStepToNew(oldStep: number): number {
   // Old flow: 0=not started, 1=basic-info done, 2=personality done,
-  // 3=photos done, 5=interests done, 6=prompts done, 7=voice done,
+  // 3=photos done, 5=legacy interests done, 6=prompts done, 7=voice done,
   // 8=marriage-prefs done, 9=matching-prefs done
   const mapping: Record<number, number> = {
     0: 0,   // Not started → start from beginning

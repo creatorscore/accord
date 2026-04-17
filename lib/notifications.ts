@@ -110,6 +110,8 @@ export async function registerForPushNotifications(): Promise<string | null> {
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#A08AB7',
+        sound: 'notification_sound.wav',
+        enableVibrate: true,
       });
     }
 
@@ -326,12 +328,13 @@ export async function sendPushNotification(
   try {
     const message = {
       to: pushToken,
-      sound: 'default',
+      sound: 'notification_sound.wav',
       title,
       body,
       data,
       priority: 'high' as const,
       badge: 1,
+      channelId: 'default',
     };
 
     // Add timeout to prevent hanging
@@ -431,13 +434,14 @@ export async function sendMatchNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: logError } = await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_match',
       title,
       body,
       data: { matchId, type: 'new_match' },
     });
+    if (logError) console.error('Failed to log new_match notification:', logError);
   } catch (error) {
     console.error('Error sending match notification:', error);
   }
@@ -518,13 +522,14 @@ export async function sendMessageNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: msgLogError } = await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_message',
       title,
       body,
       data: { matchId, type: 'new_message' },
     });
+    if (msgLogError) console.error('Failed to log new_message notification:', msgLogError);
   } catch (error) {
     console.error('Error sending message notification:', error);
   }
@@ -605,13 +610,14 @@ export async function sendReactionNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: rxnLogError } = await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'message_reaction',
       title,
       body,
       data: { matchId, type: 'message_reaction', emoji },
     });
+    if (rxnLogError) console.error('Failed to log message_reaction notification:', rxnLogError);
   } catch (error) {
     console.error('Error sending reaction notification:', error);
   }
@@ -695,7 +701,7 @@ export async function sendLikeNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: likeLogError } = await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_like',
       title,
@@ -706,6 +712,7 @@ export async function sendLikeNotification(
         isPremium,
       },
     });
+    if (likeLogError) console.error('Failed to log new_like notification:', likeLogError);
   } catch (error) {
     console.error('Error sending like notification:', error);
   }
@@ -837,13 +844,14 @@ export async function sendReportActionNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: reportLogError } = await supabase.from('push_notifications').insert({
       profile_id: reporterProfileId,
       notification_type: 'report_action',
       title,
       body,
       data: { type: 'report_action', action },
     });
+    if (reportLogError) console.error('Failed to log report_action notification:', reportLogError);
   } catch (error) {
     console.error('Error sending report action notification:', error);
   }
@@ -938,13 +946,14 @@ export async function sendBanNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: banLogError } = await supabase.from('push_notifications').insert({
       profile_id: bannedProfileId,
       notification_type: 'account_banned',
       title: 'Account Restricted',
       body: 'Your Accord account has been restricted. If you believe this is an error, please contact support at hello@joinaccord.app.',
       data: { type: 'account_banned', banReason },
     });
+    if (banLogError) console.error('Failed to log account_banned notification:', banLogError);
   } catch (error) {
     console.error('Error sending ban notification:', error);
   }
@@ -1057,13 +1066,14 @@ export async function sendPhotoReviewNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: photoLogError } = await supabase.from('push_notifications').insert({
       profile_id: profileId,
       notification_type: 'photo_review_required',
       title,
       body,
       data: { type: 'photo_review_required', reason },
     });
+    if (photoLogError) console.error('Failed to log photo_review_required notification:', photoLogError);
   } catch (error) {
     console.error('Error sending photo review notification:', error);
   }
@@ -1129,13 +1139,14 @@ export async function sendIdentityVerificationNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: verifyLogError } = await supabase.from('push_notifications').insert({
       profile_id: profileId,
       notification_type: 'identity_verification_required',
       title,
       body,
       data: { type: 'identity_verification_required', reason },
     });
+    if (verifyLogError) console.error('Failed to log identity_verification_required notification:', verifyLogError);
   } catch (error) {
     console.error('Error sending identity verification notification:', error);
   }

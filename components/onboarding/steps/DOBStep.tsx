@@ -33,29 +33,38 @@ export default function DOBStep() {
     <View style={styles.container}>
       {Platform.OS === 'android' && (
         <TouchableOpacity
-          style={[styles.dateButton, { backgroundColor: isDark ? '#1F2937' : '#F9FAFB', borderColor: isDark ? '#374151' : '#E4E4E7' }]}
+          style={[styles.dateButton, {
+            backgroundColor: isDark ? '#1A1A2D' : '#FAFAFA',
+            borderColor: isDark ? '#374151' : '#E4E4E7',
+          }]}
           onPress={() => setShowPicker(true)}
+          accessibilityRole="button"
+          accessibilityLabel={birthDate ? `Birth date: ${displayDate}. Tap to change` : 'Select your birth date'}
         >
-          <Text style={[styles.dateText, { color: birthDate ? (isDark ? '#F5F5F7' : '#1F2937') : (isDark ? '#6B7280' : '#A1A1AA') }]}>
+          <Text style={[styles.dateText, {
+            color: birthDate ? (isDark ? '#F5F5F7' : '#1F2937') : (isDark ? '#6B7280' : '#A1A1AA'),
+          }]}>
             {displayDate}
           </Text>
         </TouchableOpacity>
       )}
       {showPicker && (
-        <DateTimePicker
-          value={birthDate || maxDate}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          maximumDate={maxDate}
-          minimumDate={minDate}
-          onChange={handleChange}
-          themeVariant={isDark ? 'dark' : 'light'}
-        />
+        <View style={styles.pickerWrapper}>
+          <DateTimePicker
+            value={birthDate || maxDate}
+            mode="date"
+            display="spinner"
+            maximumDate={maxDate}
+            minimumDate={minDate}
+            onChange={handleChange}
+            themeVariant={isDark ? 'dark' : 'light'}
+          />
+        </View>
       )}
       {birthDate && (
-        <View style={styles.infoRow}>
-          <Text style={[styles.infoText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
-            Age: {calculateAge(birthDate)} · {calculateZodiac(birthDate)}
+        <View style={[styles.infoRow, { backgroundColor: isDark ? '#1A1A2D' : '#F5F2F7' }]}>
+          <Text style={[styles.infoText, { color: isDark ? '#D4C4E8' : '#8B72A8' }]}>
+            {calculateAge(birthDate)} years old  ·  {calculateZodiac(birthDate)}
           </Text>
         </View>
       )}
@@ -64,9 +73,33 @@ export default function DOBStep() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 },
-  dateButton: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 18, width: '100%', alignItems: 'center' },
-  dateText: { fontSize: 18, fontWeight: '600' },
-  infoRow: { marginTop: 16, alignItems: 'center' },
-  infoText: { fontSize: 16, fontWeight: '500' },
+  container: {
+    paddingTop: 8,
+    alignItems: 'center',
+  },
+  dateButton: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    width: '100%',
+    alignItems: 'center',
+  },
+  dateText: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  pickerWrapper: {
+    alignSelf: 'stretch',
+  },
+  infoRow: {
+    marginTop: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  infoText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
