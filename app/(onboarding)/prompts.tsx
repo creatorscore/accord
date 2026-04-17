@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, ScrollView, StyleSheet, useColorScheme } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -22,12 +23,19 @@ interface PromptAnswer {
   answer: string;
 }
 
-export default function Prompts() {
+interface PromptsProps {
+  embedded?: boolean;
+  onContinue?: () => void;
+  onBack?: () => void;
+}
+
+export default function Prompts({ embedded, onContinue: parentContinue, onBack: parentBack }: PromptsProps = {}) {
   const router = useRouter();
   const { user } = useAuth();
   const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
 
   const PROMPTS = useMemo(() => PROMPT_KEYS.map(key => t(`prompts.${key}`)), [t]);
 
@@ -76,6 +84,9 @@ export default function Prompts() {
       if (draft) {
         if (draft.data.selectedPrompts?.length) setSelectedPrompts(draft.data.selectedPrompts);
         setSubStep(draft.subStep);
+      } else if (data?.prompt_answers && Array.isArray(data.prompt_answers) && data.prompt_answers.length >= 2) {
+        // No draft but prompts already filled (user came back) — go to last sub-step
+        setSubStep(2);
       }
     } catch (error: any) {
       console.error('Error loading profile:', error);
@@ -121,8 +132,8 @@ export default function Prompts() {
   const handleSaveAndContinue = async () => {
     const filledPrompts = selectedPrompts.filter(p => p.prompt && p.answer.trim());
 
-    if (filledPrompts.length === 0) {
-      Alert.alert(t('common.required'), t('onboarding.promptsStep.answerAtLeastOne'));
+    if (filledPrompts.length < 2) {
+      Alert.alert(t('common.required'), t('onboarding.promptsStep.answerAtLeastTwo', { defaultValue: 'Please answer at least two prompts' }));
       return;
     }
 
@@ -150,18 +161,27 @@ export default function Prompts() {
     try {
       setLoading(true);
 
+      const updateData: Record<string, any> = {
+        prompt_answers: filledPrompts,
+      };
+      if (!embedded) {
+        updateData.onboarding_step = 6;
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .update({
-          prompt_answers: filledPrompts,
-          onboarding_step: 6,
-        })
+        .update(updateData)
         .eq('id', profileId);
 
       if (error) throw error;
 
       await clearDraft();
-      router.push('/(onboarding)/voice-intro');
+
+      if (embedded && parentContinue) {
+        parentContinue();
+      } else {
+        router.push('/(onboarding)/voice-intro');
+      }
     } catch (error: any) {
       Alert.alert(t('common.error'), error.message || t('onboarding.promptsStep.saveFailed'));
     } finally {
@@ -178,7 +198,11 @@ export default function Prompts() {
       return;
     }
     if (subStep === 0) {
-      goToPreviousOnboardingStep('/(onboarding)/prompts');
+      if (embedded && parentBack) {
+        parentBack();
+      } else {
+        goToPreviousOnboardingStep('/(onboarding)/prompts');
+      }
     } else {
       const prevStep = subStep - 1;
       saveDraft(prevStep, buildDraftSnapshot());
@@ -224,17 +248,8 @@ export default function Prompts() {
   const isFirstPromptRequired = subStep === 0 && (!currentPrompt.prompt || !currentPrompt.answer.trim());
   const hasAtLeastOnePrompt = selectedPrompts.some(p => p.prompt && p.answer.trim());
 
-  return (
-    <OnboardingLayout
-      currentStep={getGlobalStep('prompts', subStep)}
-      title={title}
-      subtitle={subtitle}
-      onBack={handleBack}
-      onContinue={handleContinue}
-      onSkip={() => goToNextOnboardingStep('/(onboarding)/prompts')}
-      continueDisabled={loading || (subStep === 0 && !hasAtLeastOnePrompt && (!currentPrompt.prompt || !currentPrompt.answer.trim()))}
-      continueLabel={loading ? t('common.saving') : t('common.continue')}
-    >
+  const content = (
+    <>
       {/* Prompt Picker View */}
       {showPicker ? (
         <View>
@@ -345,6 +360,55 @@ export default function Prompts() {
           <Text style={[styles.tipItem, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>{t('onboarding.promptsStep.tip3')}</Text>
         </View>
       )}
+    </>
+  );
+
+  if (embedded) {
+    const continueDisabled = loading || (subStep === 0 && !hasAtLeastOnePrompt && (!currentPrompt.prompt || !currentPrompt.answer.trim()));
+    return (
+      <View style={{ flex: 1 }}>
+        {/* Embedded title — updates with sub-step */}
+        <Text style={styles.embeddedTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.embeddedSubtitle}>{subtitle}</Text> : null}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 8 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+        >
+          {content}
+        </ScrollView>
+        {/* Bottom bar matching OnboardingLayout */}
+        <View style={[styles.embeddedBottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          <TouchableOpacity style={styles.embeddedBackCircle} onPress={handleBack} activeOpacity={0.8}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.embeddedContinueCircle, continueDisabled && styles.embeddedButtonDisabled]}
+            onPress={handleContinue}
+            disabled={continueDisabled}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="arrow-right" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <OnboardingLayout
+      currentStep={getGlobalStep('prompts', subStep)}
+      title={title}
+      subtitle={subtitle}
+      onBack={handleBack}
+      onContinue={handleContinue}
+      onSkip={() => goToNextOnboardingStep('/(onboarding)/prompts')}
+      continueDisabled={loading || (subStep === 0 && !hasAtLeastOnePrompt && (!currentPrompt.prompt || !currentPrompt.answer.trim()))}
+      continueLabel={loading ? t('common.saving') : t('common.continue')}
+    >
+      {content}
     </OnboardingLayout>
   );
 }
@@ -460,5 +524,49 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     lineHeight: 20,
     paddingLeft: 4,
+  },
+  embeddedTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    lineHeight: 32,
+    letterSpacing: -0.5,
+    color: '#1A1A2E',
+    marginBottom: 6,
+  },
+  embeddedSubtitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    color: '#71717A',
+    marginBottom: 20,
+  },
+  embeddedBottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    marginTop: 8,
+  },
+  embeddedBackCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#F5F3F8',
+    borderWidth: 1.5,
+    borderColor: '#E8E3F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  embeddedContinueCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#A08AB7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  embeddedButtonDisabled: {
+    opacity: 0.4,
   },
 });

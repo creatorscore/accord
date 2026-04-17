@@ -322,14 +322,8 @@ export function validateContent(
     return { isValid: true };
   }
 
-  // Check for gibberish (keyboard mashing)
-  if (checkGibberish && detectGibberish(text)) {
-    return {
-      isValid: false,
-      error: `Your ${fieldName} doesn't appear to contain meaningful text. Please write a real response that others can understand.`,
-      moderationResult: { isClean: false, isGibberish: true },
-    };
-  }
+  // Gibberish detection removed — it caused too many false positives
+  // blocking real users from completing onboarding
 
   // Check profanity (YouTube-level only)
   if (checkProfanity) {

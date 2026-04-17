@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { TOTAL_ONBOARDING_STEPS } from '@/lib/onboarding-steps';
+import { getSectionProgress, ONBOARDING_SECTIONS } from '@/lib/onboarding-config';
 import { usePreviewModeStore } from '@/stores/previewModeStore';
 
 interface OnboardingLayoutProps {
@@ -36,6 +37,12 @@ interface OnboardingLayoutProps {
   continueLabel?: string;
   /** Hide the bottom continue button (e.g. for photo/voice screens with custom actions) */
   hideContinue?: boolean;
+  /** Hide the back button (e.g. on the first step) */
+  hideBack?: boolean;
+  /** Hide the title/subtitle (e.g. for embedded steps that manage their own header) */
+  hideTitle?: boolean;
+  /** Disable scrolling — use for screens where content must fit the viewport */
+  noScroll?: boolean;
   /** Current onboarding route — when provided, shows "Take a look around" preview link */
   currentRoute?: string;
   /** Content */
@@ -52,6 +59,9 @@ export default function OnboardingLayout({
   continueDisabled = false,
   continueLabel = 'Continue',
   hideContinue = false,
+  hideBack = false,
+  hideTitle = false,
+  noScroll = false,
   currentRoute,
   children,
 }: OnboardingLayoutProps) {
@@ -67,92 +77,186 @@ export default function OnboardingLayout({
     }
   };
 
-  // Animated progress bar
+  // Section-based progress
+  const sectionInfo = getSectionProgress(currentStep);
+
+  // Animated progress for current section segment
   const progressAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(progressAnim, {
-      toValue: (currentStep + 1) / TOTAL_ONBOARDING_STEPS,
+      toValue: sectionInfo.sectionProgress,
       duration: 350,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
   }, [currentStep]);
 
+  // Step content fade transition
+  const contentOpacity = useRef(new Animated.Value(1)).current;
+  const [prevStep, setPrevStep] = useState(currentStep);
+  useEffect(() => {
+    if (currentStep !== prevStep) {
+      Animated.sequence([
+        Animated.timing(contentOpacity, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(contentOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      setPrevStep(currentStep);
+    }
+  }, [currentStep]);
+
+  const isLastStep = currentStep >= TOTAL_ONBOARDING_STEPS - 1;
+
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
+    extrapolate: 'clamp',
   });
 
   return (
     <View style={[styles.root, { backgroundColor: isDark ? '#0F0F1A' : '#FFFFFF' }]}>
-      {/* Header: back + progress + skip */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          onPress={onBack}
-          style={styles.backButton}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      {/* Header: progress + skip */}
+      <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
+        {/* Section progress bar — centered */}
+        <View
+          style={styles.progressContainer}
+          accessibilityRole="progressbar"
+          accessibilityLabel={`${sectionInfo.sectionLabel}: step ${currentStep + 1} of ${TOTAL_ONBOARDING_STEPS}`}
+          accessibilityValue={{ min: 0, max: TOTAL_ONBOARDING_STEPS, now: currentStep + 1 }}
         >
-          <MaterialCommunityIcons
-            name="chevron-left"
-            size={28}
-            color={isDark ? '#E5E7EB' : '#374151'}
-          />
-        </TouchableOpacity>
-
-        {/* Progress bar */}
-        <View style={[styles.progressTrack, { backgroundColor: isDark ? '#1F2937' : '#F0EDF4' }]}>
-          <Animated.View
-            style={[
-              styles.progressFill,
-              { width: progressWidth },
-            ]}
-          />
+          <View style={styles.sectionSegments}>
+            {ONBOARDING_SECTIONS.map((section, i) => {
+              const isComplete = i < sectionInfo.sectionIndex;
+              const isCurrent = i === sectionInfo.sectionIndex;
+              return (
+                <View
+                  key={section.key}
+                  style={[
+                    styles.sectionSegment,
+                    { backgroundColor: isDark ? '#2A2A3D' : '#EDE9F3' },
+                  ]}
+                >
+                  {isComplete ? (
+                    <View style={[styles.segmentFill, { width: '100%' }]} />
+                  ) : isCurrent ? (
+                    <Animated.View style={[styles.segmentFill, { width: progressWidth }]} />
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+          <Text style={[styles.sectionLabel, { color: isDark ? '#8E8E93' : '#A08AB7' }]}>
+            {sectionInfo.sectionLabel}
+          </Text>
         </View>
 
-        {/* Skip or spacer */}
-        {onSkip ? (
-          <TouchableOpacity onPress={onSkip} style={styles.skipButton}>
+        {/* Skip button — absolutely positioned so it doesn't affect centering */}
+        {onSkip && (
+          <TouchableOpacity
+            onPress={onSkip}
+            style={styles.skipButton}
+            accessibilityRole="button"
+            accessibilityLabel="Skip this step"
+          >
             <Text style={[styles.skipText, { color: isDark ? '#A08AB7' : '#8B72A8' }]}>Skip</Text>
           </TouchableOpacity>
-        ) : (
-          <View style={styles.skipSpacer} />
         )}
       </View>
 
-      {/* Scrollable content */}
+      {/* Content (scrollable or fixed) */}
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
       >
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          keyboardDismissMode="interactive"
-        >
-          {/* Title */}
-          <Text style={[styles.title, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}>
-            {title}
-          </Text>
-
-          {subtitle && (
-            <Text style={[styles.subtitle, { color: isDark ? '#8E8E93' : '#71717A' }]}>
-              {subtitle}
-            </Text>
-          )}
-
-          {/* Form content */}
-          <View style={styles.content}>
-            {children}
-          </View>
-        </ScrollView>
+        {noScroll ? (
+          <Animated.View style={[styles.noScrollContent, { opacity: contentOpacity }]}>
+            {!hideTitle && (
+              <Text
+                style={[styles.title, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}
+                accessibilityRole="header"
+              >
+                {title}
+              </Text>
+            )}
+            {!hideTitle && subtitle && (
+              <Text style={[styles.subtitle, { color: isDark ? '#8E8E93' : '#71717A' }]}>
+                {subtitle}
+              </Text>
+            )}
+            <View style={hideTitle ? styles.contentNoTitle : styles.content}>
+              {children}
+            </View>
+          </Animated.View>
+        ) : (
+          <ScrollView
+            style={styles.flex}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="interactive"
+          >
+            <Animated.View style={{ opacity: contentOpacity }}>
+              {!hideTitle && (
+                <Text
+                  style={[styles.title, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}
+                  accessibilityRole="header"
+                >
+                  {title}
+                </Text>
+              )}
+              {!hideTitle && subtitle && (
+                <Text style={[styles.subtitle, { color: isDark ? '#8E8E93' : '#71717A' }]}>
+                  {subtitle}
+                </Text>
+              )}
+              <View style={hideTitle ? styles.contentNoTitle : styles.content}>
+                {children}
+              </View>
+            </Animated.View>
+          </ScrollView>
+        )}
       </KeyboardAvoidingView>
 
-      {/* Bottom button */}
+      {/* Bottom nav bar */}
       {!hideContinue && (
-        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 24) + 12 }]}>
+        <View style={[
+          styles.bottomBar,
+          {
+            paddingBottom: Math.max(insets.bottom, 20) + 16,
+            borderTopColor: isDark ? '#1F2937' : '#F3F4F6',
+          },
+        ]}>
+          {/* Back circle */}
+          {hideBack ? (
+            <View style={styles.backCircle} />
+          ) : (
+            <TouchableOpacity
+              style={[styles.backCircle, {
+                backgroundColor: isDark ? '#1F2937' : '#F5F3F8',
+                borderColor: isDark ? '#374151' : '#E8E3F0',
+              }]}
+              onPress={onBack}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <MaterialCommunityIcons
+                name="arrow-left"
+                size={24}
+                color={isDark ? '#D1D5DB' : '#6B7280'}
+              />
+            </TouchableOpacity>
+          )}
+
+          {/* Preview link (centered) */}
           {currentRoute ? (
             <TouchableOpacity onPress={handlePreviewPress} activeOpacity={0.7} style={styles.previewLink}>
               <Text style={[styles.previewLinkText, { color: isDark ? '#A08AB7' : '#8B72A8' }]}>
@@ -162,18 +266,23 @@ export default function OnboardingLayout({
           ) : (
             <View style={styles.previewLinkSpacer} />
           )}
+
+          {/* Continue */}
           <TouchableOpacity
             style={[
               styles.continueCircle,
-              continueDisabled && styles.continueCircleDisabled,
+              continueDisabled && styles.buttonDisabled,
             ]}
             onPress={onContinue}
             disabled={continueDisabled}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={isLastStep ? (continueLabel || 'Finish') : (continueLabel || 'Continue to next step')}
+            accessibilityState={{ disabled: continueDisabled }}
           >
             <MaterialCommunityIcons
-              name="arrow-right"
-              size={28}
+              name={isLastStep ? 'check' : 'arrow-right'}
+              size={24}
               color={continueDisabled ? '#F0EDF4' : '#FFFFFF'}
             />
           </TouchableOpacity>
@@ -190,71 +299,93 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+
+  // ── Header ──────────────────────────────────────────────
   header: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 8,
+  },
+  progressContainer: {
+    width: '100%',
+    gap: 6,
+  },
+  sectionSegments: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    gap: 5,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressTrack: {
+  sectionSegment: {
     flex: 1,
-    height: 4,
-    borderRadius: 2,
-    marginHorizontal: 12,
+    height: 5,
+    borderRadius: 2.5,
     overflow: 'hidden',
   },
-  progressFill: {
-    height: 4,
-    borderRadius: 2,
+  segmentFill: {
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#A08AB7',
   },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
   skipButton: {
-    width: 48,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute',
+    right: 24,
+    bottom: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
   },
   skipText: {
     fontSize: 16,
     fontWeight: '600',
   },
-  skipSpacer: {
-    width: 48,
-  },
+
+  // ── Scroll content ──────────────────────────────────────
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 32,
+    paddingTop: 20,
+    paddingBottom: 24,
     flexGrow: 1,
   },
+  noScrollContent: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 12,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
-    lineHeight: 34,
+    lineHeight: 32,
     letterSpacing: -0.5,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 16,
-    lineHeight: 22,
-    marginBottom: 8,
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 4,
   },
   content: {
-    marginTop: 28,
+    marginTop: 24,
     flex: 1,
   },
+  contentNoTitle: {
+    marginTop: 8,
+    flex: 1,
+  },
+
+  // ── Bottom bar ──────────────────────────────────────────
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingTop: 12,
+    paddingTop: 14,
+    borderTopWidth: 1,
   },
   previewLink: {
     paddingVertical: 8,
@@ -266,15 +397,38 @@ const styles = StyleSheet.create({
   previewLinkSpacer: {
     flex: 1,
   },
+  backCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   continueCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#A08AB7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  continueCircleDisabled: {
-    backgroundColor: '#D5CDE2',
+  buttonDisabled: {
+    opacity: 0.4,
+  },
+  finishButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#A08AB7',
+    paddingHorizontal: 28,
+    height: 52,
+    borderRadius: 26,
+  },
+  finishButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
   },
 });

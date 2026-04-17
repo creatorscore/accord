@@ -1,5 +1,39 @@
 # Accord - AI Assistant Context
 
+## ⚠️ LIVE PRODUCTION APP — REAL USERS
+
+Accord is **shipped and in use by real paying users** on iOS and Android. Treat every change as a production change:
+
+- **No breaking changes.** Ever. Old app versions are still installed on user devices and must keep working against the current backend.
+- **Backward compatibility is mandatory** for database schemas, API contracts, edge function payloads, Supabase RLS policies, and client data shapes. Follow [DATABASE_MIGRATION_RULES.md](./DATABASE_MIGRATION_RULES.md) strictly.
+- **Additive only.** Add new columns/fields/endpoints; never rename, drop, or change types of existing ones without a multi-release deprecation path.
+- **Old clients must keep reading/writing.** If you add a required field, give it a default; if you change a response shape, keep the old shape too.
+- **Never push destructive migrations.** Dropping columns, tightening constraints, or rewriting enum values can brick installed app versions.
+- **OTA updates ship instantly.** An `eas update` reaches every user within minutes — double-check uncommitted changes before running it.
+- **When in doubt, ask first.** A short confirmation is always cheaper than an incident for users who depend on this app for their safety.
+
+## Critical Documentation
+
+**Read these specs before making changes to the relevant systems:**
+
+| Document | What It Covers |
+|----------|---------------|
+| [ONBOARDING_SPEC.md](./ONBOARDING_SPEC.md) | 30-step onboarding flow — step order, field types, validation, checkpoints, visibility toggles |
+| [MATCHING_SPEC.md](./MATCHING_SPEC.md) | Matching algorithm, discovery feed, filters (free vs premium), hard filters vs soft scoring |
+| [PROFILE_SPEC.md](./PROFILE_SPEC.md) | Profile data model, field visibility system, what's shown where, removed fields |
+| [QUALITY_PLAYBOOK.md](./QUALITY_PLAYBOOK.md) | Bug prevention rules, testing checklist, common failure patterns |
+| [DATABASE_MIGRATION_RULES.md](./DATABASE_MIGRATION_RULES.md) | Backward-compatible migration rules |
+
+## Golden Rules (MUST follow)
+
+1. **Gender preference, age range, and distance are HARD FILTERS** — they exclude profiles from discovery entirely, never just reduce a score.
+2. **Every Supabase write must check for errors** — never silently swallow a failed save. Show the user a toast if their data didn't persist.
+3. **No scrolling in onboarding screens** — one question per screen, everything fits the viewport. Use compact chips or dropdowns for many options.
+4. **Removed fields stay removed** — hobbies, MBTI, and love language are gone. Don't re-add or reference them.
+5. **Array columns need array handling** — `gender`, `sexual_orientation`, `ethnicity`, `gender_preference`, etc. are `TEXT[]`. Always use `Array.isArray()` checks.
+6. **Quality over growth** — better to have fewer well-matched users than a large pool of bad matches. Our users' safety depends on this app working correctly.
+7. **Test preference persistence** — after any onboarding or filter change, verify the data actually saved to DB and is reflected in the discovery feed.
+
 ## Project Overview
 
 Accord is a native mobile dating application (iOS + Android) designed specifically for individuals seeking lavender marriages - marriages of convenience between LGBTQ+ individuals. The app provides a safe, discreet, and verified platform for meaningful connections that prioritize compatibility, mutual benefit, and safety.

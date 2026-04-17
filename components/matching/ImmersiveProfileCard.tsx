@@ -59,8 +59,6 @@ interface Profile {
   distance?: number;
   height_inches?: number;
   zodiac_sign?: string;
-  personality_type?: string;
-  love_language?: string | string[]; // Can be single or array for multi-select
   languages_spoken?: string[];
   religion?: string;
   political_views?: string;
@@ -68,16 +66,10 @@ interface Profile {
   voice_intro_url?: string;
   voice_intro_duration?: number;
   voice_intro_prompt?: string;
-  hobbies?: string[];
-  interests?: {
-    movies?: string[];
-    music?: string[];
-    books?: string[];
-    tv_shows?: string[];
-  };
   hometown?: string;
   occupation?: string;
   education?: string;
+  education_level?: string;
   photo_blur_enabled?: boolean; // Privacy: blur photos until matched
   field_visibility?: Record<string, boolean>;
   preferences?: any; // Add preferences for compatibility
@@ -96,9 +88,11 @@ interface Preferences {
   income_level?: string;
   religion?: string;
   political_views?: string;
-  lifestyle_preferences?: { drinking?: string; smoking?: string; pets?: string };
+  lifestyle_preferences?: { drinking?: string; smoking?: string; smokes_weed?: string; does_drugs?: string; pets?: string };
   drinking?: string;
   smoking?: string;
+  smokes_weed?: string;
+  does_drugs?: string;
   pets?: string;
   max_distance_miles?: number;
   willing_to_relocate?: boolean;
@@ -625,6 +619,16 @@ export default function ImmersiveProfileCard({
 
           {/* TODO: Re-enable when server-side compatibility scoring is implemented */}
 
+          {/* Ideal Lavender Marriage — surfaced early so viewers immediately understand intent */}
+          <IdealMarriageCard
+            primaryReasons={profile.preferences?.primary_reasons}
+            wantsChildren={profile.preferences?.wants_children}
+            childrenArrangement={profile.preferences?.children_arrangement}
+            housingPreference={profile.preferences?.housing_preference}
+            financialArrangement={profile.preferences?.financial_arrangement}
+            relationshipType={profile.preferences?.relationship_type}
+          />
+
           {/* Reviews Section */}
           <ProfileReviewDisplay
             profileId={profile.id}
@@ -731,41 +735,46 @@ export default function ImmersiveProfileCard({
             </View>
           )}
 
-          {/* Must-Haves */}
-          {preferences?.must_haves && preferences.must_haves.length > 0 && (
-            <View style={[styles.section, { backgroundColor: '#F0FDF4', borderRadius: 16, padding: 16, marginTop: 16, borderWidth: 1, borderColor: '#86EFAC' }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 24, marginRight: 8 }}>✅</Text>
-                <Text style={[styles.sectionTitle, { color: '#166534', marginBottom: 0 }]}>{t('profileCard.section.mustHaves')}</Text>
-              </View>
-              <Text style={{ fontSize: 13, color: '#16A34A', marginBottom: 12, fontStyle: 'italic' }}>
-                {t('profileCard.section.mustHavesSubtitle')}
-              </Text>
-              {preferences.must_haves.map((item, index) => (
-                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
-                  <Text style={{ fontSize: 15, color: '#15803D', marginRight: 8 }}>•</Text>
-                  <Text style={{ fontSize: 14, color: '#15803D', flex: 1, lineHeight: 20 }}>{item}</Text>
+          {/* Combined Must-Haves & Dealbreakers */}
+          {((preferences?.must_haves && preferences.must_haves.length > 0) || (preferences?.dealbreakers && preferences.dealbreakers.length > 0)) && (
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#E5E7EB', padding: 20, marginTop: 16 }}>
+              {preferences?.must_haves && preferences.must_haves.length > 0 && (
+                <View style={preferences?.dealbreakers && preferences.dealbreakers.length > 0 ? { marginBottom: 4 } : undefined}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <MaterialCommunityIcons name="check-circle-outline" size={18} color="#10B981" />
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#1F2937' }}>{t('profileCard.section.lookingForMustHaves')}</Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 10, fontStyle: 'italic', paddingLeft: 26 }}>
+                    {t('profileCard.section.lookingForMustHavesSubtitle')}
+                  </Text>
+                  {preferences.must_haves.map((item, index) => (
+                    <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: 26, marginBottom: 6 }}>
+                      <Text style={{ fontSize: 15, color: '#9CA3AF', marginRight: 8, lineHeight: 20 }}>•</Text>
+                      <Text style={{ fontSize: 14, color: '#374151', lineHeight: 20, flex: 1 }}>{item}</Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
-          )}
-
-          {/* Dealbreakers */}
-          {preferences?.dealbreakers && preferences.dealbreakers.length > 0 && (
-            <View style={[styles.section, { backgroundColor: '#FEF2F2', borderRadius: 16, padding: 16, marginTop: 16, borderWidth: 1, borderColor: '#FCA5A5' }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 24, marginRight: 8 }}>🚫</Text>
-                <Text style={[styles.sectionTitle, { color: '#991B1B', marginBottom: 0 }]}>{t('profileCard.section.dealbreakers')}</Text>
-              </View>
-              <Text style={{ fontSize: 13, color: '#DC2626', marginBottom: 12, fontStyle: 'italic' }}>
-                {t('profileCard.section.dealbreakersSubtitle')}
-              </Text>
-              {preferences.dealbreakers.map((item, index) => (
-                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
-                  <Text style={{ fontSize: 15, color: '#B91C1C', marginRight: 8 }}>•</Text>
-                  <Text style={{ fontSize: 14, color: '#B91C1C', flex: 1, lineHeight: 20 }}>{item}</Text>
+              )}
+              {preferences?.must_haves && preferences.must_haves.length > 0 && preferences?.dealbreakers && preferences.dealbreakers.length > 0 && (
+                <View style={{ height: 1, backgroundColor: '#F3F4F6', marginVertical: 14 }} />
+              )}
+              {preferences?.dealbreakers && preferences.dealbreakers.length > 0 && (
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <MaterialCommunityIcons name="close-circle-outline" size={18} color="#EF4444" />
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#1F2937' }}>{t('profileCard.section.lookingForDealbreakers')}</Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 10, fontStyle: 'italic', paddingLeft: 26 }}>
+                    {t('profileCard.section.lookingForDealbreakersSubtitle')}
+                  </Text>
+                  {preferences.dealbreakers.map((item, index) => (
+                    <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: 26, marginBottom: 6 }}>
+                      <Text style={{ fontSize: 15, color: '#9CA3AF', marginRight: 8, lineHeight: 20 }}>•</Text>
+                      <Text style={{ fontSize: 14, color: '#374151', lineHeight: 20, flex: 1 }}>{item}</Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
+              )}
             </View>
           )}
 
@@ -803,38 +812,35 @@ export default function ImmersiveProfileCard({
               {profile.ethnicity && isFieldVisible(profile.field_visibility, 'ethnicity') && (Array.isArray(profile.ethnicity) ? !profile.ethnicity.includes('Prefer not to say') : profile.ethnicity !== 'Prefer not to say') && (
                 <LifestyleItem icon="earth" label={t('profileCard.vitals.ethnicity')} value={translateProfileArray(t, 'ethnicity', profile.ethnicity)} />
               )}
-              {profile.occupation && (
+              {profile.occupation && isFieldVisible(profile.field_visibility, 'job_title') && (
                 <LifestyleItem icon="briefcase" label={t('profileCard.vitals.occupation')} value={profile.occupation} />
               )}
-              {profile.education && (
+              {profile.education && isFieldVisible(profile.field_visibility, 'education') && (
                 <LifestyleItem icon="school" label={t('profileCard.vitals.education')} value={profile.education} />
               )}
-              {profile.hometown && (
+              {profile.education_level && isFieldVisible(profile.field_visibility, 'education_level') && (
+                <LifestyleItem icon="certificate" label={t('profileCard.vitals.educationLevel', 'Education Level')} value={formatLabel(profile.education_level)} />
+              )}
+              {profile.hometown && isFieldVisible(profile.field_visibility, 'hometown') && (
                 <LifestyleItem icon="home" label={t('profileCard.vitals.hometown')} value={profile.hometown} />
               )}
-              {profile.height_inches && (
+              {profile.height_inches && isFieldVisible(profile.field_visibility, 'height') && (
                 <LifestyleItem
                   icon="human-male-height"
                   label={t('profileCard.vitals.height')}
                   value={formatHeight(profile.height_inches, heightUnit)}
                 />
               )}
-              {profile.zodiac_sign && (
+              {profile.zodiac_sign && isFieldVisible(profile.field_visibility, 'zodiac_sign') && (
                 <LifestyleItem icon="zodiac-gemini" label={t('profileCard.vitals.zodiac')} value={translateProfileValue(t, 'zodiac_sign', profile.zodiac_sign)} />
               )}
-              {profile.personality_type && (
-                <LifestyleItem icon="brain" label={t('profileCard.vitals.personality')} value={profile.personality_type} />
-              )}
-              {profile.love_language && (
-                <LifestyleItem icon="heart" label={t('profileCard.vitals.loveLanguage')} value={translateProfileArray(t, 'love_language', profile.love_language)} />
-              )}
-              {profile.languages_spoken && profile.languages_spoken.length > 0 && (
+              {profile.languages_spoken && profile.languages_spoken.length > 0 && isFieldVisible(profile.field_visibility, 'languages_spoken') && (
                 <LifestyleItem icon="translate" label={t('profileCard.vitals.languages')} value={translateProfileArray(t, 'languages_spoken', profile.languages_spoken)} />
               )}
-              {profile.religion && isFieldVisible(profile.field_visibility, 'religion') && (
+              {profile.religion && profile.religion !== 'Prefer not to say' && isFieldVisible(profile.field_visibility, 'religion') && (
                 <LifestyleItem icon="hands-pray" label={t('profileCard.vitals.religion')} value={translateProfileValue(t, 'religion', profile.religion)} />
               )}
-              {profile.political_views && isFieldVisible(profile.field_visibility, 'political_views') && (
+              {profile.political_views && profile.political_views !== 'Prefer not to say' && isFieldVisible(profile.field_visibility, 'political_views') && (
                 <LifestyleItem icon="vote" label={t('profileCard.vitals.politics')} value={translateProfileValue(t, 'political_views', profile.political_views)} />
               )}
               {preferences?.lifestyle_preferences?.drinking && isFieldVisible(profile.field_visibility, 'drinking') && (
@@ -843,7 +849,13 @@ export default function ImmersiveProfileCard({
               {preferences?.lifestyle_preferences?.smoking && isFieldVisible(profile.field_visibility, 'smoking') && (
                 <LifestyleItem icon="smoking" label={t('profileCard.vitals.smoking')} value={formatLabel(preferences.lifestyle_preferences.smoking)} />
               )}
-              {preferences?.lifestyle_preferences?.pets && (
+              {preferences?.lifestyle_preferences?.smokes_weed && isFieldVisible(profile.field_visibility, 'smokes_weed') && (
+                <LifestyleItem icon="leaf" label={t('profileCard.vitals.weed', 'Weed')} value={formatLabel(preferences.lifestyle_preferences.smokes_weed)} />
+              )}
+              {preferences?.lifestyle_preferences?.does_drugs && isFieldVisible(profile.field_visibility, 'does_drugs') && (
+                <LifestyleItem icon="pill" label={t('profileCard.vitals.drugs', 'Drugs')} value={formatLabel(preferences.lifestyle_preferences.does_drugs)} />
+              )}
+              {preferences?.lifestyle_preferences?.pets && isFieldVisible(profile.field_visibility, 'pets') && (
                 <LifestyleItem icon="paw" label={t('profileCard.vitals.pets')} value={formatLabel(preferences.lifestyle_preferences.pets)} />
               )}
               {preferences?.financial_arrangement && (
@@ -854,84 +866,6 @@ export default function ImmersiveProfileCard({
               )}
             </View>
           </View>
-
-          {/* Ideal Lavender Marriage */}
-          <IdealMarriageCard
-            primaryReasons={profile.preferences?.primary_reasons}
-            wantsChildren={profile.preferences?.wants_children}
-            childrenArrangement={profile.preferences?.children_arrangement}
-            housingPreference={profile.preferences?.housing_preference}
-            financialArrangement={profile.preferences?.financial_arrangement}
-            relationshipType={profile.preferences?.relationship_type}
-          />
-
-          {/* Favorites - Movies, Music, Books, TV Shows */}
-          {profile.interests && (
-            (profile.interests.movies?.length ?? 0) > 0 ||
-            (profile.interests.music?.length ?? 0) > 0 ||
-            (profile.interests.books?.length ?? 0) > 0 ||
-            (profile.interests.tv_shows?.length ?? 0) > 0
-          ) && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{t('profileCard.section.favorites')}</Text>
-
-              {profile.interests.movies && profile.interests.movies.length > 0 && (
-                <View style={styles.favoriteCategory}>
-                  <View style={styles.favoriteCategoryHeader}>
-                    <MaterialCommunityIcons name="movie-open" size={22} color="#CDC2E5" />
-                    <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.movies')}</Text>
-                  </View>
-                  <View style={styles.favoritesList}>
-                    {profile.interests.movies.map((movie, index) => (
-                      <Text key={index} style={styles.favoriteItem}>• {movie}</Text>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {profile.interests.music && profile.interests.music.length > 0 && (
-                <View style={styles.favoriteCategory}>
-                  <View style={styles.favoriteCategoryHeader}>
-                    <MaterialCommunityIcons name="music" size={22} color="#A08AB7" />
-                    <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.musicArtists')}</Text>
-                  </View>
-                  <View style={styles.favoritesList}>
-                    {profile.interests.music.map((artist, index) => (
-                      <Text key={index} style={styles.favoriteItem}>• {artist}</Text>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {profile.interests.books && profile.interests.books.length > 0 && (
-                <View style={styles.favoriteCategory}>
-                  <View style={styles.favoriteCategoryHeader}>
-                    <MaterialCommunityIcons name="book-open-page-variant" size={22} color="#3B82F6" />
-                    <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.books')}</Text>
-                  </View>
-                  <View style={styles.favoritesList}>
-                    {profile.interests.books.map((book, index) => (
-                      <Text key={index} style={styles.favoriteItem}>• {book}</Text>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {profile.interests.tv_shows && profile.interests.tv_shows.length > 0 && (
-                <View style={styles.favoriteCategory}>
-                  <View style={styles.favoriteCategoryHeader}>
-                    <MaterialCommunityIcons name="television" size={22} color="#10B981" />
-                    <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.tvShows')}</Text>
-                  </View>
-                  <View style={styles.favoritesList}>
-                    {profile.interests.tv_shows.map((show, index) => (
-                      <Text key={index} style={styles.favoriteItem}>• {show}</Text>
-                    ))}
-                  </View>
-                </View>
-              )}
-            </View>
-          )}
 
           {/* More Prompts + Photos */}
           {profile.prompt_answers?.slice(1).map((prompt, index) => (
@@ -1623,27 +1557,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
-  },
-  hobbiesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  hobbyTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F3E8FF',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#D8B4FE',
-  },
-  hobbyText: {
-    fontSize: 15,
-    color: '#A08AB7',
-    fontWeight: '600',
   },
   favoriteCategory: {
     marginBottom: 20,

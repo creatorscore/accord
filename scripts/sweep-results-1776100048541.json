@@ -1,0 +1,13 @@
+{
+  "stats": {
+    "checked": 20,
+    "rcNotFound": 0,
+    "rcNoEntitlement": 20,
+    "fixed": 0,
+    "wouldFix": 0,
+    "reconcileFailed": 0,
+    "rcErrors": 0
+  },
+  "fixed": [],
+  "dryRun": true
+}

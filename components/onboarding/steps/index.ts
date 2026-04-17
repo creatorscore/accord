@@ -6,3 +6,4 @@ export { default as HeightStep } from './HeightStep';
 export { default as MatchingPrefsStep } from './MatchingPrefsStep';
 export { default as ChipSelect } from './ChipSelect';
 export { default as TextInputStep } from './TextInputStep';
+export { default as CityAutocompleteStep } from './CityAutocompleteStep';

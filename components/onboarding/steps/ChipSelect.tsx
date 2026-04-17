@@ -28,6 +28,7 @@ export default function ChipSelect({
   onVisibilityChange,
 }: ChipSelectProps) {
   const isDark = useColorScheme() === 'dark';
+  const isCompact = options.length > 8;
 
   const handlePress = (value: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -44,7 +45,7 @@ export default function ChipSelect({
 
   return (
     <View style={styles.container}>
-      <View style={styles.chipGrid}>
+      <View style={[styles.chipGrid, isCompact && styles.chipGridCompact]}>
         {options.map((opt) => {
           const value = typeof opt === 'string' ? opt : opt.value;
           const label = typeof opt === 'string' ? opt : opt.label;
@@ -55,18 +56,24 @@ export default function ChipSelect({
               key={value}
               style={[
                 styles.chip,
+                isCompact && styles.chipCompact,
                 {
-                  backgroundColor: isSelected ? '#A08AB7' : (isDark ? '#1F2937' : '#F3F4F6'),
-                  borderColor: isSelected ? '#A08AB7' : (isDark ? '#374151' : '#E5E7EB'),
+                  backgroundColor: isSelected ? '#A08AB7' : (isDark ? '#1A1A2D' : '#F5F3F8'),
+                  borderColor: isSelected ? '#A08AB7' : (isDark ? '#2C2C3E' : '#E8E3F0'),
                 },
               ]}
               onPress={() => handlePress(value)}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              accessibilityState={{ selected: isSelected }}
+              accessibilityHint={multi ? `Double tap to ${isSelected ? 'deselect' : 'select'}` : `Double tap to ${isSelected ? 'deselect' : 'choose'}`}
             >
               <Text
                 style={[
                   styles.chipText,
-                  { color: isSelected ? '#FFFFFF' : (isDark ? '#D1D5DB' : '#374151') },
+                  isCompact && styles.chipTextCompact,
+                  { color: isSelected ? '#FFFFFF' : (isDark ? '#D1D5DB' : '#4B5563') },
                 ]}
               >
                 {label}
@@ -77,7 +84,7 @@ export default function ChipSelect({
       </View>
 
       {showVisibility && (
-        <View style={[styles.visibilityRow, { borderTopColor: isDark ? '#374151' : '#F3F4F6' }]}>
+        <View style={[styles.visibilityRow, { borderTopColor: isDark ? '#2C2C3E' : '#F0EDF4' }]}>
           <Text style={[styles.visibilityLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
             Show on profile
           </Text>
@@ -97,10 +104,47 @@ export default function ChipSelect({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center' },
-  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', paddingHorizontal: 4 },
-  chip: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 50, borderWidth: 1.5 },
-  chipText: { fontSize: 15, fontWeight: '600' },
-  visibilityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, paddingTop: 16, borderTopWidth: 1 },
-  visibilityLabel: { fontSize: 15, fontWeight: '500' },
+  container: {
+    // Top-aligned — no vertical centering; content flows from title naturally
+  },
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chipGridCompact: {
+    gap: 6,
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 50,
+    borderWidth: 1.5,
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  chipCompact: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minHeight: 36,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  chipTextCompact: {
+    fontSize: 13,
+  },
+  visibilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  visibilityLabel: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
 });

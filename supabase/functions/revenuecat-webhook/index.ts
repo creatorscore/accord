@@ -71,23 +71,34 @@ serve(async (req) => {
     const hasPlatinum = entitlement_ids?.includes('platinum') || false;
 
     // Check if subscription is active (not expired)
-    const isActive = expiration_at_ms ? expiration_at_ms > Date.now() : false;
+    // If no expiration date, treat as active (lifetime subscriptions have no expiry)
+    const isActive = expiration_at_ms ? expiration_at_ms > Date.now() : true;
 
     // Get the user's profile ID and admin status from auth.users -> profiles
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, is_admin')
       .eq('user_id', app_user_id)
-      .single();
+      .maybeSingle();
 
     if (profileError || !profile) {
       console.error('Profile not found for user:', app_user_id, profileError);
+      // Log to dead-letter so we can audit/reconcile later. Return 200 so
+      // RevenueCat stops retrying indefinitely — the client will call
+      // sync-subscription on next launch, and reconcile-subscriptions covers
+      // anything missed.
+      await supabase.from('revenuecat_webhook_failures').insert({
+        event_type: type,
+        app_user_id,
+        product_id: payload.event.product_id,
+        entitlement_ids,
+        reason: 'profile_not_found',
+        error_details: profileError?.message ?? null,
+        raw_payload: payload as unknown as Record<string, unknown>,
+      });
       return new Response(
-        JSON.stringify({ error: 'Profile not found', userId: app_user_id }),
-        {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        }
+        JSON.stringify({ ok: true, logged: 'profile_not_found', userId: app_user_id }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -104,7 +115,7 @@ serve(async (req) => {
       case 'UNCANCELLATION':
       case 'PRODUCT_CHANGE':
         // Activate subscription with expiration date
-        await updateSubscriptionStatus(profile.id, hasPremium, hasPlatinum, true, expiration_at_ms, isTrial);
+        await updateSubscriptionStatus(profile.id, hasPremium, hasPlatinum, true, expiration_at_ms, isTrial, app_user_id);
         console.log('✅ Subscription activated:', {
           userId: app_user_id,
           hasPremium,
@@ -156,6 +167,23 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error processing webhook:', error);
+    // Best-effort dead-letter log — swallow any failure of the log itself.
+    try {
+      const bodyText = await req.clone().text().catch(() => '');
+      let parsed: any = null;
+      try { parsed = JSON.parse(bodyText); } catch {}
+      await supabase.from('revenuecat_webhook_failures').insert({
+        event_type: parsed?.event?.type ?? null,
+        app_user_id: parsed?.event?.app_user_id ?? null,
+        product_id: parsed?.event?.product_id ?? null,
+        entitlement_ids: parsed?.event?.entitlement_ids ?? null,
+        reason: 'processing_error',
+        error_details: (error as Error)?.message ?? String(error),
+        raw_payload: parsed,
+      });
+    } catch (logError) {
+      console.error('Failed to write webhook failure log:', logError);
+    }
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -172,7 +200,8 @@ async function updateSubscriptionStatus(
   isPlatinum: boolean,
   isActive: boolean,
   expirationMs?: number | null,
-  isTrial: boolean = false
+  isTrial: boolean = false,
+  appUserId?: string
 ) {
   try {
     // Update profiles table
@@ -203,6 +232,7 @@ async function updateSubscriptionStatus(
           status,
           auto_renew: true,
           expires_at: expiresAt,
+          ...(appUserId ? { revenuecat_customer_id: appUserId } : {}),
         },
         { onConflict: 'profile_id' }
       );

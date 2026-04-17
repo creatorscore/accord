@@ -34,7 +34,7 @@ interface SubscriptionContextType {
   // Methods
   refreshSubscription: () => Promise<void>;
   canUseFeature: (feature: string) => boolean;
-  syncWithDatabase: (freshCustomerInfo?: CustomerInfo) => Promise<void>;
+  syncWithDatabase: (freshCustomerInfo?: CustomerInfo) => Promise<boolean>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -157,59 +157,43 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   /**
-   * Sync RevenueCat subscription status to database
-   * Called after purchase/restore to ensure DB is in sync
+   * Sync RevenueCat subscription status to database via the sync-subscription
+   * edge function. The function re-fetches CustomerInfo server-side from the
+   * RevenueCat REST API (authoritative) and upserts using the service role,
+   * bypassing RLS pitfalls and any stale client state.
    *
-   * @param freshCustomerInfo - Optional fresh CustomerInfo from purchase/restore
-   *                            If provided, uses this instead of context state
+   * Called after purchase/restore as a safety net for missed webhooks.
    */
-  const syncWithDatabase = useCallback(async (freshCustomerInfo?: CustomerInfo) => {
-    // PERFORMANCE: Use profileId from shared ProfileDataContext instead of querying
-    if (!user || !profileId) {
-      return;
+  const syncWithDatabase = useCallback(async (_freshCustomerInfo?: CustomerInfo): Promise<boolean> => {
+    if (!user) {
+      return false;
     }
 
     try {
-      // Always derive premium status from CustomerInfo directly, never from outer-scope
-      // computed variables which may be stale due to React closure capture timing
-      const infoToUse = freshCustomerInfo || customerInfo;
+      const { data, error } = await supabase.functions.invoke('sync-subscription', {
+        body: {},
+      });
 
-      // If no CustomerInfo available (RC hasn't loaded), skip sync to prevent
-      // accidentally clearing is_premium for users with valid subscriptions
-      if (!infoToUse) {
-        return;
+      if (error) {
+        console.error('❌ sync-subscription failed:', error);
+        return false;
       }
 
-      const premium = hasPremium(infoToUse);
-      const platinum = hasPlatinum(infoToUse);
-      const tier = getSubscriptionTier(infoToUse);
-
-      // Update profiles table
-      await supabase
-        .from('profiles')
-        .update({
-          is_premium: premium,
-          is_platinum: platinum,
-        })
-        .eq('id', profileId);
-
-      // Update subscriptions table if active subscription
-      if (tier) {
-        await supabase.from('subscriptions').upsert(
-          {
-            profile_id: profileId,
-            tier,
-            status: 'active',
-            auto_renew: true,
-          },
-          { onConflict: 'profile_id' }
-        );
+      if (data && data.success === false) {
+        console.error('❌ sync-subscription returned failure:', data);
+        return false;
       }
 
+      // Refresh the local customerInfo from RC so the UI reflects the new status
+      const fresh = await getCustomerInfo();
+      if (fresh) setCustomerInfo(fresh);
+
+      return true;
     } catch (error) {
       console.error('❌ Error syncing subscription to database:', error);
+      return false;
     }
-  }, [user, profileId, customerInfo, isDatabaseOnlyMode]);
+  }, [user]);
 
   // In database-only mode (dev), use database status exclusively
   // In production, RevenueCat is the SOURCE OF TRUTH

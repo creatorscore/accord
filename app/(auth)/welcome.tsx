@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { useColorScheme } from '@/lib/useColorScheme';
 
 function AnimatedButton({ onPress, style, children }: { onPress: () => void; style: any; children: React.ReactNode }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -35,10 +36,21 @@ function AnimatedButton({ onPress, style, children }: { onPress: () => void; sty
 export default function Welcome() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { isDarkColorScheme } = useColorScheme();
+
+  const gradientColors = isDarkColorScheme
+    ? ['#2A1F3D', '#1A1528'] as const
+    : ['#A08AB7', '#CDC2E5'] as const;
+
+  const buttonBg = isDarkColorScheme ? '#1C1C2E' : '#FFFFFF';
+  const buttonTextColor = '#A08AB7';
+  const borderColor = isDarkColorScheme ? 'rgba(255, 255, 255, 0.3)' : '#FFFFFF';
+  const iconOverlayBg = isDarkColorScheme ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)';
+  const badgeBg = isDarkColorScheme ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)';
 
   return (
     <LinearGradient
-      colors={['#A08AB7', '#CDC2E5']}
+      colors={gradientColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[styles.container, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 10 }]}
@@ -63,7 +75,7 @@ export default function Welcome() {
       <View style={styles.valuePropsContainer}>
         <View style={styles.valuePropsRow}>
           <View style={styles.valueProp}>
-            <View style={styles.iconContainer}>
+            <View style={[styles.iconContainer, { backgroundColor: iconOverlayBg }]}>
               <MaterialCommunityIcons name="shield-check-outline" size={24} color="#FFFFFF" />
             </View>
             <Text style={styles.propText}>
@@ -72,7 +84,7 @@ export default function Welcome() {
           </View>
 
           <View style={styles.valueProp}>
-            <View style={styles.iconContainer}>
+            <View style={[styles.iconContainer, { backgroundColor: iconOverlayBg }]}>
               <MaterialCommunityIcons name="cards-heart-outline" size={24} color="#FFFFFF" />
             </View>
             <Text style={styles.propText}>
@@ -81,7 +93,7 @@ export default function Welcome() {
           </View>
 
           <View style={styles.valueProp}>
-            <View style={styles.iconContainer}>
+            <View style={[styles.iconContainer, { backgroundColor: iconOverlayBg }]}>
               <MaterialCommunityIcons name="lock-outline" size={24} color="#FFFFFF" />
             </View>
             <Text style={styles.propText}>
@@ -91,7 +103,7 @@ export default function Welcome() {
         </View>
 
         {/* Trust Badge */}
-        <View style={styles.trustBadge}>
+        <View style={[styles.trustBadge, { backgroundColor: badgeBg }]}>
           <MaterialCommunityIcons name="handshake-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
           <Text style={styles.badgeText}>
             {t('auth.welcome.trustBadge')}
@@ -103,16 +115,16 @@ export default function Welcome() {
       <View style={styles.ctaContainer}>
         <AnimatedButton
           onPress={() => router.push('/(auth)/sign-up')}
-          style={styles.primaryButton}
+          style={[styles.primaryButton, { backgroundColor: buttonBg }]}
         >
-          <Text style={styles.primaryButtonText}>
+          <Text style={[styles.primaryButtonText, { color: buttonTextColor }]}>
             {t('auth.welcome.getStarted')}
           </Text>
         </AnimatedButton>
 
         <AnimatedButton
           onPress={() => router.push('/(auth)/sign-in')}
-          style={styles.secondaryButton}
+          style={[styles.secondaryButton, { borderColor }]}
         >
           <Text style={styles.secondaryButtonText}>
             {t('auth.welcome.signIn')}

@@ -1,6 +1,6 @@
 /**
  * Zustand store for onboarding form state.
- * Accumulates answers across all 30 steps and persists via checkpoints.
+ * Accumulates answers across all 31 steps and persists via checkpoints.
  */
 
 import { create } from 'zustand';
@@ -40,7 +40,9 @@ export interface OnboardingFormState {
   wantsChildren: string; // 'yes' | 'no' | 'maybe'
   // Step 13 - Family Plans
   childrenArrangement: string[];
-  // Step 14 - Hometown
+  // Step 14 - Pets
+  pets: string;
+  // Step 15 - Hometown
   hometown: string;
   // Step 15 - Job Title
   jobTitle: string;
@@ -70,6 +72,7 @@ export interface OnboardingFormState {
   ageMax: number;
   maxDistanceMiles: number;
   distanceUnit: 'miles' | 'km';
+  willingToRelocate: boolean;
 
   // Field visibility toggles
   fieldVisibility: Record<string, boolean>;
@@ -111,6 +114,7 @@ const initialState: OnboardingFormState = {
   ethnicity: [],
   wantsChildren: '',
   childrenArrangement: [],
+  pets: '',
   hometown: '',
   jobTitle: '',
   education: '',
@@ -127,6 +131,7 @@ const initialState: OnboardingFormState = {
   ageMax: 45,
   maxDistanceMiles: 50,
   distanceUnit: 'miles',
+  willingToRelocate: false,
   fieldVisibility: {},
 };
 

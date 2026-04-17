@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useColorScheme } from '@/lib/useColorScheme';
 import { useTranslation } from 'react-i18next';
 
 // Complete list of all countries with ISO codes
@@ -217,6 +218,7 @@ interface BlockedCountry {
 
 export default function CountryBlocking() {
   const { t } = useTranslation();
+  const { isDarkColorScheme } = useColorScheme();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -332,9 +334,35 @@ export default function CountryBlocking() {
     !blockedCountries.some(b => b.country_code === country.code)
   );
 
+  const dark = isDarkColorScheme;
+  const ds = {
+    container: { backgroundColor: dark ? '#0F0F1A' : '#F9FAFB' },
+    infoCard: { backgroundColor: dark ? '#2C2C3E' : '#FEF3C7' },
+    infoIconContainer: { backgroundColor: dark ? '#1C1C2E' : 'white' },
+    infoTitle: { color: dark ? '#FCD34D' : '#92400E' },
+    infoText: { color: dark ? '#FCD34D' : '#92400E' },
+    sectionTitle: { color: dark ? '#F5F5F7' : '#111827' },
+    emptyState: { backgroundColor: dark ? '#1C1C2E' : 'white' },
+    emptyStateText: { color: dark ? '#9CA3AF' : '#6B7280' },
+    countryItem: { backgroundColor: dark ? '#1C1C2E' : 'white' },
+    countryName: { color: dark ? '#F5F5F7' : '#111827' },
+    infoBox: { backgroundColor: dark ? '#1C1C2E' : 'white' },
+    infoBoxText: { color: dark ? '#D1D5DB' : '#4B5563' },
+    privacyNotice: { backgroundColor: dark ? '#1C2E24' : '#ECFDF5' },
+    privacyText: { color: dark ? '#6EE7B7' : '#065F46' },
+    modal: { backgroundColor: dark ? '#1C1C2E' : 'white' },
+    modalHeader: { borderBottomColor: dark ? '#2C2C3E' : '#E5E7EB' },
+    modalTitle: { color: dark ? '#F5F5F7' : '#111827' },
+    searchContainer: { backgroundColor: dark ? '#2C2C3E' : '#F3F4F6' },
+    searchInput: { color: dark ? '#F5F5F7' : '#111827' },
+    countryPickerItem: { borderBottomColor: dark ? '#2C2C3E' : '#F3F4F6' },
+    countryPickerName: { color: dark ? '#F5F5F7' : '#111827' },
+    noResults: { color: dark ? '#9CA3AF' : '#6B7280' },
+  };
+
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, ds.container]}>
         <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
@@ -351,7 +379,7 @@ export default function CountryBlocking() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, ds.container]}>
       <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
@@ -362,37 +390,37 @@ export default function CountryBlocking() {
 
       <ScrollView style={styles.content}>
         {/* Safety Info Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.infoIconContainer}>
+        <View style={[styles.infoCard, ds.infoCard]}>
+          <View style={[styles.infoIconContainer, ds.infoIconContainer]}>
             <MaterialCommunityIcons name="earth-off" size={32} color="#A08AB7" />
           </View>
-          <Text style={styles.infoTitle}>{t('countryBlocking.staySafeGlobally')}</Text>
-          <Text style={styles.infoText}>
+          <Text style={[styles.infoTitle, ds.infoTitle]}>{t('countryBlocking.staySafeGlobally')}</Text>
+          <Text style={[styles.infoText, ds.infoText]}>
             {t('countryBlocking.staySafeGloballyMessage')}
           </Text>
         </View>
 
         {/* Blocked Countries List */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+          <Text style={[styles.sectionTitle, ds.sectionTitle]}>
             {t('countryBlocking.blockedCountries')} {t('countryBlocking.blockedCountriesCount', { count: blockedCountries.length })}
           </Text>
 
           {blockedCountries.length === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialCommunityIcons name="shield-check-outline" size={48} color="#D1D5DB" />
-              <Text style={styles.emptyStateText}>
+            <View style={[styles.emptyState, ds.emptyState]}>
+              <MaterialCommunityIcons name="shield-check-outline" size={48} color={dark ? '#3F3F46' : '#D1D5DB'} />
+              <Text style={[styles.emptyStateText, ds.emptyStateText]}>
                 {t('countryBlocking.noCountriesBlocked')}
               </Text>
             </View>
           ) : (
             blockedCountries.map(block => (
-              <View key={block.id} style={styles.countryItem}>
+              <View key={block.id} style={[styles.countryItem, ds.countryItem]}>
                 <View style={styles.countryInfo}>
                   <Text style={styles.countryFlag}>
                     {getFlagEmoji(block.country_code)}
                   </Text>
-                  <Text style={styles.countryName}>{block.country_name}</Text>
+                  <Text style={[styles.countryName, ds.countryName]}>{block.country_name}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.removeButton}
@@ -418,18 +446,18 @@ export default function CountryBlocking() {
 
         {/* How It Works */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('countryBlocking.howItWorks')}</Text>
-          <View style={styles.infoBox}>
-            <Text style={styles.infoBoxText}>
+          <Text style={[styles.sectionTitle, ds.sectionTitle]}>{t('countryBlocking.howItWorks')}</Text>
+          <View style={[styles.infoBox, ds.infoBox]}>
+            <Text style={[styles.infoBoxText, ds.infoBoxText]}>
               {t('countryBlocking.howItWorksText')}
             </Text>
           </View>
         </View>
 
         {/* Privacy Notice */}
-        <View style={styles.privacyNotice}>
+        <View style={[styles.privacyNotice, ds.privacyNotice]}>
           <MaterialCommunityIcons name="shield-lock" size={20} color="#10B981" />
-          <Text style={styles.privacyText}>
+          <Text style={[styles.privacyText, ds.privacyText]}>
             {t('countryBlocking.privacyNote')}
           </Text>
         </View>
@@ -438,23 +466,23 @@ export default function CountryBlocking() {
       {/* Country Picker Modal */}
       {showCountryPicker && (
         <View style={styles.modalOverlay}>
-          <View style={styles.modal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('countryBlocking.selectCountry')}</Text>
+          <View style={[styles.modal, ds.modal]}>
+            <View style={[styles.modalHeader, ds.modalHeader]}>
+              <Text style={[styles.modalTitle, ds.modalTitle]}>{t('countryBlocking.selectCountry')}</Text>
               <TouchableOpacity onPress={() => {
                 setShowCountryPicker(false);
                 setSearchQuery('');
               }}>
-                <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
+                <MaterialCommunityIcons name="close" size={24} color={dark ? '#9CA3AF' : '#6B7280'} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.searchContainer}>
+            <View style={[styles.searchContainer, ds.searchContainer]}>
               <MaterialCommunityIcons name="magnify" size={20} color="#9CA3AF" />
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, ds.searchInput]}
                 placeholder={t('countryBlocking.searchCountries')}
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={dark ? '#6B7280' : '#9CA3AF'}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoFocus
@@ -465,16 +493,16 @@ export default function CountryBlocking() {
               {filteredCountries.map(country => (
                 <TouchableOpacity
                   key={country.code}
-                  style={styles.countryPickerItem}
+                  style={[styles.countryPickerItem, ds.countryPickerItem]}
                   onPress={() => addCountryBlock(country)}
                   disabled={saving}
                 >
                   <Text style={styles.countryFlag}>{getFlagEmoji(country.code)}</Text>
-                  <Text style={styles.countryPickerName}>{country.name}</Text>
+                  <Text style={[styles.countryPickerName, ds.countryPickerName]}>{country.name}</Text>
                 </TouchableOpacity>
               ))}
               {filteredCountries.length === 0 && (
-                <Text style={styles.noResults}>{t('countryBlocking.noCountriesFound')}</Text>
+                <Text style={[styles.noResults, ds.noResults]}>{t('countryBlocking.noCountriesFound')}</Text>
               )}
             </ScrollView>
           </View>

@@ -1,6 +1,7 @@
-import { View, Text, TouchableOpacity, ScrollView, Switch, StyleSheet, useColorScheme } from 'react-native';
+import { View, Text, TouchableOpacity, Switch, StyleSheet, useColorScheme } from 'react-native';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import { getHeightOptions } from '@/lib/onboarding-config';
+import ScrollPicker from '@/components/onboarding/ScrollPicker';
 import * as Haptics from 'expo-haptics';
 
 export default function HeightStep() {
@@ -11,6 +12,9 @@ export default function HeightStep() {
   const options = getHeightOptions(heightUnit);
   const visible = fieldVisibility.height !== false;
 
+  // Default to a mid-range value if nothing selected
+  const defaultValue = heightUnit === 'imperial' ? 67 : 170; // 5'7" or 170cm
+
   return (
     <View style={styles.container}>
       {/* Unit toggle */}
@@ -18,53 +22,57 @@ export default function HeightStep() {
         {(['imperial', 'metric'] as const).map((unit) => (
           <TouchableOpacity
             key={unit}
-            style={[styles.unitTab, heightUnit === unit && styles.unitTabActive]}
+            style={[
+              styles.unitTab,
+              {
+                backgroundColor: heightUnit === unit
+                  ? '#A08AB7'
+                  : (isDark ? '#1A1A2D' : '#F5F3F8'),
+                borderColor: heightUnit === unit
+                  ? '#A08AB7'
+                  : (isDark ? '#2C2C3E' : '#E8E3F0'),
+              },
+            ]}
             onPress={() => {
               Haptics.selectionAsync();
               setField('heightUnit', unit);
               setField('heightInches', null);
             }}
+            accessibilityRole="button"
+            accessibilityLabel={unit === 'imperial' ? 'Feet and inches' : 'Centimeters'}
+            accessibilityState={{ selected: heightUnit === unit }}
           >
-            <Text style={[styles.unitTabText, heightUnit === unit && styles.unitTabTextActive]}>
-              {unit === 'imperial' ? 'ft/in' : 'cm'}
+            <Text style={[
+              styles.unitTabText,
+              { color: heightUnit === unit ? '#FFFFFF' : (isDark ? '#D1D5DB' : '#6B7280') },
+            ]}>
+              {unit === 'imperial' ? 'ft / in' : 'cm'}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Height picker scroll */}
-      <ScrollView
-        style={styles.pickerScroll}
-        contentContainerStyle={styles.pickerContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {options.map((opt) => {
-          const isSelected = heightInches === opt.value;
-          return (
-            <TouchableOpacity
-              key={opt.value}
-              style={[
-                styles.option,
-                {
-                  backgroundColor: isSelected ? '#A08AB7' : (isDark ? '#1F2937' : '#F9FAFB'),
-                  borderColor: isSelected ? '#A08AB7' : (isDark ? '#374151' : '#E5E7EB'),
-                },
-              ]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setField('heightInches', opt.value);
-              }}
-            >
-              <Text style={[styles.optionText, { color: isSelected ? '#FFFFFF' : (isDark ? '#D1D5DB' : '#374151') }]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      {/* Scroll wheel picker */}
+      <View style={styles.pickerContainer}>
+        <ScrollPicker
+          items={options}
+          selectedValue={heightInches ?? defaultValue}
+          onValueChange={(value) => setField('heightInches', value)}
+        />
+      </View>
+
+      {/* Selected value display */}
+      {heightInches !== null && (
+        <Text
+          style={[styles.selectedLabel, { color: isDark ? '#A08AB7' : '#8B72A8' }]}
+          accessibilityLiveRegion="polite"
+        >
+          {options.find(o => o.value === heightInches)?.label}
+        </Text>
+      )}
 
       {/* Visibility toggle */}
-      <View style={[styles.visibilityRow, { borderTopColor: isDark ? '#374151' : '#F3F4F6' }]}>
+      <View style={[styles.visibilityRow, { borderTopColor: isDark ? '#2C2C3E' : '#F0EDF4' }]}>
         <Text style={[styles.visibilityLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>Show on profile</Text>
         <Switch
           value={visible}
@@ -78,16 +86,44 @@ export default function HeightStep() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  unitRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 16 },
-  unitTab: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 50, backgroundColor: '#F3F4F6' },
-  unitTabActive: { backgroundColor: '#A08AB7' },
-  unitTabText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
-  unitTabTextActive: { color: '#FFFFFF' },
-  pickerScroll: { flex: 1, maxHeight: 280 },
-  pickerContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', paddingHorizontal: 4 },
-  option: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, minWidth: 70, alignItems: 'center' },
-  optionText: { fontSize: 15, fontWeight: '600' },
-  visibilityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1 },
-  visibilityLabel: { fontSize: 15, fontWeight: '500' },
+  container: {},
+  unitRow: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+    marginBottom: 28,
+  },
+  unitTab: {
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 50,
+    borderWidth: 1.5,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  unitTabText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  pickerContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  selectedLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  visibilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 16,
+    borderTopWidth: 1,
+  },
+  visibilityLabel: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
 });

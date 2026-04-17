@@ -415,7 +415,7 @@ export default function Messages() {
     if (!profileId) return () => {};
 
     const channel = supabase
-      .channel('messages-updates')
+      .channel(`messages-updates-${profileId}-${Date.now()}`)
       .on(
         'postgres_changes',
         {
@@ -425,7 +425,9 @@ export default function Messages() {
           filter: `receiver_profile_id=eq.${profileId}`,
         },
         () => {
-          loadConversations();
+          // Small delay to ensure the new message is indexed before
+          // re-querying unread counts (avoids race condition).
+          setTimeout(() => loadConversations(), 300);
         }
       )
       .on(

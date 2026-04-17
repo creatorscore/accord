@@ -15,6 +15,7 @@ module.exports = {
       "**/*"
     ],
     ios: {
+      deploymentTarget: "16.0",
       supportsTablet: true,
       bundleIdentifier: "com.privyreviews.accord",
       buildNumber: "68",
@@ -63,6 +64,7 @@ module.exports = {
       }
     },
     android: {
+      minSdkVersion: 26,
       adaptiveIcon: {
         foregroundImage: "./assets/icon.png",
         backgroundColor: "#9B87CE"

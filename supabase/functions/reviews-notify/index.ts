@@ -264,7 +264,8 @@ async function sendPushNotification(
   try {
     const message = {
       to: pushToken,
-      sound: 'default',
+      sound: 'notification_sound.wav',
+      channelId: 'default',
       title,
       body,
       data,

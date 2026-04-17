@@ -3,14 +3,13 @@ import { TFunction } from 'i18next';
 /**
  * Maps DB column names to profileValues translation section names.
  * Only fields with enumerated/known values are included.
- * Free-text fields (occupation, education, hometown, personality_type) are excluded.
+ * Free-text fields (occupation, education, hometown) are excluded.
  */
 const FIELD_TO_SECTION: Record<string, string> = {
   gender: 'gender',
   sexual_orientation: 'orientation',
   pronouns: 'pronouns',
   ethnicity: 'ethnicity',
-  love_language: 'loveLanguage',
   religion: 'religion',
   political_views: 'politics',
   zodiac_sign: 'zodiac',

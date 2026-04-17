@@ -9,21 +9,38 @@ export default function NameStep() {
   return (
     <View style={styles.container}>
       <TextInput
-        style={[styles.input, { color: isDark ? '#F5F5F7' : '#1F2937', borderColor: isDark ? '#374151' : '#E4E4E7', backgroundColor: isDark ? '#1F2937' : '#FFFFFF' }]}
+        style={[styles.input, {
+          color: isDark ? '#F5F5F7' : '#1F2937',
+          borderColor: isDark ? '#374151' : '#E4E4E7',
+          backgroundColor: isDark ? '#1A1A2D' : '#FAFAFA',
+        }]}
         placeholder="Your first name"
         placeholderTextColor={isDark ? '#6B7280' : '#A1A1AA'}
         value={displayName}
-        onChangeText={(v) => setField('displayName', v.trim())}
+        onChangeText={(v) => setField('displayName', v)}
+        onBlur={() => setField('displayName', displayName.trim())}
         autoFocus
         maxLength={30}
         autoCapitalize="words"
         returnKeyType="done"
+        accessibilityLabel="First name"
+        accessibilityHint="Enter your first name as it will appear on your profile"
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 8 },
-  input: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 18, fontSize: 22, fontWeight: '600', textAlign: 'center' },
+  container: {
+    paddingTop: 24,
+  },
+  input: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    fontSize: 24,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 });

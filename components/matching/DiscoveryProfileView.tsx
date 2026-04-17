@@ -55,8 +55,6 @@ interface Profile {
   distance?: number;
   height_inches?: number;
   zodiac_sign?: string;
-  personality_type?: string;
-  love_language?: string | string[];
   languages_spoken?: string[];
   religion?: string;
   political_views?: string;
@@ -64,17 +62,11 @@ interface Profile {
   voice_intro_url?: string;
   voice_intro_duration?: number;
   voice_intro_prompt?: string;
-  hobbies?: string[];
-  interests?: {
-    movies?: string[];
-    music?: string[];
-    books?: string[];
-    tv_shows?: string[];
-  };
   bio?: string;
   hometown?: string;
   occupation?: string;
   education?: string;
+  education_level?: string;
   photo_blur_enabled?: boolean;
   field_visibility?: Record<string, boolean>;
   preferences?: any;
@@ -91,9 +83,11 @@ interface Preferences {
   housing_preference?: string | string[];
   financial_arrangement?: string | string[];
   income_level?: string;
-  lifestyle_preferences?: { drinking?: string; smoking?: string; pets?: string };
+  lifestyle_preferences?: { drinking?: string; smoking?: string; smokes_weed?: string; does_drugs?: string; pets?: string };
   drinking?: string;
   smoking?: string;
+  smokes_weed?: string;
+  does_drugs?: string;
   pets?: string;
   max_distance_miles?: number;
   willing_to_relocate?: boolean;
@@ -420,9 +414,10 @@ const VitalsSection = React.memo(function VitalsSection({
   if (profile.age) pills.push({ icon: 'cake-variant-outline', value: String(profile.age) });
   if (profile.gender && isFieldVisible(fv, 'gender')) pills.push({ icon: 'account-outline', value: translateProfileArray(t, 'gender', profile.gender) });
   if (profile.sexual_orientation && isFieldVisible(fv, 'sexual_orientation')) pills.push({ icon: 'magnet', value: translateProfileArray(t, 'sexual_orientation', profile.sexual_orientation) });
-  if (profile.height_inches) pills.push({ icon: 'human-male-height-variant', value: formatHeight(profile.height_inches, heightUnit) });
-  if (profile.occupation) pills.push({ icon: 'briefcase-outline', value: profile.occupation });
-  if (profile.education) pills.push({ icon: 'school-outline', value: profile.education });
+  if (profile.height_inches && isFieldVisible(fv, 'height')) pills.push({ icon: 'human-male-height-variant', value: formatHeight(profile.height_inches, heightUnit) });
+  if (profile.occupation && isFieldVisible(fv, 'job_title')) pills.push({ icon: 'briefcase-outline', value: profile.occupation });
+  if (profile.education && isFieldVisible(fv, 'education')) pills.push({ icon: 'school-outline', value: profile.education });
+  if (profile.education_level && isFieldVisible(fv, 'education_level')) pills.push({ icon: 'certificate-outline', value: formatLabelI18n(profile.education_level) });
   // Current location
   if (profile.location_city) {
     const locationText = profile.location_state
@@ -434,13 +429,14 @@ const VitalsSection = React.memo(function VitalsSection({
   if (profile.distance) {
     pills.push({ icon: 'map-marker-distance', value: formatDistance(profile.distance, distanceUnit, profile.hide_distance) });
   }
-  if (profile.zodiac_sign) pills.push({ icon: 'star-four-points-outline', value: translateProfileValue(t, 'zodiac_sign', profile.zodiac_sign) });
-  if (profile.personality_type) pills.push({ icon: 'head-outline', value: profile.personality_type });
+  if (profile.zodiac_sign && isFieldVisible(fv, 'zodiac_sign')) pills.push({ icon: 'star-four-points-outline', value: translateProfileValue(t, 'zodiac_sign', profile.zodiac_sign) });
   // Note: pronouns are already shown in the header, so not duplicated here
-  // Lifestyle preferences
-  if (preferences?.lifestyle_preferences?.drinking && isFieldVisible(fv, 'drinking')) pills.push({ icon: 'glass-wine', value: formatLabelI18n(preferences.lifestyle_preferences.drinking) });
-  if (preferences?.lifestyle_preferences?.smoking && isFieldVisible(fv, 'smoking')) pills.push({ icon: 'smoking-off', value: formatLabelI18n(preferences.lifestyle_preferences.smoking) });
-  if (preferences?.lifestyle_preferences?.pets) pills.push({ icon: 'paw-outline', value: formatLabelI18n(preferences.lifestyle_preferences.pets) });
+  // Lifestyle preferences — filter "prefer_not_to_say" values
+  if (preferences?.lifestyle_preferences?.drinking && preferences.lifestyle_preferences.drinking !== 'prefer_not_to_say' && isFieldVisible(fv, 'drinking')) pills.push({ icon: 'glass-wine', value: formatLabelI18n(preferences.lifestyle_preferences.drinking) });
+  if (preferences?.lifestyle_preferences?.smoking && preferences.lifestyle_preferences.smoking !== 'prefer_not_to_say' && isFieldVisible(fv, 'smoking')) pills.push({ icon: 'smoking-off', value: formatLabelI18n(preferences.lifestyle_preferences.smoking) });
+  if (preferences?.lifestyle_preferences?.smokes_weed && isFieldVisible(fv, 'smokes_weed')) pills.push({ icon: 'leaf', value: `${t('profileCard.vitals.weed', 'Weed')}: ${formatLabelI18n(preferences.lifestyle_preferences.smokes_weed)}` });
+  if (preferences?.lifestyle_preferences?.does_drugs && isFieldVisible(fv, 'does_drugs')) pills.push({ icon: 'pill', value: `${t('profileCard.vitals.drugs', 'Drugs')}: ${formatLabelI18n(preferences.lifestyle_preferences.does_drugs)}` });
+  if (preferences?.lifestyle_preferences?.pets && isFieldVisible(fv, 'pets')) pills.push({ icon: 'paw-outline', value: formatLabelI18n(preferences.lifestyle_preferences.pets) });
   // Children
   if (isFieldVisible(fv, 'wants_children')) {
     if (preferences?.wants_children === true) {
@@ -456,8 +452,8 @@ const VitalsSection = React.memo(function VitalsSection({
   // Build rows for vertical list (using outline icons for clean Hinge look)
   const rows: { icon: string; value: string }[] = [];
 
-  if (profile.hometown) rows.push({ icon: 'home-outline', value: profile.hometown });
-  if (profile.religion && isFieldVisible(fv, 'religion')) rows.push({ icon: 'book-open-outline', value: translateProfileValue(t, 'religion', profile.religion) });
+  if (profile.hometown && isFieldVisible(fv, 'hometown')) rows.push({ icon: 'home-outline', value: profile.hometown });
+  if (profile.religion && profile.religion !== 'Prefer not to say' && isFieldVisible(fv, 'religion')) rows.push({ icon: 'book-open-outline', value: translateProfileValue(t, 'religion', profile.religion) });
   if (profile.ethnicity && isFieldVisible(fv, 'ethnicity') && (Array.isArray(profile.ethnicity) ? !profile.ethnicity.includes('Prefer not to say') : profile.ethnicity !== 'Prefer not to say')) {
     rows.push({ icon: 'account-circle-outline', value: translateProfileArray(t, 'ethnicity', profile.ethnicity) });
   }
@@ -468,13 +464,10 @@ const VitalsSection = React.memo(function VitalsSection({
       : formatLabelI18n(preferences?.primary_reason || '');
     rows.push({ icon: 'magnify', value: goalText });
   }
-  if (profile.languages_spoken && profile.languages_spoken.length > 0) {
+  if (profile.languages_spoken && profile.languages_spoken.length > 0 && isFieldVisible(fv, 'languages_spoken')) {
     rows.push({ icon: 'translate', value: translateProfileArray(t, 'languages_spoken', profile.languages_spoken) });
   }
-  if (profile.love_language) {
-    rows.push({ icon: 'heart-outline', value: translateProfileArray(t, 'love_language', profile.love_language) });
-  }
-  if (profile.political_views && isFieldVisible(fv, 'political_views')) {
+  if (profile.political_views && profile.political_views !== 'Prefer not to say' && isFieldVisible(fv, 'political_views')) {
     rows.push({ icon: 'vote-outline', value: translateProfileValue(t, 'political_views', profile.political_views) });
   }
   // Living & Finances (in vitals area alongside other profile details)
@@ -869,6 +862,25 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           </View>
         )}
 
+        {/* Profile Completeness Banner */}
+        <ProfileCompletenessBanner
+          photoCount={photos.length}
+          promptCount={promptAnswers.length}
+          isOwnProfile={isOwnProfile || false}
+          displayName={profile.display_name}
+          t={t}
+        />
+
+        {/* Ideal Lavender Marriage — surfaced early so viewers immediately understand intent */}
+        <IdealMarriageCard
+          primaryReasons={profile.preferences?.primary_reasons}
+          wantsChildren={profile.preferences?.wants_children}
+          childrenArrangement={profile.preferences?.children_arrangement}
+          housingPreference={profile.preferences?.housing_preference}
+          financialArrangement={profile.preferences?.financial_arrangement}
+          relationshipType={profile.preferences?.relationship_type}
+        />
+
         {/* First Prompt */}
         {promptAnswers[0] && (
           <PromptCard
@@ -935,86 +947,12 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           />
         )}
 
-        {/* Ideal Lavender Marriage */}
-        <IdealMarriageCard
-          primaryReasons={profile.preferences?.primary_reasons}
-          wantsChildren={profile.preferences?.wants_children}
-          childrenArrangement={profile.preferences?.children_arrangement}
-          housingPreference={profile.preferences?.housing_preference}
-          financialArrangement={profile.preferences?.financial_arrangement}
-          relationshipType={profile.preferences?.relationship_type}
+        {/* Combined Must-Haves & Dealbreakers */}
+        <LookingForSection
+          mustHaves={preferences?.must_haves}
+          dealbreakers={preferences?.dealbreakers}
+          t={t}
         />
-
-        {/* Favorites Section */}
-        {profile.interests && (
-          (profile.interests.movies?.length ?? 0) > 0 ||
-          (profile.interests.music?.length ?? 0) > 0 ||
-          (profile.interests.books?.length ?? 0) > 0 ||
-          (profile.interests.tv_shows?.length ?? 0) > 0
-        ) && (
-          <View style={styles.favoritesSection}>
-            <View style={styles.favoritesSectionHeader}>
-              <MaterialCommunityIcons name="star-circle" size={24} color="#A08AB7" />
-              <Text style={styles.favoritesSectionTitle}>{t('profileCard.section.favorites')}</Text>
-            </View>
-
-            {profile.interests.movies && profile.interests.movies.length > 0 && (
-              <View style={styles.favoriteCategory}>
-                <View style={styles.favoriteCategoryHeader}>
-                  <MaterialCommunityIcons name="movie-open" size={20} color="#CDC2E5" />
-                  <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.movies')}</Text>
-                </View>
-                <View style={styles.favoritesList}>
-                  {profile.interests.movies.map((movie, index) => (
-                    <Text key={index} style={styles.favoriteItem}>• {movie}</Text>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {profile.interests.music && profile.interests.music.length > 0 && (
-              <View style={styles.favoriteCategory}>
-                <View style={styles.favoriteCategoryHeader}>
-                  <MaterialCommunityIcons name="music" size={20} color="#A08AB7" />
-                  <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.musicArtists')}</Text>
-                </View>
-                <View style={styles.favoritesList}>
-                  {profile.interests.music.map((artist, index) => (
-                    <Text key={index} style={styles.favoriteItem}>• {artist}</Text>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {profile.interests.books && profile.interests.books.length > 0 && (
-              <View style={styles.favoriteCategory}>
-                <View style={styles.favoriteCategoryHeader}>
-                  <MaterialCommunityIcons name="book-open-page-variant" size={20} color="#3B82F6" />
-                  <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.books')}</Text>
-                </View>
-                <View style={styles.favoritesList}>
-                  {profile.interests.books.map((book, index) => (
-                    <Text key={index} style={styles.favoriteItem}>• {book}</Text>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {profile.interests.tv_shows && profile.interests.tv_shows.length > 0 && (
-              <View style={styles.favoriteCategory}>
-                <View style={styles.favoriteCategoryHeader}>
-                  <MaterialCommunityIcons name="television" size={20} color="#10B981" />
-                  <Text style={styles.favoriteCategoryTitle}>{t('profileCard.favorites.tvShows')}</Text>
-                </View>
-                <View style={styles.favoritesList}>
-                  {profile.interests.tv_shows.map((show, index) => (
-                    <Text key={index} style={styles.favoriteItem}>• {show}</Text>
-                  ))}
-                </View>
-              </View>
-            )}
-          </View>
-        )}
 
         {/* Location Preferences Section */}
         {(preferences?.max_distance_miles || preferences?.willing_to_relocate !== undefined || preferences?.preferred_cities?.length) && (
@@ -1046,40 +984,6 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                 <Text style={styles.locationValue}>{preferences.preferred_cities.join(', ')}</Text>
               </View>
             )}
-          </View>
-        )}
-
-        {/* Must-Haves Section */}
-        {preferences?.must_haves && preferences.must_haves.length > 0 && (
-          <View style={styles.mustHavesSection}>
-            <View style={styles.mustHavesSectionHeader}>
-              <Text style={styles.mustHavesEmoji}>✅</Text>
-              <Text style={styles.mustHavesSectionTitle}>{t('profileCard.section.mustHaves')}</Text>
-            </View>
-            <Text style={styles.mustHavesSubtitle}>{t('profileCard.section.mustHavesSubtitle')}</Text>
-            {preferences.must_haves.map((item, index) => (
-              <View key={index} style={styles.mustHavesItem}>
-                <Text style={styles.mustHavesBullet}>•</Text>
-                <Text style={styles.mustHavesText}>{item}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Dealbreakers Section */}
-        {preferences?.dealbreakers && preferences.dealbreakers.length > 0 && (
-          <View style={styles.dealbreakersSection}>
-            <View style={styles.dealbreakersHeader}>
-              <Text style={styles.dealbreakersEmoji}>🚫</Text>
-              <Text style={styles.dealbreakersTitle}>{t('profileCard.section.dealbreakers')}</Text>
-            </View>
-            <Text style={styles.dealbreakersSubtitle}>{t('profileCard.section.dealbreakersSubtitle')}</Text>
-            {preferences.dealbreakers.map((item, index) => (
-              <View key={index} style={styles.dealbreakersItem}>
-                <Text style={styles.dealbreakersBullet}>•</Text>
-                <Text style={styles.dealbreakersText}>{item}</Text>
-              </View>
-            ))}
           </View>
         )}
 
@@ -1294,6 +1198,211 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
 });
 
 DiscoveryProfileView.displayName = 'DiscoveryProfileView';
+
+// Profile Completeness Banner — shown when profile has < 3 photos or < 2 prompts
+const ProfileCompletenessBanner = React.memo(function ProfileCompletenessBanner({
+  photoCount,
+  promptCount,
+  isOwnProfile,
+  displayName,
+  t,
+}: {
+  photoCount: number;
+  promptCount: number;
+  isOwnProfile: boolean;
+  displayName: string;
+  t: (key: string, opts?: any) => string;
+}) {
+  const missingPhotos = Math.max(0, 3 - photoCount);
+  const missingPrompts = Math.max(0, 2 - promptCount);
+
+  if (missingPhotos === 0 && missingPrompts === 0) return null;
+
+  if (isOwnProfile) {
+    const photoPart = missingPhotos > 0 ? t('profileCard.completeness.addPhotos', { count: missingPhotos }) : '';
+    const promptPart = missingPrompts > 0 ? t('profileCard.completeness.addPrompts', { count: missingPrompts }) : '';
+    const joiner = photoPart && promptPart ? t('profileCard.completeness.andJoiner') : '';
+    const suffix = t('profileCard.completeness.toHelpOthers');
+
+    return (
+      <View style={completenessStyles.banner}>
+        <View style={completenessStyles.bannerIcon}>
+          <MaterialCommunityIcons name="pencil-plus-outline" size={20} color="#A08AB7" />
+        </View>
+        <View style={completenessStyles.bannerContent}>
+          <Text style={completenessStyles.bannerTitle}>{t('profileCard.completeness.finishYourStory')}</Text>
+          <Text style={completenessStyles.bannerSubtitle}>
+            {photoPart}{joiner}{promptPart}{suffix}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={completenessStyles.viewerBanner}>
+      <MaterialCommunityIcons name="account-clock-outline" size={16} color="#9CA3AF" />
+      <Text style={completenessStyles.viewerText}>
+        {t('profileCard.completeness.settingUp', { name: displayName })}
+      </Text>
+    </View>
+  );
+});
+
+const completenessStyles = StyleSheet.create({
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F8F7FA',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E8E3F0',
+    gap: 12,
+  },
+  bannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F0ECF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerContent: { flex: 1 },
+  bannerTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  bannerSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+  },
+  viewerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  viewerText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+});
+
+// Combined Must-Haves + Dealbreakers section
+const LookingForSection = React.memo(function LookingForSection({
+  mustHaves,
+  dealbreakers,
+  t,
+}: {
+  mustHaves?: string[];
+  dealbreakers?: string[];
+  t: (key: string, opts?: any) => string;
+}) {
+  const hasMustHaves = mustHaves && mustHaves.length > 0;
+  const hasDealbreakers = dealbreakers && dealbreakers.length > 0;
+  if (!hasMustHaves && !hasDealbreakers) return null;
+
+  return (
+    <View style={lookingStyles.card}>
+      {hasMustHaves && (
+        <View style={hasDealbreakers ? lookingStyles.section : undefined}>
+          <View style={lookingStyles.sectionHeader}>
+            <MaterialCommunityIcons name="check-circle-outline" size={18} color="#10B981" />
+            <Text style={lookingStyles.sectionTitle}>{t('profileCard.section.lookingForMustHaves')}</Text>
+          </View>
+          <Text style={lookingStyles.subtitle}>{t('profileCard.section.lookingForMustHavesSubtitle')}</Text>
+          {mustHaves!.map((item, i) => (
+            <View key={i} style={lookingStyles.item}>
+              <Text style={lookingStyles.bullet}>•</Text>
+              <Text style={lookingStyles.itemText}>{item}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+      {hasMustHaves && hasDealbreakers && (
+        <View style={lookingStyles.divider} />
+      )}
+      {hasDealbreakers && (
+        <View>
+          <View style={lookingStyles.sectionHeader}>
+            <MaterialCommunityIcons name="close-circle-outline" size={18} color="#EF4444" />
+            <Text style={lookingStyles.sectionTitle}>{t('profileCard.section.lookingForDealbreakers')}</Text>
+          </View>
+          <Text style={lookingStyles.subtitle}>{t('profileCard.section.lookingForDealbreakersSubtitle')}</Text>
+          {dealbreakers!.map((item, i) => (
+            <View key={i} style={lookingStyles.item}>
+              <Text style={lookingStyles.bullet}>•</Text>
+              <Text style={lookingStyles.itemText}>{item}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+});
+
+const lookingStyles = StyleSheet.create({
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  section: { marginBottom: 4 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 10,
+    fontStyle: 'italic',
+    paddingLeft: 26,
+  },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingLeft: 26,
+    marginBottom: 6,
+  },
+  bullet: {
+    fontSize: 15,
+    color: '#9CA3AF',
+    marginRight: 8,
+    lineHeight: 20,
+  },
+  itemText: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+    flex: 1,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 14,
+  },
+});
 
 // Compatibility Bar Component
 const CompatBar = React.memo(function CompatBar({ label, score }: { label: string; score: number }) {
@@ -1646,49 +1755,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#000000',
     lineHeight: 24,
-  },
-  // Hobbies section styles
-  hobbiesSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  hobbiesSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
-  },
-  hobbiesSectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
-  },
-  hobbiesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  hobbyTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F3F0F8',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  hobbyText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000000',
   },
   // Favorites section styles
   favoritesSection: {

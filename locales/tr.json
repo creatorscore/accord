@@ -2110,7 +2110,7 @@
     "photoLimitMessage": "You can upload up to 6 photos",
     "photoAlreadyAdded": "This photo is already in your profile",
     "photoProcessError": "Failed to process photo. Please try again.",
-    "morePhotosNeeded": "Please add at least 4 photos to continue",
+    "morePhotosNeeded": "Please add at least 3 photos to continue",
     "profileNotFound": "Profile not found. Please go back and try again.",
     "uploadFailed": "Failed to upload. Please try again.",
     "permissionDenied": "Permission Denied",

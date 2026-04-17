@@ -1,21 +1,13 @@
 /**
  * Conditional Waveform Component
  *
- * Uses simulated waveform in development/simulator (avoids native module errors)
- * Uses real @simform_solutions/react-native-audio-waveform in production builds
- *
- * NOTE: Audio playback in development mode is visual-only (simulated).
- * expo-av has compatibility issues with the new React Native architecture.
- * Test real audio playback in TestFlight/production builds.
+ * Tries to load @simform_solutions/react-native-audio-waveform (the real native module).
+ * Falls back to a visual-only SimulatedWaveform if the native module fails to load
+ * (e.g. running in Expo Go, or on a platform where the module isn't linked).
  */
 
 import React, { useRef, useState, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
-
-// Determine if we're in a production build
-// __DEV__ is false in production builds (TestFlight, App Store, Play Store)
-// This is more reliable than checking appOwnership which can be null in EAS builds
-const isProduction = !__DEV__;
 
 // Types for the waveform component
 export type PlayerState = 'playing' | 'paused' | 'stopped';
@@ -58,6 +50,7 @@ const SimulatedWaveform = forwardRef<IWaveformRef, WaveformProps>(({
   containerStyle,
   onPlayerStateChange,
   onRecorderStateChange,
+  onChangeWaveformLoadState,
 }, ref) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -77,8 +70,9 @@ const SimulatedWaveform = forwardRef<IWaveformRef, WaveformProps>(({
     return bars;
   }, [path]);
 
-  // Cleanup interval on unmount
+  // Signal ready on mount (simulated waveform is always instantly ready)
   useEffect(() => {
+    if (mode === 'static') onChangeWaveformLoadState?.(false);
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -175,24 +169,24 @@ const SimulatedWaveform = forwardRef<IWaveformRef, WaveformProps>(({
 
 SimulatedWaveform.displayName = 'SimulatedWaveform';
 
-// Conditionally load the real waveform in production
+// Try to load the real native waveform module. Falls back to the simulated
+// visual-only component if the native module isn't linked (e.g. Expo Go).
 let RealWaveform: any = SimulatedWaveform;
 let RealPlayerState: any = { playing: 'playing', paused: 'paused', stopped: 'stopped' };
 let RealRecorderState: any = { recording: 'recording', paused: 'paused', stopped: 'stopped' };
 
-if (isProduction) {
-  try {
-    const waveformModule = require('@simform_solutions/react-native-audio-waveform');
+try {
+  const waveformModule = require('@simform_solutions/react-native-audio-waveform');
+  if (waveformModule?.Waveform) {
     RealWaveform = waveformModule.Waveform;
     RealPlayerState = waveformModule.PlayerState;
     RealRecorderState = waveformModule.RecorderState;
-  } catch (error) {
-    console.warn('Failed to load audio waveform, using simulated:', error);
   }
+} catch (error) {
+  console.warn('Failed to load native audio waveform, using simulated:', error);
 }
 
-// Export the appropriate component based on environment
-export const Waveform = isProduction ? RealWaveform : SimulatedWaveform;
+export const Waveform = RealWaveform;
 export { RealPlayerState as PlayerState, RealRecorderState as RecorderState };
 
 const styles = StyleSheet.create({

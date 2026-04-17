@@ -1,0 +1,32 @@
+{
+  "stats": {
+    "checked": 8658,
+    "rcNotFound": 0,
+    "rcNoEntitlement": 8655,
+    "fixed": 3,
+    "wouldFix": 0,
+    "reconcileFailed": 0,
+    "rcErrors": 0
+  },
+  "fixed": [
+    {
+      "user_id": "7c3e792a-7919-45fb-9b5e-a445a4b9d915",
+      "tier": "premium",
+      "expires": "2026-04-15T12:26:17Z",
+      "action": "reconciled"
+    },
+    {
+      "user_id": "b043dc63-aef6-446f-b504-c23b94dd6684",
+      "tier": "premium",
+      "expires": "2026-04-15T12:02:19Z",
+      "action": "reconciled"
+    },
+    {
+      "user_id": "892e456d-1b74-4398-9d89-c7edcd94383a",
+      "tier": "premium",
+      "expires": "2026-04-14T23:31:42Z",
+      "action": "reconciled"
+    }
+  ],
+  "dryRun": false
+}

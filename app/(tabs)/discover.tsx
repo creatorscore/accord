@@ -32,6 +32,7 @@ import * as Crypto from 'expo-crypto';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { COLORS } from '@/theme/colors';
 import { trackUserAction, trackFunnel, trackEvent } from '@/lib/analytics';
+import { captureException } from '@/lib/sentry';
 import { prefetchImages } from '@/components/shared/ConditionalImage';
 import VerificationBanner from '@/components/shared/VerificationBanner';
 import TrialExpirationBanner from '@/components/premium/TrialExpirationBanner';
@@ -49,13 +50,9 @@ interface Profile {
   longitude?: number | null;
   height_inches?: number;
   zodiac_sign?: string;
-  personality_type?: string;
-  love_language?: string | string[]; // Can be single or array: users can select multiple love languages
   languages_spoken?: string[];
   religion?: string;
   political_views?: string;
-  hobbies?: string[];
-  interests?: any; // JSONB object with arrays
   photos?: { url: string; storage_path?: string; is_primary: boolean; display_order?: number; blur_data_uri?: string | null }[];
   compatibility_score?: number;
   compatibilityBreakdown?: {
@@ -107,9 +104,7 @@ export default function Discover() {
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
   const { showToast } = useToast();
-  const { colors: _colors } = useColorScheme();
-  // Force light mode on discover screen
-  const colors = COLORS.light;
+  const { colors } = useColorScheme();
   const { isPreviewMode, returnRoute, exitPreviewMode } = usePreviewModeStore();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -121,6 +116,10 @@ export default function Discover() {
     currentProfileIdRef.current = id;
     _setCurrentProfileId(id);
   };
+  // Hash of the filter set most recently passed to loadProfiles. If this diverges from
+  // the current DB preferences on focus, the feed needs to refetch — fixes the bug where
+  // editing preferences in settings didn't take effect until leaving & reopening the app.
+  const filtersSnapshotRef = useRef<string>('');
   const [currentUserPhoto, setCurrentUserPhoto] = useState<string | null>(null);
   const [currentUserGender, setCurrentUserGender] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -156,8 +155,6 @@ export default function Discover() {
     heightMin: 48,
     heightMax: 84,
     zodiacSign: [],
-    personalityType: [],
-    loveLanguage: [],
     languagesSpoken: [],
     smoking: [],
     drinking: [],
@@ -295,7 +292,8 @@ export default function Discover() {
   }, [user?.id]);
 
   // Refresh user data when screen regains focus (returning from other tabs/screens)
-  // Note: We intentionally do NOT reload profiles here to avoid resetting currentIndex
+  // loadCurrentProfile already checks if filters changed via hash comparison
+  // and reloads profiles if needed (lines 727-732).
   const isFirstFocusForReload = useRef(true);
   useFocusEffect(
     useCallback(() => {
@@ -304,9 +302,10 @@ export default function Discover() {
         return;
       }
       // Reload current user's profile and like count (e.g. after settings changes)
+      // This picks up preference changes made on other screens.
       loadCurrentProfile();
       loadLikeCount();
-    }, [])
+    }, [user?.id])
   );
 
   // Hinge-style refresh: Show new profile when user returns to discovery screen
@@ -469,6 +468,35 @@ export default function Discover() {
 
   const [currentUserName, setCurrentUserName] = useState<string>('');
 
+  // Build a stable hash of the fields that actually influence the discover feed.
+  // Used to detect preference changes made elsewhere (e.g. settings) and refetch.
+  const computeFiltersHash = (f: FilterOptions): string => {
+    return JSON.stringify({
+      ageMin: f.ageMin,
+      ageMax: f.ageMax,
+      maxDistance: f.maxDistance,
+      genderPreference: [...(f.genderPreference || [])].sort(),
+      activeToday: f.activeToday,
+      showBlurredPhotos: f.showBlurredPhotos,
+      religion: [...(f.religion || [])].sort(),
+      politicalViews: [...(f.politicalViews || [])].sort(),
+      ethnicity: [...(f.ethnicity || [])].sort(),
+      sexualOrientation: [...(f.sexualOrientation || [])].sort(),
+      housingPreference: [...(f.housingPreference || [])].sort(),
+      financialArrangement: [...(f.financialArrangement || [])].sort(),
+      heightMin: f.heightMin,
+      heightMax: f.heightMax,
+      zodiacSign: [...(f.zodiacSign || [])].sort(),
+      languagesSpoken: [...(f.languagesSpoken || [])].sort(),
+      smoking: [...(f.smoking || [])].sort(),
+      drinking: [...(f.drinking || [])].sort(),
+      pets: [...(f.pets || [])].sort(),
+      primaryReason: [...(f.primaryReason || [])].sort(),
+      relationshipType: [...(f.relationshipType || [])].sort(),
+      wantsChildren: f.wantsChildren,
+    });
+  };
+
   const persistFilters = async (newFilters: FilterOptions) => {
     if (!currentProfileId) return;
     try {
@@ -480,8 +508,6 @@ export default function Discover() {
         heightMin: newFilters.heightMin,
         heightMax: newFilters.heightMax,
         zodiacSign: newFilters.zodiacSign,
-        personalityType: newFilters.personalityType,
-        loveLanguage: newFilters.loveLanguage,
         languagesSpoken: newFilters.languagesSpoken,
         activeToday: newFilters.activeToday,
         showBlurredPhotos: newFilters.showBlurredPhotos,
@@ -494,7 +520,7 @@ export default function Discover() {
         relationshipType: newFilters.relationshipType,
         wantsChildren: newFilters.wantsChildren,
       };
-      await supabase
+      const { error: filterSaveError } = await supabase
         .from('preferences')
         .update({
           age_min: newFilters.ageMin,
@@ -504,8 +530,24 @@ export default function Discover() {
           discovery_filters: discoveryFilters,
         })
         .eq('profile_id', currentProfileId);
+      if (filterSaveError) {
+        console.error('Failed to persist filters:', filterSaveError);
+        showToast({
+          type: 'error',
+          title: t('common.error'),
+          message: t('toast.filtersSaveError') || "Couldn't save your filters. Please try again.",
+        });
+        return;
+      }
+      // Also cache locally for instant restore on app restart
+      await AsyncStorage.setItem('discovery_filters_cache', JSON.stringify(newFilters)).catch(() => {});
     } catch (err) {
       console.error('Failed to persist filters:', err);
+      showToast({
+        type: 'error',
+        title: t('common.error'),
+        message: t('toast.filtersSaveError') || "Couldn't save your filters. Please try again.",
+      });
     }
   };
 
@@ -609,8 +651,6 @@ export default function Discover() {
         heightMin: df.heightMin || 48,
         heightMax: df.heightMax || 84,
         zodiacSign: df.zodiacSign || [],
-        personalityType: df.personalityType || [],
-        loveLanguage: df.loveLanguage || [],
         languagesSpoken: df.languagesSpoken || [],
         wantsChildren: df.wantsChildren || null,
       } : filters;
@@ -674,11 +714,22 @@ export default function Discover() {
       // loadProfiles uses currentProfileIdRef.current which is already set above
       if (!hasInitiallyLoaded.current) {
         hasInitiallyLoaded.current = true;
+        filtersSnapshotRef.current = computeFiltersHash(initialFilters);
         loadProfiles(undefined, undefined, initialFilters);
         // Fetch pending likes count for teaser banner (non-blocking)
         supabase.rpc('count_unmatched_received_likes').then(({ data }) => {
           if (data != null) setPendingLikesCount(data);
         });
+      } else {
+        // Subsequent focus: if preferences changed elsewhere (e.g. matching-preferences
+        // screen, edit-profile, or another device), the feed is stale. Refetch with the
+        // freshly loaded filters and reset the index.
+        const newHash = computeFiltersHash(initialFilters);
+        if (newHash !== filtersSnapshotRef.current) {
+          filtersSnapshotRef.current = newHash;
+          setCurrentIndex(0);
+          loadProfiles(undefined, undefined, initialFilters);
+        }
       }
     } catch (error: any) {
       showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
@@ -795,6 +846,7 @@ export default function Discover() {
         { data: bannedUsers },
         { data: currentUserDataRaw, error: currentUserError },
         { data: boostedProfiles },
+        { data: reportedByMe },
       ] = await Promise.all([
         // Get people you already LIKED (we'll exclude these)
         supabase
@@ -847,6 +899,11 @@ export default function Discover() {
           .select('profile_id')
           .eq('is_active', true)
           .gt('expires_at', new Date().toISOString()),
+        // SAFETY: Users you've reported (exclude from discovery)
+        supabase
+          .from('reports')
+          .select('reported_profile_id')
+          .eq('reporter_profile_id', profileId),
       ]);
 
       if (currentUserError) throw currentUserError;
@@ -864,13 +921,16 @@ export default function Discover() {
 
       const boostedProfileIds = new Set(boostedProfiles?.map(b => b.profile_id) || []);
 
-      // Only exclude: already liked, already passed, blocked users, AND BANNED USERS
+      const reportedIds = reportedByMe?.map(r => r.reported_profile_id) || [];
+
+      // Only exclude: already liked, already passed, blocked users, banned users, AND REPORTED USERS
       // DO NOT exclude people who liked you!
       const swipedIds = [
         ...(alreadySwipedLikes?.map(l => l.liked_profile_id) || []),
         ...(alreadySwipedPasses?.map(p => p.passed_profile_id) || []),
         ...blockedIds,
-        ...bannedProfileIds
+        ...bannedProfileIds,
+        ...reportedIds,
       ];
 
       // Extract preferences as single object (Supabase returns array for joined queries)
@@ -1042,7 +1102,7 @@ export default function Discover() {
         }
 
         // Add server-side search filter using ILIKE for scalar TEXT fields only
-        // Array fields (gender, ethnicity, love_language, sexual_orientation, hobbies, etc.)
+        // Array fields (gender, ethnicity, sexual_orientation, etc.)
         // are handled by the client-side filter instead
         if (effectiveSearchKeyword.trim()) {
           const keyword = effectiveSearchKeyword.trim();
@@ -1053,13 +1113,28 @@ export default function Discover() {
             `location_city.ilike.%${keyword}%,` +
             `location_state.ilike.%${keyword}%,` +
             `religion.ilike.%${keyword}%,` +
-            `personality_type.ilike.%${keyword}%,` +
             `political_views.ilike.%${keyword}%`
           );
         }
 
-        // Only apply safety minimum age of 18
-        query = query.gte('age', 18);
+        // HARD FILTERS: Always enforce age range and gender preference, even in search mode.
+        // Users must NEVER see profiles outside their stated preferences.
+        // Safety: Always enforce minimum age of 18
+        query = query
+          .gte('age', Math.max(18, effectiveFilters.ageMin))
+          .lte('age', effectiveFilters.ageMax);
+
+        // Gender preference is a hard filter — enforce in search mode too
+        // "Everyone" means skip gender filter entirely
+        if (currentUserData.preferences?.gender_preference && currentUserData.preferences.gender_preference.length > 0) {
+          const genderPrefArray = Array.isArray(currentUserData.preferences.gender_preference)
+            ? currentUserData.preferences.gender_preference
+            : currentUserData.preferences.gender_preference.split(',').map((g: string) => g.trim());
+          if (!genderPrefArray.includes('Everyone')) {
+            const pgArrayLiteral = `{${genderPrefArray.map((g: string) => `"${g}"`).join(',')}}`;
+            query = query.filter('gender', 'ov', pgArrayLiteral);
+          }
+        }
       } else {
         // In NORMAL mode, exclude all swiped profiles
         // Cap at 150 IDs to avoid PostgREST URL length limits (400 Bad Request)
@@ -1075,19 +1150,16 @@ export default function Discover() {
           .lte('age', effectiveFilters.ageMax);
 
         // Apply gender preference filter (hard filter for all users)
-        // Users can multi-select genders, so this should be a hard requirement
-        // Use array overlap operator since gender is now an array in the database
+        // "Everyone" means skip gender filter entirely
         if (currentUserData.preferences?.gender_preference && currentUserData.preferences.gender_preference.length > 0) {
-          // Convert gender_preference to array if it's a string (handles legacy data)
           const genderPrefArray = Array.isArray(currentUserData.preferences.gender_preference)
             ? currentUserData.preferences.gender_preference
             : currentUserData.preferences.gender_preference.split(',').map((g: string) => g.trim());
 
-          // Use 'overlaps' operator for array-to-array matching
-          // Format as PostgreSQL array literal with quoted values: {"value1","value2"}
-          const pgArrayLiteral = `{${genderPrefArray.map((g: string) => `"${g}"`).join(',')}}`;
-
-          query = query.filter('gender', 'ov', pgArrayLiteral);
+          if (!genderPrefArray.includes('Everyone')) {
+            const pgArrayLiteral = `{${genderPrefArray.map((g: string) => `"${g}"`).join(',')}}`;
+            query = query.filter('gender', 'ov', pgArrayLiteral);
+          }
         }
       }
 
@@ -1232,13 +1304,9 @@ export default function Discover() {
             education: profile.education,
             height_inches: profile.height_inches,
             zodiac_sign: profile.zodiac_sign,
-            personality_type: profile.personality_type,
-            love_language: profile.love_language,
             languages_spoken: profile.languages_spoken,
             religion: profile.religion,
             political_views: profile.political_views,
-            hobbies: profile.hobbies,
-            interests: profile.interests,
             is_verified: profile.is_verified,
             prompt_answers: profile.prompt_answers,
             photos: profile.photos?.sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0)),
@@ -1252,6 +1320,7 @@ export default function Discover() {
             hide_distance: profile.hide_distance || false,
             hide_last_active: profile.hide_last_active || false,
             last_active_at: profile.last_active_at,
+            is_premium: profile.is_premium || profile.is_platinum || false,
             // Supabase returns preferences as array when using joined queries, extract first element
             preferences: Array.isArray(profile.preferences) ? profile.preferences[0] : profile.preferences,
           };
@@ -1260,7 +1329,7 @@ export default function Discover() {
           try {
 
           // ====================================================================
-          // SAFETY FILTERS (ALWAYS APPLIED - NO BYPASS)
+          // SAFETY FILTERS (ALWAYS APPLIED - NO BYPASS, including search mode)
           // ====================================================================
 
           // 1. CRITICAL: Minimum age verification (prevent underage users)
@@ -1291,6 +1360,33 @@ export default function Discover() {
             return false;
           }
 
+          // 5. CRITICAL: Gender preference hard filter (client-side safety net)
+          // This must ALWAYS be enforced — user must never see genders they excluded.
+          // Server-side filters handle this too, but this is a double-check.
+          if (currentUserData.preferences?.gender_preference && currentUserData.preferences.gender_preference.length > 0) {
+            const genderPrefArr = Array.isArray(currentUserData.preferences.gender_preference)
+              ? currentUserData.preferences.gender_preference
+              : [currentUserData.preferences.gender_preference];
+            const profileGenders = Array.isArray(profile.gender) ? profile.gender : (profile.gender ? [profile.gender] : []);
+            // Check if ANY of the profile's genders match ANY of the user's preferred genders
+            // gender_preference uses plural forms ("Men", "Women") while profile.gender uses singular ("Man", "Woman")
+            const genderMap: Record<string, string> = { 'Men': 'Man', 'Women': 'Woman', 'Non-binary': 'Non-binary', 'Everyone': '' };
+            const acceptedGenders = genderPrefArr.map((g: string) => genderMap[g] || g).filter(Boolean);
+            // "Everyone" means no restriction
+            if (!genderPrefArr.includes('Everyone') && acceptedGenders.length > 0) {
+              const hasGenderMatch = profileGenders.some((pg: string) => acceptedGenders.includes(pg));
+              if (!hasGenderMatch) {
+                return false;
+              }
+            }
+          }
+
+          // 6. CRITICAL: Age range hard filter (client-side safety net)
+          // Always enforce user's age preferences, even in search mode.
+          if (profile.age < effectiveFilters.ageMin || profile.age > effectiveFilters.ageMax) {
+            return false;
+          }
+
           // ====================================================================
           // KEYWORD SEARCH FILTER (if in search mode)
           // ====================================================================
@@ -1301,8 +1397,6 @@ export default function Discover() {
             const searchableFields = [
               profile.display_name, // Allow searching by name
               profile.zodiac_sign,
-              profile.personality_type,
-              profile.love_language,
               profile.religion,
               profile.political_views,
               profile.location_city,
@@ -1310,19 +1404,9 @@ export default function Discover() {
               profile.gender, // Allow searching by gender
               profile.sexual_orientation, // Allow searching by orientation
               profile.ethnicity, // Allow searching by ethnicity
-              ...(profile.hobbies || []),
               ...(profile.languages_spoken || []),
               ...(profile.prompt_answers?.flatMap((pa: any) => [pa.prompt, pa.answer]) || []),
             ];
-
-            // Handle interests (JSONB object with arrays: movies, music, books, tv_shows)
-            if (profile.interests && typeof profile.interests === 'object') {
-              Object.values(profile.interests).forEach((arr: any) => {
-                if (Array.isArray(arr)) {
-                  searchableFields.push(...arr);
-                }
-              });
-            }
 
             // Handle preferences fields
             if (profile.preferences) {
@@ -1348,13 +1432,8 @@ export default function Discover() {
               return false; // Keyword not found
             }
 
-            // In search mode, skip preference filters - show all keyword matches
-            // Only apply critical safety filters (minimum age 18)
-            if (profile.age < 18) {
-              return false;
-            }
-
-            // Search matched and passes safety check - include this profile!
+            // In search mode, skip premium/preference filters — show all keyword matches.
+            // Gender preference and age range are already enforced in the safety filters above.
             return true;
           }
 
@@ -1362,14 +1441,8 @@ export default function Discover() {
           // DEALBREAKER FILTERS (only in NORMAL mode, not search mode)
           // ====================================================================
 
-          // 1. STRICT AGE FILTER (no buffer, exact preferences)
-          // ONE-SIDED: Only check if profile fits current user's age preferences
-          // Do NOT check if current user fits profile's age preferences (removed for small userbase)
-          if (profile.age < effectiveFilters.ageMin || profile.age > effectiveFilters.ageMax) {
-
-            return false;
-          }
-
+          // Age and gender preference are now enforced in the SAFETY FILTERS section above
+          // (always applied, including search mode). No duplicate check needed here.
 
           // 1b. RELATIONSHIP TYPE / INTENTION FILTER (quick filter)
           if (selectedIntentionRef.current) {
@@ -1584,22 +1657,6 @@ export default function Discover() {
             }
           }
 
-          // Personality type (MBTI) filter
-          if (isPremium && effectiveFilters.personalityType.length > 0 && profile.personality_type) {
-            if (!effectiveFilters.personalityType.includes(profile.personality_type)) {
-              return false;
-            }
-          }
-
-          // Love language filter (profile.love_language is text[] in DB)
-          if (isPremium && effectiveFilters.loveLanguage.length > 0 && profile.love_language) {
-            const profileLoveLanguages = Array.isArray(profile.love_language) ? profile.love_language : [profile.love_language];
-            const loveLanguageMatch = profileLoveLanguages.some((l: string) => effectiveFilters.loveLanguage.includes(l));
-            if (!loveLanguageMatch) {
-              return false;
-            }
-          }
-
           // ====================================================================
           // PREMIUM FILTERS - Lifestyle
           // ====================================================================
@@ -1695,13 +1752,21 @@ export default function Discover() {
       const profilesWhoLikedYou = transformedProfiles.filter(p => peopleWhoLikedMeIds.has(p.id));
       const otherProfiles = transformedProfiles.filter(p => !peopleWhoLikedMeIds.has(p.id));
 
-      // Sort other profiles by: 1) Boosted status, 2) Compatibility score
+      // Sort other profiles by: 1) Boosted status, 2) Subscriber status, 3) Compatibility score
+      // Subscribers get a ranking boost so they appear higher in feeds, increasing
+      // their match rate and reducing churn from low engagement.
       const sortedOtherProfiles = otherProfiles.sort((a, b) => {
         const aIsBoosted = boostedProfileIds.has(a.id);
         const bIsBoosted = boostedProfileIds.has(b.id);
 
         if (aIsBoosted && !bIsBoosted) return -1;
         if (!aIsBoosted && bIsBoosted) return 1;
+
+        // Subscribers rank higher than free users (within same boost tier)
+        const aIsSub = (a as any).is_premium === true;
+        const bIsSub = (b as any).is_premium === true;
+        if (aIsSub && !bIsSub) return -1;
+        if (!aIsSub && bIsSub) return 1;
 
         // Otherwise sort by compatibility score
         return (b.compatibility_score || 0) - (a.compatibility_score || 0);
@@ -1773,6 +1838,7 @@ export default function Discover() {
       }
     } catch (error: any) {
       console.error('❌ Error loading profiles:', error);
+      captureException(error instanceof Error ? error : new Error(error?.message || 'Discovery profile load failed'), { context: 'discovery_load' });
       showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profilesLoadError') });
     } finally {
       setLoading(false);
@@ -1814,10 +1880,14 @@ export default function Discover() {
       }
 
       // Insert pass into database
-      await supabase.from('passes').insert({
+      const { error: passError } = await supabase.from('passes').insert({
         passer_profile_id: currentProfileId,
         passed_profile_id: targetProfile.id,
       });
+      if (passError) {
+        console.error('Failed to record pass:', passError);
+        // Non-blocking: still advance to next card, but log the failure
+      }
 
       // Track swipe left
       trackUserAction.swipedLeft(targetProfile.id);
@@ -2083,6 +2153,7 @@ export default function Discover() {
       return true;
     } catch (error: any) {
       console.error('❌ Error recording like:', error);
+      captureException(error instanceof Error ? error : new Error(error?.message || 'Like recording failed'), { context: 'discovery_like' });
       if (error?.code === 'P0001' && error?.message?.includes('Daily like limit')) {
         setShowPaywall(true);
       }
@@ -2144,13 +2215,14 @@ export default function Discover() {
         let currentCount = profileData.super_likes_count || 0;
         if (daysSinceReset >= 7) {
           currentCount = 0;
-          await supabase
+          const { error: resetError } = await supabase
             .from('profiles')
             .update({
               super_likes_count: 0,
               super_likes_reset_date: now.toISOString(),
             })
             .eq('id', currentProfileId);
+          if (resetError) console.error('Failed to reset super like count:', resetError);
         }
 
         // Check limit for premium users (5 per week)
@@ -2211,12 +2283,15 @@ export default function Discover() {
       trackUserAction.superLikeUsed(targetProfile.id);
 
       // Increment super like count
-      await supabase
+      const { error: superLikeCountError } = await supabase
         .from('profiles')
         .update({
           super_likes_count: (profileData?.super_likes_count || 0) + 1,
         })
         .eq('id', currentProfileId);
+      if (superLikeCountError) {
+        console.error('Failed to update super like count:', superLikeCountError);
+      }
 
       // Check if target user has already liked current user (mutual like = match)
       // Uses SECURITY DEFINER RPC to bypass RLS (free users can't directly read received likes)
@@ -2482,8 +2557,6 @@ export default function Discover() {
           heightMin: filters.heightMin,
           heightMax: filters.heightMax,
           zodiacSign: filters.zodiacSign,
-          personalityType: filters.personalityType,
-          loveLanguage: filters.loveLanguage,
           languagesSpoken: filters.languagesSpoken,
           activeToday: filters.activeToday,
           showBlurredPhotos: filters.showBlurredPhotos,
@@ -3410,10 +3483,14 @@ export default function Discover() {
         <FilterModal
           visible={showFilterModal}
           onClose={() => setShowFilterModal(false)}
-          onApply={(newFilters) => {
+          onApply={async (newFilters) => {
             setFilters(newFilters);
             setShowFilterModal(false);
-            persistFilters(newFilters);
+            filtersSnapshotRef.current = computeFiltersHash(newFilters);
+            setCurrentIndex(0);
+            // Await persistFilters so the DB write completes before the user
+            // navigates away — prevents stale filters on next load.
+            await persistFilters(newFilters);
             loadProfiles(undefined, undefined, newFilters);
           }}
           currentFilters={filters}
@@ -3674,8 +3751,8 @@ export default function Discover() {
                 )}
               </View>
 
-              {/* Verification Banner - Prompt unverified users to verify */}
-              {showVerificationBanner && !isPhotoVerified && (
+              {/* Verification Banner - Prompt unverified users to verify (hidden if onboarding incomplete) */}
+              {showVerificationBanner && !isPhotoVerified && isProfileComplete && (
                 <VerificationBanner onDismiss={handleDismissVerificationBanner} />
               )}
 
@@ -3824,10 +3901,12 @@ export default function Discover() {
       <FilterModal
         visible={showFilterModal}
         onClose={() => setShowFilterModal(false)}
-        onApply={(newFilters) => {
+        onApply={async (newFilters) => {
           setFilters(newFilters);
           setShowFilterModal(false);
-          persistFilters(newFilters);
+          filtersSnapshotRef.current = computeFiltersHash(newFilters);
+          setCurrentIndex(0);
+          await persistFilters(newFilters);
           loadProfiles(undefined, undefined, newFilters);
         }}
         currentFilters={filters}
@@ -3856,6 +3935,10 @@ export default function Discover() {
           }}
           reportedProfileId={reportingProfile.id}
           reportedProfileName={reportingProfile.name}
+          onReportSuccess={(reportedId, didBlock) => {
+            // Remove the reported profile from the deck so they can't reappear
+            setProfiles(prev => prev.filter(p => p.id !== reportedId));
+          }}
         />
       )}
 

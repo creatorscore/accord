@@ -15,10 +15,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
+import { useColorScheme } from '@/lib/useColorScheme';
 import { supabase } from '@/lib/supabase';
 
 export default function DeleteAccount() {
   const { t } = useTranslation();
+  const { isDarkColorScheme } = useColorScheme();
   const { user, signOut } = useAuth();
 
   const DELETE_REASONS = [
@@ -116,18 +118,40 @@ export default function DeleteAccount() {
     }
   };
 
+  const dark = isDarkColorScheme;
+  const dynamicStyles = {
+    container: { backgroundColor: dark ? '#0F0F1A' : '#F9FAFB' },
+    header: { backgroundColor: dark ? '#1C1C2E' : '#fff', borderBottomColor: dark ? '#2C2C3E' : '#E5E7EB' },
+    headerTitle: { color: dark ? '#F5F5F7' : '#111827' },
+    sectionTitle: { color: dark ? '#F5F5F7' : '#111827' },
+    sectionDescription: { color: dark ? '#9CA3AF' : '#6B7280' },
+    deletionList: { backgroundColor: dark ? '#1C1C2E' : '#fff' },
+    deletionItemText: { color: dark ? '#D1D5DB' : '#374151' },
+    alternativeCard: { backgroundColor: dark ? '#1C1C2E' : '#fff', borderColor: dark ? '#2C2C3E' : '#E5E7EB' },
+    alternativeTitle: { color: dark ? '#F5F5F7' : '#111827' },
+    alternativeText: { color: dark ? '#9CA3AF' : '#6B7280' },
+    reasonOption: { backgroundColor: dark ? '#1C1C2E' : '#fff', borderColor: dark ? '#2C2C3E' : '#E5E7EB' },
+    reasonOptionSelected: { borderColor: '#A08AB7', backgroundColor: dark ? '#2C2C3E' : '#F3E8FF' },
+    reasonLabel: { color: dark ? '#D1D5DB' : '#374151' },
+    feedbackInput: { backgroundColor: dark ? '#1C1C2E' : '#fff', borderColor: dark ? '#2C2C3E' : '#E5E7EB', color: dark ? '#F5F5F7' : '#111827' },
+    confirmInput: { backgroundColor: dark ? '#1C1C2E' : '#fff', color: dark ? '#F5F5F7' : '#111827' },
+    characterCount: { color: dark ? '#6B7280' : '#9CA3AF' },
+    footerNote: { color: dark ? '#6B7280' : '#9CA3AF' },
+    radioOuter: { borderColor: dark ? '#4B5563' : '#D1D5DB' },
+  };
+
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, dynamicStyles.container]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}
     >
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, dynamicStyles.header]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
+          <MaterialCommunityIcons name="chevron-left" size={28} color={dark ? '#F5F5F7' : '#111827'} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('deleteAccount.title')}</Text>
+        <Text style={[styles.headerTitle, dynamicStyles.headerTitle]}>{t('deleteAccount.title')}</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -138,7 +162,7 @@ export default function DeleteAccount() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Warning Banner */}
-        <View style={styles.warningBanner}>
+        <View style={[styles.warningBanner, dark && { backgroundColor: '#2C1B1B', borderColor: '#5C2020' }]}>
           <MaterialCommunityIcons name="alert" size={32} color="#EF4444" />
           <View style={styles.warningContent}>
             <Text style={styles.warningTitle}>{t('deleteAccount.warningTitle')}</Text>
@@ -150,8 +174,8 @@ export default function DeleteAccount() {
 
         {/* What Gets Deleted */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('deleteAccount.whatWillBeDeleted')}</Text>
-          <View style={styles.deletionList}>
+          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>{t('deleteAccount.whatWillBeDeleted')}</Text>
+          <View style={[styles.deletionList, dynamicStyles.deletionList]}>
             {[
               t('deleteAccount.deletionItems.profile'),
               t('deleteAccount.deletionItems.matches'),
@@ -162,7 +186,7 @@ export default function DeleteAccount() {
             ].map((item, index) => (
               <View key={index} style={styles.deletionItem}>
                 <MaterialCommunityIcons name="close-circle" size={20} color="#EF4444" />
-                <Text style={styles.deletionItemText}>{item}</Text>
+                <Text style={[styles.deletionItemText, dynamicStyles.deletionItemText]}>{item}</Text>
               </View>
             ))}
           </View>
@@ -170,36 +194,36 @@ export default function DeleteAccount() {
 
         {/* Alternatives */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('deleteAccount.beforeYouGo')}</Text>
-          <Text style={styles.sectionDescription}>
+          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>{t('deleteAccount.beforeYouGo')}</Text>
+          <Text style={[styles.sectionDescription, dynamicStyles.sectionDescription]}>
             {t('deleteAccount.considerAlternatives')}
           </Text>
 
-          <TouchableOpacity style={styles.alternativeCard}>
+          <TouchableOpacity style={[styles.alternativeCard, dynamicStyles.alternativeCard]}>
             <MaterialCommunityIcons name="pause-circle" size={24} color="#A08AB7" />
             <View style={styles.alternativeContent}>
-              <Text style={styles.alternativeTitle}>{t('deleteAccount.alternatives.takeBreak')}</Text>
-              <Text style={styles.alternativeText}>
+              <Text style={[styles.alternativeTitle, dynamicStyles.alternativeTitle]}>{t('deleteAccount.alternatives.takeBreak')}</Text>
+              <Text style={[styles.alternativeText, dynamicStyles.alternativeText]}>
                 {t('deleteAccount.alternatives.takeBreakDesc')}
               </Text>
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.alternativeCard}>
+          <TouchableOpacity style={[styles.alternativeCard, dynamicStyles.alternativeCard]}>
             <MaterialCommunityIcons name="eye-off" size={24} color="#A08AB7" />
             <View style={styles.alternativeContent}>
-              <Text style={styles.alternativeTitle}>{t('deleteAccount.alternatives.privacySettings')}</Text>
-              <Text style={styles.alternativeText}>
+              <Text style={[styles.alternativeTitle, dynamicStyles.alternativeTitle]}>{t('deleteAccount.alternatives.privacySettings')}</Text>
+              <Text style={[styles.alternativeText, dynamicStyles.alternativeText]}>
                 {t('deleteAccount.alternatives.privacySettingsDesc')}
               </Text>
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.alternativeCard}>
+          <TouchableOpacity style={[styles.alternativeCard, dynamicStyles.alternativeCard]}>
             <MaterialCommunityIcons name="email" size={24} color="#A08AB7" />
             <View style={styles.alternativeContent}>
-              <Text style={styles.alternativeTitle}>{t('deleteAccount.alternatives.contactSupport')}</Text>
-              <Text style={styles.alternativeText}>
+              <Text style={[styles.alternativeTitle, dynamicStyles.alternativeTitle]}>{t('deleteAccount.alternatives.contactSupport')}</Text>
+              <Text style={[styles.alternativeText, dynamicStyles.alternativeText]}>
                 {t('deleteAccount.alternatives.contactSupportDesc')}
               </Text>
             </View>
@@ -208,8 +232,8 @@ export default function DeleteAccount() {
 
         {/* Deletion Form */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('deleteAccount.tellUsWhy')}</Text>
-          <Text style={styles.sectionDescription}>
+          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>{t('deleteAccount.tellUsWhy')}</Text>
+          <Text style={[styles.sectionDescription, dynamicStyles.sectionDescription]}>
             {t('deleteAccount.feedbackHelps')}
           </Text>
 
@@ -218,23 +242,24 @@ export default function DeleteAccount() {
               key={reason.id}
               style={[
                 styles.reasonOption,
-                selectedReason === reason.id && styles.reasonOptionSelected,
+                dynamicStyles.reasonOption,
+                selectedReason === reason.id && [styles.reasonOptionSelected, dynamicStyles.reasonOptionSelected],
               ]}
               onPress={() => setSelectedReason(reason.id)}
             >
-              <View style={styles.radioOuter}>
+              <View style={[styles.radioOuter, dynamicStyles.radioOuter]}>
                 {selectedReason === reason.id && (
                   <View style={styles.radioInner} />
                 )}
               </View>
-              <Text style={styles.reasonLabel}>{reason.label}</Text>
+              <Text style={[styles.reasonLabel, dynamicStyles.reasonLabel]}>{reason.label}</Text>
             </TouchableOpacity>
           ))}
 
           <TextInput
-            style={styles.feedbackInput}
+            style={[styles.feedbackInput, dynamicStyles.feedbackInput]}
             placeholder={t('deleteAccount.additionalFeedback')}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={dark ? '#6B7280' : '#9CA3AF'}
             value={feedback}
             onChangeText={setFeedback}
             multiline
@@ -242,20 +267,20 @@ export default function DeleteAccount() {
             textAlignVertical="top"
             maxLength={500}
           />
-          <Text style={styles.characterCount}>{feedback.length}/500</Text>
+          <Text style={[styles.characterCount, dynamicStyles.characterCount]}>{feedback.length}/500</Text>
         </View>
 
         {/* Confirmation */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('deleteAccount.typeDeleteToConfirm')}</Text>
-          <Text style={styles.sectionDescription}>
+          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>{t('deleteAccount.typeDeleteToConfirm')}</Text>
+          <Text style={[styles.sectionDescription, dynamicStyles.sectionDescription]}>
             {t('deleteAccount.confirmUnderstand')}
           </Text>
 
           <TextInput
-            style={styles.confirmInput}
+            style={[styles.confirmInput, dynamicStyles.confirmInput]}
             placeholder={t('deleteAccount.typeDeletePlaceholder')}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={dark ? '#6B7280' : '#9CA3AF'}
             value={confirmText}
             onChangeText={setConfirmText}
             autoCapitalize="characters"
@@ -283,7 +308,7 @@ export default function DeleteAccount() {
           )}
         </TouchableOpacity>
 
-        <Text style={styles.footerNote}>
+        <Text style={[styles.footerNote, dynamicStyles.footerNote]}>
           {t('deleteAccount.footerNote')}
         </Text>
       </ScrollView>

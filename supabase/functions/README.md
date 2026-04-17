@@ -51,8 +51,8 @@ done
 - **`reviews-get-profile`**: Get review data for profiles
 - **`reviews-notify`**: Send review reminder notifications
 - **`reviews-submit`**: Submit user reviews
-- **`mailerlite-sync`**: Sync users to MailerLite
-- **`mailerlite-webhook`**: Handle MailerLite webhooks
+- **`resend-webhook`**: Handle Resend email webhooks (bounce, spam, delivery)
+- **`winback-subscribers`**: Re-engagement for expired-but-active subscribers
 
 ## Development Workflow
 

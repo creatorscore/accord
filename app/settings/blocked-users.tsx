@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useColorScheme } from '@/lib/useColorScheme';
 import { supabase } from '@/lib/supabase';
 import { signPhotoUrls } from '@/lib/signed-urls';
 
@@ -32,6 +33,7 @@ interface BlockedUser {
 
 export default function BlockedUsers() {
   const { t } = useTranslation();
+  const { isDarkColorScheme } = useColorScheme();
   const { user } = useAuth();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
@@ -198,7 +200,7 @@ export default function BlockedUsers() {
   };
 
   const renderBlockedUser = ({ item }: { item: BlockedUser }) => (
-    <View style={styles.userCard}>
+    <View style={[styles.userCard, dynamicStyles.userCard]}>
       <Image
         source={{
           uri: item.profile.photo_url || 'https://via.placeholder.com/56',
@@ -208,7 +210,7 @@ export default function BlockedUsers() {
 
       <View style={styles.userInfo}>
         <View style={styles.nameRow}>
-          <Text style={styles.name}>
+          <Text style={[styles.name, dynamicStyles.name]}>
             {item.profile.display_name}, {item.profile.age}
           </Text>
           {item.profile.is_verified && (
@@ -220,14 +222,15 @@ export default function BlockedUsers() {
           )}
         </View>
         {item.profile.location_city && (
-          <Text style={styles.location}>{item.profile.location_city}</Text>
+          <Text style={[styles.location, dynamicStyles.location]}>{item.profile.location_city}</Text>
         )}
-        <Text style={styles.blockedDate}>{t('settings.blockedUsers.blockedDate', { time: getTimeAgo(item.created_at) })}</Text>
+        <Text style={[styles.blockedDate, dynamicStyles.blockedDate]}>{t('settings.blockedUsers.blockedDate', { time: getTimeAgo(item.created_at) })}</Text>
       </View>
 
       <TouchableOpacity
         style={[
           styles.unblockButton,
+          dynamicStyles.unblockButton,
           unblocking === item.id && styles.unblockButtonDisabled,
         ]}
         onPress={() => handleUnblock(item)}
@@ -242,26 +245,40 @@ export default function BlockedUsers() {
     </View>
   );
 
+  const dynamicStyles = {
+    container: { backgroundColor: isDarkColorScheme ? '#0F0F1A' : '#F9FAFB' },
+    header: { backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#fff', borderBottomColor: isDarkColorScheme ? '#2C2C3E' : '#E5E7EB' },
+    headerTitle: { color: isDarkColorScheme ? '#F5F5F7' : '#111827' },
+    userCard: { backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#fff' },
+    name: { color: isDarkColorScheme ? '#F5F5F7' : '#111827' },
+    location: { color: isDarkColorScheme ? '#9CA3AF' : '#6B7280' },
+    blockedDate: { color: isDarkColorScheme ? '#6B7280' : '#9CA3AF' },
+    unblockButton: { backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#fff', borderColor: '#A08AB7' },
+    emptyTitle: { color: isDarkColorScheme ? '#F5F5F7' : '#111827' },
+    emptyText: { color: isDarkColorScheme ? '#9CA3AF' : '#6B7280' },
+    loadingText: { color: isDarkColorScheme ? '#9CA3AF' : '#6B7280' },
+  };
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, dynamicStyles.container]}>
         <ActivityIndicator size="large" color="#A08AB7" />
-        <Text style={styles.loadingText}>{t('settings.blockedUsers.loading')}</Text>
+        <Text style={[styles.loadingText, dynamicStyles.loadingText]}>{t('settings.blockedUsers.loading')}</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, dynamicStyles.container]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, dynamicStyles.header]}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
+          <MaterialCommunityIcons name="chevron-left" size={28} color={isDarkColorScheme ? '#F5F5F7' : '#111827'} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('settings.blockedUsers.title')}</Text>
+        <Text style={[styles.headerTitle, dynamicStyles.headerTitle]}>{t('settings.blockedUsers.title')}</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -276,10 +293,10 @@ export default function BlockedUsers() {
             <MaterialCommunityIcons
               name="cancel"
               size={64}
-              color="#D1D5DB"
+              color={isDarkColorScheme ? '#3F3F46' : '#D1D5DB'}
             />
-            <Text style={styles.emptyTitle}>{t('settings.blockedUsers.emptyTitle')}</Text>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyTitle, dynamicStyles.emptyTitle]}>{t('settings.blockedUsers.emptyTitle')}</Text>
+            <Text style={[styles.emptyText, dynamicStyles.emptyText]}>
               {t('settings.blockedUsers.emptyText')}
             </Text>
           </View>
