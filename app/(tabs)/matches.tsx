@@ -153,17 +153,6 @@ const MatchCard = memo(function MatchCard({ item, currentProfileId, colors, onPr
           )}
         </View>
 
-        {typeof item.compatibility_score === 'number' && item.compatibility_score > 0 && (
-          <View style={styles.compatibilityRow}>
-            <LinearGradient
-              colors={['#A08AB7', '#CDC2E5']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.compatibilityBadge}
-            ><MaterialCommunityIcons name="heart" size={12} color="white" /><Text style={styles.compatibilityText}>{t('matches.matchPercentage', { score: item.compatibility_score })}</Text></LinearGradient>
-          </View>
-        )}
-
         {expirationInfo && (
           <View style={[styles.expirationBadge, expirationInfo.isUrgent && styles.expirationUrgent]}>
             <MaterialCommunityIcons
@@ -1133,34 +1122,75 @@ export default function Matches() {
 
         <View style={styles.emptyContainer}>
           <MotiView
-            from={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'spring', delay: 200 }}
+            from={{ opacity: 0, translateY: 8 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400, delay: 120 }}
+            style={styles.emptyContent}
           >
-            <View style={styles.emptyIconContainer}>
-              <LinearGradient
-                colors={['#A08AB7', '#CDC2E5']}
-                style={styles.emptyIcon}
-              >
-                <MaterialCommunityIcons name="heart-outline" size={48} color="white" />
-              </LinearGradient>
+            <View style={[styles.emptyIconWell, { backgroundColor: colors.secondary }]}>
+              <MaterialCommunityIcons name="heart-outline" size={28} color="#A08AB7" />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t('matches.noMatchesYet')}</Text>
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
               {t('matches.noMatchesText')}
             </Text>
             <TouchableOpacity
-              style={styles.emptyButton}
+              style={styles.emptyPrimaryButton}
               onPress={() => router.push('/(tabs)/discover')}
+              activeOpacity={0.85}
             >
-              <LinearGradient
-                colors={['#A08AB7', '#CDC2E5']}
-                style={styles.emptyButtonGradient}
-              >
-                <MaterialCommunityIcons name="cards-heart" size={20} color="white" />
-                <Text style={styles.emptyButtonText}>{t('matches.startSwiping')}</Text>
-              </LinearGradient>
+              <Text style={styles.emptyPrimaryButtonText}>{t('matches.startSwiping')}</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.emptySecondaryButton}
+              onPress={() => router.push('/settings/matching-preferences')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.emptySecondaryButtonText, { color: colors.mutedForeground }]}>
+                {t('matches.emptyAdjustFilters')}
+              </Text>
+            </TouchableOpacity>
+          </MotiView>
+
+          <MotiView
+            from={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ type: 'timing', duration: 600, delay: 380 }}
+            style={styles.emptyPreviewWrap}
+            pointerEvents="none"
+          >
+            <Text style={[styles.emptyPreviewLabel, { color: colors.mutedForeground }]}>
+              {t('matches.emptyPreviewLabel')}
+            </Text>
+            <View style={[styles.matchCard, { backgroundColor: colors.card }]}>
+              <View style={styles.photoContainer}>
+                <Image
+                  source={require('@/assets/images/mock-conversation-avatar.jpg')}
+                  style={styles.photo}
+                />
+                <View style={[styles.verifiedBadge, { backgroundColor: colors.card }]}>
+                  <MaterialCommunityIcons name="check-decagram" size={18} color="#A08AB7" />
+                </View>
+                <View style={styles.onlineDot} />
+              </View>
+
+              <View style={styles.matchInfo}>
+                <View style={styles.matchHeader}>
+                  <Text style={[styles.matchName, { color: colors.foreground }]} numberOfLines={1}>
+                    {t('matches.emptyPreviewName')}
+                  </Text>
+                </View>
+
+                <Text style={styles.onlineStatusText}>{t('matches.emptyPreviewActive')}</Text>
+
+                <View style={styles.ctaRow}>
+                  <MaterialCommunityIcons name="message-outline" size={14} color="#A08AB7" />
+                  <Text style={styles.ctaText}>{t('matches.sayHi')}</Text>
+                </View>
+              </View>
+
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.border} />
+            </View>
           </MotiView>
         </View>
       </View>
@@ -1343,49 +1373,69 @@ const styles = StyleSheet.create({
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 32,
+    paddingTop: 48,
   },
-  emptyIconContainer: {
-    marginBottom: 24,
+  emptyContent: {
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 340,
   },
-  emptyIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  emptyIconWell: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 20,
   },
   emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 12,
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    marginBottom: 8,
     textAlign: 'center',
   },
   emptyText: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: 15,
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
+    lineHeight: 22,
+    marginBottom: 24,
   },
-  emptyButton: {
-    borderRadius: 28,
-    overflow: 'hidden',
+  emptyPrimaryButton: {
+    backgroundColor: '#A08AB7',
+    paddingVertical: 14,
+    paddingHorizontal: 36,
+    borderRadius: 999,
+    alignSelf: 'center',
   },
-  emptyButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-  },
-  emptyButtonText: {
+  emptyPrimaryButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
+    letterSpacing: 0.1,
+  },
+  emptySecondaryButton: {
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  emptySecondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+  },
+  emptyPreviewWrap: {
+    alignSelf: 'stretch',
+    marginTop: 40,
+    gap: 10,
+  },
+  emptyPreviewLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginBottom: 6,
   },
   listContent: {
     padding: 16,
@@ -1492,22 +1542,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9CA3AF',
     marginLeft: 8,
-  },
-  compatibilityRow: {
-    flexDirection: 'row',
-  },
-  compatibilityBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-  },
-  compatibilityText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
   },
   onlineStatusText: {
     fontSize: 12,

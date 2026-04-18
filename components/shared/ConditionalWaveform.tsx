@@ -158,7 +158,7 @@ const SimulatedWaveform = forwardRef<IWaveformRef, WaveformProps>(({
           );
         })}
       </View>
-      {!isProduction && (
+      {__DEV__ && (
         <View style={styles.devBadge}>
           {/* Small indicator that this is simulated - hidden in production */}
         </View>

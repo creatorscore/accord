@@ -802,7 +802,7 @@ export default function Profile() {
 
               <TouchableOpacity
                 style={[styles.menuItem, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B', borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}
-                onPress={() => router.push('/(onboarding)/basic-info')}
+                onPress={() => router.push('/(onboarding)/onboarding')}
               >
                 <View style={styles.menuItemLeft}>
                   <MaterialCommunityIcons name="clipboard-list" size={24} color="#F59E0B" />

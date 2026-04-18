@@ -11,6 +11,7 @@ import { useProfileData } from '@/contexts/ProfileDataContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useToast } from '@/contexts/ToastContext';
 import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
+import { usePhotoBlur } from '@/hooks/usePhotoBlur';
 import { signPhotoUrls } from '@/lib/signed-urls';
 import { calculateCompatibilityScore } from '@/lib/matching-algorithm';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
@@ -29,8 +30,110 @@ interface PassedProfile {
   location_state: string | null;
   photo_url: string | null;
   photo_storage_path: string | null;
+  photo_blur_data_uri: string | null;
   photo_blur_enabled: boolean;
   is_active: boolean;
+}
+
+/**
+ * Single row for a passed profile. Extracted so we can call usePhotoBlur
+ * per-row (hooks can't live inside a renderItem callback). Respects
+ * photo_blur_enabled by preferring the server-generated blur_data_uri
+ * over the weak native blurRadius fallback.
+ */
+function PassedProfileRow({
+  item,
+  undoingId,
+  formatTime,
+  t,
+  onUndoPass,
+}: {
+  item: PassedProfile;
+  undoingId: string | null;
+  formatTime: (dateStr: string) => string;
+  t: (key: string, opts?: any) => string;
+  onUndoPass: (profile: PassedProfile) => void;
+}) {
+  const { imageUri, blurRadius, onImageLoad, onImageError } = usePhotoBlur({
+    shouldBlur: item.photo_blur_enabled,
+    photoUrl: item.photo_url || '',
+    blurDataUri: item.photo_blur_data_uri,
+    blurIntensity: 30,
+  });
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(0,0,0,0.05)',
+      }}
+    >
+      <TouchableOpacity
+        onPress={() => router.push(`/profile/${item.passed_profile_id}`)}
+        style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+        activeOpacity={0.7}
+      >
+        <View style={{ width: 56, height: 56, borderRadius: 28, overflow: 'hidden', backgroundColor: '#E5E7EB' }}>
+          {item.photo_url ? (
+            <SafeBlurImage
+              source={{ uri: imageUri }}
+              style={{ width: 56, height: 56 }}
+              resizeMode="cover"
+              blurRadius={blurRadius}
+              onLoad={onImageLoad}
+              onError={onImageError}
+            />
+          ) : (
+            <View style={{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialCommunityIcons name="account" size={32} color="#9CA3AF" />
+            </View>
+          )}
+        </View>
+
+        <View style={{ flex: 1, marginLeft: 14 }}>
+          <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>
+            {item.display_name}, {item.age}
+          </Text>
+          {(item.location_city || item.location_state) && (
+            <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>
+              {[item.location_city, item.location_state].filter(Boolean).join(', ')}
+            </Text>
+          )}
+          <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
+            {t('passed.passedTime', { time: formatTime(item.passed_at) })}
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => onUndoPass(item)}
+        disabled={undoingId === item.pass_id}
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          backgroundColor: undoingId === item.pass_id ? '#E5E7EB' : '#F5F0FF',
+          borderRadius: 20,
+          marginLeft: 12,
+        }}
+        activeOpacity={0.7}
+      >
+        {undoingId === item.pass_id ? (
+          <ActivityIndicator size="small" color="#A08AB7" />
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <MaterialCommunityIcons name="heart-outline" size={18} color="#A08AB7" />
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#A08AB7' }}>
+              {t('passed.like')}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 export default function PassedProfiles() {
@@ -235,75 +338,13 @@ export default function PassedProfiles() {
   };
 
   const renderProfile = ({ item }: { item: PassedProfile }) => (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.05)',
-      }}
-    >
-      <TouchableOpacity
-        onPress={() => router.push(`/profile/${item.passed_profile_id}`)}
-        style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
-        activeOpacity={0.7}
-      >
-        <View style={{ width: 56, height: 56, borderRadius: 28, overflow: 'hidden', backgroundColor: '#E5E7EB' }}>
-          {item.photo_url ? (
-            <SafeBlurImage
-              source={{ uri: item.photo_url }}
-              style={{ width: 56, height: 56 }}
-              resizeMode="cover"
-              blurRadius={item.photo_blur_enabled ? 20 : 0}
-            />
-          ) : (
-            <View style={{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialCommunityIcons name="account" size={32} color="#9CA3AF" />
-            </View>
-          )}
-        </View>
-
-        <View style={{ flex: 1, marginLeft: 14 }}>
-          <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>
-            {item.display_name}, {item.age}
-          </Text>
-          {(item.location_city || item.location_state) && (
-            <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>
-              {[item.location_city, item.location_state].filter(Boolean).join(', ')}
-            </Text>
-          )}
-          <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
-            {t('passed.passedTime', { time: formatTime(item.passed_at) })}
-          </Text>
-        </View>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={() => handleUndoPass(item)}
-        disabled={undoingId === item.pass_id}
-        style={{
-          paddingHorizontal: 16,
-          paddingVertical: 10,
-          backgroundColor: undoingId === item.pass_id ? '#E5E7EB' : '#F5F0FF',
-          borderRadius: 20,
-          marginLeft: 12,
-        }}
-        activeOpacity={0.7}
-      >
-        {undoingId === item.pass_id ? (
-          <ActivityIndicator size="small" color="#A08AB7" />
-        ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <MaterialCommunityIcons name="heart-outline" size={18} color="#A08AB7" />
-            <Text style={{ fontSize: 14, fontWeight: '600', color: '#A08AB7' }}>
-              {t('passed.like')}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    </View>
+    <PassedProfileRow
+      item={item}
+      undoingId={undoingId}
+      formatTime={formatTime}
+      t={t}
+      onUndoPass={handleUndoPass}
+    />
   );
 
   return (

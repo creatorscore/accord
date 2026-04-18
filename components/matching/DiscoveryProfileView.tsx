@@ -33,6 +33,7 @@ import { isFieldVisible } from '@/lib/field-visibility';
 import { translateProfileValue, translateProfileArray } from '@/lib/translate-profile-values';
 import { ZoomablePhotoWrapper } from '@/components/shared/ZoomablePhotoWrapper';
 import { useTranslation } from 'react-i18next';
+import { useColorScheme } from '@/lib/useColorScheme';
 
 const { width: _SCREEN_WIDTH, height: _SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -197,6 +198,7 @@ const getLastActiveText = (lastActiveAt: string | undefined, hideLastActive: boo
 
 // Like Button Component - appears on photos and prompts
 const LikeButton = React.memo(function LikeButton({ onPress, size = 48 }: { onPress: () => void; size?: number }) {
+  const { isDarkColorScheme: dark } = useColorScheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
@@ -210,8 +212,8 @@ const LikeButton = React.memo(function LikeButton({ onPress, size = 48 }: { onPr
 
   return (
     <TouchableOpacity onPress={handlePress} activeOpacity={0.9}>
-      <Animated.View style={[styles.likeButton, { width: size, height: size, borderRadius: size / 2, transform: [{ scale: scaleAnim }] }]}>
-        <MaterialCommunityIcons name="heart-outline" size={size * 0.6} color="#1F2937" style={{ fontWeight: 'bold' }} />
+      <Animated.View style={[styles.likeButton, { width: size, height: size, borderRadius: size / 2, transform: [{ scale: scaleAnim }], backgroundColor: dark ? '#1C1C2E' : '#FFFFFF' }]}>
+        <MaterialCommunityIcons name="heart-outline" size={size * 0.6} color={dark ? '#F5F5F7' : '#1F2937'} style={{ fontWeight: 'bold' }} />
       </Animated.View>
     </TouchableOpacity>
   );
@@ -253,12 +255,14 @@ const PhotoCard = React.memo(function PhotoCard({
   const imageUri = photoBlur.imageUri;
   const effectiveBlurRadius = photoBlur.blurRadius;
 
+  const { isDarkColorScheme: dark } = useColorScheme();
+
   return (
-  <View style={styles.photoCard}>
+  <View style={[styles.photoCard, { backgroundColor: dark ? '#0F0F1A' : '#FFFFFF' }]}>
     <ZoomablePhotoWrapper enabled={!shouldBlur}>
       <SafeBlurImage
         source={{ uri: imageUri }}
-        style={styles.photoImage}
+        style={[styles.photoImage, { backgroundColor: dark ? '#1C1C2E' : '#F3F4F6' }]}
         contentFit="cover"
         cachePolicy="memory-disk"
         transition={200}
@@ -296,10 +300,11 @@ const PromptCard = React.memo(function PromptCard({
   onLike: () => void;
   showLikeButton?: boolean;
 }) {
+  const { isDarkColorScheme: dark } = useColorScheme();
   return (
-  <View style={styles.promptCard}>
-    <Text style={styles.promptQuestion}>{prompt}</Text>
-    <Text style={styles.promptAnswer}>{answer}</Text>
+  <View style={[styles.promptCard, { backgroundColor: dark ? '#0F0F1A' : '#FFFFFF', borderColor: dark ? '#2C2C3E' : '#E5E7EB' }]}>
+    <Text style={[styles.promptQuestion, { color: dark ? '#F5F5F7' : '#000000' }]}>{prompt}</Text>
+    <Text style={[styles.promptAnswer, { color: dark ? '#F5F5F7' : '#000000' }]}>{answer}</Text>
     {showLikeButton && (
       <View style={styles.promptLikeContainer}>
         <LikeButton onPress={onLike} size={44} />
@@ -311,28 +316,30 @@ const PromptCard = React.memo(function PromptCard({
 
 // Vitals Chip Component (for horizontal scroll row - Hinge style with dividers)
 const VitalsChip = React.memo(function VitalsChip({ icon, value, isLast }: { icon: string; value: string; isLast?: boolean }) {
+  const { isDarkColorScheme: dark } = useColorScheme();
   return (
   <View style={styles.vitalsChipContainer}>
     <View style={styles.vitalsChip}>
-      <MaterialCommunityIcons name={icon as any} size={20} color="#374151" />
-      <Text style={styles.vitalsChipText}>{value}</Text>
+      <MaterialCommunityIcons name={icon as any} size={20} color={dark ? '#D1D5DB' : '#374151'} />
+      <Text style={[styles.vitalsChipText, { color: dark ? '#F5F5F7' : '#000000' }]}>{value}</Text>
     </View>
-    {!isLast && <View style={styles.vitalsChipDivider} />}
+    {!isLast && <View style={[styles.vitalsChipDivider, { backgroundColor: dark ? '#2C2C3E' : '#E5E7EB' }]} />}
   </View>
   );
 });
 
 // Vitals Row Item Component (for vertical list - Hinge style with separators)
 const VitalsRowItem = React.memo(function VitalsRowItem({ icon, value, isLast }: { icon: string; value: string; isLast?: boolean }) {
+  const { isDarkColorScheme: dark } = useColorScheme();
   return (
   <View style={styles.vitalsRowContainer}>
     <View style={styles.vitalsRowItem}>
       <View style={styles.vitalsRowIconContainer}>
-        <MaterialCommunityIcons name={icon as any} size={24} color="#6B7280" />
+        <MaterialCommunityIcons name={icon as any} size={24} color={dark ? '#9CA3AF' : '#6B7280'} />
       </View>
-      <Text style={styles.vitalsRowText}>{value}</Text>
+      <Text style={[styles.vitalsRowText, { color: dark ? '#F5F5F7' : '#000000' }]}>{value}</Text>
     </View>
-    {!isLast && <View style={styles.vitalsRowSeparator} />}
+    {!isLast && <View style={[styles.vitalsRowSeparator, { backgroundColor: dark ? '#2C2C3E' : '#F3F4F6' }]} />}
   </View>
   );
 });
@@ -478,10 +485,12 @@ const VitalsSection = React.memo(function VitalsSection({
     rows.push({ icon: 'home-city-outline', value: formatArrayWithLabelsI18n(preferences.housing_preference) });
   }
 
+  const { isDarkColorScheme: dark } = useColorScheme();
+
   if (pills.length === 0 && rows.length === 0) return null;
 
   return (
-    <View style={styles.vitalsSection}>
+    <View style={[styles.vitalsSection, { backgroundColor: dark ? '#0F0F1A' : '#FFFFFF', borderColor: dark ? '#2C2C3E' : '#E5E7EB' }]}>
       {/* Horizontal scrollable chips - Hinge style */}
       {pills.length > 0 && (
         <ScrollView
@@ -503,7 +512,7 @@ const VitalsSection = React.memo(function VitalsSection({
 
       {/* Horizontal separator between chips and rows */}
       {pills.length > 0 && rows.length > 0 && (
-        <View style={styles.vitalsSectionDivider} />
+        <View style={[styles.vitalsSectionDivider, { backgroundColor: dark ? '#2C2C3E' : '#F3F4F6' }]} />
       )}
 
       {/* Vertical list with separators - Hinge style */}
@@ -551,6 +560,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
   refreshing = false,
 }, ref) => {
   const { t } = useTranslation();
+  const { isDarkColorScheme: dark } = useColorScheme();
 
   // Fall back to profile's embedded breakdown if prop not provided
   const compatibilityBreakdown = compatibilityBreakdownProp || (profile as any).compatibilityBreakdown;
@@ -742,12 +752,12 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
   }, [insets.top]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: dark ? '#0F0F1A' : '#FFFFFF' }]}>
       {/* Sticky Header Bar - appears when profile name scrolls out of view */}
       {showStickyHeader && (
-        <View style={[styles.stickyHeader, { paddingTop: insets.top + 8 }]}>
+        <View style={[styles.stickyHeader, { paddingTop: insets.top + 8, backgroundColor: dark ? 'rgba(15, 15, 26, 0.95)' : 'rgba(255, 255, 255, 0.95)', borderBottomColor: dark ? '#2C2C3E' : '#E5E7EB' }]}>
           <View style={styles.stickyHeaderContent}>
-            <Text style={styles.stickyHeaderName} numberOfLines={1}>{profile.display_name}</Text>
+            <Text style={[styles.stickyHeaderName, { color: dark ? '#F5F5F7' : '#111827' }]} numberOfLines={1}>{profile.display_name}</Text>
             {(profile.photo_verified || profile.is_verified) && (
               <MaterialCommunityIcons name="check-decagram" size={18} color="#A08AB7" style={{ marginLeft: 6 }} />
             )}
@@ -759,7 +769,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 100, paddingTop: insets.top }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 100, paddingTop: insets.top, backgroundColor: dark ? '#0F0F1A' : '#FFFFFF' }]}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={true}
         onScroll={handleScroll}
@@ -771,10 +781,10 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         {/* Discovery header (filters/search) - scrolls with content */}
         {renderHeader?.()}
         {/* Profile Header - Scrolls with content */}
-        <View onLayout={handleProfileHeaderLayout} style={styles.profileHeaderInline}>
+        <View onLayout={handleProfileHeaderLayout} style={[styles.profileHeaderInline, { backgroundColor: dark ? '#0F0F1A' : '#FFFFFF' }]}>
           <View style={styles.headerTopRow}>
             <View style={styles.nameRow}>
-              <Text style={styles.profileName}>{profile.display_name}</Text>
+              <Text style={[styles.profileName, { color: dark ? '#F5F5F7' : '#000000' }]}>{profile.display_name}</Text>
               {(profile.photo_verified || profile.is_verified) && (
                 <MaterialCommunityIcons name="check-decagram" size={24} color="#A08AB7" style={{ marginLeft: 6 }} />
               )}
@@ -783,30 +793,30 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
               {onRewind && (
                 <TouchableOpacity
                   onPress={canRewind ? onRewind : undefined}
-                  style={[styles.headerButton, !canRewind && styles.headerButtonDisabled]}
+                  style={[styles.headerButton, { backgroundColor: dark ? '#1C1C2E' : '#F3F4F6' }, !canRewind && styles.headerButtonDisabled]}
                   disabled={!canRewind}
                 >
                   <MaterialCommunityIcons
                     name="undo-variant"
                     size={20}
-                    color={canRewind ? '#6B7280' : '#D1D5DB'}
+                    color={canRewind ? (dark ? '#9CA3AF' : '#6B7280') : (dark ? '#4B5563' : '#D1D5DB')}
                   />
                 </TouchableOpacity>
               )}
-              <TouchableOpacity onPress={() => setShowActionSheet(true)} style={styles.headerButton}>
-                <MaterialCommunityIcons name="dots-horizontal" size={20} color="#6B7280" />
+              <TouchableOpacity onPress={() => setShowActionSheet(true)} style={[styles.headerButton, { backgroundColor: dark ? '#1C1C2E' : '#F3F4F6' }]}>
+                <MaterialCommunityIcons name="dots-horizontal" size={20} color={dark ? '#9CA3AF' : '#6B7280'} />
               </TouchableOpacity>
             </View>
           </View>
           <View style={styles.subInfoRow}>
             {profile.pronouns && profile.pronouns.trim() !== '' && (
-              <Text style={styles.pronounsText}>{translateProfileValue(t, 'pronouns', profile.pronouns)}</Text>
+              <Text style={[styles.pronounsText, { color: dark ? '#D1D5DB' : '#000000' }]}>{translateProfileValue(t, 'pronouns', profile.pronouns)}</Text>
             )}
             {profile.pronouns && profile.pronouns.trim() !== '' && lastActiveText && (
-              <Text style={styles.divider}>|</Text>
+              <Text style={[styles.divider, { color: dark ? '#4B5563' : '#D1D5DB' }]}>|</Text>
             )}
             {lastActiveText && (
-              <Text style={[styles.activeText, lastActiveText === t('profileCard.activity.activeNow') && styles.activeNow]}>
+              <Text style={[styles.activeText, { color: dark ? '#A08AB7' : '#3E1444' }, lastActiveText === t('profileCard.activity.activeNow') && styles.activeNow]}>
                 {lastActiveText}
               </Text>
             )}
@@ -834,11 +844,11 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
 
         {/* Voice Intro - Right after first photo */}
         {profile.voice_intro_url && (
-          <View style={styles.voiceContainer}>
-            <Text style={styles.voicePromptText}>
+          <View style={[styles.voiceContainer, { backgroundColor: dark ? '#0F0F1A' : '#FFFFFF', borderColor: dark ? '#2C2C3E' : '#E5E7EB' }]}>
+            <Text style={[styles.voicePromptText, { color: dark ? '#F5F5F7' : '#000000' }]}>
               {profile.voice_intro_prompt || t('profileCard.voice.introFallback', { name: profile.display_name })}
             </Text>
-            <View style={styles.voicePlayerContainer}>
+            <View style={[styles.voicePlayerContainer, { backgroundColor: dark ? '#1C1C2E' : '#F5F5F5' }]}>
               <TouchableOpacity style={styles.voicePlayButton} onPress={handleVoicePlayPause}>
                 <Ionicons name={isVoicePlaying ? "pause" : "play"} size={20} color="white" />
               </TouchableOpacity>
@@ -855,7 +865,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                   ))}
                 </View>
               </View>
-              <Text style={styles.voiceDuration}>
+              <Text style={[styles.voiceDuration, { color: dark ? '#F5F5F7' : '#000000' }]}>
                 {isVoicePlaying || playbackProgress > 0 ? formatTime(playbackProgress * playbackDuration) : formatTime(playbackDuration)}
               </Text>
             </View>
@@ -867,7 +877,6 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
           photoCount={photos.length}
           promptCount={promptAnswers.length}
           isOwnProfile={isOwnProfile || false}
-          displayName={profile.display_name}
           t={t}
         />
 
@@ -956,23 +965,23 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
 
         {/* Location Preferences Section */}
         {(preferences?.max_distance_miles || preferences?.willing_to_relocate !== undefined || preferences?.preferred_cities?.length) && (
-          <View style={styles.locationSection}>
+          <View style={[styles.locationSection, { backgroundColor: dark ? '#1A1708' : '#FFFBEB', borderColor: dark ? '#3D3520' : '#FEF3C7' }]}>
             <View style={styles.locationSectionHeader}>
               <MaterialCommunityIcons name="map-marker-radius" size={24} color="#F59E0B" />
-              <Text style={styles.locationSectionTitle}>{t('profileCard.section.locationRelocation')}</Text>
+              <Text style={[styles.locationSectionTitle, { color: dark ? '#F5F5F7' : '#000000' }]}>{t('profileCard.section.locationRelocation')}</Text>
             </View>
 
             {preferences?.max_distance_miles && (
               <View style={styles.locationItem}>
-                <Text style={styles.locationLabel}>{t('profileCard.location.maxDistance')}</Text>
-                <Text style={styles.locationValue}>{t('profileCard.location.upToMiles', { miles: preferences.max_distance_miles })}</Text>
+                <Text style={[styles.locationLabel, { color: dark ? '#D1D5DB' : '#000000' }]}>{t('profileCard.location.maxDistance')}</Text>
+                <Text style={[styles.locationValue, { color: dark ? '#F5F5F7' : '#000000' }]}>{t('profileCard.location.upToMiles', { miles: preferences.max_distance_miles })}</Text>
               </View>
             )}
 
             {preferences?.willing_to_relocate !== undefined && (
               <View style={styles.locationItem}>
-                <Text style={styles.locationLabel}>{t('profileCard.location.willingToRelocate')}</Text>
-                <Text style={styles.locationValue}>
+                <Text style={[styles.locationLabel, { color: dark ? '#D1D5DB' : '#000000' }]}>{t('profileCard.location.willingToRelocate')}</Text>
+                <Text style={[styles.locationValue, { color: dark ? '#F5F5F7' : '#000000' }]}>
                   {preferences.willing_to_relocate ? t('profileCard.location.openToMoving') : t('profileCard.location.stayLocal')}
                 </Text>
               </View>
@@ -980,8 +989,8 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
 
             {preferences?.preferred_cities && preferences.preferred_cities.length > 0 && (
               <View style={styles.locationItem}>
-                <Text style={styles.locationLabel}>{t('profileCard.location.preferredCities')}</Text>
-                <Text style={styles.locationValue}>{preferences.preferred_cities.join(', ')}</Text>
+                <Text style={[styles.locationLabel, { color: dark ? '#D1D5DB' : '#000000' }]}>{t('profileCard.location.preferredCities')}</Text>
+                <Text style={[styles.locationValue, { color: dark ? '#F5F5F7' : '#000000' }]}>{preferences.preferred_cities.join(', ')}</Text>
               </View>
             )}
           </View>
@@ -1040,8 +1049,8 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
       {/* Floating Pass Button - Bottom Left */}
       {!hideActions && (
         <View style={[styles.floatingPassContainer, { bottom: insets.bottom + 20 }]}>
-          <TouchableOpacity onPress={handlePass} style={styles.floatingPassButton} activeOpacity={0.9}>
-            <MaterialCommunityIcons name="close" size={34} color="#000000" />
+          <TouchableOpacity onPress={handlePass} style={[styles.floatingPassButton, { backgroundColor: dark ? '#1C1C2E' : '#FFFFFF', borderColor: dark ? '#2C2C3E' : '#E5E7EB' }]} activeOpacity={0.9}>
+            <MaterialCommunityIcons name="close" size={34} color={dark ? '#F5F5F7' : '#000000'} />
           </TouchableOpacity>
         </View>
       )}
@@ -1054,11 +1063,11 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         onRequestClose={() => setShowActionSheet(false)}
       >
         <Pressable style={styles.modalOverlay} onPress={() => setShowActionSheet(false)}>
-          <Pressable style={styles.actionSheet} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.actionSheetHeader}>
-              <Text style={styles.actionSheetTitle}>{profile.display_name}</Text>
+          <Pressable style={[styles.actionSheet, { backgroundColor: dark ? '#1C1C2E' : 'white' }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.actionSheetHeader, { borderBottomColor: dark ? '#2C2C3E' : '#F3F4F6' }]}>
+              <Text style={[styles.actionSheetTitle, { color: dark ? '#F5F5F7' : '#000000' }]}>{profile.display_name}</Text>
               <Pressable onPress={() => setShowActionSheet(false)}>
-                <MaterialCommunityIcons name="close" size={24} color="#9CA3AF" />
+                <MaterialCommunityIcons name="close" size={24} color={dark ? '#6B7280' : '#9CA3AF'} />
               </Pressable>
             </View>
             <View style={styles.actionsList}>
@@ -1067,13 +1076,13 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                   style={styles.actionItem}
                   onPress={() => { setShowActionSheet(false); setTimeout(() => onReport(), 100); }}
                 >
-                  <MaterialCommunityIcons name="flag" size={24} color="#6B7280" />
-                  <Text style={styles.actionText}>{t('profileCard.actions.report')}</Text>
+                  <MaterialCommunityIcons name="flag" size={24} color={dark ? '#9CA3AF' : '#6B7280'} />
+                  <Text style={[styles.actionText, { color: dark ? '#F5F5F7' : '#000000' }]}>{t('profileCard.actions.report')}</Text>
                 </TouchableOpacity>
               )}
               {onBlock && (
                 <TouchableOpacity
-                  style={[styles.actionItem, styles.actionItemDanger]}
+                  style={[styles.actionItem, styles.actionItemDanger, { borderTopColor: dark ? '#3B1C1C' : '#FEE2E2' }]}
                   onPress={() => { setShowActionSheet(false); setTimeout(() => onBlock(), 100); }}
                 >
                   <MaterialCommunityIcons name="block-helper" size={24} color="#EF4444" />
@@ -1093,15 +1102,15 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         backdropComponent={renderLikeSheetBackdrop}
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
-        handleIndicatorStyle={styles.likeSheetHandle}
-        backgroundStyle={styles.likeSheetBackground}
+        handleIndicatorStyle={[styles.likeSheetHandle, { backgroundColor: dark ? '#4B5563' : '#D1D5DB' }]}
+        backgroundStyle={[styles.likeSheetBackground, { backgroundColor: dark ? '#1C1C2E' : '#FFFFFF' }]}
       >
         <BottomSheetView style={[styles.likeChoiceSheet, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
           {/* Liked content preview */}
           {pendingLikeContentData?.type === 'prompt' && pendingLikeContentData.prompt && (
-            <View style={styles.likeChoicePromptPreview}>
-              <Text style={styles.likeChoicePromptQuestion} numberOfLines={1}>{pendingLikeContentData.prompt}</Text>
-              <Text style={styles.likeChoicePromptAnswer} numberOfLines={2}>{pendingLikeContentData.answer}</Text>
+            <View style={[styles.likeChoicePromptPreview, { backgroundColor: dark ? '#0F0F1A' : '#FAFAFA' }]}>
+              <Text style={[styles.likeChoicePromptQuestion, { color: dark ? '#B0A4C0' : '#8B7FA0' }]} numberOfLines={1}>{pendingLikeContentData.prompt}</Text>
+              <Text style={[styles.likeChoicePromptAnswer, { color: dark ? '#F5F5F7' : '#1F2937' }]} numberOfLines={2}>{pendingLikeContentData.answer}</Text>
             </View>
           )}
           {pendingLikeContentData?.type === 'photo' && pendingLikeContentData.index != null && photos[pendingLikeContentData.index] && (
@@ -1112,16 +1121,16 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                 contentFit="cover"
                 cachePolicy="memory-disk"
               />
-              <Text style={styles.likeChoicePhotoLabel}>{t('discover.like.likedPhoto')}</Text>
+              <Text style={[styles.likeChoicePhotoLabel, { color: dark ? '#9CA3AF' : '#6B7280' }]}>{t('discover.like.likedPhoto')}</Text>
             </View>
           )}
 
           {/* Message input */}
           <View style={styles.likeChoiceInputContainer}>
             <BottomSheetTextInput
-              style={styles.likeChoiceInput}
+              style={[styles.likeChoiceInput, { backgroundColor: dark ? '#0F0F1A' : '#F9F7FC', borderColor: dark ? '#2C2C3E' : '#E8E0F0', color: dark ? '#F5F5F7' : '#1F2937' }]}
               placeholder={t('discover.like.placeholder')}
-              placeholderTextColor="#B0A4C0"
+              placeholderTextColor={dark ? '#6B7280' : '#B0A4C0'}
               value={likeMessage}
               onChangeText={setLikeMessage}
               maxLength={150}
@@ -1158,7 +1167,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                 </Text>
               </LinearGradient>
               {!isPremium && (
-                <Text style={styles.likeChoicePrimarySubtext}>{t('discover.likesRemaining', { count: likesRemaining, limit: dailyLikeLimit })}</Text>
+                <Text style={[styles.likeChoicePrimarySubtext, { color: dark ? '#6B7280' : '#9CA3AF' }]}>{t('discover.likesRemaining', { count: likesRemaining, limit: dailyLikeLimit })}</Text>
               )}
             </TouchableOpacity>
 
@@ -1169,7 +1178,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
               disabled={superLikesRemaining === 0}
             >
               <LinearGradient
-                colors={superLikesRemaining > 0 ? ['#FEF3C7', '#FDE68A'] : ['#F3F4F6', '#E5E7EB']}
+                colors={superLikesRemaining > 0 ? ['#FEF3C7', '#FDE68A'] : (dark ? ['#1C1C2E', '#2C2C3E'] : ['#F3F4F6', '#E5E7EB'])}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.likeChoiceSecondaryGradient}
@@ -1181,7 +1190,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                 ]}>{t('discover.like.obsessed')}</Text>
                 <View style={[
                   styles.likeChoiceCountBadge,
-                  superLikesRemaining === 0 && { backgroundColor: '#E5E7EB' },
+                  superLikesRemaining === 0 && { backgroundColor: dark ? '#2C2C3E' : '#E5E7EB' },
                 ]}>
                   <Text style={[
                     styles.likeChoiceCountBadgeText,
@@ -1204,47 +1213,35 @@ const ProfileCompletenessBanner = React.memo(function ProfileCompletenessBanner(
   photoCount,
   promptCount,
   isOwnProfile,
-  displayName,
   t,
 }: {
   photoCount: number;
   promptCount: number;
   isOwnProfile: boolean;
-  displayName: string;
   t: (key: string, opts?: any) => string;
 }) {
+  if (!isOwnProfile) return null;
+
   const missingPhotos = Math.max(0, 3 - photoCount);
   const missingPrompts = Math.max(0, 2 - promptCount);
-
   if (missingPhotos === 0 && missingPrompts === 0) return null;
 
-  if (isOwnProfile) {
-    const photoPart = missingPhotos > 0 ? t('profileCard.completeness.addPhotos', { count: missingPhotos }) : '';
-    const promptPart = missingPrompts > 0 ? t('profileCard.completeness.addPrompts', { count: missingPrompts }) : '';
-    const joiner = photoPart && promptPart ? t('profileCard.completeness.andJoiner') : '';
-    const suffix = t('profileCard.completeness.toHelpOthers');
-
-    return (
-      <View style={completenessStyles.banner}>
-        <View style={completenessStyles.bannerIcon}>
-          <MaterialCommunityIcons name="pencil-plus-outline" size={20} color="#A08AB7" />
-        </View>
-        <View style={completenessStyles.bannerContent}>
-          <Text style={completenessStyles.bannerTitle}>{t('profileCard.completeness.finishYourStory')}</Text>
-          <Text style={completenessStyles.bannerSubtitle}>
-            {photoPart}{joiner}{promptPart}{suffix}
-          </Text>
-        </View>
-      </View>
-    );
-  }
+  const photoPart = missingPhotos > 0 ? t('profileCard.completeness.addPhotos', { count: missingPhotos }) : '';
+  const promptPart = missingPrompts > 0 ? t('profileCard.completeness.addPrompts', { count: missingPrompts }) : '';
+  const joiner = photoPart && promptPart ? t('profileCard.completeness.andJoiner') : '';
+  const suffix = t('profileCard.completeness.toHelpOthers');
 
   return (
-    <View style={completenessStyles.viewerBanner}>
-      <MaterialCommunityIcons name="account-clock-outline" size={16} color="#9CA3AF" />
-      <Text style={completenessStyles.viewerText}>
-        {t('profileCard.completeness.settingUp', { name: displayName })}
-      </Text>
+    <View style={completenessStyles.banner}>
+      <View style={completenessStyles.bannerIcon}>
+        <MaterialCommunityIcons name="pencil-plus-outline" size={20} color="#A08AB7" />
+      </View>
+      <View style={completenessStyles.bannerContent}>
+        <Text style={completenessStyles.bannerTitle}>{t('profileCard.completeness.finishYourStory')}</Text>
+        <Text style={completenessStyles.bannerSubtitle}>
+          {photoPart}{joiner}{promptPart}{suffix}
+        </Text>
+      </View>
     </View>
   );
 });
@@ -1279,18 +1276,6 @@ const completenessStyles = StyleSheet.create({
     fontSize: 13,
     color: '#6B7280',
     lineHeight: 18,
-  },
-  viewerBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  viewerText: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    fontStyle: 'italic',
   },
 });
 

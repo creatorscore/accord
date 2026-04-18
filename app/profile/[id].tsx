@@ -890,130 +890,6 @@ export default function ProfileView() {
     });
   }
 
-  // Render "Why We Match" section
-  const renderWhyWeMatch = () => {
-    if (!compatibilityBreakdown || compatibilityBreakdown.overall < 0) return null;
-
-    return (
-      <MotiView
-        from={{ opacity: 0, translateY: 20 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: 'timing', duration: 500 }}
-        style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: 20,
-          padding: 20,
-          marginBottom: 16,
-          marginHorizontal: 16,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
-          elevation: 3,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-          <MaterialCommunityIcons name="heart-multiple" size={24} color="#A08AB7" />
-          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#000000', marginLeft: 12 }}>
-            {t('profileView.compatibility.whyWeMatch')}
-          </Text>
-        </View>
-
-        {/* Detailed Compatibility Breakdown */}
-        <View style={{ marginTop: 16 }}>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 16 }}>
-            {t('profileView.compatibility.whatMakesYouCompatible')}
-          </Text>
-
-          {/* Location Analysis */}
-          <View style={{ marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <MaterialCommunityIcons name="map-marker" size={20} color="#10B981" />
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                {t('profileView.compatibility.locationDistance')}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-              {compatibilityBreakdown.location >= 80
-                ? t('profileView.compatibility.locationHigh')
-                : compatibilityBreakdown.location >= 60
-                ? t('profileView.compatibility.locationMedium')
-                : t('profileView.compatibility.locationLow')}
-            </Text>
-          </View>
-
-          {/* Goals Analysis */}
-          <View style={{ marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <MaterialCommunityIcons name="target" size={20} color="#3B82F6" />
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                {t('profileView.compatibility.goalsVision')}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-              {compatibilityBreakdown.goals >= 80
-                ? t('profileView.compatibility.goalsHigh')
-                : compatibilityBreakdown.goals >= 60
-                ? t('profileView.compatibility.goalsMedium')
-                : t('profileView.compatibility.goalsLow')}
-            </Text>
-          </View>
-
-          {/* Lifestyle Analysis */}
-          <View style={{ marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <MaterialCommunityIcons name="coffee" size={20} color="#F59E0B" />
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                {t('profileView.compatibility.lifestyleValues')}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-              {compatibilityBreakdown.lifestyle >= 80
-                ? t('profileView.compatibility.lifestyleHigh')
-                : compatibilityBreakdown.lifestyle >= 60
-                ? t('profileView.compatibility.lifestyleMedium')
-                : t('profileView.compatibility.lifestyleLow')}
-            </Text>
-          </View>
-
-          {/* Personality Analysis */}
-          <View style={{ marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <MaterialCommunityIcons name="heart" size={20} color="#A08AB7" />
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                {t('profileView.compatibility.personalityInterests')}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-              {compatibilityBreakdown.personality >= 75
-                ? t('profileView.compatibility.personalityHigh')
-                : compatibilityBreakdown.personality >= 60
-                ? t('profileView.compatibility.personalityMedium')
-                : t('profileView.compatibility.personalityLow')}
-            </Text>
-          </View>
-
-          {/* Demographics Analysis */}
-          <View style={{ marginBottom: 0 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <MaterialCommunityIcons name="account-group" size={20} color="#EC4899" />
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                {t('profileView.compatibility.backgroundValues')}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-              {compatibilityBreakdown.demographics >= 75
-                ? t('profileView.compatibility.backgroundHigh')
-                : compatibilityBreakdown.demographics >= 60
-                ? t('profileView.compatibility.backgroundMedium')
-                : t('profileView.compatibility.backgroundLow')}
-            </Text>
-          </View>
-        </View>
-      </MotiView>
-    );
-  };
-
   const handleMatchModalSendMessage = () => {
     setShowMatchModal(false);
     if (matchModalMatchId) {
@@ -1064,7 +940,6 @@ export default function ProfileView() {
         hideCompatibilityScore={false}
         isAdmin={isAdmin}
         isPhotoRevealed={otherUserRevealed}
-        renderAdditionalContent={renderWhyWeMatch}
       />
 
       {/* Fixed Action Buttons with Animations */}

@@ -20,7 +20,14 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { formatDistanceSlider, DistanceUnit } from '@/lib/distance-utils';
+import {
+  formatDistanceSlider,
+  formatDistanceRangeLabel,
+  distanceToSlider,
+  sliderToDistance,
+  DISTANCE_MAX,
+  DistanceUnit,
+} from '@/lib/distance-utils';
 import { GENDER_PREF_OPTIONS, expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
 import * as Haptics from 'expo-haptics';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
@@ -577,7 +584,9 @@ export default function MatchingPreferences() {
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>
-                  Within {formatDistanceSlider(preferences.max_distance_miles, preferences.distance_unit)}
+                  {preferences.max_distance_miles >= DISTANCE_MAX
+                    ? formatDistanceRangeLabel(preferences.max_distance_miles, preferences.distance_unit)
+                    : `Within ${formatDistanceSlider(preferences.max_distance_miles, preferences.distance_unit)}`}
                 </Text>
                 <Text style={styles.cardDescription}>{t('settings.matchingPreferences.maxDistanceDesc')}</Text>
               </View>
@@ -622,16 +631,22 @@ export default function MatchingPreferences() {
             <View style={styles.sliderContainer}>
               <Slider
                 style={styles.slider}
-                minimumValue={10}
-                maximumValue={1000}
-                step={10}
-                value={preferences.max_distance_miles}
-                onValueChange={(value) =>
-                  setPreferences((prev) => ({ ...prev, max_distance_miles: value }))
+                minimumValue={0}
+                maximumValue={1}
+                step={0.005}
+                value={distanceToSlider(preferences.max_distance_miles)}
+                onValueChange={(position) =>
+                  setPreferences((prev) => ({ ...prev, max_distance_miles: sliderToDistance(position) }))
                 }
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
+              <View style={styles.distanceMarkers}>
+                <Text style={styles.distanceMarkerText}>5 mi</Text>
+                <Text style={styles.distanceMarkerText}>25</Text>
+                <Text style={styles.distanceMarkerText}>100</Text>
+                <Text style={styles.distanceMarkerText}>500+</Text>
+              </View>
             </View>
 
             <View style={styles.switchRow}>
@@ -1138,6 +1153,17 @@ const styles = StyleSheet.create({
   slider: {
     width: '100%',
     height: 40,
+  },
+  distanceMarkers: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: -4,
+  },
+  distanceMarkerText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
   switchRow: {
     flexDirection: 'row',

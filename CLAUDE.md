@@ -129,7 +129,7 @@ CREATE TABLE profiles (
   display_name VARCHAR NOT NULL,
   age INTEGER NOT NULL CHECK (age >= 18 AND age <= 100),
   birth_date DATE, -- Auto-calculates age
-  gender TEXT[] NOT NULL, -- Array of gender identities: Man, Woman, Non-binary, Trans Man, Trans Woman, Genderfluid, Genderqueer, Other
+  gender TEXT[] NOT NULL, -- Single-element array; only values allowed are: Man, Woman, Non-binary. UI enforces single-select (DB column kept as TEXT[] for backward compat with old clients).
   pronouns VARCHAR, -- she/her, he/him, they/them, she/they, he/they, any pronouns, ask me, prefer not to say
   ethnicity TEXT[], -- Array of ethnicities: Asian, Black/African, Hispanic/Latinx, Indigenous/Native, Middle Eastern/North African, Pacific Islander, South Asian, White/Caucasian, Multiracial, Other, Prefer not to say
   sexual_orientation TEXT[] NOT NULL, -- Array of orientations: Straight, Lesbian, Gay, Bisexual, Queer, Asexual, Pansexual, Other

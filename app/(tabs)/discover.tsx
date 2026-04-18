@@ -31,6 +31,7 @@ import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { COLORS } from '@/theme/colors';
+import { expandGenderPreference } from '@/lib/gender-preferences';
 import { trackUserAction, trackFunnel, trackEvent } from '@/lib/analytics';
 import { captureException } from '@/lib/sentry';
 import { prefetchImages } from '@/components/shared/ConditionalImage';
@@ -526,7 +527,10 @@ export default function Discover() {
           age_min: newFilters.ageMin,
           age_max: newFilters.ageMax,
           max_distance_miles: newFilters.maxDistance,
-          gender_preference: newFilters.genderPreference,
+          // expandGenderPreference: ['Men'] → ['Man'], ['Everyone'] → [], etc.
+          // FilterModal already uses canonical values so this is usually a no-op,
+          // but the defensive wrap protects against any future UI that passes UI labels.
+          gender_preference: expandGenderPreference(newFilters.genderPreference),
           discovery_filters: discoveryFilters,
         })
         .eq('profile_id', currentProfileId);
@@ -1135,6 +1139,23 @@ export default function Discover() {
             query = query.filter('gender', 'ov', pgArrayLiteral);
           }
         }
+
+        // Distance prefilter via bounding box — only when not searching globally.
+        // The client-side Haversine check (below) is the precise filter; the bbox
+        // just cuts the candidate set dramatically so we fetch fewer profile+photo rows.
+        if (!isSearchingGlobally && currentUserData.latitude && currentUserData.longitude) {
+          const latMiles = 69;
+          const lat0 = currentUserData.latitude;
+          const lng0 = currentUserData.longitude;
+          const latDelta = effectiveFilters.maxDistance / latMiles;
+          // cos(lat) shrinks longitude degrees at higher latitudes
+          const lngDelta = effectiveFilters.maxDistance / (Math.cos((lat0 * Math.PI) / 180) * latMiles);
+          query = query
+            .gte('latitude', lat0 - latDelta)
+            .lte('latitude', lat0 + latDelta)
+            .gte('longitude', lng0 - lngDelta)
+            .lte('longitude', lng0 + lngDelta);
+        }
       } else {
         // In NORMAL mode, exclude all swiped profiles
         // Cap at 150 IDs to avoid PostgREST URL length limits (400 Bad Request)
@@ -1361,20 +1382,17 @@ export default function Discover() {
           }
 
           // 5. CRITICAL: Gender preference hard filter (client-side safety net)
-          // This must ALWAYS be enforced — user must never see genders they excluded.
-          // Server-side filters handle this too, but this is a double-check.
+          // Defense-in-depth — server-side filters (RPC + SQL overlap) are authoritative
+          // but this catches any leaks. All write paths now expand UI labels to canonical
+          // values via expandGenderPreference, so we can trust the DB to hold 'Man'/'Woman'/'Non-binary'.
           if (currentUserData.preferences?.gender_preference && currentUserData.preferences.gender_preference.length > 0) {
             const genderPrefArr = Array.isArray(currentUserData.preferences.gender_preference)
               ? currentUserData.preferences.gender_preference
               : [currentUserData.preferences.gender_preference];
-            const profileGenders = Array.isArray(profile.gender) ? profile.gender : (profile.gender ? [profile.gender] : []);
-            // Check if ANY of the profile's genders match ANY of the user's preferred genders
-            // gender_preference uses plural forms ("Men", "Women") while profile.gender uses singular ("Man", "Woman")
-            const genderMap: Record<string, string> = { 'Men': 'Man', 'Women': 'Woman', 'Non-binary': 'Non-binary', 'Everyone': '' };
-            const acceptedGenders = genderPrefArr.map((g: string) => genderMap[g] || g).filter(Boolean);
-            // "Everyone" means no restriction
-            if (!genderPrefArr.includes('Everyone') && acceptedGenders.length > 0) {
-              const hasGenderMatch = profileGenders.some((pg: string) => acceptedGenders.includes(pg));
+            // "Everyone" means no restriction — matches the RPC convention
+            if (!genderPrefArr.includes('Everyone')) {
+              const profileGenders = Array.isArray(profile.gender) ? profile.gender : (profile.gender ? [profile.gender] : []);
+              const hasGenderMatch = profileGenders.some((pg: string) => genderPrefArr.includes(pg));
               if (!hasGenderMatch) {
                 return false;
               }
@@ -1565,7 +1583,8 @@ export default function Discover() {
 
 
           // ====================================================================
-          // PREFERENCE FILTERS (Applied to all users, not just premium)
+          // PREFERENCE FILTERS (effectively premium — FilterModal gates these
+          // behind isPremium so the filter lists are empty for free users)
           // ====================================================================
 
           // Religion filter
@@ -2756,7 +2775,7 @@ export default function Discover() {
     const { width } = Dimensions.get('window');
 
     return (
-      <View className="flex-1 items-center justify-center overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
+      <View className="flex-1 items-center justify-center overflow-hidden" style={{ backgroundColor: colors.background }}>
         {/* Floating hearts background */}
         {[...Array(8)].map((_, i) => (
           <MotiView
@@ -2829,7 +2848,7 @@ export default function Discover() {
               width: 80,
               height: 80,
               borderRadius: 40,
-              backgroundColor: '#F3E8FF',
+              backgroundColor: 'rgba(160, 138, 183, 0.12)',
               alignItems: 'center',
               justifyContent: 'center',
               shadowColor: '#A08AB7',
@@ -2851,7 +2870,7 @@ export default function Discover() {
           key={loadingMessageIndex}
           style={{ marginTop: 32 }}
         >
-          <Text className="text-base font-sans-medium text-center px-8" style={{ color: '#6B7280' }}>
+          <Text className="text-base font-sans-medium text-center px-8" style={{ color: colors.mutedForeground }}>
             {loadingMessages[loadingMessageIndex]}
           </Text>
         </MotiView>
@@ -2886,9 +2905,9 @@ export default function Discover() {
   // Empty state - no more profiles (only show after first load completes)
   if (hasInitiallyLoaded.current && currentIndex >= profiles.length) {
     return (
-      <View className="flex-1" style={{ backgroundColor: '#FFFFFF' }}>
+      <View className="flex-1" style={{ backgroundColor: colors.background }}>
         {/* Header with Search/Filter Controls */}
-        <View className="pb-0" style={{ backgroundColor: '#FFFFFF', paddingTop: insets.top + 16 }}>
+        <View className="pb-0" style={{ backgroundColor: colors.background, paddingTop: insets.top + 16 }}>
           {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
           <View className="flex-row items-center mb-3">
             <ScrollView
@@ -2898,7 +2917,7 @@ export default function Discover() {
               style={{ flex: 1 }}
             >
               <TouchableOpacity
-                style={{ backgroundColor: '#FFFFFF', height: 33, paddingHorizontal: 4, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', }}
+                style={{ backgroundColor: colors.background, height: 33, paddingHorizontal: 4, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', }}
                 onPress={() => setShowFilterModal(true)}
               >
                 <MaterialCommunityIcons name="tune-vertical" size={26} color={colors.foreground} />
@@ -2906,7 +2925,7 @@ export default function Discover() {
 
               {/* Age Quick Filter */}
               <TouchableOpacity
-                style={{ backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#000', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                style={{ backgroundColor: colors.card, borderWidth: 2, borderColor: colors.foreground, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => {
                   setTempAgeMin(filters.ageMin);
                   setTempAgeMax(filters.ageMax);
@@ -2914,25 +2933,25 @@ export default function Discover() {
                   setShowIntentionDropdown(false);
                 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.age')}</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.age')}</Text>
                 <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
               </TouchableOpacity>
 
               {/* Intention Quick Filter */}
               <TouchableOpacity
-                style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => {
                   setShowIntentionDropdown(!showIntentionDropdown);
                   setShowAgeSlider(false);
                 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.datingIntentions')}</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.datingIntentions')}</Text>
                 <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
               </TouchableOpacity>
 
               {/* Active Today Toggle */}
               <TouchableOpacity
-                style={{ backgroundColor: activeToday ? '#A08AB7' : '#FFFFFF', borderWidth: 1, borderColor: activeToday ? '#A08AB7' : '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                style={{ backgroundColor: activeToday ? '#A08AB7' : colors.card, borderWidth: 1, borderColor: activeToday ? '#A08AB7' : colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => {
                   const newActiveToday = !activeToday;
                   setActiveToday(newActiveToday);
@@ -2942,26 +2961,26 @@ export default function Discover() {
                 }}
               >
                 <MaterialCommunityIcons name="clock-outline" size={16} color={activeToday ? 'white' : colors.foreground} style={{ marginRight: 4 }} />
-                <Text style={{ fontSize: 13, fontWeight: '500', color: activeToday ? '#fff' : '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.activeToday')}</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: activeToday ? '#fff' : colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.activeToday')}</Text>
               </TouchableOpacity>
 
               {/* Search */}
               <TouchableOpacity
-                style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => setShowSearchBar(!showSearchBar)}
               >
-                <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.search')}</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.search')}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
 
           {/* Age Slider Panel */}
           {showAgeSlider && (
-            <View className="mt-3 rounded-xl shadow-lg p-4" style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB' }}>
-              <Text className="font-semibold mb-3" style={{ color: '#1F2937' }}>{t('discover.ageSlider.ageRange', { min: tempAgeMin, max: tempAgeMax })}</Text>
+            <View className="mt-3 rounded-xl shadow-lg p-4" style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }}>
+              <Text className="font-semibold mb-3" style={{ color: colors.foreground }}>{t('discover.ageSlider.ageRange', { min: tempAgeMin, max: tempAgeMax })}</Text>
 
               <View className="mb-4">
-                <Text className="text-sm mb-2" style={{ color: '#6B7280' }}>{t('discover.ageSlider.minimum', { value: tempAgeMin })}</Text>
+                <Text className="text-sm mb-2" style={{ color: colors.mutedForeground }}>{t('discover.ageSlider.minimum', { value: tempAgeMin })}</Text>
                 <Slider
                   minimumValue={18}
                   maximumValue={80}
@@ -2969,13 +2988,13 @@ export default function Discover() {
                   value={tempAgeMin}
                   onValueChange={(value) => setTempAgeMin(Math.min(value, tempAgeMax - 1))}
                   minimumTrackTintColor="#A08AB7"
-                  maximumTrackTintColor="#E5E7EB"
+                  maximumTrackTintColor={colors.border}
                   thumbTintColor="#A08AB7"
                 />
               </View>
 
               <View className="mb-4">
-                <Text className="text-sm mb-2" style={{ color: '#6B7280' }}>{t('discover.ageSlider.maximum', { value: tempAgeMax })}</Text>
+                <Text className="text-sm mb-2" style={{ color: colors.mutedForeground }}>{t('discover.ageSlider.maximum', { value: tempAgeMax })}</Text>
                 <Slider
                   minimumValue={18}
                   maximumValue={80}
@@ -2983,21 +3002,21 @@ export default function Discover() {
                   value={tempAgeMax}
                   onValueChange={(value) => setTempAgeMax(Math.max(value, tempAgeMin + 1))}
                   minimumTrackTintColor="#A08AB7"
-                  maximumTrackTintColor="#E5E7EB"
+                  maximumTrackTintColor={colors.border}
                   thumbTintColor="#A08AB7"
                 />
               </View>
 
               <View className="flex-row gap-2">
                 <TouchableOpacity
-                  className="flex-1 rounded-full py-2" style={{ backgroundColor: '#F9FAFB' }}
+                  className="flex-1 rounded-full py-2" style={{ backgroundColor: colors.muted }}
                   onPress={() => {
                     setTempAgeMin(filters.ageMin);
                     setTempAgeMax(filters.ageMax);
                     setShowAgeSlider(false);
                   }}
                 >
-                  <Text className="text-center font-medium" style={{ color: '#1F2937' }}>{t('common.cancel')}</Text>
+                  <Text className="text-center font-medium" style={{ color: colors.foreground }}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   className="flex-1 bg-lavender-500 rounded-full py-2"
@@ -3016,7 +3035,7 @@ export default function Discover() {
 
           {/* Intention Dropdown */}
           {showIntentionDropdown && (
-            <View className="absolute top-full left-24 mt-1 rounded-xl shadow-lg z-50" style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', minWidth: 120 }}>
+            <View className="absolute top-full left-24 mt-1 rounded-xl shadow-lg z-50" style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, minWidth: 120 }}>
               {INTENTIONS.map((intention, index) => (
                 <TouchableOpacity
                   key={index}
@@ -3027,7 +3046,7 @@ export default function Discover() {
                     loadProfiles();
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: selectedIntention === intention.value ? '600' : '400', color: selectedIntention === intention.value ? '#A08AB7' : '#1F2937' }}>
+                  <Text style={{ fontSize: 12, fontWeight: selectedIntention === intention.value ? '600' : '400', color: selectedIntention === intention.value ? '#A08AB7' : colors.foreground }}>
                     {getIntentionLabel(intention.value)}
                   </Text>
                 </TouchableOpacity>
@@ -3038,12 +3057,12 @@ export default function Discover() {
           {/* Keyword Search Bar - Expanded when showSearchBar is true */}
           {showSearchBar && (
             <View className="mt-3">
-              <View className="flex-row items-center rounded-full px-4 py-2" style={{ backgroundColor: '#F9FAFB' }}>
-                <MaterialCommunityIcons name="magnify" size={20} color="#71717A" />
+              <View className="flex-row items-center rounded-full px-4 py-2" style={{ backgroundColor: colors.muted }}>
+                <MaterialCommunityIcons name="magnify" size={20} color={colors.mutedForeground} />
                 <TextInput
-                  className="flex-1 ml-2 text-base" style={{ color: '#1F2937' }}
+                  className="flex-1 ml-2 text-base" style={{ color: colors.foreground }}
                   placeholder={t('discover.search.placeholder')}
-                  placeholderTextColor="#A1A1AA"
+                  placeholderTextColor={colors.mutedForeground}
                   value={searchKeyword}
                   onChangeText={setSearchKeyword}
                   onSubmitEditing={handleSearch}
@@ -3052,7 +3071,7 @@ export default function Discover() {
                 />
                 {isSearchMode && (
                   <TouchableOpacity onPress={handleClearSearch} className="ml-2">
-                    <MaterialCommunityIcons name="close-circle" size={20} color="#71717A" />
+                    <MaterialCommunityIcons name="close-circle" size={20} color={colors.mutedForeground} />
                   </TouchableOpacity>
                 )}
                 {!isSearchMode && searchKeyword.trim() && (
@@ -3069,11 +3088,11 @@ export default function Discover() {
                   }}
                   className="ml-2"
                 >
-                  <MaterialCommunityIcons name="close" size={20} color="#71717A" />
+                  <MaterialCommunityIcons name="close" size={20} color={colors.mutedForeground} />
                 </TouchableOpacity>
               </View>
               {isSearchMode && (
-                <Text className="text-xs mt-2 text-center" style={{ color: '#6B7280' }}>
+                <Text className="text-xs mt-2 text-center" style={{ color: colors.mutedForeground }}>
                   {t('discover.search.tip')}
                 </Text>
               )}
@@ -3119,10 +3138,10 @@ export default function Discover() {
             /* Search Mode Empty State */
             <View className="items-center">
               <Text className="text-6xl mb-4">🔍</Text>
-              <Text className="text-2xl font-display-bold mb-3 text-center" style={{ color: '#1F2937' }}>
+              <Text className="text-2xl font-display-bold mb-3 text-center" style={{ color: colors.foreground }}>
                 {t('discover.search.noResults', { keyword: searchKeyword })}
               </Text>
-              <Text className="mb-6 text-center text-base font-sans" style={{ color: '#6B7280' }}>
+              <Text className="mb-6 text-center text-base font-sans" style={{ color: colors.mutedForeground }}>
                 {t('discover.search.noResultsHint')}
               </Text>
               <TouchableOpacity
@@ -3130,6 +3149,37 @@ export default function Discover() {
                 onPress={handleClearSearch}
               >
                 <Text className="text-white font-sans-bold text-lg">{t('discover.search.clearSearch')}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : !isProfileComplete ? (
+            /* Finish Onboarding — dominant CTA when profile is incomplete */
+            <View className="items-center" style={{ paddingHorizontal: 8 }}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(160, 138, 183, 0.12)' }} className="items-center justify-center">
+                <MaterialCommunityIcons name="pencil-plus-outline" size={32} color="#A08AB7" />
+              </View>
+              <Text className="text-center" style={{ fontSize: 22, fontWeight: '700', letterSpacing: -0.3, marginTop: 16, marginBottom: 8, color: colors.foreground }}>
+                {t('discover.completeProfile.title')}
+              </Text>
+              <Text className="text-center font-sans" style={{ fontSize: 15, lineHeight: 22, maxWidth: 300, marginBottom: 24, color: colors.mutedForeground }}>
+                {t('discover.completeProfile.message')}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  const destination = returnRoute || '/(onboarding)/onboarding';
+                  exitPreviewMode();
+                  router.replace(destination as any);
+                }}
+                style={{
+                  backgroundColor: '#A08AB7',
+                  paddingVertical: 14,
+                  paddingHorizontal: 36,
+                  borderRadius: 999,
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600', letterSpacing: 0.1 }}>
+                  {t('discover.completeProfile.button')}
+                </Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -3140,10 +3190,10 @@ export default function Discover() {
                 <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(160, 138, 183, 0.12)' }} className="items-center justify-center" >
                   <MaterialCommunityIcons name="check-circle-outline" size={32} color="#A08AB7" />
                 </View>
-                <Text className="text-center" style={{ fontSize: 24, fontWeight: '700', letterSpacing: -0.5, marginTop: 16, marginBottom: 6, color: '#1F2937' }}>
+                <Text className="text-center" style={{ fontSize: 24, fontWeight: '700', letterSpacing: -0.5, marginTop: 16, marginBottom: 6, color: colors.foreground }}>
                   {t('discover.emptyState.allCaughtUp')}
                 </Text>
-                <Text className="text-center font-sans" style={{ fontSize: 15, lineHeight: 21, maxWidth: 280, color: '#6B7280' }}>
+                <Text className="text-center font-sans" style={{ fontSize: 15, lineHeight: 21, maxWidth: 280, color: colors.mutedForeground }}>
                   {t('discover.emptyState.checkBack')}
                 </Text>
               </View>
@@ -3195,7 +3245,7 @@ export default function Discover() {
               {/* Smart Recommendations */}
               {smartRecommendations.length > 0 && (
               <View style={{ marginBottom: 16 }}>
-                <Text className="uppercase" style={{ fontSize: 12, fontWeight: '600', letterSpacing: 1.2, textAlign: 'center', marginBottom: 10, color: '#6B7280' }}>
+                <Text className="uppercase" style={{ fontSize: 12, fontWeight: '600', letterSpacing: 1.2, textAlign: 'center', marginBottom: 10, color: colors.mutedForeground }}>
                   {t('discover.recommendations.expandReach')}
                 </Text>
 
@@ -3281,7 +3331,9 @@ export default function Discover() {
                                     }
 
                                     const currentGenderPrefs = currentPrefs?.gender_preference || [];
-                                    const newGenderPrefs = [...currentGenderPrefs, addedGender];
+                                    // Defensive expand: if addedGender is a UI label ("Men"), convert
+                                    // to the canonical DB value ("Man") before writing.
+                                    const newGenderPrefs = expandGenderPreference([...currentGenderPrefs, addedGender]);
 
                                     const { error: updateError } = await supabase
                                       .from('preferences')
@@ -3403,7 +3455,7 @@ export default function Discover() {
                             <Text style={{ color: '#A08AB7', fontSize: 10, fontWeight: '700' }}>PRO</Text>
                           </View>
                         )}
-                        <MaterialCommunityIcons name="chevron-right" size={20} color={isGlobal ? 'rgba(255,255,255,0.6)' : '#D1D5DB'} />
+                        <MaterialCommunityIcons name="chevron-right" size={20} color={isGlobal ? 'rgba(255,255,255,0.6)' : colors.grey3} />
                       </TouchableOpacity>
                     );
                   })}
@@ -3441,7 +3493,7 @@ export default function Discover() {
                     <MaterialCommunityIcons name="tune-variant" size={20} color="#A08AB7" />
                   </View>
                   <Text style={{ color: colors.foreground, fontSize: 15, fontWeight: '600', flex: 1 }}>Adjust Filters</Text>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.grey3} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -3472,7 +3524,7 @@ export default function Discover() {
                     <MaterialCommunityIcons name="magnify" size={20} color="#A08AB7" />
                   </View>
                   <Text style={{ color: colors.foreground, fontSize: 15, fontWeight: '600', flex: 1 }}>Search by Keyword</Text>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
+                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.grey3} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -3520,7 +3572,7 @@ export default function Discover() {
   }
 
   return (
-    <View className="flex-1" style={{ backgroundColor: '#FFFFFF', paddingRight: rightSafeArea }}>
+    <View className="flex-1" style={{ backgroundColor: colors.background, paddingRight: rightSafeArea }}>
       {/* Hinge-Style Scrollable Profile View */}
       <Animated.View style={{ flex: 1, opacity: profileOpacity }}>
         <DiscoveryProfileView
@@ -3548,7 +3600,7 @@ export default function Discover() {
           renderHeader={() => (
             <>
               {/* Header with Search/Filter Controls */}
-              <View className="pt-4 pb-0" style={{ backgroundColor: '#FFFFFF', marginHorizontal: -16 }}>
+              <View className="pt-4 pb-0" style={{ backgroundColor: colors.background, marginHorizontal: -16 }}>
                 {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
                 <View className="flex-row items-center mb-3">
                   <ScrollView
@@ -3558,7 +3610,7 @@ export default function Discover() {
                     style={{ flex: 1 }}
                   >
                     <TouchableOpacity
-                      className="rounded-full p-2.5" style={{ backgroundColor: '#FFFFFF' }}
+                      className="rounded-full p-2.5" style={{ backgroundColor: colors.background }}
                       onPress={() => setShowFilterModal(true)}
                     >
                       <MaterialCommunityIcons name="tune-vertical" size={24} color={colors.foreground} />
@@ -3566,7 +3618,7 @@ export default function Discover() {
 
                     {/* Age Quick Filter */}
                     <TouchableOpacity
-                      style={{ backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#000', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      style={{ backgroundColor: colors.card, borderWidth: 2, borderColor: colors.foreground, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                       onPress={() => {
                         setTempAgeMin(filters.ageMin);
                         setTempAgeMax(filters.ageMax);
@@ -3574,25 +3626,25 @@ export default function Discover() {
                         setShowIntentionDropdown(false);
                       }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.age')}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.age')}</Text>
                       <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
                     </TouchableOpacity>
 
                     {/* Intention Quick Filter */}
                     <TouchableOpacity
-                      style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                       onPress={() => {
                         setShowIntentionDropdown(!showIntentionDropdown);
                         setShowAgeSlider(false);
                       }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.datingIntentions')}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.datingIntentions')}</Text>
                       <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
                     </TouchableOpacity>
 
                     {/* Active Today Toggle */}
                     <TouchableOpacity
-                      style={{ backgroundColor: activeToday ? '#A08AB7' : '#FFFFFF', borderWidth: 1, borderColor: activeToday ? '#A08AB7' : '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      style={{ backgroundColor: activeToday ? '#A08AB7' : colors.card, borderWidth: 1, borderColor: activeToday ? '#A08AB7' : colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                       onPress={() => {
                         const newActiveToday = !activeToday;
                         setActiveToday(newActiveToday);
@@ -3602,15 +3654,15 @@ export default function Discover() {
                       }}
                     >
                       <MaterialCommunityIcons name="clock-outline" size={16} color={activeToday ? 'white' : colors.foreground} style={{ marginRight: 4 }} />
-                      <Text style={{ fontSize: 13, fontWeight: '500', color: activeToday ? '#fff' : '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.activeToday')}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: activeToday ? '#fff' : colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.activeToday')}</Text>
                     </TouchableOpacity>
 
                     {/* Search */}
                     <TouchableOpacity
-                      style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D1D5DB', paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                       onPress={() => setShowSearchBar(!showSearchBar)}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#1F2937', lineHeight: 14 }}>{t('discover.quickFilter.search')}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.search')}</Text>
                     </TouchableOpacity>
 
                     {isPlatinum && (
@@ -3627,11 +3679,11 @@ export default function Discover() {
 
                 {/* Age Slider Panel */}
                 {showAgeSlider && (
-                  <View className="mt-3 rounded-xl shadow-lg p-4" style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB' }}>
-                    <Text className="font-semibold mb-3" style={{ color: '#1F2937' }}>{t('discover.ageSlider.ageRange', { min: tempAgeMin, max: tempAgeMax })}</Text>
+                  <View className="mt-3 rounded-xl shadow-lg p-4" style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }}>
+                    <Text className="font-semibold mb-3" style={{ color: colors.foreground }}>{t('discover.ageSlider.ageRange', { min: tempAgeMin, max: tempAgeMax })}</Text>
 
                     <View className="mb-4">
-                      <Text className="text-sm mb-2" style={{ color: '#6B7280' }}>{t('discover.ageSlider.minimum', { value: tempAgeMin })}</Text>
+                      <Text className="text-sm mb-2" style={{ color: colors.mutedForeground }}>{t('discover.ageSlider.minimum', { value: tempAgeMin })}</Text>
                       <Slider
                         minimumValue={18}
                         maximumValue={80}
@@ -3639,13 +3691,13 @@ export default function Discover() {
                         value={tempAgeMin}
                         onValueChange={(value) => setTempAgeMin(Math.min(value, tempAgeMax - 1))}
                         minimumTrackTintColor="#A08AB7"
-                        maximumTrackTintColor="#E5E7EB"
+                        maximumTrackTintColor={colors.border}
                         thumbTintColor="#A08AB7"
                       />
                     </View>
 
                     <View className="mb-4">
-                      <Text className="text-sm mb-2" style={{ color: '#6B7280' }}>{t('discover.ageSlider.maximum', { value: tempAgeMax })}</Text>
+                      <Text className="text-sm mb-2" style={{ color: colors.mutedForeground }}>{t('discover.ageSlider.maximum', { value: tempAgeMax })}</Text>
                       <Slider
                         minimumValue={18}
                         maximumValue={80}
@@ -3653,21 +3705,21 @@ export default function Discover() {
                         value={tempAgeMax}
                         onValueChange={(value) => setTempAgeMax(Math.max(value, tempAgeMin + 1))}
                         minimumTrackTintColor="#A08AB7"
-                        maximumTrackTintColor="#E5E7EB"
+                        maximumTrackTintColor={colors.border}
                         thumbTintColor="#A08AB7"
                       />
                     </View>
 
                     <View className="flex-row gap-2">
                       <TouchableOpacity
-                        className="flex-1 rounded-full py-2" style={{ backgroundColor: '#F9FAFB' }}
+                        className="flex-1 rounded-full py-2" style={{ backgroundColor: colors.muted }}
                         onPress={() => {
                           setTempAgeMin(filters.ageMin);
                           setTempAgeMax(filters.ageMax);
                           setShowAgeSlider(false);
                         }}
                       >
-                        <Text className="text-center font-medium" style={{ color: '#1F2937' }}>{t('common.cancel')}</Text>
+                        <Text className="text-center font-medium" style={{ color: colors.foreground }}>{t('common.cancel')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         className="flex-1 bg-lavender-500 rounded-full py-2"
@@ -3686,7 +3738,7 @@ export default function Discover() {
 
                 {/* Intention Dropdown */}
                 {showIntentionDropdown && (
-                  <View className="absolute top-full left-24 mt-1 rounded-xl shadow-lg z-50" style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', minWidth: 120 }}>
+                  <View className="absolute top-full left-24 mt-1 rounded-xl shadow-lg z-50" style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, minWidth: 120 }}>
                     {INTENTIONS.map((intention, index) => (
                       <TouchableOpacity
                         key={index}
@@ -3697,7 +3749,7 @@ export default function Discover() {
                           loadProfiles();
                         }}
                       >
-                        <Text style={{ fontSize: 12, fontWeight: selectedIntention === intention.value ? '600' : '400', color: selectedIntention === intention.value ? '#A08AB7' : '#1F2937' }}>
+                        <Text style={{ fontSize: 12, fontWeight: selectedIntention === intention.value ? '600' : '400', color: selectedIntention === intention.value ? '#A08AB7' : colors.foreground }}>
                           {getIntentionLabel(intention.value)}
                         </Text>
                       </TouchableOpacity>
@@ -3708,12 +3760,12 @@ export default function Discover() {
                 {/* Keyword Search Bar - Expanded when showSearchBar is true */}
                 {showSearchBar && (
                   <View className="mt-3">
-                    <View className="flex-row items-center rounded-full px-4 py-2" style={{ backgroundColor: '#F9FAFB' }}>
-                      <MaterialCommunityIcons name="magnify" size={20} color="#71717A" />
+                    <View className="flex-row items-center rounded-full px-4 py-2" style={{ backgroundColor: colors.muted }}>
+                      <MaterialCommunityIcons name="magnify" size={20} color={colors.mutedForeground} />
                       <TextInput
-                        className="flex-1 ml-2 text-base" style={{ color: '#1F2937' }}
+                        className="flex-1 ml-2 text-base" style={{ color: colors.foreground }}
                         placeholder={t('discover.search.placeholder')}
-                        placeholderTextColor="#A1A1AA"
+                        placeholderTextColor={colors.mutedForeground}
                         value={searchKeyword}
                         onChangeText={setSearchKeyword}
                         onSubmitEditing={handleSearch}
@@ -3722,7 +3774,7 @@ export default function Discover() {
                       />
                       {isSearchMode && (
                         <TouchableOpacity onPress={handleClearSearch} className="ml-2">
-                          <MaterialCommunityIcons name="close-circle" size={20} color="#71717A" />
+                          <MaterialCommunityIcons name="close-circle" size={20} color={colors.mutedForeground} />
                         </TouchableOpacity>
                       )}
                       {!isSearchMode && searchKeyword.trim() && (
@@ -3739,11 +3791,11 @@ export default function Discover() {
                         }}
                         className="ml-2"
                       >
-                        <MaterialCommunityIcons name="close" size={20} color="#71717A" />
+                        <MaterialCommunityIcons name="close" size={20} color={colors.mutedForeground} />
                       </TouchableOpacity>
                     </View>
                     {isSearchMode && (
-                      <Text className="text-xs mt-2 text-center" style={{ color: '#6B7280' }}>
+                      <Text className="text-xs mt-2 text-center" style={{ color: colors.mutedForeground }}>
                         {t('discover.search.tip')}
                       </Text>
                     )}
@@ -3950,7 +4002,7 @@ export default function Discover() {
         onRequestClose={() => setShowPremiumLocationPrompt(false)}
       >
         <View className="flex-1 bg-black/60 justify-center items-center px-6">
-          <View className="rounded-3xl w-full max-w-sm overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
+          <View className="rounded-3xl w-full max-w-sm overflow-hidden" style={{ backgroundColor: colors.card }}>
             {/* Header */}
             <View className="bg-lavender-500 p-6 items-center">
               <View className="w-16 h-16 rounded-full bg-white/20 items-center justify-center mb-3">
@@ -3963,22 +4015,22 @@ export default function Discover() {
 
             {/* Body */}
             <View className="p-6">
-              <Text className="text-center text-base mb-4" style={{ color: '#1F2937' }}>
+              <Text className="text-center text-base mb-4" style={{ color: colors.foreground }}>
                 {t('discover.premiumLocation.description')}
               </Text>
 
-              <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: '#F5F3FF' }}>
+              <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: colors.secondary }}>
                 <View className="flex-row items-center mb-2">
                   <MaterialCommunityIcons name="check-circle" size={20} color="#A08AB7" />
-                  <Text className="ml-2" style={{ color: '#1F2937' }}>{t('discover.premiumLocation.searchGlobally')}</Text>
+                  <Text className="ml-2" style={{ color: colors.foreground }}>{t('discover.premiumLocation.searchGlobally')}</Text>
                 </View>
                 <View className="flex-row items-center">
                   <MaterialCommunityIcons name="check-circle" size={20} color="#A08AB7" />
-                  <Text className="ml-2" style={{ color: '#1F2937' }}>{t('discover.premiumLocation.matchCities')}</Text>
+                  <Text className="ml-2" style={{ color: colors.foreground }}>{t('discover.premiumLocation.matchCities')}</Text>
                 </View>
               </View>
 
-              <Text className="text-center text-sm mb-6" style={{ color: '#6B7280' }}>
+              <Text className="text-center text-sm mb-6" style={{ color: colors.mutedForeground }}>
                 {t('discover.premiumLocation.upgradeMessage')}
               </Text>
 
@@ -3999,7 +4051,7 @@ export default function Discover() {
                 className="py-3"
                 onPress={() => setShowPremiumLocationPrompt(false)}
               >
-                <Text className="text-center text-sm" style={{ color: '#6B7280' }}>
+                <Text className="text-center text-sm" style={{ color: colors.mutedForeground }}>
                   {t('discover.premiumLocation.maybeLater')}
                 </Text>
               </TouchableOpacity>

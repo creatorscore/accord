@@ -241,24 +241,7 @@ export default function MatchModal({
               {matchedProfile.display_name}
             </Text>
 
-            {/* Compatibility - eye-catching pill */}
-            {matchedProfile.compatibility_score !== undefined && matchedProfile.compatibility_score !== null && (
-              <View style={{
-                backgroundColor: 'rgba(255,255,255,0.2)',
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 20,
-                marginBottom: 48,
-              }}>
-                <Text style={{
-                  fontSize: 15,
-                  fontWeight: '600',
-                  color: 'white',
-                }}>
-                  {matchedProfile.compatibility_score}% your type
-                </Text>
-              </View>
-            )}
+            <View style={{ marginBottom: 48 }} />
 
             {/* Primary action - one clear choice */}
             <TouchableOpacity

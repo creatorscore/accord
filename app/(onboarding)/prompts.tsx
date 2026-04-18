@@ -84,10 +84,9 @@ export default function Prompts({ embedded, onContinue: parentContinue, onBack: 
       if (draft) {
         if (draft.data.selectedPrompts?.length) setSelectedPrompts(draft.data.selectedPrompts);
         setSubStep(draft.subStep);
-      } else if (data?.prompt_answers && Array.isArray(data.prompt_answers) && data.prompt_answers.length >= 2) {
-        // No draft but prompts already filled (user came back) — go to last sub-step
-        setSubStep(2);
       }
+      // Always start at prompt 1 otherwise — revisiting users will see their
+      // existing answers pre-filled and can step through with Next.
     } catch (error: any) {
       console.error('Error loading profile:', error);
     }
@@ -368,8 +367,8 @@ export default function Prompts({ embedded, onContinue: parentContinue, onBack: 
     return (
       <View style={{ flex: 1 }}>
         {/* Embedded title — updates with sub-step */}
-        <Text style={styles.embeddedTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.embeddedSubtitle}>{subtitle}</Text> : null}
+        <Text style={[styles.embeddedTitle, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}>{title}</Text>
+        {subtitle ? <Text style={[styles.embeddedSubtitle, { color: isDark ? '#8E8E93' : '#71717A' }]}>{subtitle}</Text> : null}
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 8 }}
@@ -380,9 +379,22 @@ export default function Prompts({ embedded, onContinue: parentContinue, onBack: 
           {content}
         </ScrollView>
         {/* Bottom bar matching OnboardingLayout */}
-        <View style={[styles.embeddedBottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <TouchableOpacity style={styles.embeddedBackCircle} onPress={handleBack} activeOpacity={0.8}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color="#6B7280" />
+        <View style={[
+          styles.embeddedBottomBar,
+          {
+            paddingBottom: Math.max(insets.bottom, 20),
+            borderTopColor: isDark ? '#1F2937' : '#F3F4F6',
+          },
+        ]}>
+          <TouchableOpacity
+            style={[styles.embeddedBackCircle, {
+              backgroundColor: isDark ? '#1F2937' : '#F5F3F8',
+              borderColor: isDark ? '#374151' : '#E8E3F0',
+            }]}
+            onPress={handleBack}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={24} color={isDark ? '#D1D5DB' : '#6B7280'} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.embeddedContinueCircle, continueDisabled && styles.embeddedButtonDisabled]}

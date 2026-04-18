@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, createRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, StyleSheet, Alert, Modal, Pressable, useWindowDimensions, Platform, InteractionManager, BackHandler } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, StyleSheet, Alert, Modal, Pressable, useWindowDimensions, Platform, InteractionManager, BackHandler, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect , router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -71,6 +71,13 @@ export default function Messages() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set()); // Set of match_ids where other user is typing
+  // Ticks every 60s — forces FlatList to re-render relative timestamps ("2m ago" → "3m ago").
+  // Without this, timestamps freeze at whatever they were on initial render.
+  const [timeTick, setTimeTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTimeTick((t) => t + 1), 60_000);
+    return () => clearInterval(interval);
+  }, []);
   const typingUsersRef = useRef(typingUsers);
   typingUsersRef.current = typingUsers;
   const [isAdmin, setIsAdmin] = useState(false);
@@ -736,10 +743,19 @@ export default function Messages() {
   };
 
   const handleMarkAsUnread = async (conversation: Conversation) => {
-    try {
-      if (!conversation.last_message) return;
+    if (!conversation.last_message) return;
 
-      // Mark the last message as unread
+    // Optimistic UI: bump unread locally before waiting for the server
+    const previousUnread = conversation.unread_count || 0;
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.match_id === conversation.match_id
+          ? { ...c, unread_count: Math.max(1, previousUnread + 1) }
+          : c
+      )
+    );
+
+    try {
       const { error } = await supabase
         .from('messages')
         .update({ read_at: null })
@@ -750,12 +766,19 @@ export default function Messages() {
 
       if (error) throw error;
 
-      // Reload conversations to update unread count
-      await loadConversations();
-
       showToast({ type: 'success', title: t('common.success'), message: t('messages.markUnreadSuccess') });
+      // Background resync — no spinner shown to user
+      loadConversations();
     } catch (error: any) {
       console.error('Error marking as unread:', error);
+      // Rollback optimistic change
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.match_id === conversation.match_id
+            ? { ...c, unread_count: previousUnread }
+            : c
+        )
+      );
       showToast({ type: 'error', title: t('common.error'), message: t('messages.markUnreadError') });
     }
   };
@@ -988,58 +1011,116 @@ export default function Messages() {
 
         <View style={styles.emptyContainer}>
           <MotiView
-            from={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'spring', delay: 200 }}
+            from={{ opacity: 0, translateY: 8 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400, delay: 120 }}
+            style={styles.emptyContent}
           >
             {showArchived ? (
               <>
-                <View style={styles.emptyIconContainer}>
-                  <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
-                    <MaterialCommunityIcons name="archive-outline" size={48} color={colors.mutedForeground} />
-                  </View>
+                <View style={[styles.emptyIconWell, { backgroundColor: colors.muted }]}>
+                  <MaterialCommunityIcons name="archive-outline" size={28} color={colors.mutedForeground} />
                 </View>
                 <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t('messages.noArchivedMessages')}</Text>
                 <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
                   {t('messages.noArchivedMessagesText')}
                 </Text>
                 <TouchableOpacity
-                  style={styles.emptyButton}
+                  style={[styles.emptyPrimaryButton, { backgroundColor: colors.muted }]}
                   onPress={() => {
                     setShowArchived(false);
                     setConversations([]);
                     setLoading(true);
                   }}
+                  activeOpacity={0.85}
                 >
-                  <View style={[styles.emptyButtonGradient, { backgroundColor: colors.muted }]}>
-                    <MaterialCommunityIcons name="arrow-left" size={20} color={colors.foreground} />
-                    <Text style={[styles.emptyButtonText, { color: colors.foreground }]}>{t('messages.backToMessages')}</Text>
-                  </View>
+                  <Text style={[styles.emptyPrimaryButtonText, { color: colors.foreground }]}>{t('messages.backToMessages')}</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
-                <View style={styles.emptyIconContainer}>
-                  <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.emptyIcon}>
-                    <MaterialCommunityIcons name="chat-outline" size={48} color="white" />
-                  </LinearGradient>
+                <View style={[styles.emptyIconWell, { backgroundColor: colors.secondary }]}>
+                  <MaterialCommunityIcons name="message-outline" size={28} color="#A08AB7" />
                 </View>
                 <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t('messages.noMessagesYet')}</Text>
                 <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
                   {t('messages.noMessagesText')}
                 </Text>
                 <TouchableOpacity
-                  style={styles.emptyButton}
-                  onPress={() => router.push('/(tabs)/discover')}
+                  style={styles.emptyPrimaryButton}
+                  onPress={() => router.push('/(tabs)/matches')}
+                  activeOpacity={0.85}
                 >
-                  <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.emptyButtonGradient}>
-                    <MaterialCommunityIcons name="cards-heart" size={20} color="white" />
-                    <Text style={styles.emptyButtonText}>{t('messages.findMatches')}</Text>
-                  </LinearGradient>
+                  <Text style={styles.emptyPrimaryButtonText}>{t('messages.emptySeeMatches')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.emptySecondaryButton}
+                  onPress={() => router.push('/(tabs)/discover')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.emptySecondaryButtonText, { color: colors.mutedForeground }]}>
+                    {t('messages.findMatches')}
+                  </Text>
                 </TouchableOpacity>
               </>
             )}
           </MotiView>
+
+          {!showArchived && (
+            <MotiView
+              from={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ type: 'timing', duration: 600, delay: 380 }}
+              style={styles.emptyPreviewWrap}
+              pointerEvents="none"
+            >
+              <Text style={[styles.emptyPreviewLabel, { color: colors.mutedForeground }]}>
+                {t('messages.emptyPreviewLabel')}
+              </Text>
+              <View style={[styles.previewThread, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.previewThreadHeader}>
+                  <View style={styles.previewAvatarWrap}>
+                    <Image
+                      source={require('@/assets/images/mock-conversation-avatar.jpg')}
+                      style={styles.previewAvatar}
+                    />
+                    <View style={[styles.previewAvatarActiveDot, { borderColor: colors.card }]} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.previewName, { color: colors.foreground }]} numberOfLines={1}>
+                      {t('messages.emptyPreviewName')}
+                    </Text>
+                    <Text style={[styles.previewMatch, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {t('messages.emptyPreviewMatch')}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.previewBubbles}>
+                  <View style={[styles.previewBubbleTheirs, { backgroundColor: colors.muted }]}>
+                    <Text style={[styles.previewBubbleText, { color: colors.foreground }]}>
+                      {t('messages.emptyPreviewBubble1')}
+                    </Text>
+                  </View>
+                  <LinearGradient
+                    colors={['#A08AB7', '#CDC2E5']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.previewBubbleMine}
+                  >
+                    <Text style={[styles.previewBubbleText, { color: '#1F1B2E' }]}>
+                      {t('messages.emptyPreviewBubble2')}
+                    </Text>
+                  </LinearGradient>
+                  <View style={[styles.previewBubbleTheirs, { backgroundColor: colors.muted }]}>
+                    <Text style={[styles.previewBubbleText, { color: colors.foreground }]}>
+                      {t('messages.emptyPreviewBubble3')}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </MotiView>
+          )}
         </View>
       </View>
     );
@@ -1090,7 +1171,7 @@ export default function Messages() {
         data={conversations}
         renderItem={renderConversation}
         keyExtractor={keyExtractor}
-        extraData={typingUsers}
+        extraData={[typingUsers, timeTick]}
         ListHeaderComponent={listHeader}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 80 }]}
         refreshControl={
@@ -1308,49 +1389,136 @@ const styles = StyleSheet.create({
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 32,
+    paddingTop: 48,
   },
-  emptyIconContainer: {
-    marginBottom: 24,
+  emptyContent: {
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 340,
   },
-  emptyIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  emptyIconWell: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 20,
   },
   emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 12,
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    marginBottom: 8,
     textAlign: 'center',
   },
   emptyText: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: 15,
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
+    lineHeight: 22,
+    marginBottom: 24,
   },
-  emptyButton: {
-    borderRadius: 28,
-    overflow: 'hidden',
+  emptyPrimaryButton: {
+    backgroundColor: '#A08AB7',
+    paddingVertical: 14,
+    paddingHorizontal: 36,
+    borderRadius: 999,
+    alignSelf: 'center',
   },
-  emptyButtonGradient: {
+  emptyPrimaryButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.1,
+  },
+  emptySecondaryButton: {
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  emptySecondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+  },
+  emptyPreviewWrap: {
+    alignSelf: 'stretch',
+    marginTop: 40,
+    gap: 10,
+  },
+  emptyPreviewLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  previewThread: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 14,
+    gap: 12,
+  },
+  previewThreadHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
+    gap: 12,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(128,128,128,0.2)',
   },
-  emptyButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  previewAvatarWrap: {
+    position: 'relative',
+    width: 40,
+    height: 40,
+  },
+  previewAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E9E2F5',
+  },
+  previewAvatarActiveDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+  },
+  previewName: {
+    fontSize: 14,
     fontWeight: '600',
+  },
+  previewMatch: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  previewBubbles: {
+    gap: 6,
+  },
+  previewBubbleTheirs: {
+    alignSelf: 'flex-start',
+    maxWidth: '80%',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderBottomLeftRadius: 6,
+  },
+  previewBubbleMine: {
+    alignSelf: 'flex-end',
+    maxWidth: '80%',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderBottomRightRadius: 6,
+  },
+  previewBubbleText: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   listContent: {
     padding: 16,

@@ -60,6 +60,7 @@ import EmojiPicker from 'rn-emoji-keyboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import SwipeableMessageBubble from '@/components/messaging/SwipeableMessageBubble';
+import { captureException } from '@/lib/sentry';
 
 interface MessageReaction {
   id: string;
@@ -525,13 +526,22 @@ export default function Chat() {
         unsubMessages = subscribeToMessages();
         unsubReactions = subscribeToReactions();
 
-        // Mark messages as read (non-blocking)
+        // Mark messages as read. Not awaited on the main render path (we don't want
+        // to block UI), but errors are surfaced so we can detect when reads are
+        // silently dropping — otherwise local UI drifts from server state.
         supabase.from('messages')
           .update({ read_at: new Date().toISOString() })
           .eq('match_id', matchId)
           .eq('receiver_profile_id', myProfileId)
           .is('read_at', null)
-          .then(({ error: readError }) => { if (!readError) refreshUnreadCount(); });
+          .then(({ error: readError }) => {
+            if (readError) {
+              console.error('Failed to mark messages read:', readError);
+              captureException(readError, { context: 'markMessagesAsRead on chat open', matchId });
+            } else {
+              refreshUnreadCount();
+            }
+          });
 
         // PERFORMANCE: Defer decryption until after UI is responsive
         InteractionManager.runAfterInteractions(async () => {
@@ -1240,6 +1250,16 @@ export default function Chat() {
           }, 3000);
         }
       })
+      .on('broadcast', { event: 'typing_stopped' }, (payload) => {
+        // Immediate hide — other user cleared input or blurred keyboard
+        if (payload.payload?.profileId && payload.payload.profileId !== currentProfileId) {
+          if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = null;
+          }
+          setIsOtherUserTyping(false);
+        }
+      })
       .subscribe();
 
     typingChannelRef.current = channel;
@@ -1264,6 +1284,19 @@ export default function Chat() {
     typingChannelRef.current.send({
       type: 'broadcast',
       event: 'typing',
+      payload: { profileId: currentProfileId },
+    });
+  }, [currentProfileId]);
+
+  // Broadcast "typing stopped" so the other side doesn't wait the full 3s for the
+  // typing indicator to time out. Fires when input clears, input blurs, or on unmount.
+  const broadcastTypingStopped = useCallback(() => {
+    if (!typingChannelRef.current || !currentProfileId) return;
+    // Reset the debounce window so the next typing event goes out immediately
+    lastTypingBroadcastRef.current = 0;
+    typingChannelRef.current.send({
+      type: 'broadcast',
+      event: 'typing_stopped',
       payload: { profileId: currentProfileId },
     });
   }, [currentProfileId]);
@@ -1467,24 +1500,53 @@ export default function Chat() {
     try {
 
 
-      let encryptedContent = messageContent; // Default to plain text
-
-      // PERFORMANCE: Use cached keys — don't fetch per message.
-      // senderPrivateKey and otherPublicKey are already loaded at chat init.
+      // Require both keys before sending — never fall back to plaintext.
+      // If either is missing, the recipient can't decrypt anyway (plaintext in
+      // encrypted_content fails decryption and renders as "[Unable to decrypt]"),
+      // so silent fallback just produces broken messages with weaker privacy.
       const senderPrivateKey = await getPrivateKey(user.id);
       const recipientPublicKey = matchProfile.encryption_public_key;
 
-      if (senderPrivateKey && recipientPublicKey) {
-        try {
-          encryptedContent = await encryptMessage(
-            messageContent,
-            senderPrivateKey,
-            recipientPublicKey
-          );
-        } catch (encryptError: any) {
-          console.warn('⚠️ Encryption failed, sending as plain text:', encryptError.message);
-          encryptedContent = messageContent;
-        }
+      if (!senderPrivateKey) {
+        setNewMessage(messageContent); // Restore input
+        setSending(false);
+        showToast({
+          type: 'error',
+          title: t('chat.encryption.yourKeyMissingTitle', { defaultValue: 'Encryption not set up' }),
+          message: t('chat.encryption.yourKeyMissingMsg', { defaultValue: 'Please restart the app to finish setting up encryption.' }),
+        });
+        captureException(new Error('Send blocked: sender private key missing'), { profileId: currentProfileId });
+        return;
+      }
+
+      if (!recipientPublicKey) {
+        setNewMessage(messageContent);
+        setSending(false);
+        showToast({
+          type: 'error',
+          title: t('chat.encryption.recipientKeyMissingTitle', { defaultValue: "They haven't set up encryption yet" }),
+          message: t('chat.encryption.recipientKeyMissingMsg', { defaultValue: 'Try again once they open the app.' }),
+        });
+        captureException(new Error('Send blocked: recipient public key missing'), {
+          recipientProfileId: matchProfile.id,
+          matchId,
+        });
+        return;
+      }
+
+      let encryptedContent: string;
+      try {
+        encryptedContent = await encryptMessage(messageContent, senderPrivateKey, recipientPublicKey);
+      } catch (encryptError: any) {
+        setNewMessage(messageContent);
+        setSending(false);
+        showToast({
+          type: 'error',
+          title: t('chat.encryption.failedTitle', { defaultValue: 'Message not sent' }),
+          message: t('chat.encryption.failedMsg', { defaultValue: 'Encryption failed. Please try again.' }),
+        });
+        captureException(encryptError, { context: 'encryptMessage failed', matchId });
+        return;
       }
 
       // Send message (encrypted if possible, plain text otherwise)
@@ -1511,11 +1573,22 @@ export default function Chat() {
       if (messages.length === 0) {
         trackFunnel.firstMessageSent();
 
-        // Prevent match expiration by setting first_message_sent_at
-        await supabase
+        // Prevent match expiration by setting first_message_sent_at.
+        // CRITICAL: must succeed or the match will expire in 7 days despite the message.
+        const { error: firstMsgError } = await supabase
           .from('matches')
           .update({ first_message_sent_at: new Date().toISOString() })
           .eq('id', matchId);
+
+        if (firstMsgError) {
+          console.error('Failed to set first_message_sent_at:', firstMsgError);
+          captureException(firstMsgError, { context: 'first_message_sent_at update failed', matchId });
+          showToast({
+            type: 'error',
+            title: t('chat.expirationWarningTitle', { defaultValue: 'Match may expire' }),
+            message: t('chat.expirationWarningMsg', { defaultValue: "Message sent, but we couldn't confirm — resend if the chat vanishes." }),
+          });
+        }
       }
 
 
@@ -1877,12 +1950,23 @@ export default function Chat() {
         });
       }
 
-      // Prevent match expiration if this is the first message
+      // Prevent match expiration if this is the first message.
+      // CRITICAL: must succeed or the match will expire in 7 days despite the message.
       if (messages.length === 0) {
-        await supabase
+        const { error: firstMsgError } = await supabase
           .from('matches')
           .update({ first_message_sent_at: new Date().toISOString() })
           .eq('id', matchId);
+
+        if (firstMsgError) {
+          console.error('Failed to set first_message_sent_at (voice):', firstMsgError);
+          captureException(firstMsgError, { context: 'first_message_sent_at update failed (voice)', matchId });
+          showToast({
+            type: 'error',
+            title: t('chat.expirationWarningTitle', { defaultValue: 'Match may expire' }),
+            message: t('chat.expirationWarningMsg', { defaultValue: "Message sent, but we couldn't confirm — resend if the chat vanishes." }),
+          });
+        }
       }
 
       // Push notification handled by database trigger (notify-new-message edge function)
@@ -2298,10 +2382,19 @@ export default function Chat() {
   // Fetch link preview via edge function and update message in DB + local state
   const fetchAndStoreLinkPreview = async (messageId: string, url: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-link-preview', {
-        body: { url },
-      });
-      if (error || !data?.title) return;
+      // 5s timeout — the edge function occasionally hangs when the remote URL is
+      // unreachable. Without a timeout, the promise can stay pending indefinitely,
+      // accumulating memory and leaving the user wondering why the preview never loads.
+      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error('Link preview timed out') }), 5000)
+      );
+      const invokePromise = supabase.functions.invoke('fetch-link-preview', { body: { url } });
+
+      const { data, error } = (await Promise.race([invokePromise, timeoutPromise])) as any;
+      if (error || !data?.title) {
+        if (error) console.warn('Link preview failed:', error?.message || error);
+        return;
+      }
 
       const preview: LinkPreviewData = {
         url: data.url || url,
@@ -2320,8 +2413,9 @@ export default function Chat() {
       setMessages((prev) =>
         prev.map((m) => (m.id === messageId ? { ...m, link_preview: preview } : m))
       );
-    } catch {
-      // Non-critical, silently fail
+    } catch (err) {
+      // Non-critical, log for monitoring but don't disturb the user
+      console.warn('Link preview error:', err);
     }
   };
 
@@ -2552,12 +2646,12 @@ export default function Chat() {
                     <MaterialCommunityIcons
                       name={item.read_at ? "check-all" : "check"}
                       size={12}
-                      color={item.read_at ? "#3B82F6" : "rgba(0,0,0,0.3)"}
+                      color={item.read_at ? "#4C1D95" : "rgba(0,0,0,0.35)"}
                       style={styles.readReceipt}
                     />
                   ) : (
                     <TouchableOpacity onPress={() => setShowPaywall(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <MaterialCommunityIcons name="check" size={12} color="rgba(0,0,0,0.2)" style={styles.readReceipt} />
+                      <MaterialCommunityIcons name="check" size={12} color="rgba(0,0,0,0.25)" style={styles.readReceipt} />
                     </TouchableOpacity>
                   )
                 )}
@@ -2607,12 +2701,12 @@ export default function Chat() {
                             <MaterialCommunityIcons
                               name={item.read_at ? "check-all" : "check"}
                               size={12}
-                              color={item.read_at ? "#3B82F6" : "rgba(0,0,0,0.3)"}
+                              color={item.read_at ? "#4C1D95" : "rgba(0,0,0,0.35)"}
                               style={styles.readReceipt}
                             />
                           ) : (
                             <TouchableOpacity onPress={() => setShowPaywall(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                              <MaterialCommunityIcons name="check" size={12} color="rgba(0,0,0,0.2)" style={styles.readReceipt} />
+                              <MaterialCommunityIcons name="check" size={12} color="rgba(0,0,0,0.25)" style={styles.readReceipt} />
                             </TouchableOpacity>
                           )}
                         </View>
@@ -2699,12 +2793,12 @@ export default function Chat() {
                         <MaterialCommunityIcons
                           name={item.read_at ? "check-all" : "check"}
                           size={14}
-                          color={item.read_at ? "#3B82F6" : "rgba(0,0,0,0.3)"}
+                          color={item.read_at ? "#4C1D95" : "rgba(0,0,0,0.35)"}
                           style={styles.readReceipt}
                         />
                       ) : (
                         <TouchableOpacity onPress={() => setShowPaywall(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <MaterialCommunityIcons name="check" size={14} color="rgba(0,0,0,0.2)" style={styles.readReceipt} />
+                          <MaterialCommunityIcons name="check" size={14} color="rgba(0,0,0,0.25)" style={styles.readReceipt} />
                         </TouchableOpacity>
                       )}
                     </View>
@@ -3337,10 +3431,20 @@ export default function Chat() {
               placeholderTextColor={colors.mutedForeground}
               value={newMessage}
               onChangeText={(text) => {
+                const wasTyping = newMessage.length > 0;
                 setNewMessage(text);
-                // Broadcast typing event for premium users
                 if (text.length > 0) {
                   broadcastTyping();
+                } else if (wasTyping) {
+                  // Input just went from non-empty to empty — tell the other side
+                  // so they don't see "typing..." linger for 3s.
+                  broadcastTypingStopped();
+                }
+              }}
+              onBlur={() => {
+                // Keyboard closed or input lost focus — stop the typing indicator
+                if (newMessage.length > 0) {
+                  broadcastTypingStopped();
                 }
               }}
               multiline

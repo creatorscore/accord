@@ -28,7 +28,7 @@ export default function ChipSelect({
   onVisibilityChange,
 }: ChipSelectProps) {
   const isDark = useColorScheme() === 'dark';
-  const isCompact = options.length > 8;
+  const isCompact = options.length > 6;
 
   const handlePress = (value: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
