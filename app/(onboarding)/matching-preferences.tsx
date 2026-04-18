@@ -7,7 +7,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
-import { formatDistanceSlider, DistanceUnit } from '@/lib/distance-utils';
+import {
+  formatDistanceSlider,
+  formatDistanceRangeLabel,
+  distanceToSlider,
+  sliderToDistance,
+  DISTANCE_MAX,
+  DistanceUnit,
+} from '@/lib/distance-utils';
 import Slider from '@react-native-community/slider';
 import * as Haptics from 'expo-haptics';
 import { GENDER_PREF_OPTIONS, expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
@@ -255,18 +262,26 @@ export default function MatchingPreferences() {
             {/* Distance Slider */}
             <View style={styles.sliderSection}>
               <Text style={[styles.sliderLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
-                {t('onboarding.matchingPreferences.maxDistance', { distance: formatDistanceSlider(maxDistance, distanceUnit) })}
+                {maxDistance >= DISTANCE_MAX
+                  ? t('onboarding.matchingPreferences.maxDistance', { distance: formatDistanceRangeLabel(maxDistance, distanceUnit) })
+                  : t('onboarding.matchingPreferences.maxDistance', { distance: formatDistanceSlider(maxDistance, distanceUnit) })}
               </Text>
               <Slider
-                minimumValue={10}
-                maximumValue={1000}
-                step={10}
-                value={maxDistance}
-                onValueChange={setMaxDistance}
+                minimumValue={0}
+                maximumValue={1}
+                step={0.005}
+                value={distanceToSlider(maxDistance)}
+                onValueChange={(position) => setMaxDistance(sliderToDistance(position))}
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor={isDark ? '#374151' : '#D1D5DB'}
                 thumbTintColor="#A08AB7"
               />
+              <View style={styles.distanceMarkers}>
+                <Text style={[styles.distanceMarkerText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>5 mi</Text>
+                <Text style={[styles.distanceMarkerText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>25</Text>
+                <Text style={[styles.distanceMarkerText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>100</Text>
+                <Text style={[styles.distanceMarkerText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>500+</Text>
+              </View>
             </View>
 
             {/* Willing to Relocate */}
@@ -335,6 +350,16 @@ const styles = StyleSheet.create({
   sliderLabel: {
     fontSize: 14,
     marginBottom: 8,
+  },
+  distanceMarkers: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: -4,
+  },
+  distanceMarkerText: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   unitToggle: {
     marginBottom: 24,

@@ -611,49 +611,42 @@ function calculateDemographicsScore(
 ): number {
   let score = 0;
 
-  // Age preference compatibility (50 points)
-  if (
+  // HARD FILTER: age must mutually fit both users' ranges.
+  // DB-level filters already enforce this, so out-of-range profiles shouldn't
+  // reach the algorithm. The hard-fail here aligns with CLAUDE.md Golden Rule #1
+  // and makes any DB-bypass immediately visible (score collapses to 0).
+  const ageMutualMatch =
     profile1.age >= prefs2.age_min &&
     profile1.age <= prefs2.age_max &&
     profile2.age >= prefs1.age_min &&
-    profile2.age <= prefs1.age_max
-  ) {
-    score += 50;
-  } else if (
-    profile1.age >= prefs2.age_min - 3 &&
-    profile1.age <= prefs2.age_max + 3 &&
-    profile2.age >= prefs1.age_min - 3 &&
-    profile2.age <= prefs1.age_max + 3
-  ) {
-    score += 30; // Close to preferred range
-  } else {
-    score += 10; // Outside range but might still work
-  }
+    profile2.age <= prefs1.age_max;
 
-  // Gender preference compatibility (50 points)
+  if (!ageMutualMatch) {
+    return 0;
+  }
+  score += 50;
+
+  // HARD FILTER: gender preference must be mutually satisfied (or "Everyone").
+  // Same reasoning — DB filter is authoritative, algorithm aligns.
   const gender1Array = toArray(profile1.gender);
   const gender2Array = toArray(profile2.gender);
 
-  // Check if profile1's gender(s) match profile2's preferences
-  // "Everyone" means no restriction — always matches
   const genderPref2 = toArray(prefs2.gender_preference);
   const profile1MatchesPrefs =
     genderPref2.length === 0 ||
     genderPref2.includes('Everyone') ||
     gender1Array.some(g => genderPref2.includes(g));
 
-  // Check if profile2's gender(s) match profile1's preferences
   const genderPref1 = toArray(prefs1.gender_preference);
   const profile2MatchesPrefs =
     genderPref1.length === 0 ||
     genderPref1.includes('Everyone') ||
     gender2Array.some(g => genderPref1.includes(g));
 
-  if (profile1MatchesPrefs && profile2MatchesPrefs) {
-    score += 50;
-  } else if (profile1MatchesPrefs || profile2MatchesPrefs) {
-    score += 25; // One-sided match
+  if (!profile1MatchesPrefs || !profile2MatchesPrefs) {
+    return 0;
   }
+  score += 50;
 
   return Math.min(score, 100);
 }

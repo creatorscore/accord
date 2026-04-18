@@ -657,7 +657,7 @@
       "permissionDenied": "Permission Denied",
       "permissionDeniedMsg": "Please enable notifications in your device settings to receive match alerts.",
       "photosRequired": "Photos Required",
-      "photosRequiredMsg": "Please add at least 2 photos to complete your profile.",
+      "photosRequiredMsg": "Please add at least 3 photos to complete your profile.",
       "completeError": "Failed to complete onboarding"
     },
     "matchingPreferences": {
@@ -1040,9 +1040,13 @@
     "connection": "{{count}} connection",
     "matchCount": "{{current}}/{{limit}} matches used",
     "loadingMatches": "Loading your matches...",
-    "noMatchesYet": "No matches yet",
-    "noMatchesText": "Keep browsing to find your perfect match!\nYour connections will appear here.",
-    "startSwiping": "Start Browsing",
+    "noMatchesYet": "Your matches live here",
+    "noMatchesText": "When someone you like likes you back, you'll see them here first.",
+    "startSwiping": "Browse profiles",
+    "emptyAdjustFilters": "Adjust your filters",
+    "emptyPreviewLabel": "Your matches will look like this",
+    "emptyPreviewName": "Alex, 28",
+    "emptyPreviewActive": "Active now",
     "seeWhoLikesYou": "See Who Likes You",
     "noNewLikes": "No new likes yet",
     "likesCount": "{{count}} {{likes}} liked you",
@@ -1050,7 +1054,6 @@
     "peopleHave": "people have",
     "upgradeTo": "{{count}}+ likes",
     "upgradeToSee": "Upgrade to see",
-    "matchPercentage": "{{score}}% Match",
     "sayHi": "Say hi! 👋",
     "youLabel": "You: ",
     "timeAgo": {
@@ -1100,9 +1103,16 @@
     "conversation": "{{count}} conversation",
     "archivedConversations": "Archived conversations",
     "loadingMessages": "Loading messages...",
-    "noMessagesYet": "No messages yet",
-    "noMessagesText": "Match with someone to start chatting!\nYour conversations will appear here.",
-    "findMatches": "Find Matches",
+    "noMessagesYet": "Your conversations live here",
+    "noMessagesText": "Start chatting with someone you've matched with — a short hello goes a long way.",
+    "findMatches": "Find someone to chat with",
+    "emptySeeMatches": "See your matches",
+    "emptyPreviewLabel": "Your conversations will look like this",
+    "emptyPreviewName": "Alex, 28",
+    "emptyPreviewMatch": "Active now",
+    "emptyPreviewBubble1": "Hi! Your story was beautifully written 💜",
+    "emptyPreviewBubble2": "Thanks — yours really resonated",
+    "emptyPreviewBubble3": "Coffee this weekend?",
     "startConversation": "Start the conversation",
     "encryptedMessage": "🔒 Encrypted message",
     "timeAgo": {
@@ -2415,8 +2425,7 @@
       "addPrompts": "answer {{count}} more prompt",
       "addPrompts_other": "answer {{count}} more prompts",
       "andJoiner": " and ",
-      "toHelpOthers": " to help others get to know you.",
-      "settingUp": "{{name}} is still setting up their profile"
+      "toHelpOthers": " to help others get to know you."
     }
   },
   "profileView": {
@@ -2473,13 +2482,12 @@
     }
   },
   "onboardingPhotos": {
-    "subtitle": "Upload 2-6 photos. Your first photo will be your profile picture.",
+    "subtitle": "Upload 3-6 photos. Your first photo will be your profile picture.",
     "uploading": "Uploading... {{progress}}%",
     "primary": "Primary",
     "processing": "Processing...",
     "addPhoto": "Add Photo",
     "counter": "{{count}} of 6 photos",
-    "minimumTwo": "(minimum 2)",
     "minimumThree": "(minimum 3)",
     "tipsTitle": "Photo Tips",
     "tip1": "Use clear, recent photos",

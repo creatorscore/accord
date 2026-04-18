@@ -31,6 +31,7 @@ import {
   getAvailableOrientations,
   mapOldStepToNew,
 } from '@/lib/onboarding-config';
+import { expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
 import { ensurePushTokenSaved, registerForPushNotifications } from '@/lib/notifications';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
@@ -109,7 +110,7 @@ export default function Onboarding() {
             pronouns: profile.pronouns || '',
             gender: profile.gender || [],
             sexualOrientation: profile.sexual_orientation || [],
-            genderPreference: prefs?.gender_preference || [],
+            genderPreference: collapseGenderPreference(prefs?.gender_preference || []),
             relationshipType: prefs?.relationship_type || '',
             primaryReasons: prefs?.primary_reasons || [],
             heightInches: profile.height_inches || null,
@@ -149,7 +150,8 @@ export default function Onboarding() {
           // (indicates a previous save failure)
           if (mappedStep > 14 && prefs) {
             const missing: string[] = [];
-            if (!prefs.gender_preference?.length) missing.push('gender preference');
+            // gender_preference === [] is valid — it means "Everyone". Only null/undefined = actually missing.
+            if (prefs.gender_preference == null) missing.push('gender preference');
             if (!prefs.relationship_type) missing.push('relationship type');
             if (missing.length > 0) {
               showToast({ type: 'info', title: 'Review needed', message: `Your ${missing.join(' and ')} may not have saved. Please review previous steps.` });
@@ -276,7 +278,7 @@ export default function Onboarding() {
       if (pid) {
         const prefsData: Record<string, any> = {
           profile_id: pid,
-          gender_preference: store.genderPreference,
+          gender_preference: expandGenderPreference(store.genderPreference),
           relationship_type: store.relationshipType || 'platonic',
           primary_reasons: store.primaryReasons.length > 0 ? store.primaryReasons : null,
           // Legacy column — keep in sync to avoid NOT NULL constraint on older schema
@@ -364,7 +366,8 @@ export default function Onboarding() {
           .maybeSingle();
 
         const missing: string[] = [];
-        if (!savedPrefs?.gender_preference?.length) missing.push('gender preference');
+        // gender_preference === [] is valid — it means "Everyone". Only null/undefined = actually missing.
+        if (savedPrefs?.gender_preference == null) missing.push('gender preference');
         if (!savedPrefs?.relationship_type) missing.push('relationship type');
         if (missing.length > 0) {
           showToast({ type: 'error', title: 'Preferences may not have saved', message: `Please check your ${missing.join(' and ')} in settings.` });
@@ -413,15 +416,27 @@ export default function Onboarding() {
       case 4: // Pronouns
         return <ChipSelect options={PRONOUNS} selected={store.pronouns ? [store.pronouns] : []} onSelect={(v) => setField('pronouns', v[0] || '')} multi={false} />;
       case 5: // Gender
-        return <ChipSelect options={GENDERS} selected={store.gender} onSelect={(v) => setField('gender', v)} />;
+        return <ChipSelect options={GENDERS} selected={store.gender} onSelect={(v) => setField('gender', v)} multi={false} />;
       case 6: // Sexuality
-        return <ChipSelect options={store.gender.includes('Man') ? getAvailableOrientations('Man') : ORIENTATIONS} selected={store.sexualOrientation} onSelect={(v) => setField('sexualOrientation', v)} />;
+        return <ChipSelect options={store.gender.includes('Man') ? getAvailableOrientations('Man') : ORIENTATIONS} selected={store.sexualOrientation} onSelect={(v) => setField('sexualOrientation', v)} multi={false} />;
       case 7: // Gender Preference
-        return <ChipSelect options={GENDER_PREF_OPTIONS} selected={store.genderPreference} onSelect={(v) => setField('genderPreference', v)} />;
+        return <ChipSelect options={GENDER_PREF_OPTIONS} selected={store.genderPreference} onSelect={(newSelection) => {
+          const prev = store.genderPreference;
+          const added = newSelection.filter((v) => !prev.includes(v));
+          if (added.includes('Everyone')) {
+            // Everyone was just tapped on → make it exclusive
+            setField('genderPreference', ['Everyone']);
+          } else if (added.length > 0 && prev.includes('Everyone')) {
+            // A specific option was tapped while Everyone was selected → drop Everyone
+            setField('genderPreference', added);
+          } else {
+            setField('genderPreference', newSelection);
+          }
+        }} />;
       case 8: // Relationship Type
         return <ChipSelect options={RELATIONSHIP_TYPES} selected={store.relationshipType ? [store.relationshipType] : []} onSelect={(v) => setField('relationshipType', v[0] || '')} multi={false} />;
       case 9: // Intention / Primary Reasons
-        return <ChipSelect options={PRIMARY_REASONS} selected={store.primaryReasons} onSelect={(v) => setField('primaryReasons', v)} />;
+        return <ChipSelect options={PRIMARY_REASONS} selected={store.primaryReasons} onSelect={(v) => setField('primaryReasons', v)} multi={false} />;
       case 10: return <HeightStep />;
       case 11: // Ethnicity
         return <ChipSelect options={ETHNICITIES} selected={store.ethnicity} onSelect={(v) => setField('ethnicity', v)} />;
@@ -444,9 +459,9 @@ export default function Onboarding() {
       case 20: // Politics
         return <ChipSelect options={POLITICAL_VIEWS} selected={store.politicalViews ? [store.politicalViews] : []} onSelect={(v) => setField('politicalViews', v[0] || '')} multi={false} showVisibility visible={vis('political_views')} onVisibilityChange={(v) => setVis('political_views', v)} />;
       case 21: // Financial Arrangement
-        return <ChipSelect options={FINANCIAL_ARRANGEMENTS} selected={store.financialArrangement} onSelect={(v) => setField('financialArrangement', v)} />;
+        return <ChipSelect options={FINANCIAL_ARRANGEMENTS} selected={store.financialArrangement} onSelect={(v) => setField('financialArrangement', v)} multi={false} />;
       case 22: // Housing
-        return <ChipSelect options={HOUSING_PREFERENCES} selected={store.housingPreference} onSelect={(v) => setField('housingPreference', v)} />;
+        return <ChipSelect options={HOUSING_PREFERENCES} selected={store.housingPreference} onSelect={(v) => setField('housingPreference', v)} multi={false} />;
       case 23: // Drinking
         return <ChipSelect options={DRINKING_OPTIONS} selected={store.drinking ? [store.drinking] : []} onSelect={(v) => setField('drinking', v[0] || '')} multi={false} showVisibility visible={vis('drinking')} onVisibilityChange={(v) => setVis('drinking', v)} />;
       case 24: // Smoking
@@ -481,7 +496,7 @@ export default function Onboarding() {
       hideContinue={isEmbeddedStep}
       hideBack={subStep === 0}
       hideTitle={isEmbeddedStep}
-      noScroll={subStep === 28 || subStep === 29}
+      noScroll={subStep === 27 || subStep === 28 || subStep === 29 || [4, 5, 6, 7, 8, 9, 11, 12, 13, 14].includes(subStep)}
       currentRoute={currentRoute}
     >
       {renderStepContent()}

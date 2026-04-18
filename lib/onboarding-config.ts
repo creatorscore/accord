@@ -60,12 +60,12 @@ export const ONBOARDING_STEPS: OnboardingStepConfig[] = [
   { key: 'location', title: 'Where are you based?', subtitle: "We use this to find people near you.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'basics' },
   // ── Identity (4-7) ──
   { key: 'pronouns', title: 'What are your pronouns?', subtitle: "This helps others know how to refer to you.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
-  { key: 'gender', title: 'Choose your gender', subtitle: "Select all that apply.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
-  { key: 'sexuality', title: "What's your sexuality?", subtitle: "Select all that apply.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
-  { key: 'gender_pref', title: 'Who would you like to date?', subtitle: "Who would you like to see in your feed?", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
+  { key: 'gender', title: 'Choose your gender', subtitle: "Pick the gender you identify as — trans women choose Woman, trans men choose Man.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
+  { key: 'sexuality', title: "What's your sexuality?", subtitle: "Pick the one that fits best.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
+  { key: 'gender_pref', title: 'Who would you like to meet?', subtitle: "Pick Everyone, or any mix of the three.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
   // ── Goals (8-13) ──
   { key: 'relationship_type', title: 'What type of relationship are you looking for?', subtitle: "This helps us match you with compatible people.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'goals' },
-  { key: 'intention', title: 'What brings you to Accord?', subtitle: "Select all that apply.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'goals' },
+  { key: 'intention', title: 'What brings you to Accord?', subtitle: "Pick the one that fits best.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'goals' },
   { key: 'height', title: 'How tall are you?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'height', section: 'goals' },
   { key: 'ethnicity', title: "What's your ethnicity?", subtitle: "Select all that apply.", skippable: true, previewAvailable: true, hasVisibility: false, section: 'goals' },
   { key: 'children', title: 'Do you want children?', subtitle: "This is important for compatibility.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'goals' },

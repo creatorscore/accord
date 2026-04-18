@@ -125,9 +125,15 @@ function SwipeableConversationCard({
   });
 
   const handleSwipeOpen = useCallback(() => {
-    // Close previously open swipeable
-    if (openSwipeableRef.current && openSwipeableRef.current !== swipeableRef.current) {
-      openSwipeableRef.current.close();
+    // Close any other open swipeable. Ref may point to a FlatList-recycled card
+    // that's already unmounted — wrap in try/catch so a stale ref doesn't crash.
+    const previouslyOpen = openSwipeableRef.current;
+    if (previouslyOpen && previouslyOpen !== swipeableRef.current) {
+      try {
+        previouslyOpen.close();
+      } catch {
+        // Swallow — ref was stale, nothing to close
+      }
     }
     openSwipeableRef.current = swipeableRef.current;
   }, [openSwipeableRef, swipeableRef]);
@@ -345,7 +351,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#A08AB7',
     borderWidth: 2,
     borderColor: '#fff',
   },

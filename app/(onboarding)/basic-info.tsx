@@ -630,8 +630,9 @@ export default function BasicInfo() {
           terms_accepted_at: new Date().toISOString(),
           terms_version: '1.0',
           onboarding_step: 1,
-          // profile_complete is set after photos are uploaded (enforce_minimum_photos
-          // trigger requires at least 2 photos before profile_complete can be true)
+          // profile_complete is set after photos are uploaded. Client requires 3 photos
+          // (photos.tsx). DB trigger check_minimum_photos still enforces 2 for backward
+          // compat with older app versions — bump to 3 once old clients have churned out.
         }, { onConflict: 'user_id' });
 
       if (error) throw error;

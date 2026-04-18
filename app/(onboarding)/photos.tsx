@@ -11,6 +11,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -45,6 +46,7 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
   const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -156,14 +158,10 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
               return;
             }
 
-            const { optimized } = await optimizeImage(selectedUri, {
-              generateThumbnail: true,
-            });
-
-            const [contentHash, blurDataUri] = await Promise.all([
-              generateImageHash(optimized.uri),
-              generateBlurDataUri(optimized.uri).catch(() => undefined),
-            ]);
+            // Hash the ORIGINAL picker URI before optimization — optimization output
+            // can vary run-to-run (metadata timestamps, JPEG quantization) which would
+            // produce different hashes for the same source image and let duplicates slip.
+            const contentHash = await generateImageHash(selectedUri);
 
             const isDuplicateLocal = photos.some(p => p.contentHash === contentHash);
             if (isDuplicateLocal) {
@@ -186,6 +184,12 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
                 return;
               }
             }
+
+            const { optimized } = await optimizeImage(selectedUri, {
+              generateThumbnail: true,
+            });
+
+            const blurDataUri = await generateBlurDataUri(optimized.uri).catch(() => undefined);
 
             if (isMounted.current) {
               setPhotos(prev => [...prev, { uri: optimized.uri, originalUri: selectedUri, contentHash, blurDataUri }]);
@@ -459,8 +463,8 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
             style={[
               styles.addPhotoButton,
               {
-                borderColor: isDark ? '#4B5563' : '#D1D5DB',
-                backgroundColor: isDark ? '#1F2937' : '#F9FAFB',
+                borderColor: isDark ? '#A08AB7' : '#D1D5DB',
+                backgroundColor: isDark ? 'rgba(160, 138, 183, 0.12)' : '#F9FAFB',
               },
             ]}
             onPress={pickImage}
@@ -472,12 +476,12 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
             {processingImage ? (
               <>
                 <ActivityIndicator size="large" color="#A08AB7" />
-                <Text style={[styles.addPhotoText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>{t('onboardingPhotos.processing')}</Text>
+                <Text style={[styles.addPhotoText, { color: isDark ? '#D4C4E8' : '#6B7280' }]}>{t('onboardingPhotos.processing')}</Text>
               </>
             ) : (
               <>
-                <MaterialCommunityIcons name="plus" size={28} color={isDark ? '#6B7280' : '#9CA3AF'} />
-                <Text style={[styles.addPhotoText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>{t('onboardingPhotos.addPhoto')}</Text>
+                <MaterialCommunityIcons name="plus" size={28} color={isDark ? '#A08AB7' : '#9CA3AF'} />
+                <Text style={[styles.addPhotoText, { color: isDark ? '#D4C4E8' : '#6B7280' }]}>{t('onboardingPhotos.addPhoto')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -499,14 +503,24 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
         </View>
       )}
 
-      {/* Compact privacy toggle row (no card wrapper) */}
-      <View style={styles.privacyRowCompact}>
-        <MaterialCommunityIcons name="eye-off-outline" size={18} color="#A08AB7" />
+      {/* Privacy mode card — sits below the photo grid */}
+      <View
+        style={[
+          styles.privacyCard,
+          {
+            backgroundColor: isDark ? '#1A1A2D' : '#F9F8FB',
+            borderColor: isDark ? '#2C2C3E' : '#F0EDF4',
+          },
+        ]}
+      >
+        <View style={styles.privacyIconWell}>
+          <MaterialCommunityIcons name="eye-off-outline" size={20} color="#A08AB7" />
+        </View>
         <View style={styles.privacyTextCompact}>
-          <Text style={[styles.privacyLabel, { color: isDark ? '#E5E7EB' : '#1F2937' }]} numberOfLines={1}>
+          <Text style={[styles.privacyLabel, { color: isDark ? '#F5F5F7' : '#1F2937' }]} numberOfLines={1}>
             {t('onboarding.photos.privacyMode')}
           </Text>
-          <Text style={[styles.privacyDescCompact, { color: isDark ? '#9CA3AF' : '#6B7280' }]} numberOfLines={1}>
+          <Text style={[styles.privacyDescCompact, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
             {t('onboarding.photos.privacyModeDesc')}
           </Text>
         </View>
@@ -535,13 +549,28 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
     return (
       <View style={{ flex: 1 }}>
         {/* Embedded title */}
-        <Text style={styles.embeddedTitle}>{t('onboarding.photos.title')}</Text>
-        <Text style={styles.embeddedSubtitle}>{t('onboardingPhotos.subtitle')}</Text>
-        {content}
+        <Text style={[styles.embeddedTitle, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}>{t('onboarding.photos.title')}</Text>
+        <Text style={[styles.embeddedSubtitle, { color: isDark ? '#8E8E93' : '#71717A' }]}>{t('onboardingPhotos.subtitle')}</Text>
+        <View style={{ flex: 1 }}>
+          {content}
+        </View>
         {/* Bottom bar matching OnboardingLayout */}
-        <View style={styles.embeddedBottomBar}>
-          <TouchableOpacity style={styles.embeddedBackCircle} onPress={parentBack} activeOpacity={0.8}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color="#6B7280" />
+        <View style={[
+          styles.embeddedBottomBar,
+          {
+            paddingBottom: Math.max(insets.bottom, 20) + 16,
+            borderTopColor: isDark ? '#1F2937' : '#F3F4F6',
+          },
+        ]}>
+          <TouchableOpacity
+            style={[styles.embeddedBackCircle, {
+              backgroundColor: isDark ? '#1F2937' : '#F5F3F8',
+              borderColor: isDark ? '#374151' : '#E8E3F0',
+            }]}
+            onPress={parentBack}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={24} color={isDark ? '#D1D5DB' : '#6B7280'} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.embeddedContinueCircle, continueDisabled && styles.embeddedButtonDisabled]}
@@ -674,23 +703,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  privacyRowCompact: {
+  privacyCard: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 16,
+  },
+  privacyIconWell: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(160, 138, 183, 0.12)',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 'auto',
-    paddingTop: 8,
+    justifyContent: 'center',
   },
   privacyTextCompact: {
     flex: 1,
   },
   privacyLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
   },
   privacyDescCompact: {
     fontSize: 12,
-    marginTop: 1,
+    lineHeight: 16,
+    marginTop: 2,
   },
   uploadProgressContainer: {
     marginBottom: 16,

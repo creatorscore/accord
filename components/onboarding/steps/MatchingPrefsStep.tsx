@@ -2,29 +2,13 @@ import { useCallback } from 'react';
 import { View, Text, Switch, StyleSheet, useColorScheme } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useOnboardingStore } from '@/stores/onboardingStore';
-
-/**
- * Non-linear distance mapping: more resolution at 5-100mi, less at 100-500mi.
- * Slider position 0-1 maps to distance via exponential curve.
- */
-const DISTANCE_MIN = 5;
-const DISTANCE_MAX = 500;
-
-function distanceToSlider(miles: number): number {
-  if (miles <= DISTANCE_MIN) return 0;
-  if (miles >= DISTANCE_MAX) return 1;
-  return Math.log(miles / DISTANCE_MIN) / Math.log(DISTANCE_MAX / DISTANCE_MIN);
-}
-
-function sliderToDistance(position: number): number {
-  if (position <= 0) return DISTANCE_MIN;
-  if (position >= 1) return DISTANCE_MAX;
-  const raw = DISTANCE_MIN * Math.pow(DISTANCE_MAX / DISTANCE_MIN, position);
-  if (raw <= 25) return Math.round(raw);
-  if (raw <= 100) return Math.round(raw / 5) * 5;
-  if (raw <= 250) return Math.round(raw / 10) * 10;
-  return Math.round(raw / 25) * 25;
-}
+import {
+  DISTANCE_MIN,
+  DISTANCE_MAX,
+  distanceToSlider,
+  sliderToDistance,
+  formatDistanceRangeLabel,
+} from '@/lib/distance-utils';
 
 export default function MatchingPrefsStep() {
   const { ageMin, ageMax, maxDistanceMiles, willingToRelocate } = useOnboardingStore();
@@ -42,7 +26,7 @@ export default function MatchingPrefsStep() {
     setField('maxDistanceMiles', miles);
   }, [setField]);
 
-  const distanceLabel = maxDistanceMiles >= DISTANCE_MAX ? 'Anywhere' : `${maxDistanceMiles} mi`;
+  const distanceLabel = formatDistanceRangeLabel(maxDistanceMiles);
 
   return (
     <View style={styles.container}>

@@ -583,16 +583,10 @@ export default function EditProfile() {
             return;
           }
 
-          // Optimize image with compression
-          const { optimized } = await optimizeImage(selectedUri, {
-            generateThumbnail: true,
-          });
-
-          // Generate hash and blur thumbnail in parallel
-          const [contentHash, blurDataUri] = await Promise.all([
-            generateImageHash(optimized.uri),
-            generateBlurDataUri(optimized.uri).catch(() => undefined),
-          ]);
+          // Hash the ORIGINAL picker URI before optimization — optimization output
+          // can vary run-to-run (metadata timestamps, JPEG quantization) which would
+          // produce different hashes for the same source image and let duplicates slip.
+          const contentHash = await generateImageHash(selectedUri);
 
           // Check for duplicate in current selection (local check)
           const isDuplicateLocal = photos.some(p => !p.to_delete && p.contentHash === contentHash);
@@ -615,6 +609,12 @@ export default function EditProfile() {
               return;
             }
           }
+
+          // Optimize image with compression now that dedup cleared
+          const { optimized } = await optimizeImage(selectedUri, {
+            generateThumbnail: true,
+          });
+          const blurDataUri = await generateBlurDataUri(optimized.uri).catch(() => undefined);
 
           const newPhoto: Photo = {
             url: optimized.uri,
@@ -1204,7 +1204,7 @@ export default function EditProfile() {
           age_max: parseInt(ageMax) || 45,
           max_distance_miles: parseInt(maxDistance) || 50,
           willing_to_relocate: willingToRelocate,
-          gender_preference: genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary', 'Trans Woman', 'Genderfluid', 'Bigender', 'Other'],
+          gender_preference: genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary'],
           dealbreakers: dealbreakers.length > 0 ? dealbreakers : null,
           must_haves: mustHaves.length > 0 ? mustHaves : null,
         };
@@ -2512,7 +2512,7 @@ export default function EditProfile() {
                 age_max: parseInt(ageMax) || 45,
                 max_distance_miles: parseInt(maxDistance) || 50,
                 willing_to_relocate: willingToRelocate,
-                gender_preference: Array.isArray(genderPreference) && genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary', 'Trans Woman', 'Genderfluid', 'Bigender', 'Other'],
+                gender_preference: Array.isArray(genderPreference) && genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary'],
                 dealbreakers: Array.isArray(dealbreakers) ? dealbreakers : [],
                 must_haves: Array.isArray(mustHaves) ? mustHaves : [],
                 lifestyle_preferences: {

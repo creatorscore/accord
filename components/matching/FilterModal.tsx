@@ -13,6 +13,12 @@ import Slider from '@react-native-community/slider';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  DISTANCE_MAX,
+  distanceToSlider,
+  sliderToDistance,
+  formatDistanceRangeLabel,
+} from '@/lib/distance-utils';
 
 export interface FilterOptions {
   // Free filters
@@ -391,17 +397,27 @@ export default function FilterModal({
           {/* Distance */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('filters.maxDistance')}</Text>
-            <Text style={styles.rangeText}>{t('filters.miles', { count: localDistance })}</Text>
+            <Text style={styles.rangeText}>
+              {localDistance >= DISTANCE_MAX
+                ? formatDistanceRangeLabel(localDistance)
+                : t('filters.miles', { count: localDistance })}
+            </Text>
             <Slider
               style={styles.slider}
-              minimumValue={5}
-              maximumValue={1000}
-              step={5}
-              value={localDistance}
-              onValueChange={(value) => setLocalDistance(Math.round(value))}
+              minimumValue={0}
+              maximumValue={1}
+              step={0.005}
+              value={distanceToSlider(localDistance)}
+              onValueChange={(position) => setLocalDistance(sliderToDistance(position))}
               minimumTrackTintColor="#A08AB7"
               maximumTrackTintColor="#E5E7EB"
             />
+            <View style={styles.distanceMarkers}>
+              <Text style={styles.distanceMarkerText}>5 mi</Text>
+              <Text style={styles.distanceMarkerText}>25</Text>
+              <Text style={styles.distanceMarkerText}>100</Text>
+              <Text style={styles.distanceMarkerText}>500+</Text>
+            </View>
           </View>
 
           {/* Active Today Toggle */}
@@ -704,6 +720,17 @@ const styles = StyleSheet.create({
   },
   sliderLabel: {
     fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  distanceMarkers: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: -4,
+  },
+  distanceMarkerText: {
+    fontSize: 11,
     color: '#9CA3AF',
     fontWeight: '500',
   },
