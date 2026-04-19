@@ -1005,6 +1005,8 @@ export default function Discover() {
         } else {
           // Cache miss — fall back to live RPC
           console.log('⚠️ Discovery cache miss, using live RPC');
+          // Gender prefs: use in-session filter only. Empty array = "Everyone" (RPC skips the filter).
+          // No DB fallback — if the user clears to Everyone but DB save raced, we honor the user's intent.
           const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_profiles', {
             p_user_lat: currentUserData.latitude,
             p_user_lon: currentUserData.longitude,
@@ -1012,7 +1014,7 @@ export default function Discover() {
             p_user_profile_id: profileId,
             p_min_age: Math.max(18, effectiveFilters.ageMin),
             p_max_age: effectiveFilters.ageMax,
-            p_gender_prefs: effectiveFilters.genderPreference?.length > 0 ? effectiveFilters.genderPreference : (currentUserData.preferences?.gender_preference || []),
+            p_gender_prefs: effectiveFilters.genderPreference || [],
             p_result_limit: 50
           });
 
@@ -1045,6 +1047,7 @@ export default function Discover() {
               .eq('is_active', true)
               .eq('profile_complete', true)
               .eq('incognito_mode', false)
+              .eq('photo_review_required', false)
               .or('policy_restricted.is.null,policy_restricted.eq.false');
 
             if (profilesError) {
@@ -1128,12 +1131,12 @@ export default function Discover() {
           .gte('age', Math.max(18, effectiveFilters.ageMin))
           .lte('age', effectiveFilters.ageMax);
 
-        // Gender preference is a hard filter — enforce in search mode too
-        // "Everyone" means skip gender filter entirely
-        if (currentUserData.preferences?.gender_preference && currentUserData.preferences.gender_preference.length > 0) {
-          const genderPrefArray = Array.isArray(currentUserData.preferences.gender_preference)
-            ? currentUserData.preferences.gender_preference
-            : currentUserData.preferences.gender_preference.split(',').map((g: string) => g.trim());
+        // Gender preference is a hard filter — enforce in search mode too.
+        // Use in-session effectiveFilters (not DB) so an in-session filter change takes
+        // effect immediately even if the DB write is still in flight.
+        // "Everyone" (or empty array) means skip the gender filter entirely.
+        if (effectiveFilters.genderPreference && effectiveFilters.genderPreference.length > 0) {
+          const genderPrefArray = effectiveFilters.genderPreference;
           if (!genderPrefArray.includes('Everyone')) {
             const pgArrayLiteral = `{${genderPrefArray.map((g: string) => `"${g}"`).join(',')}}`;
             query = query.filter('gender', 'ov', pgArrayLiteral);
@@ -1170,13 +1173,12 @@ export default function Discover() {
           .gte('age', Math.max(18, effectiveFilters.ageMin))
           .lte('age', effectiveFilters.ageMax);
 
-        // Apply gender preference filter (hard filter for all users)
-        // "Everyone" means skip gender filter entirely
-        if (currentUserData.preferences?.gender_preference && currentUserData.preferences.gender_preference.length > 0) {
-          const genderPrefArray = Array.isArray(currentUserData.preferences.gender_preference)
-            ? currentUserData.preferences.gender_preference
-            : currentUserData.preferences.gender_preference.split(',').map((g: string) => g.trim());
-
+        // Apply gender preference filter (hard filter for all users).
+        // Source of truth: in-session effectiveFilters, not DB (so in-session changes
+        // take effect before the DB write settles).
+        // "Everyone" (or empty array) means skip the gender filter entirely.
+        if (effectiveFilters.genderPreference && effectiveFilters.genderPreference.length > 0) {
+          const genderPrefArray = effectiveFilters.genderPreference;
           if (!genderPrefArray.includes('Everyone')) {
             const pgArrayLiteral = `{${genderPrefArray.map((g: string) => `"${g}"`).join(',')}}`;
             query = query.filter('gender', 'ov', pgArrayLiteral);
@@ -1383,12 +1385,10 @@ export default function Discover() {
 
           // 5. CRITICAL: Gender preference hard filter (client-side safety net)
           // Defense-in-depth — server-side filters (RPC + SQL overlap) are authoritative
-          // but this catches any leaks. All write paths now expand UI labels to canonical
-          // values via expandGenderPreference, so we can trust the DB to hold 'Man'/'Woman'/'Non-binary'.
-          if (currentUserData.preferences?.gender_preference && currentUserData.preferences.gender_preference.length > 0) {
-            const genderPrefArr = Array.isArray(currentUserData.preferences.gender_preference)
-              ? currentUserData.preferences.gender_preference
-              : [currentUserData.preferences.gender_preference];
+          // but this catches any leaks. Source: effectiveFilters (in-session) so mid-session
+          // changes are enforced immediately, matching what the RPC/query was called with.
+          if (effectiveFilters.genderPreference && effectiveFilters.genderPreference.length > 0) {
+            const genderPrefArr = effectiveFilters.genderPreference;
             // "Everyone" means no restriction — matches the RPC convention
             if (!genderPrefArr.includes('Everyone')) {
               const profileGenders = Array.isArray(profile.gender) ? profile.gender : (profile.gender ? [profile.gender] : []);
@@ -1450,9 +1450,10 @@ export default function Discover() {
               return false; // Keyword not found
             }
 
-            // In search mode, skip premium/preference filters — show all keyword matches.
-            // Gender preference and age range are already enforced in the safety filters above.
-            return true;
+            // Keyword matched. Fall through to premium/preference filters below so
+            // a premium user searching "yoga" with religion=Jewish still only sees
+            // Jewish candidates who match "yoga" — filters are NEVER skipped because
+            // you typed something. Gender/age hard filters already ran above.
           }
 
           // ====================================================================
@@ -3539,9 +3540,12 @@ export default function Discover() {
             setFilters(newFilters);
             setShowFilterModal(false);
             filtersSnapshotRef.current = computeFiltersHash(newFilters);
+            // Clear stale profile queue immediately so the user can't swipe
+            // on pre-filter candidates during the refetch window.
+            setProfiles([]);
             setCurrentIndex(0);
-            // Await persistFilters so the DB write completes before the user
-            // navigates away — prevents stale filters on next load.
+            // Await persistFilters so the DB write completes (and the cache
+            // invalidation trigger fires) before we re-query.
             await persistFilters(newFilters);
             loadProfiles(undefined, undefined, newFilters);
           }}
