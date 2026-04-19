@@ -45,7 +45,7 @@ import ReviewPromptBanner from '@/components/reviews/ReviewPromptBanner';
 import ReviewSubmissionModal from '@/components/reviews/ReviewSubmissionModal';
 import { useToast } from '@/contexts/ToastContext';
 import { validateMessage, containsContactInfo, validateContent } from '@/lib/content-moderation';
-import { encryptMessage, decryptMessage, getPrivateKey, getLegacyPrivateKey } from '@/lib/encryption';
+import { encryptMessage, decryptMessage, getPrivateKey, getLegacyPrivateKey, ensurePrivateKey } from '@/lib/encryption';
 import { getLastActiveText, isOnline, getOnlineStatusColor } from '@/lib/online-status';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { useColorScheme } from '@/lib/useColorScheme';
@@ -442,6 +442,10 @@ export default function Chat() {
           photo_blur_data_uri: primaryPhoto?.blur_data_uri,
           is_verified: profile.is_verified,
           photo_verified: profile.photo_verified,
+          // Recipient's public key — without this the send path throws the
+          // scary "They haven't set up encryption yet" toast even though the
+          // key is sitting right there in the profile row we just fetched.
+          encryption_public_key: profile.encryption_public_key,
           location_city: profile.location_city,
           compatibility_score: matchData.compatibility_score,
           distance: distance ?? undefined,
@@ -1504,19 +1508,41 @@ export default function Chat() {
       // If either is missing, the recipient can't decrypt anyway (plaintext in
       // encrypted_content fails decryption and renders as "[Unable to decrypt]"),
       // so silent fallback just produces broken messages with weaker privacy.
-      const senderPrivateKey = await getPrivateKey(user.id);
-      const recipientPublicKey = matchProfile.encryption_public_key;
-
-      if (!senderPrivateKey) {
-        setNewMessage(messageContent); // Restore input
+      // ensurePrivateKey self-heals: if SecureStore lost our key (reinstall,
+      // keychain wipe, cold-start race with AuthContext.setupEncryption),
+      // regenerate deterministically from userId. This unblocks users who
+      // were stuck with "can't send text, photos work" because their private
+      // key never made it into SecureStore or got evicted.
+      let senderPrivateKey: string;
+      try {
+        senderPrivateKey = await ensurePrivateKey(user.id);
+      } catch (keyError: any) {
+        setNewMessage(messageContent);
         setSending(false);
         showToast({
           type: 'error',
           title: t('chat.encryption.yourKeyMissingTitle', { defaultValue: 'Encryption not set up' }),
           message: t('chat.encryption.yourKeyMissingMsg', { defaultValue: 'Please restart the app to finish setting up encryption.' }),
         });
-        captureException(new Error('Send blocked: sender private key missing'), { profileId: currentProfileId });
+        captureException(keyError, { context: 'ensurePrivateKey failed', profileId: currentProfileId });
         return;
+      }
+      // Recipient's public key. Usually populated from the initial profile fetch,
+      // but if the match object was reconstructed without it, refetch once from
+      // DB (all active profiles have a key). Only show the user-facing toast
+      // after the refetch also fails — true "they haven't set up encryption"
+      // should essentially never happen in production.
+      let recipientPublicKey = matchProfile.encryption_public_key;
+      if (!recipientPublicKey) {
+        const { data: freshProfile } = await supabase
+          .from('profiles')
+          .select('encryption_public_key')
+          .eq('id', matchProfile.id)
+          .maybeSingle();
+        recipientPublicKey = freshProfile?.encryption_public_key || undefined;
+        if (recipientPublicKey) {
+          setMatchProfile((prev) => prev ? { ...prev, encryption_public_key: recipientPublicKey } : prev);
+        }
       }
 
       if (!recipientPublicKey) {
@@ -1524,10 +1550,10 @@ export default function Chat() {
         setSending(false);
         showToast({
           type: 'error',
-          title: t('chat.encryption.recipientKeyMissingTitle', { defaultValue: "They haven't set up encryption yet" }),
-          message: t('chat.encryption.recipientKeyMissingMsg', { defaultValue: 'Try again once they open the app.' }),
+          title: t('chat.encryption.recipientKeyMissingTitle', { defaultValue: 'Try again in a moment' }),
+          message: t('chat.encryption.recipientKeyMissingMsg', { defaultValue: "Setting up secure messaging — this usually clears up within a few seconds." }),
         });
-        captureException(new Error('Send blocked: recipient public key missing'), {
+        captureException(new Error('Send blocked: recipient public key missing after refetch'), {
           recipientProfileId: matchProfile.id,
           matchId,
         });

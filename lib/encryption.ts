@@ -164,6 +164,37 @@ export async function getPrivateKey(userId: string): Promise<string | null> {
 }
 
 /**
+ * Like getPrivateKey, but self-heals: if SecureStore lost the key (keychain
+ * wipe, reinstall, cold-start race with AuthContext.setupEncryption), we
+ * regenerate it deterministically from userId and re-store it. Safe because
+ * generateKeyPairForUser is pure (same userId -> same key on any device).
+ *
+ * Use this from code paths where a missing key would block the user (e.g.
+ * sending a message). Do NOT use from initializeEncryption itself — that
+ * path needs to see the actual stored value so it can migrate legacy
+ * random keys to the deterministic scheme.
+ */
+export async function ensurePrivateKey(userId: string): Promise<string> {
+  if (!userId) {
+    throw new Error('ensurePrivateKey called with empty userId');
+  }
+  const stored = await getPrivateKey(userId);
+  if (stored) return stored;
+
+  // Regenerate deterministically. Same userId always yields the same key,
+  // so old messages still decrypt and the recipient's cached public key for us
+  // still matches.
+  const { privateKey } = await generateKeyPairForUser(userId);
+  // Best-effort cache. Don't block send if SecureStore refuses the write.
+  try {
+    await storePrivateKey(userId, privateKey);
+  } catch (err) {
+    console.warn('[encryption] ensurePrivateKey failed to cache to SecureStore:', err);
+  }
+  return privateKey;
+}
+
+/**
  * Retrieve legacy private key from secure storage
  * This is the old random key that was used before deterministic keys
  * Used for backwards compatibility to decrypt old messages
