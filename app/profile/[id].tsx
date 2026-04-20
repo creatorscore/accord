@@ -6,7 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import { signPhotoUrls, getSignedUrl } from '@/lib/signed-urls';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -179,6 +181,35 @@ const _CompatibilityBar = ({ label, score, icon, color }: { label: string; score
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Matches discover.tsx — keep in sync
+const DAILY_LIKE_LIMIT = 5;
+
+// Returns true if the current AsyncStorage counter says the user has already used today's 5
+// for the current local day. Server-side trigger is the authoritative gate — this is a
+// pre-check so we can show the paywall before hitting the DB.
+const hasHitDailyLikeLimitLocally = async (): Promise<boolean> => {
+  try {
+    const stored = await AsyncStorage.getItem('like_data');
+    if (!stored) return false;
+    const { date, count } = JSON.parse(stored);
+    const today = new Date().toDateString();
+    if (date !== today) return false;
+    return typeof count === 'number' && count >= DAILY_LIKE_LIMIT;
+  } catch {
+    return false;
+  }
+};
+
+const bumpDailyLikeCounter = async () => {
+  try {
+    const stored = await AsyncStorage.getItem('like_data');
+    const today = new Date().toDateString();
+    const current = stored ? JSON.parse(stored) : null;
+    const count = current?.date === today ? (current.count || 0) + 1 : 1;
+    await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count }));
+  } catch {}
+};
+
 export default function ProfileView() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -195,6 +226,7 @@ export default function ProfileView() {
   const [loading, setLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [isSuperLiked, setIsSuperLiked] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   const [isMatched, setIsMatched] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false); // Admin can view any profile
   const [matchId, setMatchId] = useState<string | null>(null);
@@ -594,6 +626,13 @@ export default function ProfileView() {
   const handleLike = async () => {
     if (!currentProfileId || !id) return;
 
+    // Free users: pre-check daily limit so we can show the paywall before hitting the DB.
+    // Server-side enforce_like_limits trigger is still the authoritative gate (see P0001 catch below).
+    if (!isPremium && !isPlatinum && await hasHitDailyLikeLimitLocally()) {
+      setShowPaywall(true);
+      return;
+    }
+
     setIsLiked(true);
 
     try {
@@ -603,9 +642,20 @@ export default function ProfileView() {
         liked_profile_id: id,
       });
 
-      // Ignore duplicate key errors - the like already exists
-      if (likeInsertError && !likeInsertError.message?.includes('duplicate')) {
-        throw likeInsertError;
+      if (likeInsertError) {
+        // Ignore duplicate key errors - the like already exists
+        if (likeInsertError.message?.includes('duplicate')) {
+          // fall through
+        } else if (likeInsertError.code === 'P0001' && likeInsertError.message?.includes('Daily like limit')) {
+          setIsLiked(false);
+          setShowPaywall(true);
+          return;
+        } else {
+          throw likeInsertError;
+        }
+      } else if (!isPremium && !isPlatinum) {
+        // Successful free-tier like — keep local counter in sync with server trigger
+        await bumpDailyLikeCounter();
       }
 
       // Check for mutual match
@@ -714,16 +764,36 @@ export default function ProfileView() {
   const handleObsessed = async () => {
     if (!currentProfileId || !id) return;
 
+    // Super likes are premium-only. Pre-check client-side so we can show paywall
+    // instead of a generic error toast when the server trigger rejects.
+    if (!isPremium && !isPlatinum) {
+      setShowPaywall(true);
+      return;
+    }
+
     setIsSuperLiked(true);
 
     try {
-      // Insert super like
+      // Insert super like (explicit like_type so the server trigger routes to the
+      // super-like branch and applies the weekly budget check)
       const { error: superLikeError } = await supabase.from('likes').insert({
         liker_profile_id: currentProfileId,
         liked_profile_id: id,
+        like_type: 'super_like',
       });
 
       if (superLikeError) {
+        if (superLikeError.code === 'P0001') {
+          setIsSuperLiked(false);
+          if (superLikeError.message?.includes('Premium subscription required')) {
+            setShowPaywall(true);
+          } else if (superLikeError.message?.includes('Weekly super like limit')) {
+            Alert.alert(t('discover.superLikeLimitTitle', { defaultValue: 'Super Like limit reached' }), t('discover.superLikeLimitMsg', { defaultValue: 'You have used all your super likes for this week. They reset every 7 days.' }));
+          } else {
+            Alert.alert(t('common.error'), superLikeError.message);
+          }
+          return;
+        }
         throw superLikeError;
       }
 
@@ -1106,6 +1176,12 @@ export default function ProfileView() {
           currentUserPhoto={currentUserPhoto || undefined}
         />
       )}
+
+      <PremiumPaywall
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        feature="daily_like_limit"
+      />
     </View>
   );
 }

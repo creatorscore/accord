@@ -747,19 +747,39 @@ export default function Discover() {
       const today = new Date().toDateString();
       const storedData = await AsyncStorage.getItem('like_data');
 
+      let localCount = 0;
       if (storedData) {
-        const { date, count} = JSON.parse(storedData);
-        // Reset count if it's a new day
-        if (date === today) {
-          setLikeCount(count);
-        } else {
-          setLikeCount(0);
-          await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: 0 }));
-        }
-      } else {
-        setLikeCount(0);
-        await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: 0 }));
+        const { date, count } = JSON.parse(storedData);
+        localCount = date === today && typeof count === 'number' ? count : 0;
       }
+
+      // Reconcile with server-side counter (enforce_like_limits trigger maintains
+      // profiles.daily_likes_count on every free-tier like). The server is the
+      // authoritative source — take max(local, server) so AsyncStorage tampering
+      // on rooted/jailbroken devices can't reset the counter, but a fresh install
+      // still learns today's used count from the DB.
+      let serverCount = 0;
+      if (currentProfileId) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('daily_likes_count, daily_likes_reset_date')
+          .eq('id', currentProfileId)
+          .maybeSingle();
+        if (prof) {
+          const serverDate = prof.daily_likes_reset_date
+            ? new Date(prof.daily_likes_reset_date + 'T00:00:00Z').toDateString()
+            : null;
+          // Only trust the server count if its reset date matches the client's local "today".
+          // Timezone drift means we'd otherwise show stale counts early/late in the day.
+          if (serverDate === today && typeof prof.daily_likes_count === 'number') {
+            serverCount = prof.daily_likes_count;
+          }
+        }
+      }
+
+      const reconciled = Math.max(localCount, serverCount);
+      setLikeCount(reconciled);
+      await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: reconciled }));
     } catch (error) {
       console.error('Error loading like count:', error);
     }
