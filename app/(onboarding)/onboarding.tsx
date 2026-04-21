@@ -30,6 +30,7 @@ import {
   DRUG_OPTIONS,
   getAvailableOrientations,
   mapOldStepToNew,
+  resolveResumeStep,
 } from '@/lib/onboarding-config';
 import { expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
 import { ensurePushTokenSaved, registerForPushNotifications } from '@/lib/notifications';
@@ -96,8 +97,13 @@ export default function Onboarding() {
           setProfileId(profile.id);
           const prefs = Array.isArray(profile.preferences) ? profile.preferences[0] : profile.preferences;
 
-          // Hydrate store from existing data
-          store.hydrate({
+          // Hydrate store from existing DB data, but only for fields the user
+          // hasn't already touched locally. The zustand persist middleware may
+          // have already rehydrated in-progress answers (gender, genderPreference,
+          // etc.) from AsyncStorage before this effect runs; overwriting those
+          // with DB defaults would wipe the user's unsaved progress and send
+          // them back to re-enter the same answers.
+          store.hydrateIfEmpty({
             displayName: profile.display_name || '',
             birthDate: profile.birth_date ? new Date(profile.birth_date) : null,
             age: profile.age || null,
@@ -138,12 +144,20 @@ export default function Onboarding() {
             fieldVisibility: profile.field_visibility || {},
           });
 
-          // Determine resume step
-          const rawStep = parseInt(resumeStep || '0', 10);
-          // If onboarding_step is from the old flow (0-9), map it
-          const mappedStep = profile.onboarding_step <= 9
-            ? mapOldStepToNew(profile.onboarding_step || 0)
-            : Math.min(rawStep, TOTAL_ONBOARDING_STEPS - 1);
+          // Determine resume step — prefer the URL param if it's plausible,
+          // but always override with earliestMissingRequiredStep so legacy
+          // users whose old flow never collected gender_preference /
+          // relationship_type / primary_reasons don't coast past those.
+          const urlStep = parseInt(resumeStep || '0', 10);
+          const storedStep = profile.onboarding_step && profile.onboarding_step > 9
+            ? Math.max(profile.onboarding_step, urlStep || 0)
+            : (profile.onboarding_step || 0);
+          const mappedStep = resolveResumeStep(
+            storedStep,
+            profile,
+            prefs,
+            TOTAL_ONBOARDING_STEPS,
+          );
           setSubStep(mappedStep);
 
           // Warn if resuming past identity steps but critical prefs are missing
@@ -174,7 +188,7 @@ export default function Onboarding() {
       case 1: return store.birthDate !== null && store.age !== null && store.age >= 18;
       case 2: return true; // notifications now skippable
       case 3: return !!(store.locationCity || store.locationState);
-      case 4: return true; // pronouns skippable
+      case 4: return !!store.pronouns; // Pronouns required per ONBOARDING_SPEC (incl. "prefer not to say")
       case 5: return store.gender.length > 0;
       case 6: return store.sexualOrientation.length > 0;
       case 7: return store.genderPreference.length > 0;
@@ -337,7 +351,11 @@ export default function Onboarding() {
       return;
     }
 
-    // Save at checkpoints: after location (3), after pets (14), after drugs (26), final (30)
+    // Save at checkpoints: after location (3), after pets (14), after drugs (26), final (30).
+    // In-memory answers between these checkpoints are protected by the zustand
+    // persist middleware (see stores/onboardingStore.ts) so an app kill doesn't
+    // wipe gender / gender preference / relationship / intent answers — they
+    // survive in AsyncStorage and hydrate back in when the user reopens.
     const checkpoints = [3, 14, 26, 30];
     if (checkpoints.includes(subStep)) {
       try {
@@ -376,6 +394,9 @@ export default function Onboarding() {
       }
 
       trackUserAction.onboardingCompleted?.();
+      // Clear the persisted onboarding draft — prevents stale answers from
+      // leaking into a new signup on the same device or a re-onboarding session.
+      store.reset();
       router.replace('/(tabs)/discover');
     } else {
       setSubStep(subStep + 1);
@@ -418,7 +439,7 @@ export default function Onboarding() {
       case 5: // Gender
         return <ChipSelect options={GENDERS} selected={store.gender} onSelect={(v) => setField('gender', v)} multi={false} />;
       case 6: // Sexuality
-        return <ChipSelect options={store.gender.includes('Man') ? getAvailableOrientations('Man') : ORIENTATIONS} selected={store.sexualOrientation} onSelect={(v) => setField('sexualOrientation', v)} multi={false} />;
+        return <ChipSelect options={Array.isArray(store.gender) && store.gender.includes('Man') ? getAvailableOrientations('Man') : ORIENTATIONS} selected={store.sexualOrientation} onSelect={(v) => setField('sexualOrientation', v)} multi={false} />;
       case 7: // Gender Preference
         return <ChipSelect options={GENDER_PREF_OPTIONS} selected={store.genderPreference} onSelect={(newSelection) => {
           const prev = store.genderPreference;
@@ -435,8 +456,8 @@ export default function Onboarding() {
         }} />;
       case 8: // Relationship Type
         return <ChipSelect options={RELATIONSHIP_TYPES} selected={store.relationshipType ? [store.relationshipType] : []} onSelect={(v) => setField('relationshipType', v[0] || '')} multi={false} />;
-      case 9: // Intention / Primary Reasons
-        return <ChipSelect options={PRIMARY_REASONS} selected={store.primaryReasons} onSelect={(v) => setField('primaryReasons', v)} multi={false} />;
+      case 9: // Intention / Primary Reasons — multi-select per spec; users often have several reasons
+        return <ChipSelect options={PRIMARY_REASONS} selected={store.primaryReasons} onSelect={(v) => setField('primaryReasons', v)} multi={true} />;
       case 10: return <HeightStep />;
       case 11: // Ethnicity
         return <ChipSelect options={ETHNICITIES} selected={store.ethnicity} onSelect={(v) => setField('ethnicity', v)} />;

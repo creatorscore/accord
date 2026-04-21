@@ -272,7 +272,13 @@ export default function MatchingPreferences() {
       );
     } catch (error: any) {
       console.error('❌ Error saving matching preferences:', error);
-      Alert.alert(t('common.error'), t('settings.matchingPreferences.saveError'));
+      // Prefer the actual DB/Supabase message over the generic i18n fallback
+      // so a user can read an actionable hint (missing field, RLS, etc.) if
+      // it comes back. The i18n key is the fallback when error has no body.
+      Alert.alert(
+        t('common.error'),
+        error?.message || t('settings.matchingPreferences.saveError')
+      );
     } finally {
       setSaving(false);
     }

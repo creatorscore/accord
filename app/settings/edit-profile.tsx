@@ -1219,7 +1219,16 @@ export default function EditProfile() {
 
         if (prefsError) {
           console.error('Error saving preferences:', prefsError);
-          // Don't fail the whole save if preferences fail
+          captureException(prefsError instanceof Error ? prefsError : new Error((prefsError as any)?.message || 'Preferences save failed'), { context: 'edit_profile_preferences' });
+          // Don't fail the whole save — profile columns may have saved — but
+          // tell the user so they don't assume their preference changes stuck.
+          // Previously this was swallowed silently and the success alert below
+          // claimed everything saved, which was the wrong story when only
+          // part of the payload landed.
+          Alert.alert(
+            'Partial save',
+            'Your profile saved, but some preferences could not be updated. Please retry from the Matching Preferences screen.'
+          );
         }
       }
 

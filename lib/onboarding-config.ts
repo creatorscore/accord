@@ -287,24 +287,91 @@ export function getHeightOptions(unit: 'imperial' | 'metric'): { value: number; 
 }
 
 /**
- * Map old onboarding_step values (0-9) to new step indices (0-29)
+ * Map old onboarding_step values (0-9) to new step indices (0-30)
  * for existing users who are mid-onboarding on the old flow.
+ *
+ * Callers should prefer `resolveResumeStep` (below) which overrides the map
+ * when critical fields are missing — the bare map can skip required content
+ * that the old flow never collected (gender_preference, relationship_type,
+ * primary_reasons, etc.), which let ~400 legacy users finish onboarding with
+ * null relationship_type before this fix.
  */
 export function mapOldStepToNew(oldStep: number): number {
-  // Old flow: 0=not started, 1=basic-info done, 2=personality done,
-  // 3=photos done, 5=legacy interests done, 6=prompts done, 7=voice done,
-  // 8=marriage-prefs done, 9=matching-prefs done
+  // Old flow screens: basic-info (→1), photos (→3), voice (→7),
+  // marriage-preferences (→8), matching-preferences / notifications (→9).
+  // Steps 2/4/5/6 come from retired versions (personality, interests, prompts)
+  // and are treated as equivalent to their nearest surviving neighbor.
   const mapping: Record<number, number> = {
     0: 0,   // Not started → start from beginning
-    1: 10,  // Basic info done (name/DOB/gender/pronouns/orientation/ethnicity/location/hometown/occupation/education) → height
-    2: 10,  // Personality done → height (personality removed)
-    3: 27,  // Photos done → prompts
-    4: 27,  // Legacy → prompts
-    5: 27,  // Interests done → prompts
-    6: 28,  // Prompts done → voice note
-    7: 20,  // Voice done → financial arrangement
-    8: 29,  // Marriage prefs done → matching prefs
-    9: 29,  // Matching prefs done → matching prefs (last step)
+    1: 4,   // Basic info done → Identity section (pronouns..gender_pref..goals)
+    2: 4,   // Personality (removed) → Identity
+    3: 4,   // Photos done (but Identity+Goals+Lifestyle never collected) → Identity
+    4: 4,   // Legacy → Identity
+    5: 4,   // Interests (removed) → Identity
+    6: 4,   // Prompts done (old order) → Identity
+    7: 4,   // Voice done (old order) → Identity
+    8: 4,   // Marriage prefs done (still missing gender_pref + identity) → Identity
+    9: 30,  // Matching prefs done → final Matching Prefs step in new flow
   };
   return mapping[oldStep] ?? 0;
+}
+
+/**
+ * Inspect a legacy user's actual DB state and return the earliest new-flow
+ * step index they still need to fill out. Beats `mapOldStepToNew` alone when
+ * the user has partial data that doesn't match any neat old-step marker —
+ * e.g. marriage-prefs done but relationship_type somehow null, or an abandoned
+ * signup where onboarding_step was never bumped past 1.
+ *
+ * Returns `null` if every required field is present (caller should fall back
+ * to the map or the stored step).
+ */
+export function earliestMissingRequiredStep(profile: {
+  display_name?: string | null;
+  birth_date?: string | null;
+  age?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  pronouns?: string | null;
+  gender?: string[] | null;
+  sexual_orientation?: string[] | null;
+}, preferences: {
+  gender_preference?: string[] | null;
+  relationship_type?: string | null;
+  primary_reasons?: string[] | null;
+  wants_children?: boolean | null;
+  financial_arrangement?: string[] | null;
+  housing_preference?: string[] | null;
+} | null | undefined): number | null {
+  if (!profile.display_name || profile.display_name.trim().length === 0) return 0;
+  if (!profile.birth_date || !profile.age) return 1;
+  if (profile.latitude == null || profile.longitude == null) return 3;
+  if (!profile.pronouns) return 4;
+  if (!profile.gender || profile.gender.length === 0) return 5;
+  if (!profile.sexual_orientation || profile.sexual_orientation.length === 0) return 6;
+  // gender_preference: empty array is valid (= "Everyone"). Only null is missing.
+  if (!preferences || preferences.gender_preference == null) return 7;
+  if (!preferences.relationship_type) return 8;
+  if (!preferences.primary_reasons || preferences.primary_reasons.length === 0) return 9;
+  if (preferences.wants_children == null) return 12;
+  if (!preferences.financial_arrangement || preferences.financial_arrangement.length === 0) return 21;
+  if (!preferences.housing_preference || preferences.housing_preference.length === 0) return 22;
+  return null;
+}
+
+/**
+ * Final resume step: earliest missing required field wins; otherwise use the
+ * legacy map (for 0-9) or the stored step (for 10+). Callers pass the raw
+ * `profile.onboarding_step` and the hydrated profile/preferences.
+ */
+export function resolveResumeStep(
+  storedStep: number,
+  profile: Parameters<typeof earliestMissingRequiredStep>[0],
+  preferences: Parameters<typeof earliestMissingRequiredStep>[1],
+  total: number
+): number {
+  const missing = earliestMissingRequiredStep(profile, preferences);
+  if (missing !== null) return missing;
+  if (storedStep <= 9) return mapOldStepToNew(storedStep);
+  return Math.min(storedStep, total - 1);
 }

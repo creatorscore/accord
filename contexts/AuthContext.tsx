@@ -343,6 +343,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         Promise.resolve(clearSignedUrlCache()),
       ]).catch(() => {});
     }
+
+    // Clear persisted onboarding draft so the next user on this device doesn't
+    // inherit the previous user's in-progress answers.
+    try {
+      const { useOnboardingStore } = await import('@/stores/onboardingStore');
+      useOnboardingStore.getState().reset();
+    } catch {}
   };
 
   const sendPasswordResetEmail = async (email: string) => {

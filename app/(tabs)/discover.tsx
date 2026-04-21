@@ -190,6 +190,7 @@ export default function Discover() {
   const [tempAgeMax, setTempAgeMax] = useState(50);
   const [activeToday, setActiveToday] = useState(false);
   const [photoReviewRequired, setPhotoReviewRequired] = useState(false);
+  const [photoReviewReason, setPhotoReviewReason] = useState<string | null>(null);
   const [isPhotoVerified, setIsPhotoVerified] = useState(true); // Default to true to hide banner initially
   const [showVerificationBanner, setShowVerificationBanner] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(true); // Default to true to avoid flash
@@ -291,6 +292,16 @@ export default function Discover() {
     // Request tracking permission on first app use
     initializeTracking();
   }, [user?.id]);
+
+  // loadLikeCount reconciles AsyncStorage with the server-side daily_likes_count
+  // but only when currentProfileId is set. On initial mount, loadLikeCount and
+  // loadCurrentProfile race — the counter is loaded before the profile id is
+  // known, so server reconciliation is skipped and the client may show "5 likes
+  // left" while the server trigger has already blown past the limit (e.g. after
+  // the 2026-04-20 back-sync migration). Re-reconcile once the profile id lands.
+  useEffect(() => {
+    if (currentProfileId) loadLikeCount();
+  }, [currentProfileId]);
 
   // Refresh user data when screen regains focus (returning from other tabs/screens)
   // loadCurrentProfile already checks if filters changed via hash comparison
@@ -570,6 +581,7 @@ export default function Discover() {
           height_unit,
           is_admin,
           photo_review_required,
+          photo_review_reason,
           photo_verified,
           profile_complete,
           super_likes_count,
@@ -677,6 +689,7 @@ export default function Discover() {
       setHeightUnit(userHeightUnit as HeightUnit);
       setIsAdmin(data.is_admin || false);
       setPhotoReviewRequired(data.photo_review_required || false);
+      setPhotoReviewReason(data.photo_review_reason || null);
       setIsPhotoVerified(data.photo_verified || false);
       // Show verification banner if not verified (check AsyncStorage for dismiss state)
       if (!data.photo_verified) {
@@ -755,29 +768,33 @@ export default function Discover() {
 
       // Reconcile with server-side counter (enforce_like_limits trigger maintains
       // profiles.daily_likes_count on every free-tier like). The server is the
-      // authoritative source — take max(local, server) so AsyncStorage tampering
-      // on rooted/jailbroken devices can't reset the counter, but a fresh install
-      // still learns today's used count from the DB.
-      let serverCount = 0;
+      // authoritative source: trust it whenever we got a response. If the fetch
+      // failed or the profile isn't found, fall back to the AsyncStorage value
+      // so offline users still see their last known count. Trusting the server
+      // makes admin resets (zeroing daily_likes_count from support) reach the
+      // user's device on next load — with the old max(local, server) strategy,
+      // stale AsyncStorage would keep the UI pinned at the old count.
+      let serverCount: number | null = null;
       if (currentProfileId) {
-        const { data: prof } = await supabase
+        const { data: prof, error: profErr } = await supabase
           .from('profiles')
           .select('daily_likes_count, daily_likes_reset_date')
           .eq('id', currentProfileId)
           .maybeSingle();
-        if (prof) {
+        if (!profErr && prof) {
           const serverDate = prof.daily_likes_reset_date
             ? new Date(prof.daily_likes_reset_date + 'T00:00:00Z').toDateString()
             : null;
-          // Only trust the server count if its reset date matches the client's local "today".
-          // Timezone drift means we'd otherwise show stale counts early/late in the day.
-          if (serverDate === today && typeof prof.daily_likes_count === 'number') {
-            serverCount = prof.daily_likes_count;
+          if (typeof prof.daily_likes_count === 'number') {
+            // If the server's reset_date is before today (trigger hasn't fired
+            // yet because the user hasn't tried to swipe), treat the count as 0
+            // — it will reset on the next like anyway.
+            serverCount = serverDate === today ? prof.daily_likes_count : 0;
           }
         }
       }
 
-      const reconciled = Math.max(localCount, serverCount);
+      const reconciled = serverCount !== null ? serverCount : localCount;
       setLikeCount(reconciled);
       await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: reconciled }));
     } catch (error) {
@@ -1608,18 +1625,18 @@ export default function Discover() {
           // behind isPremium so the filter lists are empty for free users)
           // ====================================================================
 
-          // Religion filter
-          if (effectiveFilters.religion.length > 0 && profile.religion) {
+          // Religion filter — premium only. Without this guard, a user who
+          // downgrades from premium still has religion/politics selections
+          // persisted in discovery_filters and silently narrows their feed.
+          if (isPremium && effectiveFilters.religion.length > 0 && profile.religion) {
             if (!effectiveFilters.religion.includes(profile.religion)) {
-
               return false;
             }
           }
 
-          // Political views filter
-          if (effectiveFilters.politicalViews.length > 0 && profile.political_views) {
+          // Political views filter — premium only (same reason as religion).
+          if (isPremium && effectiveFilters.politicalViews.length > 0 && profile.political_views) {
             if (!effectiveFilters.politicalViews.includes(profile.political_views)) {
-
               return false;
             }
           }
@@ -2106,6 +2123,16 @@ export default function Discover() {
 
       if (likeError) {
         if (likeError.code === 'P0001' && likeError.message?.includes('Daily like limit')) {
+          // Server says limit hit but client counter may be stale (e.g. back-sync
+          // from a migration). Sync the client count so the UI shows "0 remaining"
+          // and the user understands this is a daily-limit issue, not a paywall
+          // for browsing itself.
+          setLikeCount(DAILY_LIKE_LIMIT);
+          try {
+            const today = new Date().toDateString();
+            await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: DAILY_LIKE_LIMIT }));
+          } catch {}
+          showToast({ type: 'info', title: t('discover.dailyLimitTitle'), message: t('discover.dailyLimitMessage') });
           setShowPaywall(true);
           return false;
         }
@@ -2195,7 +2222,17 @@ export default function Discover() {
       console.error('❌ Error recording like:', error);
       captureException(error instanceof Error ? error : new Error(error?.message || 'Like recording failed'), { context: 'discovery_like' });
       if (error?.code === 'P0001' && error?.message?.includes('Daily like limit')) {
+        setLikeCount(DAILY_LIKE_LIMIT);
+        try {
+          const today = new Date().toDateString();
+          await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: DAILY_LIKE_LIMIT }));
+        } catch {}
+        showToast({ type: 'info', title: t('discover.dailyLimitTitle'), message: t('discover.dailyLimitMessage') });
         setShowPaywall(true);
+      } else if (error?.code === 'P0001' && error?.message) {
+        // Surface other server-side rejections (profile incomplete, photo count,
+        // premium required for super like, etc.) instead of silently returning.
+        showToast({ type: 'error', title: t('common.error'), message: error.message });
       }
       return false;
     }
@@ -2288,7 +2325,11 @@ export default function Discover() {
         .maybeSingle();
 
       if (existingLike) {
-        // Update existing like to super_like
+        // Update existing like to super_like. The enforce_super_like_on_update
+        // trigger (migration 20260420_enforce_super_like_on_update) now applies
+        // the same premium + weekly-budget checks as the INSERT trigger, so a
+        // free user upgrading their own standard like is rejected server-side
+        // and a premium user's super_likes_count is incremented correctly.
         const { error: updateError } = await supabase
           .from('likes')
           .update({ like_type: 'super_like' })
@@ -2414,8 +2455,21 @@ export default function Discover() {
             { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
           ]
         );
+      } else if (error?.code === 'P0001' && error?.message?.includes('Weekly super like limit')) {
+        // Surfaced by enforce_super_like_on_update when a premium user tries to
+        // promote a standard like after already using their 5 super-likes this
+        // week. Don't show the paywall — they already pay; show the limit.
+        Alert.alert(
+          t('discover.premium.superLikeLimitTitle'),
+          t('discover.premium.superLikeLimitMessage', { day: '' }),
+          [{ text: 'OK' }]
+        );
       } else if (error?.code === 'P0001' && error?.message?.includes('Daily like limit')) {
         setShowPaywall(true);
+      } else if (error?.code === 'P0001' && error?.message) {
+        // Surface any other server-side rejection (profile incomplete, photo
+        // count, etc.) instead of the generic superLikeError toast.
+        showToast({ type: 'error', title: t('common.error'), message: error.message });
       } else {
         showToast({ type: 'error', title: t('common.error'), message: t('toast.superLikeError') });
       }
@@ -3871,7 +3925,11 @@ export default function Discover() {
                   </View>
                   <View className="flex-1">
                     <Text className="text-amber-900 font-semibold text-sm">{t('discover.banner.profileHidden')}</Text>
-                    <Text className="text-amber-700 text-xs mt-0.5">{t('discover.banner.profileHiddenDescription')}</Text>
+                    <Text className="text-amber-700 text-xs mt-0.5" numberOfLines={2}>
+                      {photoReviewReason
+                        ? `${t('discover.banner.profileHiddenDescription')} (${photoReviewReason})`
+                        : t('discover.banner.profileHiddenDescription')}
+                    </Text>
                   </View>
                   <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
                 </TouchableOpacity>

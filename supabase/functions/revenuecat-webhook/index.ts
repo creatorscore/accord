@@ -22,6 +22,7 @@ type RevenueCatEventType =
 
 interface RevenueCatWebhookEvent {
   event: {
+    id?: string; // RevenueCat's unique event id — used for dedup.
     type: RevenueCatEventType;
     app_user_id: string;
     product_id: string;
@@ -62,7 +63,52 @@ serve(async (req) => {
       userId: payload.event.app_user_id,
       productId: payload.event.product_id,
       entitlements: payload.event.entitlement_ids,
+      environment: payload.event.environment,
     });
+
+    // Idempotency: RC retries deliver the same event multiple times. Fall
+    // back to a composite key if RC didn't provide event.id (older payloads).
+    // Primary-key violation on insert = duplicate delivery → ack and exit.
+    const eventDedupKey = payload.event.id
+      ?? `${payload.event.type}:${payload.event.app_user_id}:${payload.event.purchased_at_ms}`;
+    const { error: dedupError } = await supabase
+      .from('revenuecat_webhook_events')
+      .insert({
+        event_id: eventDedupKey,
+        event_type: payload.event.type,
+        app_user_id: payload.event.app_user_id,
+      });
+    if (dedupError && dedupError.code === '23505') {
+      // Unique violation on PK — we already processed this event.
+      console.log('⏭️ Duplicate webhook event, skipping:', eventDedupKey);
+      return new Response(
+        JSON.stringify({ ok: true, ignored: 'duplicate_event', eventId: eventDedupKey }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    } else if (dedupError) {
+      // Any OTHER insert failure: log and proceed anyway. Dedup is a nice-to-have,
+      // not a blocker — reconcile-subscriptions catches drift weekly.
+      console.warn('⚠️ webhook dedup insert failed, continuing:', dedupError);
+    }
+
+    // Sandbox events (TestFlight / dev test purchases) must not flip prod
+    // is_premium flags. Without this guard a tester who buys in sandbox gets
+    // production premium on the same Supabase project. Set
+    // ALLOW_SANDBOX_SUBSCRIPTIONS=true in the function env if you run a single
+    // Supabase for both prod + TestFlight and explicitly want sandbox entitlements
+    // to reach the DB. Default: log and return 200 (ack so RC stops retrying).
+    if (payload.event.environment === 'SANDBOX' &&
+        Deno.env.get('ALLOW_SANDBOX_SUBSCRIPTIONS') !== 'true') {
+      console.log('⚠️ Sandbox webhook ignored (prod safety):', {
+        userId: payload.event.app_user_id,
+        eventType: payload.event.type,
+        product: payload.event.product_id,
+      });
+      return new Response(
+        JSON.stringify({ ok: true, ignored: 'sandbox_event' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
 
     const { type, app_user_id, entitlement_ids, expiration_at_ms } = payload.event;
 
@@ -152,9 +198,23 @@ serve(async (req) => {
         break;
 
       case 'BILLING_ISSUE':
-        // Keep subscription active temporarily, but log for monitoring
-        console.log('⚠️ Billing issue for user:', app_user_id);
-        // Could add notification to user here
+        // Grace period: payment failed but Apple/Google still considers the
+        // subscription valid for a few days. Keep is_premium = true until the
+        // eventual EXPIRATION event, but flag the status so clients can show
+        // a "payment issue — update your card" banner and admins can see the
+        // user is at risk. Also queue a push nudging them to fix payment.
+        console.log('⚠️ Billing issue for user — entering grace:', app_user_id);
+        await supabase.from('subscriptions')
+          .update({ status: 'grace' })
+          .eq('profile_id', profile.id);
+        await supabase.from('notification_queue').insert({
+          recipient_profile_id: profile.id,
+          notification_type: 'billing_issue',
+          title: 'Payment issue with your subscription',
+          body: 'We had trouble charging your card. Update your payment method in the store to keep your Premium features.',
+          data: { type: 'billing_issue', screen: 'subscription' },
+          status: 'pending',
+        });
         break;
 
       default:
