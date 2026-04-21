@@ -40,7 +40,6 @@ const ScreenCaptureOverlay = lazy(() => import('@/components/shared/ScreenCaptur
 const AppUpdateChecker = lazy(() => import('@/components/AppUpdateChecker'));
 const WhatsNewModal = lazy(() => import('@/components/WhatsNewModal'));
 const GenderConfirmationModal = lazy(() => import('@/components/GenderConfirmationModal'));
-const NewFeatureModal = lazy(() => import('@/components/NewFeatureModal'));
 
 // Prevent splash screen from hiding until fonts are loaded
 SplashScreenExpo.preventAutoHideAsync();
@@ -247,13 +246,6 @@ export default function RootLayout() {
                         {!showSplash && (
                           <Suspense fallback={null}>
                             <GenderConfirmationModal />
-                          </Suspense>
-                        )}
-
-                        {/* New feature announcement — "Who Viewed Me" */}
-                        {!showSplash && (
-                          <Suspense fallback={null}>
-                            <NewFeatureModal onUpgrade={() => {}} />
                           </Suspense>
                         )}
 
