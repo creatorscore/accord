@@ -245,7 +245,9 @@
     "loseSeeWhoLiked": "See who liked you",
     "loseSuperLikes": "Super Likes",
     "loseVoiceMessages": "Voice messages",
-    "keepPremium": "Keep Premium"
+    "keepPremium": "Keep Premium",
+    "upgradeToPremium": "Upgrade to Premium",
+    "upgradeToPremiumSubtitle": "Get unlimited likes, see who liked you, and more."
   },
   "trialValue": {
     "title": "Your Trial Stats",
@@ -1194,6 +1196,10 @@
     "loadingProfile": "Loading profile...",
     "errorLoading": "Error Loading Profile",
     "errorLoadingMessage": "There was a problem loading your profile. Please try again.",
+    "errorLoadingProfileTitle": "Error Loading Profile",
+    "errorLoadingProfileMessage": "There was a problem loading your profile. Please try again.",
+    "enjoyingPremiumFeatures": "Enjoying all Premium features",
+    "enjoyingPlatinumFeatures": "Enjoying all Platinum features",
     "signOut": "Sign Out",
     "retry": "Retry",
     "addPhotos": "Add Photos",
@@ -1293,6 +1299,7 @@
     "activityCenterFeature": "Activity Center"
   },
   "chat": {
+    "loading": "Loading chat...",
     "loadingChat": "Loading chat...",
     "secureMessaging": "Secure messaging",
     "typing": "typing...",
@@ -1593,7 +1600,9 @@
     "subjectPlaceholder": "What's your feedback about?",
     "description": "Description",
     "descriptionPlaceholder": "Tell us more about your experience...",
+    "descriptionMinChars": "Please write at least 10 characters.",
     "feedbackType": "Feedback Type",
+    "feedbackTypeQuestion": "What kind of feedback?",
     "bug": "Bug Report",
     "feature": "Feature Request",
     "improvement": "Improvement",
@@ -1602,6 +1611,16 @@
     "allowContactDesc": "We may reach out to learn more about your feedback",
     "submit": "Submit Feedback",
     "submitting": "Submitting...",
+    "submitButton": "Submit Feedback",
+    "stepsToReproduce": "Steps to reproduce (optional)",
+    "stepsPlaceholder": "Tell us how to reproduce this bug.",
+    "expectedBehavior": "What did you expect to happen?",
+    "expectedPlaceholder": "Describe the expected behavior.",
+    "actualBehavior": "What actually happened?",
+    "actualPlaceholder": "Describe what went wrong.",
+    "ratingsOptional": "Ratings (optional)",
+    "emailOptional": "Email (optional, for follow-up)",
+    "emailPlaceholder": "you@example.com",
     "missingInfo": "Missing Information",
     "missingInfoMessage": "Please provide a subject and description for your feedback.",
     "ratingRequired": "Rating Required",
@@ -1609,7 +1628,29 @@
     "thankYou": "Thank You!",
     "thankYouMessage": "Your feedback helps us make Accord better for everyone.",
     "error": "Error",
-    "errorMessage": "Failed to submit feedback. Please try again."
+    "errorMessage": "Failed to submit feedback. Please try again.",
+    "alerts": {
+      "missingInfoTitle": "Missing Information",
+      "missingInfoMessage": "Please provide a subject and description for your feedback.",
+      "ratingRequiredTitle": "Rating Required",
+      "ratingRequiredMessage": "Please provide an overall rating.",
+      "successTitle": "Thank You!",
+      "successMessage": "Your feedback helps us make Accord better for everyone.",
+      "errorMessage": "Failed to submit feedback. Please try again."
+    },
+    "types": {
+      "bugReport": "Bug Report",
+      "featureRequest": "Feature Request",
+      "usabilityIssue": "Usability Issue",
+      "generalFeedback": "General Feedback"
+    },
+    "ratings": {
+      "overall": "Overall",
+      "easeOfUse": "Ease of use",
+      "matchQuality": "Match quality",
+      "performance": "Performance",
+      "design": "Design"
+    }
   },
   "deleteAccount": {
     "title": "Delete Account",
@@ -2030,7 +2071,8 @@
       "backgroundChecks": "Background checks",
       "legalResources": "Legal resources",
       "weeklyProfileBoost": "Weekly profile boost",
-      "prioritySupport": "Priority support"
+      "prioritySupport": "Priority support",
+      "activityCenter": "Activity center"
     },
     "restorePurchases": "Restore Purchases",
     "restoring": "Restoring...",

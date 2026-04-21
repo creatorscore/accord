@@ -236,19 +236,44 @@ export default function Likes() {
   const currentProfileIdRef = useRef<string | null>(null);
   const initialLoadDone = useRef(false);
 
-  // Load daily like count from AsyncStorage (shared with discover tab)
+  // Load daily like count from AsyncStorage (shared with discover tab) and
+  // reconcile with the server-side profiles.daily_likes_count. Without server
+  // reconcile, a user who opens the Likes tab before ever visiting Discover
+  // sees a stale "5 remaining" when the server has already recorded today's
+  // likes (e.g. via back-sync migration or a swipe on another device).
   const loadDailyLikeCount = async () => {
     try {
+      const today = new Date().toDateString();
       const stored = await AsyncStorage.getItem('like_data');
+      let localCount = 0;
       if (stored) {
         const { date, count } = JSON.parse(stored);
-        const today = new Date().toDateString();
-        if (date === today) {
-          setDailyLikeCount(count);
-        } else {
-          setDailyLikeCount(0);
+        localCount = date === today && typeof count === 'number' ? count : 0;
+      }
+
+      let serverCount: number | null = null;
+      const profileId = currentProfileIdRef.current;
+      if (profileId) {
+        const { data: prof, error: profErr } = await supabase
+          .from('profiles')
+          .select('daily_likes_count, daily_likes_reset_date')
+          .eq('id', profileId)
+          .maybeSingle();
+        if (!profErr && prof) {
+          const serverDate = prof.daily_likes_reset_date
+            ? new Date(prof.daily_likes_reset_date + 'T00:00:00Z').toDateString()
+            : null;
+          if (typeof prof.daily_likes_count === 'number') {
+            serverCount = serverDate === today ? prof.daily_likes_count : 0;
+          }
         }
       }
+
+      // Trust server when we got a response (admin resets reach the device);
+      // fall back to AsyncStorage only when the server fetch failed.
+      const reconciled = serverCount !== null ? serverCount : localCount;
+      setDailyLikeCount(reconciled);
+      await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: reconciled }));
     } catch (error) {
       console.error('Error loading daily like count:', error);
     }

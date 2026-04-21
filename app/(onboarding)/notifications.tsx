@@ -140,7 +140,8 @@ export default function Notifications() {
       if (profileData?.latitude == null || profileData?.longitude == null) missing.push('location');
       if (!profileData?.display_name) missing.push('name');
       if (!profileData?.age) missing.push('age');
-      if (!prefsData?.gender_preference || prefsData.gender_preference.length === 0) missing.push('gender preference');
+      // gender_preference === [] means "Everyone" (valid, no filter). Only null/undefined is actually missing.
+      if (prefsData?.gender_preference == null) missing.push('gender preference');
 
       if (missing.length > 0) {
         Alert.alert(

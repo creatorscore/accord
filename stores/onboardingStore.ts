@@ -1,9 +1,18 @@
 /**
  * Zustand store for onboarding form state.
  * Accumulates answers across all 31 steps and persists via checkpoints.
+ *
+ * The store is also persisted to AsyncStorage via zustand's `persist` middleware
+ * so a user's in-progress answers survive an app kill/background even between
+ * DB checkpoints (which only fire at steps 3, 14, 26, 30). Without this, users
+ * who close the app between e.g. gender (step 5) and pets (step 14) would lose
+ * every answer in that block and end up re-entering them on next launch, which
+ * manifested as the "onboarding keeps saying my profile is incomplete" bug.
  */
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface OnboardingFormState {
   // Step 0 - Name
@@ -89,8 +98,15 @@ interface OnboardingStore extends OnboardingFormState {
   setVisibility: (field: string, visible: boolean) => void;
   /** Reset all form state */
   reset: () => void;
-  /** Hydrate from existing profile data (for resume) */
+  /** Hydrate from existing profile data (for resume) — overwrites unconditionally. */
   hydrate: (data: Partial<OnboardingFormState>) => void;
+  /**
+   * Hydrate from DB but preserve any field the user has already changed locally.
+   * Only overwrites fields that are still at their initial default (i.e. the
+   * user has not touched them in this or a previous session).
+   * Prevents a fresh DB fetch from wiping a persisted in-progress draft.
+   */
+  hydrateIfEmpty: (data: Partial<OnboardingFormState>) => void;
 }
 
 const initialState: OnboardingFormState = {
@@ -135,30 +151,119 @@ const initialState: OnboardingFormState = {
   fieldVisibility: {},
 };
 
-export const useOnboardingStore = create<OnboardingStore>((set) => ({
-  ...initialState,
+export const useOnboardingStore = create<OnboardingStore>()(
+  persist(
+    (set) => ({
+      ...initialState,
 
-  setField: (key, value) => set({ [key]: value }),
+      setField: (key, value) => set({ [key]: value }),
 
-  setFields: (fields) => set(fields),
+      setFields: (fields) => set(fields),
 
-  toggleVisibility: (field) =>
-    set((state) => ({
-      fieldVisibility: {
-        ...state.fieldVisibility,
-        [field]: !(state.fieldVisibility[field] ?? true),
+      toggleVisibility: (field) =>
+        set((state) => ({
+          fieldVisibility: {
+            ...state.fieldVisibility,
+            [field]: !(state.fieldVisibility[field] ?? true),
+          },
+        })),
+
+      setVisibility: (field, visible) =>
+        set((state) => ({
+          fieldVisibility: {
+            ...state.fieldVisibility,
+            [field]: visible,
+          },
+        })),
+
+      reset: () => set(initialState),
+
+      hydrate: (data) => set(data),
+
+      hydrateIfEmpty: (data) =>
+        set((state) => {
+          const merged: Partial<OnboardingFormState> = {};
+          (Object.keys(data) as Array<keyof OnboardingFormState>).forEach((key) => {
+            const dbVal = data[key];
+            if (dbVal === undefined) return;
+            const stateVal = state[key];
+            const initialVal = initialState[key];
+            // Determine whether the current state value is still at its initial default.
+            // Arrays compare by shallow equality on length+contents (empty array === default).
+            let isAtDefault: boolean;
+            if (Array.isArray(stateVal) && Array.isArray(initialVal)) {
+              isAtDefault =
+                stateVal.length === initialVal.length &&
+                stateVal.every((v, i) => v === (initialVal as any[])[i]);
+            } else if (
+              stateVal !== null &&
+              typeof stateVal === 'object' &&
+              initialVal !== null &&
+              typeof initialVal === 'object'
+            ) {
+              // fieldVisibility is an object — treat an empty object as default.
+              isAtDefault = Object.keys(stateVal).length === Object.keys(initialVal).length;
+            } else {
+              isAtDefault = stateVal === initialVal;
+            }
+            if (isAtDefault) (merged as any)[key] = dbVal;
+          });
+          return merged;
+        }),
+    }),
+    {
+      name: 'accord-onboarding-draft',
+      storage: createJSONStorage(() => AsyncStorage),
+      // Only persist form fields, not the action functions.
+      partialize: (state): OnboardingFormState => ({
+        displayName: state.displayName,
+        birthDate: state.birthDate,
+        age: state.age,
+        zodiacSign: state.zodiacSign,
+        locationCity: state.locationCity,
+        locationState: state.locationState,
+        locationCountry: state.locationCountry,
+        latitude: state.latitude,
+        longitude: state.longitude,
+        pronouns: state.pronouns,
+        gender: state.gender,
+        sexualOrientation: state.sexualOrientation,
+        genderPreference: state.genderPreference,
+        relationshipType: state.relationshipType,
+        primaryReasons: state.primaryReasons,
+        heightInches: state.heightInches,
+        heightUnit: state.heightUnit,
+        ethnicity: state.ethnicity,
+        wantsChildren: state.wantsChildren,
+        childrenArrangement: state.childrenArrangement,
+        pets: state.pets,
+        hometown: state.hometown,
+        jobTitle: state.jobTitle,
+        education: state.education,
+        educationLevel: state.educationLevel,
+        religion: state.religion,
+        politicalViews: state.politicalViews,
+        financialArrangement: state.financialArrangement,
+        housingPreference: state.housingPreference,
+        drinking: state.drinking,
+        smoking: state.smoking,
+        smokesWeed: state.smokesWeed,
+        doesDrugs: state.doesDrugs,
+        ageMin: state.ageMin,
+        ageMax: state.ageMax,
+        maxDistanceMiles: state.maxDistanceMiles,
+        distanceUnit: state.distanceUnit,
+        willingToRelocate: state.willingToRelocate,
+        fieldVisibility: state.fieldVisibility,
+      }),
+      // birthDate round-trips through JSON as an ISO string; rehydrate as a Date
+      // so downstream code (validation, DOB rendering) keeps working.
+      onRehydrateStorage: () => (state) => {
+        if (state?.birthDate && typeof state.birthDate === 'string') {
+          const d = new Date(state.birthDate);
+          if (!isNaN(d.getTime())) state.birthDate = d;
+        }
       },
-    })),
-
-  setVisibility: (field, visible) =>
-    set((state) => ({
-      fieldVisibility: {
-        ...state.fieldVisibility,
-        [field]: visible,
-      },
-    })),
-
-  reset: () => set(initialState),
-
-  hydrate: (data) => set(data),
-}));
+    }
+  )
+);
