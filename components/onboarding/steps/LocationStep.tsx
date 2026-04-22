@@ -86,10 +86,12 @@ export default function LocationStep() {
   }, []);
 
   const handleChangeText = (text: string) => {
+    console.log('[LocationStep] handleChangeText:', JSON.stringify({ text, len: text.length }));
     setQuery(text);
     // Don't update store — only update on selection
     if (text.length === 0) {
       // Clear location if input cleared
+      console.log('[LocationStep] clearing store (empty input)');
       setFields({ locationCity: '', locationState: '' });
       setShowResults(false);
       return;
@@ -99,6 +101,7 @@ export default function LocationStep() {
   };
 
   const handleSelectCity = async (city: City) => {
+    console.log('[LocationStep] handleSelectCity:', JSON.stringify(city));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const formatted = formatCity(city);
     setQuery(formatted);
@@ -110,6 +113,12 @@ export default function LocationStep() {
       locationState: city.admin1,
       locationCountry: city.country,
     });
+    console.log('[LocationStep] setFields called with:', JSON.stringify({ locationCity: city.name, locationState: city.admin1, locationCountry: city.country }));
+    // Read back immediately to verify the store actually took the update
+    setTimeout(() => {
+      const s = useOnboardingStore.getState();
+      console.log('[LocationStep] store AFTER setFields:', JSON.stringify({ locationCity: s.locationCity, locationState: s.locationState, locationCountry: s.locationCountry, latitude: s.latitude, longitude: s.longitude }));
+    }, 50);
     // Best-effort: geocode the selection to populate lat/lng so the matching
     // RPC (get_nearby_profiles) can actually place this user. Without this,
     // dropdown-picker users get no discovery results because the haversine
@@ -136,12 +145,14 @@ export default function LocationStep() {
   };
 
   const handleGetLocation = async () => {
+    const t0 = Date.now();
     console.log('[LocationStep] GPS pressed, busyRef:', busyRef.current, 'loading:', loading);
     if (busyRef.current) return;
     busyRef.current = true;
     setLoading(true);
     try {
       const enabled = await Location.hasServicesEnabledAsync();
+      console.log('[LocationStep] hasServicesEnabled:', enabled, '+', Date.now() - t0, 'ms');
       if (!enabled) {
         Alert.alert(
           'Location services off',
@@ -151,19 +162,45 @@ export default function LocationStep() {
       }
 
       const { status } = await Location.requestForegroundPermissionsAsync();
+      console.log('[LocationStep] permission status:', status, '+', Date.now() - t0, 'ms');
       if (status !== 'granted') {
         Alert.alert('Permission denied', 'You can search for your city below instead.');
         return;
       }
 
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Lowest,
-      });
+      // Try the OS's last-known fix first — returns instantly when available
+      // (typically <50ms). Avoids the multi-second cold GPS lock that
+      // getCurrentPositionAsync triggers, especially on Android emulators
+      // and devices that haven't requested a fix recently.
+      let loc = await Location.getLastKnownPositionAsync({ maxAge: 5 * 60 * 1000 }).catch(() => null);
+      console.log('[LocationStep] last-known fix:', loc ? 'hit' : 'miss', '+', Date.now() - t0, 'ms');
 
-      const geo = (await Location.reverseGeocodeAsync({
+      if (!loc) {
+        // No cached fix — request a live one with Balanced accuracy and a
+        // 10s timeout. Lowest can stall indefinitely on poor signal; Balanced
+        // is faster and accurate enough for city/state matching.
+        const livePromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000));
+        loc = await Promise.race([livePromise, timeoutPromise]).catch(() => null);
+        console.log('[LocationStep] live fix:', loc ? 'got' : 'timeout/error', '+', Date.now() - t0, 'ms');
+      }
+
+      if (!loc) {
+        Alert.alert(
+          'Location unavailable',
+          "We couldn't get your location quickly. Please search for your city below.",
+        );
+        return;
+      }
+
+      const geoPromise = Location.reverseGeocodeAsync({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
-      }))?.[0];
+      });
+      const geoTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+      const geoResults = await Promise.race([geoPromise, geoTimeout]).catch(() => null);
+      console.log('[LocationStep] reverse geocode:', geoResults ? 'got' : 'timeout/error', '+', Date.now() - t0, 'ms');
+      const geo = Array.isArray(geoResults) ? geoResults[0] : null;
 
       const city = geo?.city || geo?.district || '';
       const state = geo?.region || '';
@@ -176,10 +213,12 @@ export default function LocationStep() {
       });
       setQuery([city, state].filter(Boolean).join(', '));
       setShowResults(false);
+      console.log('[LocationStep] GPS done in', Date.now() - t0, 'ms');
     } catch (error: any) {
+      console.log('[LocationStep] GPS error:', error?.message, '+', Date.now() - t0, 'ms');
       Alert.alert(
         'Location unavailable',
-        'We couldn\'t detect your location automatically. Please search for your city below.',
+        "We couldn't detect your location automatically. Please search for your city below.",
       );
     } finally {
       busyRef.current = false;
