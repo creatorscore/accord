@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Keyboard, ScrollView, RefreshControl, Dimensions, useWindowDimensions, Platform, Animated, AppState } from 'react-native';
-import { MotiView } from 'moti';
 import Slider from '@react-native-community/slider';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +35,7 @@ import { trackUserAction, trackFunnel, trackEvent } from '@/lib/analytics';
 import { captureException } from '@/lib/sentry';
 import { prefetchImages } from '@/components/shared/ConditionalImage';
 import VerificationBanner from '@/components/shared/VerificationBanner';
+import HandshakeLoader from '@/components/shared/HandshakeLoader';
 import TrialExpirationBanner from '@/components/premium/TrialExpirationBanner';
 
 interface Profile {
@@ -2844,153 +2844,11 @@ export default function Discover() {
     setShowImmersiveProfile(false);
   };
 
-  // Fun loading messages
-  const loadingMessages = [
-    t('discover.findingMatches'),
-    'Scanning the universe...',
-    'Finding your perfect match...',
-    'Almost there...',
-    'Good things take time...',
-  ];
-  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
-
-  // Rotate loading messages
-  useEffect(() => {
-    if (!loading) return;
-    const interval = setInterval(() => {
-      setLoadingMessageIndex((prev) => (prev + 1) % loadingMessages.length);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [loading]);
-
-  // Loading state with fun animation
+  // Loading state
   if (loading) {
-    const { width } = Dimensions.get('window');
-
     return (
       <View className="flex-1 items-center justify-center overflow-hidden" style={{ backgroundColor: colors.background }}>
-        {/* Floating hearts background */}
-        {[...Array(8)].map((_, i) => (
-          <MotiView
-            key={i}
-            from={{
-              opacity: 0,
-              translateY: 100,
-              translateX: (i % 2 === 0 ? -1 : 1) * (20 + (i * 15)),
-              scale: 0.5,
-            }}
-            animate={{
-              opacity: [0, 0.6, 0],
-              translateY: -400,
-              translateX: (i % 2 === 0 ? 1 : -1) * (30 + (i * 10)),
-              scale: [0.5, 1, 0.8],
-            }}
-            transition={{
-              type: 'timing',
-              duration: 3000 + (i * 400),
-              loop: true,
-              delay: i * 300,
-            }}
-            style={{
-              position: 'absolute',
-              bottom: 100,
-              left: width / 2 - 12 + ((i - 4) * 25),
-            }}
-          >
-            <Text style={{ fontSize: 24 + (i % 3) * 8 }}>
-              {['💜', '💕', '✨', '💫', '💜', '💕', '✨', '💫'][i]}
-            </Text>
-          </MotiView>
-        ))}
-
-        {/* Pulsing rings */}
-        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-          {[0, 1, 2].map((i) => (
-            <MotiView
-              key={i}
-              from={{ opacity: 0.8, scale: 0.8 }}
-              animate={{ opacity: 0, scale: 2 }}
-              transition={{
-                type: 'timing',
-                duration: 2000,
-                loop: true,
-                delay: i * 600,
-              }}
-              style={{
-                position: 'absolute',
-                width: 100,
-                height: 100,
-                borderRadius: 50,
-                borderWidth: 3,
-                borderColor: '#A08AB7',
-              }}
-            />
-          ))}
-
-          {/* Center heart icon */}
-          <MotiView
-            from={{ scale: 0.9 }}
-            animate={{ scale: 1.1 }}
-            transition={{
-              type: 'timing',
-              duration: 800,
-              loop: true,
-              repeatReverse: true,
-            }}
-            style={{
-              width: 80,
-              height: 80,
-              borderRadius: 40,
-              backgroundColor: 'rgba(160, 138, 183, 0.12)',
-              alignItems: 'center',
-              justifyContent: 'center',
-              shadowColor: '#A08AB7',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 8,
-            }}
-          >
-            <MaterialCommunityIcons name="cards-heart" size={40} color="#A08AB7" />
-          </MotiView>
-        </View>
-
-        {/* Animated loading text */}
-        <MotiView
-          from={{ opacity: 0, translateY: 10 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 500 }}
-          key={loadingMessageIndex}
-          style={{ marginTop: 32 }}
-        >
-          <Text className="text-base font-sans-medium text-center px-8" style={{ color: colors.mutedForeground }}>
-            {loadingMessages[loadingMessageIndex]}
-          </Text>
-        </MotiView>
-
-        {/* Animated dots */}
-        <View style={{ flexDirection: 'row', marginTop: 16, gap: 6 }}>
-          {[0, 1, 2].map((i) => (
-            <MotiView
-              key={i}
-              from={{ opacity: 0.3, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1.2 }}
-              transition={{
-                type: 'timing',
-                duration: 500,
-                loop: true,
-                repeatReverse: true,
-                delay: i * 150,
-              }}
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: '#A08AB7',
-              }}
-            />
-          ))}
-        </View>
+        <HandshakeLoader />
       </View>
     );
   }
