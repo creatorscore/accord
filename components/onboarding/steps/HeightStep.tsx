@@ -34,6 +34,11 @@ export default function HeightStep() {
               },
             ]}
             onPress={() => {
+              // Tapping the already-selected unit should be a no-op, not a
+              // reset — users who re-tap to "confirm" were unintentionally
+              // clearing heightInches and then seeing the picker jump back
+              // to the default value.
+              if (heightUnit === unit) return;
               Haptics.selectionAsync();
               setField('heightUnit', unit);
               setField('heightInches', null);

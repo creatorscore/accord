@@ -234,9 +234,13 @@ export default function OnboardingLayout({
             borderTopColor: isDark ? '#1F2937' : '#F3F4F6',
           },
         ]}>
-          {/* Back circle */}
+          {/* Back circle — when hidden, render an invisible spacer (no
+              border / no background) so the preview link stays centered.
+              Previously the placeholder inherited the backCircle style's
+              borderWidth with no explicit borderColor, which rendered as
+              a black ring on Android. */}
           {hideBack ? (
-            <View style={styles.backCircle} />
+            <View style={[styles.backCircle, { borderWidth: 0, backgroundColor: 'transparent' }]} />
           ) : (
             <TouchableOpacity
               style={[styles.backCircle, {

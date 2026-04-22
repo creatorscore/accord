@@ -572,7 +572,11 @@ export default function Discover() {
       return;
     }
     try {
-      const { data, error } = await supabase
+      // Race the profile fetch against a 12s timeout. If the supabase-js
+      // queue is stalled (see onboarding checkpoint notes), we don't want
+      // discover to sit on the animated loading screen indefinitely —
+      // drop to the empty/incomplete state so the user can navigate away.
+      const fetchPromise = supabase
         .from('profiles')
         .select(`
           id,
@@ -597,6 +601,16 @@ export default function Discover() {
         `)
         .eq('user_id', user.id)
         .single();
+      const timeoutPromise = new Promise<{ data: null; error: { code: 'TIMEOUT'; message: string } }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: { code: 'TIMEOUT', message: 'Profile fetch timed out' } }), 12000)
+      );
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+      if (error?.code === 'TIMEOUT') {
+        console.warn('[Discover] loadCurrentProfile timed out');
+        setLoading(false);
+        showToast({ type: 'info', title: t('common.slowConnection', { defaultValue: 'Slow connection' }), message: t('common.pullToRetry', { defaultValue: 'Pull down to retry.' }) });
+        return;
+      }
 
       if (error) throw error;
 
@@ -750,8 +764,10 @@ export default function Discover() {
       }
     } catch (error: any) {
       showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
-      // Don't set loading=false here - keep showing loading screen until loadProfiles completes
-      // The user can pull to refresh or the next focus event will retry
+      // If loadCurrentProfile itself threw, drop out of the loading screen
+      // so the user isn't stuck on the animated heart forever. The empty
+      // state has its own pull-to-refresh.
+      setLoading(false);
     }
   };
 
@@ -3959,7 +3975,6 @@ export default function Discover() {
                         : t('discover.banner.completeProfileDefault')}
                     </Text>
                   </View>
-                  <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
                 </TouchableOpacity>
               )}
             </>

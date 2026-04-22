@@ -57,12 +57,17 @@ export const ONBOARDING_STEPS: OnboardingStepConfig[] = [
   { key: 'name', title: "What's your first name?", subtitle: "This can't be changed later, so pick a good one.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'basics' },
   { key: 'dob', title: "When's your birthday?", subtitle: "Your age will be shown on your profile. We'll also grab your zodiac sign.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'basics' },
   { key: 'notifications', title: 'Turn on notifications', subtitle: "Get notified when you get a match, message, or like.", skippable: true, previewAvailable: false, hasVisibility: false, section: 'basics' },
-  { key: 'location', title: 'Where are you based?', subtitle: "We use this to find people near you.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'basics' },
+  // Preview ("Take a look around") is gated until step 8 — the user must
+  // have completed location, gender, gender_preference, etc. so Discovery
+  // has the data to filter matches. Previously preview was available from
+  // step 3 onward, which meant discovery would load zero profiles (no lat/lng
+  // saved yet, no gender_pref picked, no preferences row) and look frozen.
+  { key: 'location', title: 'Where are you based?', subtitle: "We use this to find people near you.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'basics' },
   // ── Identity (4-7) ──
-  { key: 'pronouns', title: 'What are your pronouns?', subtitle: "This helps others know how to refer to you.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
-  { key: 'gender', title: 'Choose your gender', subtitle: "Pick the gender you identify as — trans women choose Woman, trans men choose Man.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
-  { key: 'sexuality', title: "What's your sexuality?", subtitle: "Pick the one that fits best.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
-  { key: 'gender_pref', title: 'Who would you like to meet?', subtitle: "Pick Everyone, or any mix of the three.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'identity' },
+  { key: 'pronouns', title: 'What are your pronouns?', subtitle: "This helps others know how to refer to you.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'identity' },
+  { key: 'gender', title: 'Choose your gender', subtitle: "Pick the gender you identify as — trans women choose Woman, trans men choose Man.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'identity' },
+  { key: 'sexuality', title: "What's your sexuality?", subtitle: "Pick the one that fits best.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'identity' },
+  { key: 'gender_pref', title: 'Who would you like to meet?', subtitle: "Pick Everyone, or any mix of the three.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'identity' },
   // ── Goals (8-13) ──
   { key: 'relationship_type', title: 'What type of relationship are you looking for?', subtitle: "This helps us match you with compatible people.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'goals' },
   { key: 'intention', title: 'What brings you to Accord?', subtitle: "Pick the one that fits best.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'goals' },
