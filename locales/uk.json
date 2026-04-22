@@ -135,6 +135,25 @@
       "weeksAgo": "{{count}} тиж. тому",
       "monthsAgo": "{{count}} міс. тому",
       "yearsAgo": "{{count}} р. тому"
+    },
+    "errorBoundary": {
+      "title": "Ой! Щось пішло не так",
+      "message": "Ми зіткнулися з несподіваною помилкою. Спробуйте перезапустити застосунок.",
+      "restart": "Перезапустити застосунок"
+    },
+    "update": {
+      "forcedTitle": "Ми внесли важливі зміни",
+      "softTitle": "На вас чекає щось нове",
+      "forcedBody": "Ця версія Accord більше не підтримується. Оновіться, щоб ваші розмови залишалися захищеними, а все працювало плавно.",
+      "softBody": "Доступна новіша версія Accord із покращеннями, які вам сподобаються.",
+      "updateButton": "Оновити Accord",
+      "notNow": "Не зараз",
+      "nativeTitleRequired": "Потрібне оновлення",
+      "nativeTitleAvailable": "Доступне оновлення",
+      "nativeBodyRequired": "Для продовження потрібна нова версія Accord. Будь ласка, оновіть зараз.",
+      "nativeBodyAvailable": "Доступна нова версія Accord із покращеннями та виправленнями помилок.",
+      "nativeUpdateNow": "Оновити зараз",
+      "nativeLater": "Пізніше"
     }
   },
   "discover": {
@@ -250,6 +269,13 @@
       "upgradeMessage": "Оновіть до Преміум, щоб активувати ці функції та знаходити збіги в будь-якій точці світу.",
       "upgradeToPremium": "Оновити до Преміум",
       "maybeLater": "Можливо пізніше"
+    },
+    "match": {
+      "itsA": "Це",
+      "exclamation": "Збіг!",
+      "bothLiked": "Ви та {{name}} сподобалися одне одному",
+      "sendMessage": "Надіслати повідомлення",
+      "keepBrowsing": "Продовжити перегляд"
     }
   },
   "filters": {
@@ -712,6 +738,171 @@
       "enterOccupation": "Будь ласка, введіть вашу професію.",
       "enterEducation": "Будь ласка, введіть вашу освіту.",
       "notAuthenticatedMessage": "Не авторизовано. Будь ласка, увійдіть знову."
+    },
+    "options": {
+      "genders": {
+        "man": "Чоловік",
+        "woman": "Жінка",
+        "non_binary": "Небінарна особа"
+      },
+      "pronouns": {
+        "she_her": "вона/її",
+        "he_him": "він/його",
+        "they_them": "вони/їх",
+        "she_they": "вона/вони",
+        "he_they": "він/вони",
+        "any_pronouns": "будь-які займенники",
+        "ask_me": "запитай мене",
+        "prefer_not_to_say": "не хочу казати"
+      },
+      "orientations": {
+        "lesbian": "Лесбійка",
+        "gay": "Гей",
+        "bisexual": "Бісексуал",
+        "straight": "Гетеро",
+        "queer": "Квір",
+        "asexual": "Асексуал",
+        "pansexual": "Пансексуал",
+        "demisexual": "Демісексуал",
+        "questioning": "У пошуку себе",
+        "omnisexual": "Омнісексуал",
+        "polysexual": "Полісексуал",
+        "androsexual": "Андросексуал",
+        "gynesexual": "Гінесексуал",
+        "sapiosexual": "Сапіосексуал",
+        "heteroflexible": "Гетерогнучкий",
+        "homoflexible": "Гомогнучкий",
+        "prefer_not_to_say": "Не хочу казати",
+        "other": "Інше"
+      },
+      "genderPrefs": {
+        "men": "Чоловіки",
+        "women": "Жінки",
+        "non_binary": "Небінарні люди",
+        "everyone": "Усі"
+      },
+      "ethnicities": {
+        "asian": "Азійська",
+        "black_african": "Чорна/Африканська",
+        "hispanic_latinx": "Латиноамериканська",
+        "indigenous_native": "Корінні народи",
+        "middle_eastern_north_african": "Близький Схід/Півн. Африка",
+        "pacific_islander": "Тихоокеанські острови",
+        "south_asian": "Південноазійська",
+        "white_caucasian": "Біла/Європеоїдна",
+        "multiracial": "Змішана",
+        "other": "Інша",
+        "prefer_not_to_say": "Не хочу казати"
+      },
+      "religions": {
+        "christian": "Християнство",
+        "catholic": "Католицизм",
+        "protestant": "Протестантизм",
+        "muslim": "Іслам",
+        "jewish": "Юдаїзм",
+        "hindu": "Індуїзм",
+        "buddhist": "Буддизм",
+        "sikh": "Сикхізм",
+        "atheist": "Атеїзм",
+        "agnostic": "Агностицизм",
+        "spiritual_but_not_religious": "Духовність без релігії",
+        "other": "Інше",
+        "prefer_not_to_say": "Не хочу казати"
+      },
+      "politicalViews": {
+        "liberal": "Ліберальні",
+        "progressive": "Прогресивні",
+        "moderate": "Помірковані",
+        "conservative": "Консервативні",
+        "libertarian": "Лібертаріанські",
+        "socialist": "Соціалістичні",
+        "apolitical": "Аполітичні",
+        "other": "Інші",
+        "prefer_not_to_say": "Не хочу казати"
+      },
+      "relationshipTypes": {
+        "platonic": "Лише платонічно",
+        "romantic": "Можливий роман",
+        "open": "Відкриті стосунки"
+      },
+      "primaryReasons": {
+        "financial": "Фінансова стабільність",
+        "immigration": "Імміграція/віза",
+        "family_pressure": "Тиск родини",
+        "legal_benefits": "Правові переваги",
+        "companionship": "Товариство",
+        "safety": "Безпека та захист",
+        "other": "Інше"
+      },
+      "childrenOptions": {
+        "yes": "Так",
+        "no": "Ні",
+        "maybe": "Можливо / Відкрита(ий)"
+      },
+      "familyPlans": {
+        "biological": "Біологічні діти",
+        "adoption": "Усиновлення",
+        "surrogacy": "Сурогатне материнство",
+        "ivf": "ЕКЗ/лікування безпліддя",
+        "co_parenting": "Спільне батьківство",
+        "fostering": "Прийомна сім'я",
+        "already_have": "Уже маю дітей",
+        "open_discussion": "Відкрита(ий) до розмови",
+        "other": "Інше"
+      },
+      "petsOptions": {
+        "love_them": "Обожнюю",
+        "like_them": "Подобаються",
+        "indifferent": "Байдуже",
+        "allergic": "Алергія",
+        "dont_like": "Не люблю"
+      },
+      "housingPrefs": {
+        "separate_spaces": "Окремі кімнати/простори",
+        "roommates": "Як сусіди по квартирі",
+        "separate_homes": "Окремі домівки поруч",
+        "shared_bedroom": "Спільна спальня",
+        "flexible": "Гнучко/обговоримо"
+      },
+      "financialArr": {
+        "separate": "Роздільні фінанси",
+        "shared_expenses": "Спільні рахунки/витрати",
+        "joint": "Спільні фінанси",
+        "prenup_required": "Потрібен шлюбний договір",
+        "flexible": "Гнучко/обговоримо"
+      },
+      "educationLevels": {
+        "high_school": "Середня освіта",
+        "associates": "Молодший спеціаліст",
+        "bachelors": "Бакалавр",
+        "masters": "Магістр",
+        "doctorate": "Докторський / PhD",
+        "trade_school": "Профтехучилище",
+        "self_taught": "Самоук",
+        "other": "Інше"
+      },
+      "drinkingOptions": {
+        "never": "Ніколи",
+        "socially": "У компанії",
+        "regularly": "Регулярно",
+        "prefer_not_to_say": "Не хочу казати"
+      },
+      "smokingOptions": {
+        "never": "Ніколи",
+        "socially": "У компанії",
+        "regularly": "Регулярно",
+        "trying_to_quit": "Намагаюсь кинути"
+      },
+      "weedOptions": {
+        "never": "Ніколи",
+        "socially": "У компанії",
+        "regularly": "Регулярно"
+      },
+      "drugOptions": {
+        "never": "Ніколи",
+        "socially": "У компанії",
+        "regularly": "Регулярно"
+      }
     }
   },
   "matchingPreferences": {
@@ -976,7 +1167,11 @@
       "success": "Скаргу надіслано",
       "successMessage": "Дякуємо, що допомагаєте зберегти Accord безпечним. Наша команда розгляне цю скаргу.",
       "error": "Не вдалося надіслати скаргу. Спробуйте ще раз."
-    }
+    },
+    "matchCountTitle": "{{current}} із {{limit}} активних збігів",
+    "matchCountSubtitleFree": "Безкоштовний тариф",
+    "matchCountSubtitleWarning": "Майже заповнено — отримайте необмежені збіги",
+    "matchCountSubtitleFull": "Скасуйте збіг з кимось або перейдіть на необмежений тариф"
   },
   "messages": {
     "title": "Повідомлення",
@@ -2082,7 +2277,14 @@
     "tooFarTitle": "Занадто далеко",
     "tooFarMessage": "Налаштування пошуку цієї людини не включають вашу зону.",
     "globalSearchPremiumTitle": "Глобальний пошук тепер Premium",
-    "globalSearchPremiumMessage": "Глобальний пошук став Premium-функцією. Ваші збіги будуть фільтруватися за відстанню. Покращіть підписку для підбору по всьому світу."
+    "globalSearchPremiumMessage": "Глобальний пошук став Premium-функцією. Ваші збіги будуть фільтруватися за відстанню. Покращіть підписку для підбору по всьому світу.",
+    "newMessageFrom": "Нове повідомлення від {{name}}",
+    "userLikesYou": "Ви подобаєтеся {{name}}!",
+    "someoneLikesYou": "Ви комусь подобаєтеся!",
+    "tapToSeeProfile": "Торкніться, щоб переглянути профіль",
+    "upgradeToSeePremium": "Перейдіть на Premium, щоб дізнатися, хто",
+    "reactedWith": "{{name}} відреагував(ла) {{emoji}}",
+    "tapToViewConversation": "Торкніться, щоб переглянути розмову"
   },
   "prompts": {
     "idealMarriage": "Мій ідеальний лавандовий шлюб виглядає так...",

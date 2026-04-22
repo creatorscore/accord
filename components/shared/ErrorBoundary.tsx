@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
+import i18n from '@/lib/i18n';
 import { captureException } from '@/lib/sentry';
 
 interface ErrorBoundaryProps {
@@ -58,12 +59,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       return (
         <View style={styles.container}>
           <MaterialCommunityIcons name="alert-circle" size={80} color="#EF4444" />
-          <Text style={styles.title}>Oops! Something went wrong</Text>
-          <Text style={styles.message}>
-            We encountered an unexpected error. Please try restarting the app.
-          </Text>
+          <Text style={styles.title}>{i18n.t('common.errorBoundary.title')}</Text>
+          <Text style={styles.message}>{i18n.t('common.errorBoundary.message')}</Text>
           <TouchableOpacity style={styles.button} onPress={this.handleReload}>
-            <Text style={styles.buttonText}>Restart App</Text>
+            <Text style={styles.buttonText}>{i18n.t('common.errorBoundary.restart')}</Text>
           </TouchableOpacity>
         </View>
       );

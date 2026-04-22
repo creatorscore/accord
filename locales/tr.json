@@ -56,6 +56,25 @@
       "weeksAgo": "{{count}} hafta önce",
       "monthsAgo": "{{count}} ay önce",
       "yearsAgo": "{{count}} yıl önce"
+    },
+    "errorBoundary": {
+      "title": "Hay aksi! Bir şeyler ters gitti",
+      "message": "Beklenmeyen bir hatayla karşılaştık. Lütfen uygulamayı yeniden başlatmayı deneyin.",
+      "restart": "Uygulamayı Yeniden Başlat"
+    },
+    "update": {
+      "forcedTitle": "Bazı önemli değişiklikler yaptık",
+      "softTitle": "Seni yeni bir şey bekliyor",
+      "forcedBody": "Accord'un bu sürümü artık desteklenmiyor. Sohbetlerinin güvende kalması ve her şeyin sorunsuz çalışması için güncelle.",
+      "softBody": "Accord'un beğeneceğin iyileştirmelerle daha yeni bir sürümü mevcut.",
+      "updateButton": "Accord'u Güncelle",
+      "notNow": "Şimdi değil",
+      "nativeTitleRequired": "Güncelleme Gerekli",
+      "nativeTitleAvailable": "Güncelleme Mevcut",
+      "nativeBodyRequired": "Devam etmek için Accord'un yeni bir sürümü gerekli. Lütfen şimdi güncelle.",
+      "nativeBodyAvailable": "İyileştirmeler ve hata düzeltmeleriyle Accord'un yeni bir sürümü mevcut.",
+      "nativeUpdateNow": "Şimdi Güncelle",
+      "nativeLater": "Daha sonra"
     }
   },
   "discover": {
@@ -171,6 +190,13 @@
       "upgradeMessage": "Bu özellikleri etkinleştirmek ve dünyanın her yerinde eşleşme bulmak için Premium'a yükseltin.",
       "upgradeToPremium": "Premium'a Yükselt",
       "maybeLater": "Belki Sonra"
+    },
+    "match": {
+      "itsA": "Bu bir",
+      "exclamation": "Eşleşme!",
+      "bothLiked": "Sen ve {{name}} birbirinizi beğendiniz",
+      "sendMessage": "Mesaj Gönder",
+      "keepBrowsing": "Göz Atmaya Devam Et"
     }
   },
   "filters": {
@@ -633,6 +659,171 @@
       "enterOccupation": "Lütfen mesleğinizi girin.",
       "enterEducation": "Lütfen eğitiminizi girin.",
       "notAuthenticatedMessage": "Kimlik doğrulanmadı. Lütfen tekrar giriş yapın."
+    },
+    "options": {
+      "genders": {
+        "man": "Erkek",
+        "woman": "Kadın",
+        "non_binary": "Non-binary"
+      },
+      "pronouns": {
+        "she_her": "o (kadın)",
+        "he_him": "o (erkek)",
+        "they_them": "onlar",
+        "she_they": "o (kadın)/onlar",
+        "he_they": "o (erkek)/onlar",
+        "any_pronouns": "her zamir",
+        "ask_me": "bana sor",
+        "prefer_not_to_say": "belirtmek istemiyorum"
+      },
+      "orientations": {
+        "lesbian": "Lezbiyen",
+        "gay": "Gey",
+        "bisexual": "Biseksüel",
+        "straight": "Heteroseksüel",
+        "queer": "Queer",
+        "asexual": "Aseksüel",
+        "pansexual": "Panseksüel",
+        "demisexual": "Demiseksüel",
+        "questioning": "Sorgulayan",
+        "omnisexual": "Omniseksüel",
+        "polysexual": "Poliseksüel",
+        "androsexual": "Androseksüel",
+        "gynesexual": "Jineseksüel",
+        "sapiosexual": "Sapyoseksüel",
+        "heteroflexible": "Heteroesnek",
+        "homoflexible": "Homoesnek",
+        "prefer_not_to_say": "Belirtmek istemiyorum",
+        "other": "Diğer"
+      },
+      "genderPrefs": {
+        "men": "Erkekler",
+        "women": "Kadınlar",
+        "non_binary": "Non-binary",
+        "everyone": "Herkes"
+      },
+      "ethnicities": {
+        "asian": "Asyalı",
+        "black_african": "Siyahi/Afrikalı",
+        "hispanic_latinx": "Hispanik/Latin",
+        "indigenous_native": "Yerli",
+        "middle_eastern_north_african": "Orta Doğulu/Kuzey Afrikalı",
+        "pacific_islander": "Pasifik Adalı",
+        "south_asian": "Güney Asyalı",
+        "white_caucasian": "Beyaz/Kafkas",
+        "multiracial": "Çok ırklı",
+        "other": "Diğer",
+        "prefer_not_to_say": "Belirtmek istemiyorum"
+      },
+      "religions": {
+        "christian": "Hristiyan",
+        "catholic": "Katolik",
+        "protestant": "Protestan",
+        "muslim": "Müslüman",
+        "jewish": "Yahudi",
+        "hindu": "Hindu",
+        "buddhist": "Budist",
+        "sikh": "Sih",
+        "atheist": "Ateist",
+        "agnostic": "Agnostik",
+        "spiritual_but_not_religious": "Ruhani ama dindar değil",
+        "other": "Diğer",
+        "prefer_not_to_say": "Belirtmek istemiyorum"
+      },
+      "politicalViews": {
+        "liberal": "Liberal",
+        "progressive": "İlerici",
+        "moderate": "Ilımlı",
+        "conservative": "Muhafazakâr",
+        "libertarian": "Liberteryen",
+        "socialist": "Sosyalist",
+        "apolitical": "Apolitik",
+        "other": "Diğer",
+        "prefer_not_to_say": "Belirtmek istemiyorum"
+      },
+      "relationshipTypes": {
+        "platonic": "Yalnızca platonik",
+        "romantic": "Romantik olasılık",
+        "open": "Açık düzen"
+      },
+      "primaryReasons": {
+        "financial": "Finansal istikrar",
+        "immigration": "Göç/Vize",
+        "family_pressure": "Aile baskısı",
+        "legal_benefits": "Yasal haklar",
+        "companionship": "Arkadaşlık",
+        "safety": "Güvenlik ve koruma",
+        "other": "Diğer"
+      },
+      "childrenOptions": {
+        "yes": "Evet",
+        "no": "Hayır",
+        "maybe": "Belki / Açığım"
+      },
+      "familyPlans": {
+        "biological": "Biyolojik çocuk",
+        "adoption": "Evlat edinme",
+        "surrogacy": "Taşıyıcı annelik",
+        "ivf": "Tüp bebek/Tedavi",
+        "co_parenting": "Ortak ebeveynlik",
+        "fostering": "Koruyucu aile",
+        "already_have": "Zaten çocuğum var",
+        "open_discussion": "Konuşmaya açığım",
+        "other": "Diğer"
+      },
+      "petsOptions": {
+        "love_them": "Çok seviyorum",
+        "like_them": "Seviyorum",
+        "indifferent": "Fark etmez",
+        "allergic": "Alerjim var",
+        "dont_like": "Sevmiyorum"
+      },
+      "housingPrefs": {
+        "separate_spaces": "Ayrı oda/alan",
+        "roommates": "Ev arkadaşı gibi",
+        "separate_homes": "Yakında ayrı evler",
+        "shared_bedroom": "Ortak yatak odası",
+        "flexible": "Esnek/Konuşulabilir"
+      },
+      "financialArr": {
+        "separate": "Ayrı finans",
+        "shared_expenses": "Masrafları paylaşma",
+        "joint": "Ortak finans",
+        "prenup_required": "Evlilik sözleşmesi şart",
+        "flexible": "Esnek/Konuşulabilir"
+      },
+      "educationLevels": {
+        "high_school": "Lise",
+        "associates": "Ön lisans",
+        "bachelors": "Lisans",
+        "masters": "Yüksek lisans",
+        "doctorate": "Doktora",
+        "trade_school": "Meslek okulu",
+        "self_taught": "Kendi kendime öğrendim",
+        "other": "Diğer"
+      },
+      "drinkingOptions": {
+        "never": "Hiç",
+        "socially": "Sosyal olarak",
+        "regularly": "Düzenli",
+        "prefer_not_to_say": "Belirtmek istemiyorum"
+      },
+      "smokingOptions": {
+        "never": "Hiç",
+        "socially": "Sosyal olarak",
+        "regularly": "Düzenli",
+        "trying_to_quit": "Bırakmaya çalışıyorum"
+      },
+      "weedOptions": {
+        "never": "Hiç",
+        "socially": "Sosyal olarak",
+        "regularly": "Düzenli"
+      },
+      "drugOptions": {
+        "never": "Hiç",
+        "socially": "Sosyal olarak",
+        "regularly": "Düzenli"
+      }
     }
   },
   "matchingPreferences": {
@@ -903,7 +1094,11 @@
     "waitingForOther": "İncelemenizi gönderdiniz. Diğer taraf bekleniyor.",
     "youNeedToReview": "Lütfen incelemenizi gönderin",
     "reviewNow": "Şimdi İncele",
-    "revealed": "Açığa Çıktı"
+    "revealed": "Açığa Çıktı",
+    "matchCountTitle": "{{limit}} aktif eşleşmeden {{current}} tanesi",
+    "matchCountSubtitleFree": "Ücretsiz plan",
+    "matchCountSubtitleWarning": "Neredeyse dolu — sınırsız eşleşme al",
+    "matchCountSubtitleFull": "Birinin eşleşmesini kaldır veya sınırsıza yükselt"
   },
   "messages": {
     "title": "Mesajlar",
@@ -2153,7 +2348,14 @@
     "tooFarTitle": "Çok Uzak",
     "tooFarMessage": "Bu kişinin arama tercihleri bölgenizi kapsamıyor.",
     "globalSearchPremiumTitle": "Küresel Arama Artık Premium",
-    "globalSearchPremiumMessage": "Küresel arama artık bir Premium özelliğidir. Eşleşmeleriniz mesafeye göre filtrelenecek. Dünya çapında eşleşmeye devam etmek için yükseltin."
+    "globalSearchPremiumMessage": "Küresel arama artık bir Premium özelliğidir. Eşleşmeleriniz mesafeye göre filtrelenecek. Dünya çapında eşleşmeye devam etmek için yükseltin.",
+    "newMessageFrom": "{{name}} kişisinden yeni mesaj",
+    "userLikesYou": "{{name}} seni beğendi!",
+    "someoneLikesYou": "Biri seni beğendi!",
+    "tapToSeeProfile": "Profilini görmek için dokun",
+    "upgradeToSeePremium": "Kim olduğunu görmek için Premium'a yükselt",
+    "reactedWith": "{{name}} {{emoji}} ile tepki verdi",
+    "tapToViewConversation": "Sohbeti görüntülemek için dokun"
   },
   "prompts": {
     "idealMarriage": "Benim ideal lavanta evliliğim şöyle görünüyor...",

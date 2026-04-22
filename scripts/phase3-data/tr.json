@@ -1,0 +1,165 @@
+{
+  "genders": {
+    "man": "Erkek",
+    "woman": "Kadın",
+    "non_binary": "Non-binary"
+  },
+  "pronouns": {
+    "she_her": "o (kadın)",
+    "he_him": "o (erkek)",
+    "they_them": "onlar",
+    "she_they": "o (kadın)/onlar",
+    "he_they": "o (erkek)/onlar",
+    "any_pronouns": "her zamir",
+    "ask_me": "bana sor",
+    "prefer_not_to_say": "belirtmek istemiyorum"
+  },
+  "orientations": {
+    "lesbian": "Lezbiyen",
+    "gay": "Gey",
+    "bisexual": "Biseksüel",
+    "straight": "Heteroseksüel",
+    "queer": "Queer",
+    "asexual": "Aseksüel",
+    "pansexual": "Panseksüel",
+    "demisexual": "Demiseksüel",
+    "questioning": "Sorgulayan",
+    "omnisexual": "Omniseksüel",
+    "polysexual": "Poliseksüel",
+    "androsexual": "Androseksüel",
+    "gynesexual": "Jineseksüel",
+    "sapiosexual": "Sapyoseksüel",
+    "heteroflexible": "Heteroesnek",
+    "homoflexible": "Homoesnek",
+    "prefer_not_to_say": "Belirtmek istemiyorum",
+    "other": "Diğer"
+  },
+  "genderPrefs": {
+    "men": "Erkekler",
+    "women": "Kadınlar",
+    "non_binary": "Non-binary",
+    "everyone": "Herkes"
+  },
+  "ethnicities": {
+    "asian": "Asyalı",
+    "black_african": "Siyahi/Afrikalı",
+    "hispanic_latinx": "Hispanik/Latin",
+    "indigenous_native": "Yerli",
+    "middle_eastern_north_african": "Orta Doğulu/Kuzey Afrikalı",
+    "pacific_islander": "Pasifik Adalı",
+    "south_asian": "Güney Asyalı",
+    "white_caucasian": "Beyaz/Kafkas",
+    "multiracial": "Çok ırklı",
+    "other": "Diğer",
+    "prefer_not_to_say": "Belirtmek istemiyorum"
+  },
+  "religions": {
+    "christian": "Hristiyan",
+    "catholic": "Katolik",
+    "protestant": "Protestan",
+    "muslim": "Müslüman",
+    "jewish": "Yahudi",
+    "hindu": "Hindu",
+    "buddhist": "Budist",
+    "sikh": "Sih",
+    "atheist": "Ateist",
+    "agnostic": "Agnostik",
+    "spiritual_but_not_religious": "Ruhani ama dindar değil",
+    "other": "Diğer",
+    "prefer_not_to_say": "Belirtmek istemiyorum"
+  },
+  "politicalViews": {
+    "liberal": "Liberal",
+    "progressive": "İlerici",
+    "moderate": "Ilımlı",
+    "conservative": "Muhafazakâr",
+    "libertarian": "Liberteryen",
+    "socialist": "Sosyalist",
+    "apolitical": "Apolitik",
+    "other": "Diğer",
+    "prefer_not_to_say": "Belirtmek istemiyorum"
+  },
+  "relationshipTypes": {
+    "platonic": "Yalnızca platonik",
+    "romantic": "Romantik olasılık",
+    "open": "Açık düzen"
+  },
+  "primaryReasons": {
+    "financial": "Finansal istikrar",
+    "immigration": "Göç/Vize",
+    "family_pressure": "Aile baskısı",
+    "legal_benefits": "Yasal haklar",
+    "companionship": "Arkadaşlık",
+    "safety": "Güvenlik ve koruma",
+    "other": "Diğer"
+  },
+  "childrenOptions": {
+    "yes": "Evet",
+    "no": "Hayır",
+    "maybe": "Belki / Açığım"
+  },
+  "familyPlans": {
+    "biological": "Biyolojik çocuk",
+    "adoption": "Evlat edinme",
+    "surrogacy": "Taşıyıcı annelik",
+    "ivf": "Tüp bebek/Tedavi",
+    "co_parenting": "Ortak ebeveynlik",
+    "fostering": "Koruyucu aile",
+    "already_have": "Zaten çocuğum var",
+    "open_discussion": "Konuşmaya açığım",
+    "other": "Diğer"
+  },
+  "petsOptions": {
+    "love_them": "Çok seviyorum",
+    "like_them": "Seviyorum",
+    "indifferent": "Fark etmez",
+    "allergic": "Alerjim var",
+    "dont_like": "Sevmiyorum"
+  },
+  "housingPrefs": {
+    "separate_spaces": "Ayrı oda/alan",
+    "roommates": "Ev arkadaşı gibi",
+    "separate_homes": "Yakında ayrı evler",
+    "shared_bedroom": "Ortak yatak odası",
+    "flexible": "Esnek/Konuşulabilir"
+  },
+  "financialArr": {
+    "separate": "Ayrı finans",
+    "shared_expenses": "Masrafları paylaşma",
+    "joint": "Ortak finans",
+    "prenup_required": "Evlilik sözleşmesi şart",
+    "flexible": "Esnek/Konuşulabilir"
+  },
+  "educationLevels": {
+    "high_school": "Lise",
+    "associates": "Ön lisans",
+    "bachelors": "Lisans",
+    "masters": "Yüksek lisans",
+    "doctorate": "Doktora",
+    "trade_school": "Meslek okulu",
+    "self_taught": "Kendi kendime öğrendim",
+    "other": "Diğer"
+  },
+  "drinkingOptions": {
+    "never": "Hiç",
+    "socially": "Sosyal olarak",
+    "regularly": "Düzenli",
+    "prefer_not_to_say": "Belirtmek istemiyorum"
+  },
+  "smokingOptions": {
+    "never": "Hiç",
+    "socially": "Sosyal olarak",
+    "regularly": "Düzenli",
+    "trying_to_quit": "Bırakmaya çalışıyorum"
+  },
+  "weedOptions": {
+    "never": "Hiç",
+    "socially": "Sosyal olarak",
+    "regularly": "Düzenli"
+  },
+  "drugOptions": {
+    "never": "Hiç",
+    "socially": "Sosyal olarak",
+    "regularly": "Düzenli"
+  }
+}

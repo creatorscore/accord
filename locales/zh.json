@@ -56,6 +56,25 @@
       "weeksAgo": "{{count}} 周前",
       "monthsAgo": "{{count}} 个月前",
       "yearsAgo": "{{count}} 年前"
+    },
+    "errorBoundary": {
+      "title": "糟糕！出错了",
+      "message": "我们遇到了意外错误。请尝试重新启动应用程序。",
+      "restart": "重启应用"
+    },
+    "update": {
+      "forcedTitle": "我们做了一些重要的更改",
+      "softTitle": "有新内容在等你",
+      "forcedBody": "此版本的 Accord 已不再受支持。请更新以保证对话安全并让一切顺畅运行。",
+      "softBody": "Accord 的较新版本已推出，包含你会喜欢的改进。",
+      "updateButton": "更新 Accord",
+      "notNow": "暂不更新",
+      "nativeTitleRequired": "需要更新",
+      "nativeTitleAvailable": "有可用更新",
+      "nativeBodyRequired": "需要新版本的 Accord 才能继续。请立即更新。",
+      "nativeBodyAvailable": "Accord 的新版本已推出，包含改进和错误修复。",
+      "nativeUpdateNow": "立即更新",
+      "nativeLater": "稍后"
     }
   },
   "discover": {
@@ -171,6 +190,13 @@
       "upgradeMessage": "升级到高级版以激活这些功能，在世界任何地方找到匹配。",
       "upgradeToPremium": "升级到高级版",
       "maybeLater": "以后再说"
+    },
+    "match": {
+      "itsA": "这是一次",
+      "exclamation": "匹配！",
+      "bothLiked": "你和 {{name}} 互相喜欢",
+      "sendMessage": "发送消息",
+      "keepBrowsing": "继续浏览"
     }
   },
   "filters": {
@@ -633,6 +659,171 @@
       "enterOccupation": "请输入你的职业。",
       "enterEducation": "请输入你的学历。",
       "notAuthenticatedMessage": "未认证。请重新登录。"
+    },
+    "options": {
+      "genders": {
+        "man": "男",
+        "woman": "女",
+        "non_binary": "非二元"
+      },
+      "pronouns": {
+        "she_her": "她",
+        "he_him": "他",
+        "they_them": "TA",
+        "she_they": "她/TA",
+        "he_they": "他/TA",
+        "any_pronouns": "任意称呼",
+        "ask_me": "请问我",
+        "prefer_not_to_say": "不愿透露"
+      },
+      "orientations": {
+        "lesbian": "女同",
+        "gay": "男同",
+        "bisexual": "双性恋",
+        "straight": "异性恋",
+        "queer": "酷儿",
+        "asexual": "无性恋",
+        "pansexual": "泛性恋",
+        "demisexual": "半性恋",
+        "questioning": "探索中",
+        "omnisexual": "全性恋",
+        "polysexual": "多性恋",
+        "androsexual": "男性向",
+        "gynesexual": "女性向",
+        "sapiosexual": "智性恋",
+        "heteroflexible": "偏异灵活",
+        "homoflexible": "偏同灵活",
+        "prefer_not_to_say": "不愿透露",
+        "other": "其他"
+      },
+      "genderPrefs": {
+        "men": "男性",
+        "women": "女性",
+        "non_binary": "非二元",
+        "everyone": "所有人"
+      },
+      "ethnicities": {
+        "asian": "东亚裔",
+        "black_african": "非裔",
+        "hispanic_latinx": "拉丁裔",
+        "indigenous_native": "原住民",
+        "middle_eastern_north_african": "中东/北非裔",
+        "pacific_islander": "太平洋岛裔",
+        "south_asian": "南亚裔",
+        "white_caucasian": "白人",
+        "multiracial": "混血",
+        "other": "其他",
+        "prefer_not_to_say": "不愿透露"
+      },
+      "religions": {
+        "christian": "基督徒",
+        "catholic": "天主教",
+        "protestant": "新教",
+        "muslim": "穆斯林",
+        "jewish": "犹太教",
+        "hindu": "印度教",
+        "buddhist": "佛教",
+        "sikh": "锡克教",
+        "atheist": "无神论",
+        "agnostic": "不可知论",
+        "spiritual_but_not_religious": "有灵性不信教",
+        "other": "其他",
+        "prefer_not_to_say": "不愿透露"
+      },
+      "politicalViews": {
+        "liberal": "自由派",
+        "progressive": "进步派",
+        "moderate": "温和派",
+        "conservative": "保守派",
+        "libertarian": "自由意志",
+        "socialist": "社会主义",
+        "apolitical": "不关心政治",
+        "other": "其他",
+        "prefer_not_to_say": "不愿透露"
+      },
+      "relationshipTypes": {
+        "platonic": "仅柏拉图式",
+        "romantic": "可发展恋爱",
+        "open": "开放式安排"
+      },
+      "primaryReasons": {
+        "financial": "经济稳定",
+        "immigration": "移民/签证",
+        "family_pressure": "家庭压力",
+        "legal_benefits": "法律权益",
+        "companionship": "陪伴",
+        "safety": "安全与保护",
+        "other": "其他"
+      },
+      "childrenOptions": {
+        "yes": "要",
+        "no": "不要",
+        "maybe": "也许/可商量"
+      },
+      "familyPlans": {
+        "biological": "亲生孩子",
+        "adoption": "领养",
+        "surrogacy": "代孕",
+        "ivf": "试管/辅助生育",
+        "co_parenting": "共同育儿",
+        "fostering": "寄养",
+        "already_have": "已有孩子",
+        "open_discussion": "可商量",
+        "other": "其他"
+      },
+      "petsOptions": {
+        "love_them": "非常喜欢",
+        "like_them": "喜欢",
+        "indifferent": "无所谓",
+        "allergic": "过敏",
+        "dont_like": "不喜欢"
+      },
+      "housingPrefs": {
+        "separate_spaces": "分房/分空间",
+        "roommates": "像室友一样住",
+        "separate_homes": "分居就近",
+        "shared_bedroom": "同住一室",
+        "flexible": "灵活可商量"
+      },
+      "financialArr": {
+        "separate": "财务分开",
+        "shared_expenses": "分摊开销",
+        "joint": "财务共有",
+        "prenup_required": "须婚前协议",
+        "flexible": "灵活可商量"
+      },
+      "educationLevels": {
+        "high_school": "高中",
+        "associates": "大专",
+        "bachelors": "本科",
+        "masters": "硕士",
+        "doctorate": "博士",
+        "trade_school": "职业学校",
+        "self_taught": "自学",
+        "other": "其他"
+      },
+      "drinkingOptions": {
+        "never": "从不",
+        "socially": "社交场合",
+        "regularly": "经常",
+        "prefer_not_to_say": "不愿透露"
+      },
+      "smokingOptions": {
+        "never": "从不",
+        "socially": "社交场合",
+        "regularly": "经常",
+        "trying_to_quit": "正在戒烟"
+      },
+      "weedOptions": {
+        "never": "从不",
+        "socially": "社交场合",
+        "regularly": "经常"
+      },
+      "drugOptions": {
+        "never": "从不",
+        "socially": "社交场合",
+        "regularly": "经常"
+      }
     }
   },
   "matchingPreferences": {
@@ -897,7 +1088,11 @@
       "success": "举报已提交",
       "successMessage": "感谢您帮助保持 Accord 的安全。我们的团队将审核此举报。",
       "error": "提交举报失败。请重试。"
-    }
+    },
+    "matchCountTitle": "{{limit}} 个活跃匹配中的 {{current}} 个",
+    "matchCountSubtitleFree": "免费方案",
+    "matchCountSubtitleWarning": "快满了——获取无限匹配",
+    "matchCountSubtitleFull": "取消与某人的匹配，或升级以获得无限匹配"
   },
   "messages": {
     "title": "消息",
@@ -2147,7 +2342,14 @@
     "tooFarTitle": "距离太远",
     "tooFarMessage": "此人的搜索偏好不包含你的地区。",
     "globalSearchPremiumTitle": "全球搜索现为 Premium 功能",
-    "globalSearchPremiumMessage": "全球搜索现在是高级功能。你的匹配将按距离筛选。升级以继续全球匹配。"
+    "globalSearchPremiumMessage": "全球搜索现在是高级功能。你的匹配将按距离筛选。升级以继续全球匹配。",
+    "newMessageFrom": "来自 {{name}} 的新消息",
+    "userLikesYou": "{{name}} 喜欢你！",
+    "someoneLikesYou": "有人喜欢你！",
+    "tapToSeeProfile": "点按查看他们的资料",
+    "upgradeToSeePremium": "升级到高级版以查看是谁",
+    "reactedWith": "{{name}} 以 {{emoji}} 做出反应",
+    "tapToViewConversation": "点按查看对话"
   },
   "prompts": {
     "idealMarriage": "我理想中的薰衣草婚姻是...",
