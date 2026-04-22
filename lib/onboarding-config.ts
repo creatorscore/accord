@@ -332,6 +332,8 @@ export function earliestMissingRequiredStep(profile: {
   age?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+  location_city?: string | null;
+  location_state?: string | null;
   pronouns?: string | null;
   gender?: string[] | null;
   sexual_orientation?: string[] | null;
@@ -345,7 +347,11 @@ export function earliestMissingRequiredStep(profile: {
 } | null | undefined): number | null {
   if (!profile.display_name || profile.display_name.trim().length === 0) return 0;
   if (!profile.birth_date || !profile.age) return 1;
-  if (profile.latitude == null || profile.longitude == null) return 3;
+  // Location: require city OR state; do NOT require lat/lng. LocationStep's
+  // dropdown picker saves city/state/country only — lat/lng is populated only
+  // by the GPS path. Requiring lat/lng here would loop the user back to step 3
+  // after every resume, even though they already entered a valid city.
+  if (!profile.location_city && !profile.location_state) return 3;
   if (!profile.pronouns) return 4;
   if (!profile.gender || profile.gender.length === 0) return 5;
   if (!profile.sexual_orientation || profile.sexual_orientation.length === 0) return 6;

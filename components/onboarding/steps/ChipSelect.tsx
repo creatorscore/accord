@@ -39,7 +39,13 @@ export default function ChipSelect({
         onSelect([...selected, value]);
       }
     } else {
-      onSelect(selected[0] === value ? [] : [value]);
+      // Single-select: never deselect on re-tap. Previously this returned []
+      // when the user tapped their already-selected chip, which cleared a
+      // required field and disabled Continue — users stuck at pronouns /
+      // gender / sexuality / relationship / children / financial / housing
+      // couldn't advance once they tapped twice. Radio semantics: tapping a
+      // chip always results in exactly that chip selected.
+      onSelect([value]);
     }
   };
 

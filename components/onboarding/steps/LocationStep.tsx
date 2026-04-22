@@ -98,18 +98,33 @@ export default function LocationStep() {
     debounceRef.current = setTimeout(() => doSearch(text), 150);
   };
 
-  const handleSelectCity = (city: City) => {
+  const handleSelectCity = async (city: City) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const formatted = formatCity(city);
     setQuery(formatted);
     setShowResults(false);
     Keyboard.dismiss();
-    // Commit to store only on selection
+    // Commit city fields immediately so the Continue button enables.
     setFields({
       locationCity: city.name,
       locationState: city.admin1,
       locationCountry: city.country,
     });
+    // Best-effort: geocode the selection to populate lat/lng so the matching
+    // RPC (get_nearby_profiles) can actually place this user. Without this,
+    // dropdown-picker users get no discovery results because the haversine
+    // filter has nothing to compute against. Permission may be denied and
+    // geocoding may fail offline — either way the city/state fields above
+    // are already saved and Continue is enabled.
+    try {
+      const results = await Location.geocodeAsync(formatted);
+      const first = results?.[0];
+      if (first && typeof first.latitude === 'number' && typeof first.longitude === 'number') {
+        setFields({ latitude: first.latitude, longitude: first.longitude });
+      }
+    } catch {
+      // geocoding unavailable (permission denied, offline, etc.) — not fatal
+    }
   };
 
   const handleClear = () => {
