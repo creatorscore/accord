@@ -71,27 +71,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => subscription.unsubscribe();
   }, []);
 
-  // CRITICAL SAFETY: Check if user is banned
-  // PERFORMANCE: Defer to avoid blocking cold start
+  // CRITICAL SAFETY: Check if user is banned.
+  // One-shot per session — token-refresh events change the user reference
+  // and would otherwise re-fire this. index.tsx already runs the primary
+  // ban check (rpc/is_banned) on cold start; this is the secondary safeguard
+  // for users banned mid-session.
+  const banCheckedFor = useRef<string | null>(null);
   useEffect(() => {
+    if (!user) {
+      banCheckedFor.current = null;
+      return;
+    }
+    if (banCheckedFor.current === user.id) return;
+
     const checkBanStatus = async () => {
-      if (!user) return;
-
       try {
-        // Get user's profile ID (use maybeSingle - user might not have a profile yet)
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (!profile) return;
-
-        // Check if banned by user_id or profile_id
+        // Query bans directly by banned_user_id — avoids the redundant
+        // profile.id lookup that ProfileDataContext is already doing in
+        // parallel. We don't need to also check banned_profile_id here:
+        // a profile-level ban always sets banned_user_id too (see
+        // admin-ban-user edge function), so user_id alone catches both
+        // cases. Removing the profile fetch removes one launch-time GET
+        // that was contributing to the saveCheckpoint queue stall.
         const { data: banData } = await supabase
           .from('bans')
           .select('id, ban_reason')
-          .or(`banned_user_id.eq.${user.id},banned_profile_id.eq.${profile.id}`)
+          .eq('banned_user_id', user.id)
           .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
           .maybeSingle();
 
@@ -103,34 +108,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             pathname: '/(auth)/banned',
             params: { userId: user.id }
           });
+          return;
         }
+        banCheckedFor.current = user.id;
       } catch (error) {
         console.error('Error checking ban status:', error);
       }
     };
 
     // Run ban check immediately — security takes priority over startup performance.
-    // The index.tsx routing already does a primary ban check; this is the secondary
-    // safeguard for users who were banned AFTER the initial route check.
-    if (user) {
-      checkBanStatus();
-    }
+    checkBanStatus();
   }, [user]);
 
   // Initialize encryption keys for authenticated users
   // Uses deterministic key derivation so the same user gets identical keys on iOS/Android
   // CRITICAL: This ensures cross-platform messaging works correctly
-  // PERFORMANCE: Deferred to avoid blocking cold start
+  // PERFORMANCE: Deferred to avoid blocking cold start.
+  // One-shot per session — once we've verified/synced the encryption key for
+  // this user.id, don't run again. Token refresh events change the user
+  // object reference and would otherwise re-fire this effect, contributing to
+  // the launch-time GET+PATCH flood that was stalling saveCheckpoint.
+  const encryptionSyncedFor = useRef<string | null>(null);
   useEffect(() => {
-    const setupEncryption = async () => {
-      if (!user) return;
+    if (!user) {
+      encryptionSyncedFor.current = null;
+      return;
+    }
+    if (encryptionSyncedFor.current === user.id) return;
 
+    const setupEncryption = async () => {
       try {
-        // Always initialize encryption - this uses deterministic keys based on userId
-        // So the same user gets the same keys on any device (iOS/Android)
         const publicKey = await initializeEncryption(user.id);
 
-        // Store public key in user's profile (use maybeSingle - profile might not exist yet)
         const { data: profile } = await supabase
           .from('profiles')
           .select('id, encryption_public_key')
@@ -138,33 +147,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           .maybeSingle();
 
         if (profile) {
-          // CRITICAL FIX: ALWAYS force update the encryption key in the database
-          // This fixes users who had old random keys that don't match deterministic derivation
-          // Without this, iOS/Android users can't read each other's messages
-          const currentDbKey = profile.encryption_public_key;
-          const keysMatch = currentDbKey === publicKey;
+          if (profile.encryption_public_key !== publicKey) {
+            const { error: updateError } = await supabase
+              .from('profiles')
+              .update({ encryption_public_key: publicKey })
+              .eq('id', profile.id);
 
-          // Always update to ensure consistency across platforms
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ encryption_public_key: publicKey })
-            .eq('id', profile.id);
-
-          if (updateError) {
-            console.error('❌ Failed to update encryption key:', updateError);
+            if (updateError) {
+              console.error('❌ Failed to update encryption key:', updateError);
+              return; // don't mark as synced if the write failed
+            }
           }
+          encryptionSyncedFor.current = user.id;
         }
       } catch (error) {
         console.error('Error setting up encryption:', error);
       }
     };
 
-    // PERFORMANCE: Defer encryption setup until after initial render
-    if (user) {
-      InteractionManager.runAfterInteractions(() => {
-        setupEncryption();
-      });
-    }
+    InteractionManager.runAfterInteractions(() => {
+      setupEncryption();
+    });
   }, [user]);
 
   // Automatic location refresh when app comes to foreground

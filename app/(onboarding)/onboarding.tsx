@@ -293,104 +293,124 @@ export default function Onboarding() {
         ...(step >= TOTAL_ONBOARDING_STEPS - 1 ? { profile_complete: true } : {}),
       };
 
-      // Upsert profile, then resolve the profile id with a short timeout race.
-      // Postgres logs show the write completes in ~100ms, but the supabase-js
-      // response can be queued behind a flood of in-flight requests from the
-      // push-token + ban-check + activity-tracker loops, leaving the await
-      // hanging indefinitely from the user's perspective. Cap at 8s — if the
-      // representation never comes back, fall through and re-resolve the id
-      // by user_id below.
-      console.log('[saveCheckpoint] upserting profile...');
-      const upsertPromise = supabase
+      // Build the preferences payload up-front so we can fire profile + prefs
+      // upserts concurrently when we already know the profile id.
+      const buildPrefsData = (pid: string): Record<string, any> => ({
+        profile_id: pid,
+        gender_preference: expandGenderPreference(store.genderPreference),
+        relationship_type: store.relationshipType || 'platonic',
+        primary_reasons: store.primaryReasons.length > 0 ? store.primaryReasons : null,
+        // Legacy column — keep in sync to avoid NOT NULL constraint on older schema
+        primary_reason: store.primaryReasons.length > 0 ? store.primaryReasons[0] : 'other',
+        wants_children: store.wantsChildren === 'yes' ? true : store.wantsChildren === 'no' ? false : null,
+        children_arrangement: store.childrenArrangement.length > 0 ? store.childrenArrangement : null,
+        financial_arrangement: store.financialArrangement.length > 0 ? store.financialArrangement : null,
+        housing_preference: store.housingPreference.length > 0 ? store.housingPreference : null,
+        lifestyle_preferences: {
+          pets: store.pets || null,
+          drinking: store.drinking || null,
+          smoking: store.smoking || null,
+          smokes_weed: store.smokesWeed || null,
+          does_drugs: store.doesDrugs || null,
+        },
+        age_min: store.ageMin,
+        age_max: store.ageMax,
+        max_distance_miles: store.maxDistanceMiles,
+        distance_unit: store.distanceUnit || 'miles',
+        willing_to_relocate: store.willingToRelocate,
+      });
+
+      // Race helper: treat a response-level timeout as "write likely succeeded"
+      // rather than a fatal error (Postgres logs show the server-side write
+      // completes in ~100ms; only the HTTP response is queue-stalled).
+      const raceWithTimeout = <T,>(p: PromiseLike<T>, ms: number, label: string): Promise<T | { error: { code: 'TIMEOUT'; message: string } }> =>
+        Promise.race([
+          p as Promise<T>,
+          new Promise<{ error: { code: 'TIMEOUT'; message: string } }>((resolve) =>
+            setTimeout(() => resolve({ error: { code: 'TIMEOUT', message: `${label} timed out — write likely succeeded` } }), ms)
+          ),
+        ]);
+
+      const profileUpsert = supabase
         .from('profiles')
         .upsert(profileData, { onConflict: 'user_id' })
         .select('id')
         .single();
-      const timeoutPromise = new Promise<{ data: null; error: { code: 'TIMEOUT'; message: string } }>((resolve) =>
-        setTimeout(() => resolve({ data: null, error: { code: 'TIMEOUT', message: 'upsert response timed out — write likely succeeded' } }), 8000)
-      );
-      const { data: upserted, error: profileError } = await Promise.race([upsertPromise, timeoutPromise]);
+
+      // Parallelize when we already know the profile id (returning user). The
+      // FK from preferences → profiles is satisfied because the profile row
+      // already exists in the DB; the concurrent UPDATE on profiles doesn't
+      // block the INSERT/UPDATE on preferences. On brand-new signups
+      // (profileId null) we must sequence so preferences doesn't violate the
+      // FK before profile is inserted. Total wait drops from ~16s → ~4s for
+      // returning users on a queue-stalled client.
+      let upserted: { id?: string } | null = null;
+      let profileError: any = null;
+      let prefsError: any = null;
+
+      if (profileId) {
+        console.log('[saveCheckpoint] parallel upsert (profile + preferences)');
+        const prefsUpsert = supabase
+          .from('preferences')
+          .upsert(buildPrefsData(profileId), { onConflict: 'profile_id' });
+        const [profResult, prefsResult] = await Promise.all([
+          raceWithTimeout(profileUpsert, 4000, 'profile upsert'),
+          raceWithTimeout(prefsUpsert, 4000, 'preferences upsert'),
+        ]);
+        upserted = (profResult as any).data ?? null;
+        profileError = (profResult as any).error ?? null;
+        prefsError = (prefsResult as any).error ?? null;
+      } else {
+        console.log('[saveCheckpoint] sequential upsert (new signup)');
+        const profResult = await raceWithTimeout(profileUpsert, 5000, 'profile upsert');
+        upserted = (profResult as any).data ?? null;
+        profileError = (profResult as any).error ?? null;
+      }
       console.log('[saveCheckpoint] profile upsert done. err =', profileError?.message, 'id =', upserted?.id);
 
-      // Treat real errors as fatal; treat the timeout as "probably saved, look it up".
       if (profileError && profileError.code !== 'TIMEOUT') throw profileError;
 
       let pid = upserted?.id || profileId;
       if (!pid) {
         console.log('[saveCheckpoint] no id from upsert, looking up by user_id...');
-        const { data: lookup } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        pid = lookup?.id || null;
+        const lookupResult = await raceWithTimeout(
+          supabase.from('profiles').select('id').eq('user_id', user.id).maybeSingle(),
+          4000,
+          'profile id lookup'
+        );
+        pid = (lookupResult as any).data?.id || null;
         console.log('[saveCheckpoint] id lookup result:', pid);
       }
       if (pid && !profileId) setProfileId(pid);
 
-      // Save preferences
-      if (pid) {
+      // If we ran sequentially (new signup), do preferences now that we have pid.
+      if (!profileId && pid) {
         console.log('[saveCheckpoint] upserting preferences for pid', pid);
-        const prefsData: Record<string, any> = {
-          profile_id: pid,
-          gender_preference: expandGenderPreference(store.genderPreference),
-          relationship_type: store.relationshipType || 'platonic',
-          primary_reasons: store.primaryReasons.length > 0 ? store.primaryReasons : null,
-          // Legacy column — keep in sync to avoid NOT NULL constraint on older schema
-          primary_reason: store.primaryReasons.length > 0 ? store.primaryReasons[0] : 'other',
-          wants_children: store.wantsChildren === 'yes' ? true : store.wantsChildren === 'no' ? false : null,
-          children_arrangement: store.childrenArrangement.length > 0 ? store.childrenArrangement : null,
-          financial_arrangement: store.financialArrangement.length > 0 ? store.financialArrangement : null,
-          housing_preference: store.housingPreference.length > 0 ? store.housingPreference : null,
-          lifestyle_preferences: {
-            pets: store.pets || null,
-            drinking: store.drinking || null,
-            smoking: store.smoking || null,
-            smokes_weed: store.smokesWeed || null,
-            does_drugs: store.doesDrugs || null,
-          },
-          age_min: store.ageMin,
-          age_max: store.ageMax,
-          max_distance_miles: store.maxDistanceMiles,
-          distance_unit: store.distanceUnit || 'miles',
-          willing_to_relocate: store.willingToRelocate,
-        };
-
-        // Same timeout race as the profile upsert above — protects against
-        // the supabase-js fetch queue stalling on a flood of in-flight requests.
-        const prefsUpsertPromise = supabase
-          .from('preferences')
-          .upsert(prefsData, { onConflict: 'profile_id' });
-        const prefsTimeoutPromise = new Promise<{ error: { code: 'TIMEOUT'; message: string } }>((resolve) =>
-          setTimeout(() => resolve({ error: { code: 'TIMEOUT', message: 'preferences upsert response timed out — write likely succeeded' } }), 8000)
+        const prefsResult = await raceWithTimeout(
+          supabase.from('preferences').upsert(buildPrefsData(pid), { onConflict: 'profile_id' }),
+          5000,
+          'preferences upsert'
         );
-        const { error: prefsError } = await Promise.race([prefsUpsertPromise, prefsTimeoutPromise]);
-        console.log('[saveCheckpoint] preferences upsert done. err =', prefsError?.message);
-
-        if (prefsError && prefsError.code !== 'TIMEOUT') throw prefsError;
+        prefsError = (prefsResult as any).error ?? null;
       }
+      console.log('[saveCheckpoint] preferences upsert done. err =', prefsError?.message);
 
-      // Save push token if granted. Hard-capped with a timeout so a slow
-      // expo-notifications / APNs / FCM handshake doesn't block the user
-      // from advancing past the checkpoint — we've already saved the profile
-      // and preferences, the push token is a nice-to-have.
+      if (prefsError && prefsError.code !== 'TIMEOUT') throw prefsError;
+
+      // Push token save is fire-and-forget — we're not going to block Continue
+      // on it. Fires in the background; if it fails, NotificationContext has
+      // its own retry loop that'll pick up on next app launch.
       if (notificationsGranted && pid) {
-        console.log('[saveCheckpoint] registering push token...');
-        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
-        const token = await Promise.race([
-          registerForPushNotifications().catch((e) => { console.log('[saveCheckpoint] register push failed:', e?.message); return null; }),
-          timeout,
-        ]);
-        if (token) {
-          console.log('[saveCheckpoint] saving push token...');
-          await Promise.race([
-            ensurePushTokenSaved(pid, token).catch((e) => { console.log('[saveCheckpoint] save push token failed:', e?.message); }),
-            new Promise((resolve) => setTimeout(resolve, 3000)),
-          ]);
-        } else {
-          console.log('[saveCheckpoint] push token null or timed out, skipping save');
-        }
-        console.log('[saveCheckpoint] push token step done');
+        const pidFinal: string = pid;
+        (async () => {
+          try {
+            const token = await Promise.race<string | null>([
+              registerForPushNotifications().catch(() => null),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+            ]);
+            if (token) await ensurePushTokenSaved(pidFinal, token).catch(() => {});
+          } catch {}
+        })();
       }
       console.log('[saveCheckpoint] all done, returning');
     } catch (error: any) {
@@ -417,16 +437,31 @@ export default function Onboarding() {
     }
 
     // Save at checkpoints: after location (3), after pets (14), after drugs (26), final (30).
+    // Show a "Saving your progress..." toast only if the save actually takes
+    // more than ~600ms — avoids a toast-flash on the common fast path but
+    // reassures users that the app isn't frozen when the queue is stalled.
+    let savingToastShown = false;
+    let savingToastTimer: ReturnType<typeof setTimeout> | null = null;
     const checkpoints = [3, 14, 26, 30];
     if (checkpoints.includes(subStep)) {
+      savingToastTimer = setTimeout(() => {
+        savingToastShown = true;
+        showToast({ type: 'info', title: 'Saving...', message: 'Saving your progress.' });
+      }, 600);
       console.log('[Onboarding] saveCheckpoint starting for step', subStep + 1);
       try {
         await saveCheckpoint(subStep + 1);
         console.log('[Onboarding] saveCheckpoint SUCCESS for step', subStep + 1);
       } catch (err: any) {
         console.log('[Onboarding] saveCheckpoint FAILED for step', subStep + 1, ':', err?.message || err);
+        if (savingToastTimer) clearTimeout(savingToastTimer);
         // Save failed — toast already shown by saveCheckpoint. Stay on current step.
         return;
+      } finally {
+        if (savingToastTimer) clearTimeout(savingToastTimer);
+      }
+      if (savingToastShown) {
+        showToast({ type: 'success', title: 'Saved', message: "Moving on — you're all set." });
       }
     }
 
