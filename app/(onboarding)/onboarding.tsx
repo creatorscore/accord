@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert, Keyboard } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
@@ -62,6 +63,7 @@ const StepFallback = () => <View style={{ flex: 1, justifyContent: 'center', ali
 
 export default function Onboarding() {
   const { resumeStep } = useLocalSearchParams<{ resumeStep?: string }>();
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { showToast } = useToast();
   const enterPreviewMode = usePreviewModeStore((s) => s.enterPreviewMode);
@@ -354,18 +356,21 @@ export default function Onboarding() {
         .select('id')
         .single();
 
-      // Parallelize when we already know the profile id (returning user). The
-      // FK from preferences → profiles is satisfied because the profile row
-      // already exists in the DB; the concurrent UPDATE on profiles doesn't
-      // block the INSERT/UPDATE on preferences. On brand-new signups
-      // (profileId null) we must sequence so preferences doesn't violate the
-      // FK before profile is inserted. Total wait drops from ~16s → ~4s for
-      // returning users on a queue-stalled client.
+      // Parallelize when we already know the profile id (returning user) AND
+      // we're not on the final step. The final step flips profile_complete
+      // = true, which fires `trigger_create_preferences_on_complete` on
+      // profiles — that trigger writes to the preferences row from within
+      // the profile transaction, and a concurrent preferences upsert trying
+      // to lock the same row deadlocks with it. Sequential on the final
+      // step avoids the deadlock at the cost of a few hundred ms.
+      // Non-final steps also run sequential when profileId is null (brand-new
+      // signup) so preferences doesn't violate the FK before profile inserts.
+      const isFinalStep = step >= TOTAL_ONBOARDING_STEPS - 1;
       let upserted: { id?: string } | null = null;
       let profileError: any = null;
       let prefsError: any = null;
 
-      if (profileId) {
+      if (profileId && !isFinalStep) {
         console.log('[saveCheckpoint] parallel upsert (profile + preferences)');
         const prefsUpsert = supabase
           .from('preferences')
@@ -378,8 +383,8 @@ export default function Onboarding() {
         profileError = (profResult as any).error ?? null;
         prefsError = (prefsResult as any).error ?? null;
       } else {
-        console.log('[saveCheckpoint] sequential upsert (new signup)');
-        const profResult = await raceWithTimeout(profileUpsert, 5000, 'profile upsert');
+        console.log('[saveCheckpoint] sequential upsert', isFinalStep ? '(final step — avoids trigger deadlock)' : '(new signup)');
+        const profResult = await raceWithTimeout(profileUpsert, 6000, 'profile upsert');
         upserted = (profResult as any).data ?? null;
         profileError = (profResult as any).error ?? null;
       }
@@ -400,8 +405,9 @@ export default function Onboarding() {
       }
       if (pid && !profileId) setProfileId(pid);
 
-      // If we ran sequentially (new signup), do preferences now that we have pid.
-      if (!profileId && pid) {
+      // If we ran sequentially (new signup OR final step), do preferences
+      // now that we have pid AND the profile transaction has committed.
+      if ((!profileId || isFinalStep) && pid) {
         console.log('[saveCheckpoint] upserting preferences for pid', pid);
         const prefsResult = await raceWithTimeout(
           supabase.from('preferences').upsert(buildPrefsData(pid), { onConflict: 'profile_id' }),
@@ -637,8 +643,8 @@ export default function Onboarding() {
   return (
     <OnboardingLayout
       currentStep={subStep}
-      title={stepConfig?.title || ''}
-      subtitle={stepConfig?.subtitle}
+      title={stepConfig ? t(`onboarding.stepLabels.${stepConfig.key}.title`, stepConfig.title) : ''}
+      subtitle={stepConfig?.subtitle ? t(`onboarding.stepLabels.${stepConfig.key}.subtitle`, stepConfig.subtitle) : undefined}
       onBack={handleBack}
       onContinue={handleContinue}
       onSkip={stepConfig?.skippable ? handleSkip : undefined}
