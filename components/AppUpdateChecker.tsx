@@ -11,6 +11,8 @@ import {
   AppStateStatus,
 } from 'react-native';
 import Constants from 'expo-constants';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 
 // Native in-app updates - uses Google Play Core on Android, App Store on iOS
@@ -46,6 +48,7 @@ interface UpdateInfo {
 
 // Preview component for admins to test the update modal
 export function UpdateModalPreview({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
   const mockInfo: UpdateInfo = {
     latest_version: '99.0.0',
     minimum_version: '99.0.0',
@@ -64,10 +67,8 @@ export function UpdateModalPreview({ visible, onClose }: { visible: boolean; onC
             <View style={[styles.dot, styles.dotSmall, { left: '35%', top: 40 }]} />
           </View>
           <Text style={styles.emoji}>{'\u{1F527}'}</Text>
-          <Text style={styles.title}>{"We've made some\nimportant changes"}</Text>
-          <Text style={styles.body}>
-            This version of Accord is no longer supported. Update to keep your conversations safe and everything running smoothly.
-          </Text>
+          <Text style={styles.title}>{t('common.update.forcedTitle')}</Text>
+          <Text style={styles.body}>{t('common.update.forcedBody')}</Text>
           <View style={styles.versionPill}>
             <Text style={styles.versionPillText}>
               v{CURRENT_VERSION}  →  v{mockInfo.latest_version}
@@ -76,7 +77,7 @@ export function UpdateModalPreview({ visible, onClose }: { visible: boolean; onC
         </View>
         <View style={styles.actions}>
           <TouchableOpacity style={styles.updateButton} onPress={onClose} activeOpacity={0.85}>
-            <Text style={styles.updateButtonText}>Update Accord</Text>
+            <Text style={styles.updateButtonText}>{t('common.update.updateButton')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.laterButton} onPress={onClose} activeOpacity={0.7}>
             <Text style={styles.laterButtonText}>Close Preview</Text>
@@ -88,6 +89,7 @@ export function UpdateModalPreview({ visible, onClose }: { visible: boolean; onC
 }
 
 export default function AppUpdateChecker() {
+  const { t } = useTranslation();
   const [showFallbackModal, setShowFallbackModal] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isForced, setIsForced] = useState(false);
@@ -222,12 +224,12 @@ export default function AppUpdateChecker() {
         } else {
           // iOS: Show App Store prompt
           await inAppUpdates.current.startUpdate({
-            title: isForced ? 'Update Required' : 'Update Available',
+            title: isForced ? i18n.t('common.update.nativeTitleRequired') : i18n.t('common.update.nativeTitleAvailable'),
             message: isForced
-              ? 'A new version of Accord is required to continue. Please update now.'
-              : 'A new version of Accord is available with improvements and bug fixes.',
-            buttonUpgradeText: 'Update Now',
-            buttonCancelText: isForced ? undefined : 'Later',
+              ? i18n.t('common.update.nativeBodyRequired')
+              : i18n.t('common.update.nativeBodyAvailable'),
+            buttonUpgradeText: i18n.t('common.update.nativeUpdateNow'),
+            buttonCancelText: isForced ? undefined : i18n.t('common.update.nativeLater'),
             forceUpgrade: isForced,
           });
         }
@@ -280,9 +282,7 @@ export default function AppUpdateChecker() {
 
           {/* Headline */}
           <Text style={styles.title}>
-            {isForced
-              ? "We've made some\nimportant changes"
-              : "Something new\nis waiting for you"}
+            {isForced ? t('common.update.forcedTitle') : t('common.update.softTitle')}
           </Text>
 
           {/* Body */}
@@ -290,8 +290,8 @@ export default function AppUpdateChecker() {
             {updateInfo.update_message
               ? updateInfo.update_message
               : isForced
-                ? "This version of Accord is no longer supported. Update to keep your conversations safe and everything running smoothly."
-                : "A newer version of Accord is available with improvements you'll appreciate."}
+                ? t('common.update.forcedBody')
+                : t('common.update.softBody')}
           </Text>
 
           {/* Version pill */}
@@ -309,7 +309,7 @@ export default function AppUpdateChecker() {
             onPress={handleUpdate}
             activeOpacity={0.85}
           >
-            <Text style={styles.updateButtonText}>Update Accord</Text>
+            <Text style={styles.updateButtonText}>{t('common.update.updateButton')}</Text>
           </TouchableOpacity>
 
           {(!isForced || isAdminTest) && (
@@ -319,7 +319,7 @@ export default function AppUpdateChecker() {
               activeOpacity={0.7}
             >
               <Text style={styles.laterButtonText}>
-                {isAdminTest ? 'Close (Admin Test)' : 'Not now'}
+                {isAdminTest ? 'Close (Admin Test)' : t('common.update.notNow')}
               </Text>
             </TouchableOpacity>
           )}

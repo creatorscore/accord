@@ -56,6 +56,25 @@
       "weeksAgo": "{{count}} minggu lalu",
       "monthsAgo": "{{count}} bulan lalu",
       "yearsAgo": "{{count}} tahun lalu"
+    },
+    "errorBoundary": {
+      "title": "Ups! Ada yang salah",
+      "message": "Kami mengalami kesalahan tak terduga. Coba mulai ulang aplikasi.",
+      "restart": "Mulai Ulang Aplikasi"
+    },
+    "update": {
+      "forcedTitle": "Kami telah membuat beberapa perubahan penting",
+      "softTitle": "Sesuatu yang baru menunggumu",
+      "forcedBody": "Versi Accord ini tidak lagi didukung. Perbarui untuk menjaga percakapanmu tetap aman dan semuanya berjalan lancar.",
+      "softBody": "Versi Accord yang lebih baru tersedia dengan peningkatan yang akan kamu sukai.",
+      "updateButton": "Perbarui Accord",
+      "notNow": "Tidak sekarang",
+      "nativeTitleRequired": "Pembaruan Diperlukan",
+      "nativeTitleAvailable": "Pembaruan Tersedia",
+      "nativeBodyRequired": "Versi baru Accord diperlukan untuk melanjutkan. Harap perbarui sekarang.",
+      "nativeBodyAvailable": "Versi baru Accord tersedia dengan peningkatan dan perbaikan bug.",
+      "nativeUpdateNow": "Perbarui Sekarang",
+      "nativeLater": "Nanti"
     }
   },
   "discover": {
@@ -171,6 +190,13 @@
       "upgradeMessage": "Upgrade ke Premium untuk mengaktifkan fitur ini dan menemukan kecocokan di mana saja di dunia.",
       "upgradeToPremium": "Upgrade ke Premium",
       "maybeLater": "Mungkin Nanti"
+    },
+    "match": {
+      "itsA": "Ini",
+      "exclamation": "Cocok!",
+      "bothLiked": "Kamu dan {{name}} saling menyukai",
+      "sendMessage": "Kirim Pesan",
+      "keepBrowsing": "Lanjut Menjelajah"
     }
   },
   "filters": {
@@ -633,6 +659,171 @@
       "enterOccupation": "Silakan masukkan pekerjaan Anda.",
       "enterEducation": "Silakan masukkan pendidikan Anda.",
       "notAuthenticatedMessage": "Tidak terautentikasi. Silakan masuk lagi."
+    },
+    "options": {
+      "genders": {
+        "man": "Pria",
+        "woman": "Wanita",
+        "non_binary": "Nonbiner"
+      },
+      "pronouns": {
+        "she_her": "dia (perempuan)",
+        "he_him": "dia (laki-laki)",
+        "they_them": "mereka",
+        "she_they": "dia/mereka (p)",
+        "he_they": "dia/mereka (l)",
+        "any_pronouns": "apa saja",
+        "ask_me": "tanya saya",
+        "prefer_not_to_say": "tidak ingin menyebut"
+      },
+      "orientations": {
+        "lesbian": "Lesbian",
+        "gay": "Gay",
+        "bisexual": "Biseksual",
+        "straight": "Heteroseksual",
+        "queer": "Queer",
+        "asexual": "Aseksual",
+        "pansexual": "Panseksual",
+        "demisexual": "Demiseksual",
+        "questioning": "Sedang mencari tahu",
+        "omnisexual": "Omniseksual",
+        "polysexual": "Poliseksual",
+        "androsexual": "Androseksual",
+        "gynesexual": "Gineseksual",
+        "sapiosexual": "Sapioseksual",
+        "heteroflexible": "Heterofleksibel",
+        "homoflexible": "Homofleksibel",
+        "prefer_not_to_say": "Tidak ingin menyebut",
+        "other": "Lainnya"
+      },
+      "genderPrefs": {
+        "men": "Pria",
+        "women": "Wanita",
+        "non_binary": "Nonbiner",
+        "everyone": "Semua"
+      },
+      "ethnicities": {
+        "asian": "Asia",
+        "black_african": "Kulit Hitam/Afrika",
+        "hispanic_latinx": "Hispanik/Latinx",
+        "indigenous_native": "Pribumi/Adat",
+        "middle_eastern_north_african": "Timur Tengah/Afrika Utara",
+        "pacific_islander": "Kepulauan Pasifik",
+        "south_asian": "Asia Selatan",
+        "white_caucasian": "Kulit Putih/Kaukasia",
+        "multiracial": "Multiras",
+        "other": "Lainnya",
+        "prefer_not_to_say": "Tidak ingin menyebut"
+      },
+      "religions": {
+        "christian": "Kristen",
+        "catholic": "Katolik",
+        "protestant": "Protestan",
+        "muslim": "Muslim",
+        "jewish": "Yahudi",
+        "hindu": "Hindu",
+        "buddhist": "Buddha",
+        "sikh": "Sikh",
+        "atheist": "Ateis",
+        "agnostic": "Agnostik",
+        "spiritual_but_not_religious": "Spiritual tapi tidak beragama",
+        "other": "Lainnya",
+        "prefer_not_to_say": "Tidak ingin menyebut"
+      },
+      "politicalViews": {
+        "liberal": "Liberal",
+        "progressive": "Progresif",
+        "moderate": "Moderat",
+        "conservative": "Konservatif",
+        "libertarian": "Libertarian",
+        "socialist": "Sosialis",
+        "apolitical": "Apolitis",
+        "other": "Lainnya",
+        "prefer_not_to_say": "Tidak ingin menyebut"
+      },
+      "relationshipTypes": {
+        "platonic": "Hanya platonis",
+        "romantic": "Mungkin romantis",
+        "open": "Pengaturan terbuka"
+      },
+      "primaryReasons": {
+        "financial": "Stabilitas finansial",
+        "immigration": "Imigrasi/visa",
+        "family_pressure": "Tekanan keluarga",
+        "legal_benefits": "Manfaat hukum",
+        "companionship": "Teman hidup",
+        "safety": "Keamanan & perlindungan",
+        "other": "Lainnya"
+      },
+      "childrenOptions": {
+        "yes": "Ya",
+        "no": "Tidak",
+        "maybe": "Mungkin / terbuka"
+      },
+      "familyPlans": {
+        "biological": "Anak biologis",
+        "adoption": "Adopsi",
+        "surrogacy": "Surogasi",
+        "ivf": "Bayi tabung/fertilitas",
+        "co_parenting": "Pengasuhan bersama",
+        "fostering": "Anak asuh",
+        "already_have": "Sudah punya anak",
+        "open_discussion": "Terbuka untuk dibicarakan",
+        "other": "Lainnya"
+      },
+      "petsOptions": {
+        "love_them": "Sangat suka",
+        "like_them": "Suka",
+        "indifferent": "Biasa saja",
+        "allergic": "Alergi",
+        "dont_like": "Tidak suka"
+      },
+      "housingPrefs": {
+        "separate_spaces": "Kamar/ruang terpisah",
+        "roommates": "Seperti teman sekamar",
+        "separate_homes": "Rumah terpisah berdekatan",
+        "shared_bedroom": "Satu kamar tidur",
+        "flexible": "Fleksibel/bisa dirundingkan"
+      },
+      "financialArr": {
+        "separate": "Keuangan terpisah",
+        "shared_expenses": "Berbagi tagihan",
+        "joint": "Keuangan bersama",
+        "prenup_required": "Wajib perjanjian pranikah",
+        "flexible": "Fleksibel/bisa dirundingkan"
+      },
+      "educationLevels": {
+        "high_school": "SMA",
+        "associates": "Diploma",
+        "bachelors": "Sarjana (S1)",
+        "masters": "Magister (S2)",
+        "doctorate": "Doktor (S3)",
+        "trade_school": "Sekolah kejuruan",
+        "self_taught": "Belajar mandiri",
+        "other": "Lainnya"
+      },
+      "drinkingOptions": {
+        "never": "Tidak pernah",
+        "socially": "Saat bersosial",
+        "regularly": "Rutin",
+        "prefer_not_to_say": "Tidak ingin menyebut"
+      },
+      "smokingOptions": {
+        "never": "Tidak pernah",
+        "socially": "Saat bersosial",
+        "regularly": "Rutin",
+        "trying_to_quit": "Sedang berhenti"
+      },
+      "weedOptions": {
+        "never": "Tidak pernah",
+        "socially": "Saat bersosial",
+        "regularly": "Rutin"
+      },
+      "drugOptions": {
+        "never": "Tidak pernah",
+        "socially": "Saat bersosial",
+        "regularly": "Rutin"
+      }
     }
   },
   "matchingPreferences": {
@@ -897,7 +1088,11 @@
       "success": "Laporan Dikirim",
       "successMessage": "Terima kasih telah membantu menjaga keamanan Accord. Tim kami akan meninjau laporan ini.",
       "error": "Gagal mengirim laporan. Silakan coba lagi."
-    }
+    },
+    "matchCountTitle": "{{current}} dari {{limit}} kecocokan aktif",
+    "matchCountSubtitleFree": "Paket gratis",
+    "matchCountSubtitleWarning": "Hampir penuh — dapatkan kecocokan tanpa batas",
+    "matchCountSubtitleFull": "Batalkan kecocokan seseorang atau tingkatkan untuk tanpa batas"
   },
   "messages": {
     "title": "Pesan",
@@ -2147,7 +2342,14 @@
     "tooFarTitle": "Terlalu Jauh",
     "tooFarMessage": "Preferensi pencarian orang ini tidak mencakup area Anda.",
     "globalSearchPremiumTitle": "Pencarian Global Sekarang Premium",
-    "globalSearchPremiumMessage": "Pencarian global sekarang adalah fitur premium. Kecocokan Anda akan difilter berdasarkan jarak. Tingkatkan untuk terus mencocokkan di seluruh dunia."
+    "globalSearchPremiumMessage": "Pencarian global sekarang adalah fitur premium. Kecocokan Anda akan difilter berdasarkan jarak. Tingkatkan untuk terus mencocokkan di seluruh dunia.",
+    "newMessageFrom": "Pesan baru dari {{name}}",
+    "userLikesYou": "{{name}} menyukaimu!",
+    "someoneLikesYou": "Seseorang menyukaimu!",
+    "tapToSeeProfile": "Ketuk untuk melihat profilnya",
+    "upgradeToSeePremium": "Tingkatkan ke Premium untuk melihat siapa",
+    "reactedWith": "{{name}} bereaksi {{emoji}}",
+    "tapToViewConversation": "Ketuk untuk melihat percakapan"
   },
   "prompts": {
     "idealMarriage": "Pernikahan lavender ideal saya terlihat seperti...",

@@ -56,6 +56,25 @@
       "weeksAgo": "{{count}} সপ্তাহ আগে",
       "monthsAgo": "{{count}} মাস আগে",
       "yearsAgo": "{{count}} বছর আগে"
+    },
+    "errorBoundary": {
+      "title": "ওহ! কিছু একটা ভুল হয়েছে",
+      "message": "আমরা একটি অপ্রত্যাশিত ত্রুটির সম্মুখীন হয়েছি। অনুগ্রহ করে অ্যাপটি পুনরায় চালু করুন।",
+      "restart": "অ্যাপ পুনরায় চালু করুন"
+    },
+    "update": {
+      "forcedTitle": "আমরা কিছু গুরুত্বপূর্ণ পরিবর্তন করেছি",
+      "softTitle": "নতুন কিছু আপনার জন্য অপেক্ষা করছে",
+      "forcedBody": "Accord-এর এই সংস্করণটি আর সমর্থিত নয়। আপনার কথোপকথন সুরক্ষিত রাখতে এবং সবকিছু মসৃণভাবে চালাতে আপডেট করুন।",
+      "softBody": "Accord-এর একটি নতুন সংস্করণ উপলব্ধ যাতে আপনি উপভোগ করবেন এমন উন্নতি রয়েছে।",
+      "updateButton": "Accord আপডেট করুন",
+      "notNow": "এখন নয়",
+      "nativeTitleRequired": "আপডেট প্রয়োজন",
+      "nativeTitleAvailable": "আপডেট উপলব্ধ",
+      "nativeBodyRequired": "চালিয়ে যেতে Accord-এর একটি নতুন সংস্করণ প্রয়োজন। অনুগ্রহ করে এখন আপডেট করুন।",
+      "nativeBodyAvailable": "উন্নতি এবং বাগ ফিক্স সহ Accord-এর একটি নতুন সংস্করণ উপলব্ধ।",
+      "nativeUpdateNow": "এখন আপডেট করুন",
+      "nativeLater": "পরে"
     }
   },
   "discover": {
@@ -171,6 +190,13 @@
       "upgradeMessage": "এই ফিচারগুলো সক্রিয় করতে এবং বিশ্বের যেকোনো জায়গায় ম্যাচ খুঁজতে প্রিমিয়ামে আপগ্রেড করুন।",
       "upgradeToPremium": "প্রিমিয়ামে আপগ্রেড",
       "maybeLater": "পরে হয়তো"
+    },
+    "match": {
+      "itsA": "এটা একটা",
+      "exclamation": "ম্যাচ!",
+      "bothLiked": "আপনি এবং {{name}} একে অপরকে পছন্দ করেছেন",
+      "sendMessage": "একটি বার্তা পাঠান",
+      "keepBrowsing": "ব্রাউজিং চালিয়ে যান"
     }
   },
   "filters": {
@@ -633,6 +659,171 @@
       "enterOccupation": "অনুগ্রহ করে আপনার পেশা লিখুন।",
       "enterEducation": "অনুগ্রহ করে আপনার শিক্ষা লিখুন।",
       "notAuthenticatedMessage": "প্রমাণীকৃত নয়। অনুগ্রহ করে আবার সাইন ইন করুন।"
+    },
+    "options": {
+      "genders": {
+        "man": "পুরুষ",
+        "woman": "মহিলা",
+        "non_binary": "নন-বাইনারি"
+      },
+      "pronouns": {
+        "she_her": "সে (মহিলা)",
+        "he_him": "সে (পুরুষ)",
+        "they_them": "তারা",
+        "she_they": "সে/তারা",
+        "he_they": "সে/তারা",
+        "any_pronouns": "যেকোনো সর্বনাম",
+        "ask_me": "জিজ্ঞাসা করুন",
+        "prefer_not_to_say": "বলতে চাই না"
+      },
+      "orientations": {
+        "lesbian": "লেসবিয়ান",
+        "gay": "গে",
+        "bisexual": "বাইসেক্সুয়াল",
+        "straight": "স্ট্রেট",
+        "queer": "কুইয়ার",
+        "asexual": "অ্যাসেক্সুয়াল",
+        "pansexual": "প্যানসেক্সুয়াল",
+        "demisexual": "ডেমিসেক্সুয়াল",
+        "questioning": "অনুসন্ধানকারী",
+        "omnisexual": "অমনিসেক্সুয়াল",
+        "polysexual": "পলিসেক্সুয়াল",
+        "androsexual": "অ্যান্ড্রোসেক্সুয়াল",
+        "gynesexual": "জাইনিসেক্সুয়াল",
+        "sapiosexual": "স্যাপিওসেক্সুয়াল",
+        "heteroflexible": "হেটেরোফ্লেক্সিবল",
+        "homoflexible": "হোমোফ্লেক্সিবল",
+        "prefer_not_to_say": "বলতে চাই না",
+        "other": "অন্যান্য"
+      },
+      "genderPrefs": {
+        "men": "পুরুষ",
+        "women": "মহিলা",
+        "non_binary": "নন-বাইনারি",
+        "everyone": "সবাই"
+      },
+      "ethnicities": {
+        "asian": "এশীয়",
+        "black_african": "কৃষ্ণাঙ্গ/আফ্রিকান",
+        "hispanic_latinx": "হিস্পানিক/ল্যাটিনক্স",
+        "indigenous_native": "আদিবাসী",
+        "middle_eastern_north_african": "মধ্যপ্রাচ্য/উত্তর আফ্রিকান",
+        "pacific_islander": "প্যাসিফিক দ্বীপবাসী",
+        "south_asian": "দক্ষিণ এশীয়",
+        "white_caucasian": "শ্বেতাঙ্গ/ককেশীয়",
+        "multiracial": "বহু-জাতিগত",
+        "other": "অন্যান্য",
+        "prefer_not_to_say": "বলতে চাই না"
+      },
+      "religions": {
+        "christian": "খ্রিস্টান",
+        "catholic": "ক্যাথলিক",
+        "protestant": "প্রোটেস্ট্যান্ট",
+        "muslim": "মুসলিম",
+        "jewish": "ইহুদি",
+        "hindu": "হিন্দু",
+        "buddhist": "বৌদ্ধ",
+        "sikh": "শিখ",
+        "atheist": "নাস্তিক",
+        "agnostic": "অজ্ঞেয়বাদী",
+        "spiritual_but_not_religious": "আধ্যাত্মিক, ধার্মিক নই",
+        "other": "অন্যান্য",
+        "prefer_not_to_say": "বলতে চাই না"
+      },
+      "politicalViews": {
+        "liberal": "উদারপন্থী",
+        "progressive": "প্রগতিশীল",
+        "moderate": "মধ্যপন্থী",
+        "conservative": "রক্ষণশীল",
+        "libertarian": "লিবার্টেরিয়ান",
+        "socialist": "সমাজতান্ত্রিক",
+        "apolitical": "অরাজনৈতিক",
+        "other": "অন্যান্য",
+        "prefer_not_to_say": "বলতে চাই না"
+      },
+      "relationshipTypes": {
+        "platonic": "শুধু প্লেটোনিক",
+        "romantic": "রোমান্টিক সম্ভব",
+        "open": "উন্মুক্ত ব্যবস্থা"
+      },
+      "primaryReasons": {
+        "financial": "আর্থিক স্থিতিশীলতা",
+        "immigration": "ইমিগ্রেশন/ভিসা",
+        "family_pressure": "পারিবারিক চাপ",
+        "legal_benefits": "আইনি সুবিধা",
+        "companionship": "সঙ্গ",
+        "safety": "নিরাপত্তা ও সুরক্ষা",
+        "other": "অন্যান্য"
+      },
+      "childrenOptions": {
+        "yes": "হ্যাঁ",
+        "no": "না",
+        "maybe": "হয়তো / উন্মুক্ত"
+      },
+      "familyPlans": {
+        "biological": "জৈবিক সন্তান",
+        "adoption": "দত্তক",
+        "surrogacy": "সারোগেসি",
+        "ivf": "আইভিএফ/প্রজনন চিকিৎসা",
+        "co_parenting": "সহ-পিতামাতৃত্ব",
+        "fostering": "ফস্টারিং",
+        "already_have": "ইতিমধ্যে সন্তান আছে",
+        "open_discussion": "আলোচনার জন্য উন্মুক্ত",
+        "other": "অন্যান্য"
+      },
+      "petsOptions": {
+        "love_them": "ভালোবাসি",
+        "like_them": "পছন্দ",
+        "indifferent": "উদাসীন",
+        "allergic": "অ্যালার্জি",
+        "dont_like": "পছন্দ করি না"
+      },
+      "housingPrefs": {
+        "separate_spaces": "পৃথক শয়নকক্ষ/স্থান",
+        "roommates": "রুমমেটের মতো বসবাস",
+        "separate_homes": "নিকটবর্তী আলাদা বাড়ি",
+        "shared_bedroom": "যৌথ শয়নকক্ষ",
+        "flexible": "নমনীয়/আলোচনাসাপেক্ষ"
+      },
+      "financialArr": {
+        "separate": "আর্থিক বিষয় আলাদা",
+        "shared_expenses": "বিল/খরচ ভাগাভাগি",
+        "joint": "যৌথ আর্থিক ব্যবস্থা",
+        "prenup_required": "প্রেনাপ প্রয়োজন",
+        "flexible": "নমনীয়/আলোচনাসাপেক্ষ"
+      },
+      "educationLevels": {
+        "high_school": "উচ্চ বিদ্যালয়",
+        "associates": "অ্যাসোসিয়েট ডিগ্রি",
+        "bachelors": "স্নাতক",
+        "masters": "স্নাতকোত্তর",
+        "doctorate": "পিএইচডি",
+        "trade_school": "কারিগরি স্কুল",
+        "self_taught": "স্ব-শিক্ষিত",
+        "other": "অন্যান্য"
+      },
+      "drinkingOptions": {
+        "never": "কখনোই না",
+        "socially": "সামাজিকভাবে",
+        "regularly": "নিয়মিত",
+        "prefer_not_to_say": "বলতে চাই না"
+      },
+      "smokingOptions": {
+        "never": "কখনোই না",
+        "socially": "সামাজিকভাবে",
+        "regularly": "নিয়মিত",
+        "trying_to_quit": "ছাড়ার চেষ্টা"
+      },
+      "weedOptions": {
+        "never": "কখনোই না",
+        "socially": "সামাজিকভাবে",
+        "regularly": "নিয়মিত"
+      },
+      "drugOptions": {
+        "never": "কখনোই না",
+        "socially": "সামাজিকভাবে",
+        "regularly": "নিয়মিত"
+      }
     }
   },
   "matchingPreferences": {
@@ -897,7 +1088,11 @@
       "success": "রিপোর্ট জমা দেওয়া হয়েছে",
       "successMessage": "Accord নিরাপদ রাখতে সাহায্য করার জন্য ধন্যবাদ। আমাদের টিম এই রিপোর্ট পর্যালোচনা করবে।",
       "error": "রিপোর্ট জমা দিতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন।"
-    }
+    },
+    "matchCountTitle": "{{limit}}-এর মধ্যে {{current}}টি সক্রিয় ম্যাচ",
+    "matchCountSubtitleFree": "ফ্রি প্ল্যান",
+    "matchCountSubtitleWarning": "প্রায় পূর্ণ — সীমাহীন ম্যাচ পান",
+    "matchCountSubtitleFull": "কাউকে আনম্যাচ করুন বা সীমাহীনের জন্য আপগ্রেড করুন"
   },
   "messages": {
     "title": "মেসেজসমূহ",
@@ -2147,7 +2342,14 @@
     "tooFarTitle": "অনেক দূরে",
     "tooFarMessage": "এই ব্যক্তির অনুসন্ধান পছন্দ আপনার এলাকা অন্তর্ভুক্ত করে না।",
     "globalSearchPremiumTitle": "গ্লোবাল সার্চ এখন Premium",
-    "globalSearchPremiumMessage": "গ্লোবাল সার্চ এখন একটি Premium ফিচার। আপনার ম্যাচ দূরত্ব অনুসারে ফিল্টার হবে। বিশ্বব্যাপী ম্যাচিং চালিয়ে যেতে আপগ্রেড করুন।"
+    "globalSearchPremiumMessage": "গ্লোবাল সার্চ এখন একটি Premium ফিচার। আপনার ম্যাচ দূরত্ব অনুসারে ফিল্টার হবে। বিশ্বব্যাপী ম্যাচিং চালিয়ে যেতে আপগ্রেড করুন।",
+    "newMessageFrom": "{{name}} থেকে নতুন বার্তা",
+    "userLikesYou": "{{name}} আপনাকে পছন্দ করে!",
+    "someoneLikesYou": "কেউ আপনাকে পছন্দ করে!",
+    "tapToSeeProfile": "তাদের প্রোফাইল দেখতে ট্যাপ করুন",
+    "upgradeToSeePremium": "কে তা দেখতে প্রিমিয়ামে আপগ্রেড করুন",
+    "reactedWith": "{{name}} {{emoji}} দিয়ে প্রতিক্রিয়া জানিয়েছে",
+    "tapToViewConversation": "কথোপকথন দেখতে ট্যাপ করুন"
   },
   "prompts": {
     "idealMarriage": "আমার আদর্শ ল্যাভেন্ডার বিবাহ দেখতে এরকম...",

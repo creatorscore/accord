@@ -56,6 +56,25 @@
       "weeksAgo": "{{count}} सप्ताह पहले",
       "monthsAgo": "{{count}} महीने पहले",
       "yearsAgo": "{{count}} साल पहले"
+    },
+    "errorBoundary": {
+      "title": "उफ़! कुछ गलत हो गया",
+      "message": "हमें एक अप्रत्याशित त्रुटि का सामना करना पड़ा। कृपया ऐप को पुनः आरंभ करने का प्रयास करें।",
+      "restart": "ऐप पुनः आरंभ करें"
+    },
+    "update": {
+      "forcedTitle": "हमने कुछ महत्वपूर्ण बदलाव किए हैं",
+      "softTitle": "कुछ नया आपका इंतज़ार कर रहा है",
+      "forcedBody": "Accord का यह संस्करण अब समर्थित नहीं है। अपनी बातचीत को सुरक्षित रखने और सब कुछ सुचारू रूप से चलाने के लिए अपडेट करें।",
+      "softBody": "Accord का एक नया संस्करण उपलब्ध है जिसमें आपको पसंद आने वाले सुधार हैं।",
+      "updateButton": "Accord अपडेट करें",
+      "notNow": "अभी नहीं",
+      "nativeTitleRequired": "अपडेट आवश्यक",
+      "nativeTitleAvailable": "अपडेट उपलब्ध",
+      "nativeBodyRequired": "जारी रखने के लिए Accord का नया संस्करण आवश्यक है। कृपया अभी अपडेट करें।",
+      "nativeBodyAvailable": "सुधार और बग फ़िक्स के साथ Accord का नया संस्करण उपलब्ध है।",
+      "nativeUpdateNow": "अभी अपडेट करें",
+      "nativeLater": "बाद में"
     }
   },
   "discover": {
@@ -171,6 +190,13 @@
       "upgradeMessage": "इन सुविधाओं को सक्रिय करने और दुनिया में कहीं भी मिलान खोजने के लिए प्रीमियम में अपग्रेड करें।",
       "upgradeToPremium": "प्रीमियम में अपग्रेड",
       "maybeLater": "शायद बाद में"
+    },
+    "match": {
+      "itsA": "यह है",
+      "exclamation": "मैच!",
+      "bothLiked": "आपने और {{name}} ने एक-दूसरे को पसंद किया",
+      "sendMessage": "संदेश भेजें",
+      "keepBrowsing": "ब्राउज़िंग जारी रखें"
     }
   },
   "filters": {
@@ -633,6 +659,171 @@
       "enterOccupation": "कृपया अपना पेशा दर्ज करें।",
       "enterEducation": "कृपया अपनी शिक्षा दर्ज करें।",
       "notAuthenticatedMessage": "प्रमाणित नहीं। कृपया दोबारा साइन इन करें।"
+    },
+    "options": {
+      "genders": {
+        "man": "पुरुष",
+        "woman": "महिला",
+        "non_binary": "नॉन-बाइनरी"
+      },
+      "pronouns": {
+        "she_her": "वह (स्त्री)",
+        "he_him": "वह (पुरुष)",
+        "they_them": "वे",
+        "she_they": "वह/वे (स्त्री)",
+        "he_they": "वह/वे (पुरुष)",
+        "any_pronouns": "कोई भी सर्वनाम",
+        "ask_me": "मुझसे पूछें",
+        "prefer_not_to_say": "नहीं बताना चाहता"
+      },
+      "orientations": {
+        "lesbian": "लेस्बियन",
+        "gay": "गे",
+        "bisexual": "बाइसेक्शुअल",
+        "straight": "स्ट्रेट",
+        "queer": "क्वीयर",
+        "asexual": "अलैंगिक",
+        "pansexual": "पैनसेक्शुअल",
+        "demisexual": "डेमीसेक्शुअल",
+        "questioning": "खोज रहा हूँ",
+        "omnisexual": "ओम्निसेक्शुअल",
+        "polysexual": "पॉलीसेक्शुअल",
+        "androsexual": "एंड्रोसेक्शुअल",
+        "gynesexual": "गाइनेसेक्शुअल",
+        "sapiosexual": "सैपियोसेक्शुअल",
+        "heteroflexible": "हेटेरोफ्लेक्सिबल",
+        "homoflexible": "होमोफ्लेक्सिबल",
+        "prefer_not_to_say": "नहीं बताना चाहता",
+        "other": "अन्य"
+      },
+      "genderPrefs": {
+        "men": "पुरुष",
+        "women": "महिलाएँ",
+        "non_binary": "नॉन-बाइनरी",
+        "everyone": "सभी"
+      },
+      "ethnicities": {
+        "asian": "एशियाई",
+        "black_african": "अश्वेत/अफ्रीकी",
+        "hispanic_latinx": "हिस्पैनिक/लैटिनक्स",
+        "indigenous_native": "स्वदेशी",
+        "middle_eastern_north_african": "मध्य पूर्वी/उत्तर अफ्रीकी",
+        "pacific_islander": "प्रशांत द्वीपवासी",
+        "south_asian": "दक्षिण एशियाई",
+        "white_caucasian": "श्वेत/कॉकेशियन",
+        "multiracial": "बहुजातीय",
+        "other": "अन्य",
+        "prefer_not_to_say": "नहीं बताना चाहता"
+      },
+      "religions": {
+        "christian": "ईसाई",
+        "catholic": "कैथोलिक",
+        "protestant": "प्रोटेस्टेंट",
+        "muslim": "मुस्लिम",
+        "jewish": "यहूदी",
+        "hindu": "हिन्दू",
+        "buddhist": "बौद्ध",
+        "sikh": "सिख",
+        "atheist": "नास्तिक",
+        "agnostic": "अज्ञेयवादी",
+        "spiritual_but_not_religious": "आध्यात्मिक लेकिन धार्मिक नहीं",
+        "other": "अन्य",
+        "prefer_not_to_say": "नहीं बताना चाहता"
+      },
+      "politicalViews": {
+        "liberal": "उदार",
+        "progressive": "प्रगतिशील",
+        "moderate": "मध्यमार्गी",
+        "conservative": "रूढ़िवादी",
+        "libertarian": "स्वतंत्रतावादी",
+        "socialist": "समाजवादी",
+        "apolitical": "गैर-राजनीतिक",
+        "other": "अन्य",
+        "prefer_not_to_say": "नहीं बताना चाहता"
+      },
+      "relationshipTypes": {
+        "platonic": "केवल प्लेटोनिक",
+        "romantic": "रोमांटिक संभव",
+        "open": "खुली व्यवस्था"
+      },
+      "primaryReasons": {
+        "financial": "वित्तीय स्थिरता",
+        "immigration": "आप्रवासन/वीज़ा",
+        "family_pressure": "पारिवारिक दबाव",
+        "legal_benefits": "कानूनी लाभ",
+        "companionship": "साथ",
+        "safety": "सुरक्षा एवं संरक्षण",
+        "other": "अन्य"
+      },
+      "childrenOptions": {
+        "yes": "हाँ",
+        "no": "नहीं",
+        "maybe": "शायद / खुला"
+      },
+      "familyPlans": {
+        "biological": "जैविक बच्चे",
+        "adoption": "गोद लेना",
+        "surrogacy": "सरोगेसी",
+        "ivf": "आईवीएफ/प्रजनन उपचार",
+        "co_parenting": "सह-पालन",
+        "fostering": "फॉस्टरिंग",
+        "already_have": "पहले से बच्चे हैं",
+        "open_discussion": "चर्चा के लिए तैयार",
+        "other": "अन्य"
+      },
+      "petsOptions": {
+        "love_them": "बहुत पसंद",
+        "like_them": "पसंद",
+        "indifferent": "तटस्थ",
+        "allergic": "एलर्जी है",
+        "dont_like": "पसंद नहीं"
+      },
+      "housingPrefs": {
+        "separate_spaces": "अलग कमरे/स्थान",
+        "roommates": "रूममेट की तरह",
+        "separate_homes": "पास के अलग घर",
+        "shared_bedroom": "साझा शयनकक्ष",
+        "flexible": "लचीला/बातचीत योग्य"
+      },
+      "financialArr": {
+        "separate": "वित्त अलग रखें",
+        "shared_expenses": "बिल/खर्च साझा करें",
+        "joint": "संयुक्त वित्त",
+        "prenup_required": "प्रीनप आवश्यक",
+        "flexible": "लचीला/बातचीत योग्य"
+      },
+      "educationLevels": {
+        "high_school": "हाई स्कूल",
+        "associates": "एसोसिएट डिग्री",
+        "bachelors": "बैचलर डिग्री",
+        "masters": "मास्टर डिग्री",
+        "doctorate": "पीएचडी",
+        "trade_school": "व्यावसायिक स्कूल",
+        "self_taught": "स्वयं सीखा",
+        "other": "अन्य"
+      },
+      "drinkingOptions": {
+        "never": "कभी नहीं",
+        "socially": "सामाजिक रूप से",
+        "regularly": "नियमित रूप से",
+        "prefer_not_to_say": "नहीं बताना चाहता"
+      },
+      "smokingOptions": {
+        "never": "कभी नहीं",
+        "socially": "सामाजिक रूप से",
+        "regularly": "नियमित रूप से",
+        "trying_to_quit": "छोड़ने की कोशिश"
+      },
+      "weedOptions": {
+        "never": "कभी नहीं",
+        "socially": "सामाजिक रूप से",
+        "regularly": "नियमित रूप से"
+      },
+      "drugOptions": {
+        "never": "कभी नहीं",
+        "socially": "सामाजिक रूप से",
+        "regularly": "नियमित रूप से"
+      }
     }
   },
   "matchingPreferences": {
@@ -897,7 +1088,11 @@
       "success": "रिपोर्ट जमा की गई",
       "successMessage": "Accord को सुरक्षित रखने में मदद करने के लिए धन्यवाद। हमारी टीम इस रिपोर्ट की समीक्षा करेगी।",
       "error": "रिपोर्ट जमा करने में विफल। कृपया पुनः प्रयास करें।"
-    }
+    },
+    "matchCountTitle": "{{limit}} में से {{current}} सक्रिय मैच",
+    "matchCountSubtitleFree": "मुफ़्त योजना",
+    "matchCountSubtitleWarning": "लगभग भर गया — असीमित मैच पाएं",
+    "matchCountSubtitleFull": "किसी को अनमैच करें या असीमित के लिए अपग्रेड करें"
   },
   "messages": {
     "title": "संदेश",
@@ -2084,7 +2279,14 @@
     "tooFarTitle": "बहुत दूर",
     "tooFarMessage": "इस व्यक्ति की खोज प्राथमिकताओं में आपका क्षेत्र शामिल नहीं है।",
     "globalSearchPremiumTitle": "वैश्विक खोज अब Premium है",
-    "globalSearchPremiumMessage": "वैश्विक खोज अब एक प्रीमियम सुविधा है। आपके मैच दूरी के अनुसार फ़िल्टर किए जाएंगे। दुनिया भर में मैचिंग जारी रखने के लिए अपग्रेड करें।"
+    "globalSearchPremiumMessage": "वैश्विक खोज अब एक प्रीमियम सुविधा है। आपके मैच दूरी के अनुसार फ़िल्टर किए जाएंगे। दुनिया भर में मैचिंग जारी रखने के लिए अपग्रेड करें।",
+    "newMessageFrom": "{{name}} से नया संदेश",
+    "userLikesYou": "{{name}} आपको पसंद करता है!",
+    "someoneLikesYou": "कोई आपको पसंद करता है!",
+    "tapToSeeProfile": "उनका प्रोफ़ाइल देखने के लिए टैप करें",
+    "upgradeToSeePremium": "यह देखने के लिए कि कौन, प्रीमियम में अपग्रेड करें",
+    "reactedWith": "{{name}} ने {{emoji}} के साथ प्रतिक्रिया दी",
+    "tapToViewConversation": "बातचीत देखने के लिए टैप करें"
   },
   "prompts": {
     "idealMarriage": "मेरी आदर्श लैवेंडर शादी ऐसी दिखती है...",

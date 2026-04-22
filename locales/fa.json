@@ -56,6 +56,25 @@
       "weeksAgo": "{{count}} هفته پیش",
       "monthsAgo": "{{count}} ماه پیش",
       "yearsAgo": "{{count}} سال پیش"
+    },
+    "errorBoundary": {
+      "title": "اوه! مشکلی پیش آمد",
+      "message": "با خطایی غیرمنتظره مواجه شدیم. لطفاً برنامه را دوباره راه‌اندازی کنید.",
+      "restart": "راه‌اندازی مجدد برنامه"
+    },
+    "update": {
+      "forcedTitle": "ما تغییرات مهمی ایجاد کرده‌ایم",
+      "softTitle": "چیز جدیدی در انتظار شماست",
+      "forcedBody": "این نسخه از Accord دیگر پشتیبانی نمی‌شود. برای حفظ امنیت گفتگوها و اجرای روان همه چیز به‌روزرسانی کنید.",
+      "softBody": "نسخه جدیدتری از Accord با بهبودهایی که از آن‌ها لذت خواهید برد در دسترس است.",
+      "updateButton": "به‌روزرسانی Accord",
+      "notNow": "الان نه",
+      "nativeTitleRequired": "به‌روزرسانی لازم است",
+      "nativeTitleAvailable": "به‌روزرسانی موجود است",
+      "nativeBodyRequired": "برای ادامه به نسخه جدیدی از Accord نیاز است. لطفاً اکنون به‌روزرسانی کنید.",
+      "nativeBodyAvailable": "نسخه جدیدی از Accord با بهبودها و رفع اشکالات در دسترس است.",
+      "nativeUpdateNow": "اکنون به‌روزرسانی کنید",
+      "nativeLater": "بعداً"
     }
   },
   "discover": {
@@ -171,6 +190,13 @@
       "upgradeMessage": "برای فعال‌سازی این ویژگی‌ها و یافتن تطابق در هر جای جهان به پریمیوم ارتقا دهید.",
       "upgradeToPremium": "ارتقا به پریمیوم",
       "maybeLater": "شاید بعداً"
+    },
+    "match": {
+      "itsA": "این یک",
+      "exclamation": "مَچ!",
+      "bothLiked": "شما و {{name}} از هم خوشتان آمده است",
+      "sendMessage": "ارسال پیام",
+      "keepBrowsing": "ادامه مرور"
     }
   },
   "filters": {
@@ -633,6 +659,171 @@
       "enterOccupation": "لطفاً شغل خود را وارد کنید.",
       "enterEducation": "لطفاً تحصیلات خود را وارد کنید.",
       "notAuthenticatedMessage": "احراز هویت نشده. لطفاً دوباره وارد شوید."
+    },
+    "options": {
+      "genders": {
+        "man": "مرد",
+        "woman": "زن",
+        "non_binary": "ناهم‌تبار"
+      },
+      "pronouns": {
+        "she_her": "او (مؤنث)",
+        "he_him": "او (مذکر)",
+        "they_them": "آن‌ها",
+        "she_they": "او/آن‌ها (مؤنث)",
+        "he_they": "او/آن‌ها (مذکر)",
+        "any_pronouns": "هر ضمیری",
+        "ask_me": "از من بپرسید",
+        "prefer_not_to_say": "ترجیح می‌دهم نگویم"
+      },
+      "orientations": {
+        "lesbian": "لزبین",
+        "gay": "گی",
+        "bisexual": "دوجنس‌گرا",
+        "straight": "دگرجنس‌گرا",
+        "queer": "کوئیر",
+        "asexual": "بی‌جنس‌گرا",
+        "pansexual": "همه‌جنس‌گرا",
+        "demisexual": "دمی‌جنس‌گرا",
+        "questioning": "در حال کشف",
+        "omnisexual": "همه‌جنس‌گرا (همگانی)",
+        "polysexual": "چندجنس‌گرا",
+        "androsexual": "مردگرا",
+        "gynesexual": "زن‌گرا",
+        "sapiosexual": "سپیوسکشوال",
+        "heteroflexible": "دگرجنس‌گرا منعطف",
+        "homoflexible": "همجنس‌گرا منعطف",
+        "prefer_not_to_say": "ترجیح می‌دهم نگویم",
+        "other": "دیگر"
+      },
+      "genderPrefs": {
+        "men": "مردان",
+        "women": "زنان",
+        "non_binary": "ناهم‌تبار",
+        "everyone": "همه"
+      },
+      "ethnicities": {
+        "asian": "آسیایی",
+        "black_african": "سیاه‌پوست/آفریقایی",
+        "hispanic_latinx": "اسپانیایی‌تبار/لاتین‌تبار",
+        "indigenous_native": "بومی",
+        "middle_eastern_north_african": "خاورمیانه‌ای/آفریقای شمالی",
+        "pacific_islander": "اهل جزایر اقیانوس آرام",
+        "south_asian": "جنوب آسیایی",
+        "white_caucasian": "سفیدپوست/قفقازی",
+        "multiracial": "چندنژادی",
+        "other": "دیگر",
+        "prefer_not_to_say": "ترجیح می‌دهم نگویم"
+      },
+      "religions": {
+        "christian": "مسیحی",
+        "catholic": "کاتولیک",
+        "protestant": "پروتستان",
+        "muslim": "مسلمان",
+        "jewish": "یهودی",
+        "hindu": "هندو",
+        "buddhist": "بودایی",
+        "sikh": "سیک",
+        "atheist": "خداناباور",
+        "agnostic": "ندانم‌گرا",
+        "spiritual_but_not_religious": "معنوی اما نه مذهبی",
+        "other": "دیگر",
+        "prefer_not_to_say": "ترجیح می‌دهم نگویم"
+      },
+      "politicalViews": {
+        "liberal": "لیبرال",
+        "progressive": "مترقی",
+        "moderate": "میانه‌رو",
+        "conservative": "محافظه‌کار",
+        "libertarian": "آزادی‌خواه",
+        "socialist": "سوسیالیست",
+        "apolitical": "غیرسیاسی",
+        "other": "دیگر",
+        "prefer_not_to_say": "ترجیح می‌دهم نگویم"
+      },
+      "relationshipTypes": {
+        "platonic": "فقط افلاطونی",
+        "romantic": "رمانتیک احتمالی",
+        "open": "قرارداد باز"
+      },
+      "primaryReasons": {
+        "financial": "ثبات مالی",
+        "immigration": "مهاجرت/ویزا",
+        "family_pressure": "فشار خانوادگی",
+        "legal_benefits": "مزایای قانونی",
+        "companionship": "همراهی",
+        "safety": "ایمنی و محافظت",
+        "other": "دیگر"
+      },
+      "childrenOptions": {
+        "yes": "بله",
+        "no": "خیر",
+        "maybe": "شاید / باز"
+      },
+      "familyPlans": {
+        "biological": "فرزند بیولوژیکی",
+        "adoption": "فرزندخواندگی",
+        "surrogacy": "رحم اجاره‌ای",
+        "ivf": "آی‌وی‌اف/درمان ناباروری",
+        "co_parenting": "هم‌والدینی",
+        "fostering": "سرپرستی",
+        "already_have": "قبلاً فرزند دارم",
+        "open_discussion": "آماده گفتگو",
+        "other": "دیگر"
+      },
+      "petsOptions": {
+        "love_them": "عاشقشان هستم",
+        "like_them": "دوستشان دارم",
+        "indifferent": "بی‌تفاوت",
+        "allergic": "حساسیت دارم",
+        "dont_like": "دوست ندارم"
+      },
+      "housingPrefs": {
+        "separate_spaces": "اتاق‌های جدا",
+        "roommates": "مانند هم‌اتاقی",
+        "separate_homes": "خانه‌های جدا نزدیک هم",
+        "shared_bedroom": "اتاق‌خواب مشترک",
+        "flexible": "انعطاف‌پذیر"
+      },
+      "financialArr": {
+        "separate": "مالی‌ها را جدا نگه داریم",
+        "shared_expenses": "تقسیم هزینه‌ها",
+        "joint": "مالی مشترک",
+        "prenup_required": "قرارداد پیش از ازدواج",
+        "flexible": "انعطاف‌پذیر"
+      },
+      "educationLevels": {
+        "high_school": "دبیرستان",
+        "associates": "مدرک کاردانی",
+        "bachelors": "لیسانس",
+        "masters": "کارشناسی ارشد",
+        "doctorate": "دکترا",
+        "trade_school": "مدرسه فنی",
+        "self_taught": "خودآموخته",
+        "other": "دیگر"
+      },
+      "drinkingOptions": {
+        "never": "هرگز",
+        "socially": "اجتماعی",
+        "regularly": "مرتباً",
+        "prefer_not_to_say": "ترجیح می‌دهم نگویم"
+      },
+      "smokingOptions": {
+        "never": "هرگز",
+        "socially": "اجتماعی",
+        "regularly": "مرتباً",
+        "trying_to_quit": "در تلاش برای ترک"
+      },
+      "weedOptions": {
+        "never": "هرگز",
+        "socially": "اجتماعی",
+        "regularly": "مرتباً"
+      },
+      "drugOptions": {
+        "never": "هرگز",
+        "socially": "اجتماعی",
+        "regularly": "مرتباً"
+      }
     }
   },
   "matchingPreferences": {
@@ -897,7 +1088,11 @@
       "success": "گزارش ارسال شد",
       "successMessage": "از اینکه به امن نگه داشتن Accord کمک می‌کنید متشکریم. تیم ما این گزارش را بررسی خواهد کرد.",
       "error": "ارسال گزارش ناموفق بود. لطفاً دوباره تلاش کنید."
-    }
+    },
+    "matchCountTitle": "{{current}} از {{limit}} مَچ فعال",
+    "matchCountSubtitleFree": "طرح رایگان",
+    "matchCountSubtitleWarning": "تقریباً پر شده — مَچ‌های نامحدود دریافت کنید",
+    "matchCountSubtitleFull": "با کسی از حالت مَچ خارج شوید یا برای نامحدود ارتقا دهید"
   },
   "messages": {
     "title": "پیام‌ها",
@@ -2084,7 +2279,14 @@
     "tooFarTitle": "خیلی دور",
     "tooFarMessage": "ترجیحات جستجوی این شخص منطقه شما را شامل نمی‌شود.",
     "globalSearchPremiumTitle": "جستجوی جهانی اکنون Premium است",
-    "globalSearchPremiumMessage": "جستجوی جهانی اکنون یک ویژگی Premium است. تطابق‌های شما بر اساس فاصله فیلتر خواهند شد. برای ادامه تطابق جهانی ارتقا دهید."
+    "globalSearchPremiumMessage": "جستجوی جهانی اکنون یک ویژگی Premium است. تطابق‌های شما بر اساس فاصله فیلتر خواهند شد. برای ادامه تطابق جهانی ارتقا دهید.",
+    "newMessageFrom": "پیام جدید از {{name}}",
+    "userLikesYou": "{{name}} از شما خوشش می‌آید!",
+    "someoneLikesYou": "کسی از شما خوشش می‌آید!",
+    "tapToSeeProfile": "برای دیدن پروفایل آن‌ها ضربه بزنید",
+    "upgradeToSeePremium": "برای دیدن این که چه کسی، به پریمیوم ارتقا دهید",
+    "reactedWith": "{{name}} با {{emoji}} واکنش نشان داد",
+    "tapToViewConversation": "برای مشاهده گفتگو ضربه بزنید"
   },
   "prompts": {
     "idealMarriage": "ازدواج لاوندر ایده‌آل من شبیه این است...",

@@ -56,6 +56,25 @@
       "weeksAgo": "{{count}} нед. назад",
       "monthsAgo": "{{count}} мес. назад",
       "yearsAgo": "{{count}} г. назад"
+    },
+    "errorBoundary": {
+      "title": "Упс! Что-то пошло не так",
+      "message": "Мы столкнулись с непредвиденной ошибкой. Попробуйте перезапустить приложение.",
+      "restart": "Перезапустить приложение"
+    },
+    "update": {
+      "forcedTitle": "Мы внесли важные изменения",
+      "softTitle": "Вас ждёт что-то новое",
+      "forcedBody": "Эта версия Accord больше не поддерживается. Обновитесь, чтобы ваши разговоры оставались защищёнными, а всё работало плавно.",
+      "softBody": "Доступна более новая версия Accord с улучшениями, которые вам понравятся.",
+      "updateButton": "Обновить Accord",
+      "notNow": "Не сейчас",
+      "nativeTitleRequired": "Требуется обновление",
+      "nativeTitleAvailable": "Доступно обновление",
+      "nativeBodyRequired": "Для продолжения требуется новая версия Accord. Пожалуйста, обновите сейчас.",
+      "nativeBodyAvailable": "Доступна новая версия Accord с улучшениями и исправлениями ошибок.",
+      "nativeUpdateNow": "Обновить сейчас",
+      "nativeLater": "Позже"
     }
   },
   "discover": {
@@ -171,6 +190,13 @@
       "upgradeMessage": "Обновите до Премиум, чтобы активировать эти функции и находить совпадения в любой точке мира.",
       "upgradeToPremium": "Обновить до Премиум",
       "maybeLater": "Может быть позже"
+    },
+    "match": {
+      "itsA": "Это",
+      "exclamation": "Совпадение!",
+      "bothLiked": "Вы и {{name}} понравились друг другу",
+      "sendMessage": "Отправить сообщение",
+      "keepBrowsing": "Продолжить просмотр"
     }
   },
   "filters": {
@@ -633,6 +659,171 @@
       "enterOccupation": "Пожалуйста, введите вашу профессию.",
       "enterEducation": "Пожалуйста, введите ваше образование.",
       "notAuthenticatedMessage": "Не авторизованы. Пожалуйста, войдите снова."
+    },
+    "options": {
+      "genders": {
+        "man": "Мужчина",
+        "woman": "Женщина",
+        "non_binary": "Небинарный"
+      },
+      "pronouns": {
+        "she_her": "она/её",
+        "he_him": "он/его",
+        "they_them": "они/их",
+        "she_they": "она/они",
+        "he_they": "он/они",
+        "any_pronouns": "любые местоимения",
+        "ask_me": "спроси меня",
+        "prefer_not_to_say": "не хочу говорить"
+      },
+      "orientations": {
+        "lesbian": "Лесбиянка",
+        "gay": "Гей",
+        "bisexual": "Бисексуал",
+        "straight": "Гетеро",
+        "queer": "Квир",
+        "asexual": "Асексуал",
+        "pansexual": "Пансексуал",
+        "demisexual": "Демисексуал",
+        "questioning": "В поиске себя",
+        "omnisexual": "Омнисексуал",
+        "polysexual": "Полисексуал",
+        "androsexual": "Андросексуал",
+        "gynesexual": "Гинесексуал",
+        "sapiosexual": "Сапиосексуал",
+        "heteroflexible": "Гетерогибкий",
+        "homoflexible": "Гомогибкий",
+        "prefer_not_to_say": "Не хочу говорить",
+        "other": "Другое"
+      },
+      "genderPrefs": {
+        "men": "Мужчины",
+        "women": "Женщины",
+        "non_binary": "Небинарные люди",
+        "everyone": "Все"
+      },
+      "ethnicities": {
+        "asian": "Азиатская",
+        "black_african": "Чёрная/Африканская",
+        "hispanic_latinx": "Латиноамериканская",
+        "indigenous_native": "Коренные народы",
+        "middle_eastern_north_african": "Ближний Восток/Сев. Африка",
+        "pacific_islander": "Тихоокеанские острова",
+        "south_asian": "Южноазиатская",
+        "white_caucasian": "Белая/Европеоидная",
+        "multiracial": "Смешанная",
+        "other": "Другая",
+        "prefer_not_to_say": "Не хочу говорить"
+      },
+      "religions": {
+        "christian": "Христианство",
+        "catholic": "Католицизм",
+        "protestant": "Протестантизм",
+        "muslim": "Ислам",
+        "jewish": "Иудаизм",
+        "hindu": "Индуизм",
+        "buddhist": "Буддизм",
+        "sikh": "Сикхизм",
+        "atheist": "Атеизм",
+        "agnostic": "Агностицизм",
+        "spiritual_but_not_religious": "Духовность без религии",
+        "other": "Другое",
+        "prefer_not_to_say": "Не хочу говорить"
+      },
+      "politicalViews": {
+        "liberal": "Либеральные",
+        "progressive": "Прогрессивные",
+        "moderate": "Умеренные",
+        "conservative": "Консервативные",
+        "libertarian": "Либертарианские",
+        "socialist": "Социалистические",
+        "apolitical": "Аполитичные",
+        "other": "Другие",
+        "prefer_not_to_say": "Не хочу говорить"
+      },
+      "relationshipTypes": {
+        "platonic": "Только платонически",
+        "romantic": "Возможен роман",
+        "open": "Открытые отношения"
+      },
+      "primaryReasons": {
+        "financial": "Финансовая стабильность",
+        "immigration": "Иммиграция/виза",
+        "family_pressure": "Давление семьи",
+        "legal_benefits": "Правовые льготы",
+        "companionship": "Компания",
+        "safety": "Безопасность и защита",
+        "other": "Другое"
+      },
+      "childrenOptions": {
+        "yes": "Да",
+        "no": "Нет",
+        "maybe": "Возможно / Открыт(а)"
+      },
+      "familyPlans": {
+        "biological": "Биологические дети",
+        "adoption": "Усыновление",
+        "surrogacy": "Суррогатное материнство",
+        "ivf": "ЭКО/лечение бесплодия",
+        "co_parenting": "Совместное родительство",
+        "fostering": "Приёмная семья",
+        "already_have": "Уже есть дети",
+        "open_discussion": "Открыт(а) к обсуждению",
+        "other": "Другое"
+      },
+      "petsOptions": {
+        "love_them": "Обожаю",
+        "like_them": "Нравятся",
+        "indifferent": "Безразличен",
+        "allergic": "Аллергия",
+        "dont_like": "Не люблю"
+      },
+      "housingPrefs": {
+        "separate_spaces": "Отдельные спальни/пространства",
+        "roommates": "Как соседи по квартире",
+        "separate_homes": "Отдельные дома рядом",
+        "shared_bedroom": "Общая спальня",
+        "flexible": "Гибко/обсудим"
+      },
+      "financialArr": {
+        "separate": "Раздельные финансы",
+        "shared_expenses": "Общие счета/расходы",
+        "joint": "Совместные финансы",
+        "prenup_required": "Нужен брачный договор",
+        "flexible": "Гибко/обсудим"
+      },
+      "educationLevels": {
+        "high_school": "Среднее образование",
+        "associates": "Колледж",
+        "bachelors": "Бакалавриат",
+        "masters": "Магистратура",
+        "doctorate": "Докторская / PhD",
+        "trade_school": "Профучилище",
+        "self_taught": "Самоучка",
+        "other": "Другое"
+      },
+      "drinkingOptions": {
+        "never": "Никогда",
+        "socially": "В компании",
+        "regularly": "Регулярно",
+        "prefer_not_to_say": "Не хочу говорить"
+      },
+      "smokingOptions": {
+        "never": "Никогда",
+        "socially": "В компании",
+        "regularly": "Регулярно",
+        "trying_to_quit": "Пытаюсь бросить"
+      },
+      "weedOptions": {
+        "never": "Никогда",
+        "socially": "В компании",
+        "regularly": "Регулярно"
+      },
+      "drugOptions": {
+        "never": "Никогда",
+        "socially": "В компании",
+        "regularly": "Регулярно"
+      }
     }
   },
   "matchingPreferences": {
@@ -897,7 +1088,11 @@
       "success": "Жалоба отправлена",
       "successMessage": "Спасибо за помощь в обеспечении безопасности Accord. Наша команда рассмотрит эту жалобу.",
       "error": "Не удалось отправить жалобу. Попробуйте снова."
-    }
+    },
+    "matchCountTitle": "{{current}} из {{limit}} активных совпадений",
+    "matchCountSubtitleFree": "Бесплатный тариф",
+    "matchCountSubtitleWarning": "Почти заполнено — получите безлимитные совпадения",
+    "matchCountSubtitleFull": "Отмените совпадение с кем-то или перейдите на безлимитный"
   },
   "messages": {
     "title": "Сообщения",
@@ -2147,7 +2342,14 @@
     "tooFarTitle": "Слишком далеко",
     "tooFarMessage": "Настройки поиска этого человека не включают вашу зону.",
     "globalSearchPremiumTitle": "Глобальный поиск теперь Premium",
-    "globalSearchPremiumMessage": "Глобальный поиск стал Premium-функцией. Ваши совпадения будут фильтроваться по расстоянию. Улучшите подписку для подбора по всему миру."
+    "globalSearchPremiumMessage": "Глобальный поиск стал Premium-функцией. Ваши совпадения будут фильтроваться по расстоянию. Улучшите подписку для подбора по всему миру.",
+    "newMessageFrom": "Новое сообщение от {{name}}",
+    "userLikesYou": "Вы нравитесь {{name}}!",
+    "someoneLikesYou": "Вы кому-то нравитесь!",
+    "tapToSeeProfile": "Нажмите, чтобы увидеть профиль",
+    "upgradeToSeePremium": "Перейдите на Premium, чтобы узнать кто",
+    "reactedWith": "{{name}} отреагировал(а) {{emoji}}",
+    "tapToViewConversation": "Нажмите, чтобы открыть разговор"
   },
   "prompts": {
     "idealMarriage": "Мой идеальный лавандовый брак выглядит так...",

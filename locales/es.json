@@ -135,6 +135,25 @@
       "weeksAgo": "hace {{count}} semanas",
       "monthsAgo": "hace {{count}} meses",
       "yearsAgo": "hace {{count}} años"
+    },
+    "errorBoundary": {
+      "title": "¡Ups! Algo salió mal",
+      "message": "Encontramos un error inesperado. Intenta reiniciar la aplicación.",
+      "restart": "Reiniciar app"
+    },
+    "update": {
+      "forcedTitle": "Hemos hecho algunos cambios importantes",
+      "softTitle": "Algo nuevo te está esperando",
+      "forcedBody": "Esta versión de Accord ya no es compatible. Actualiza para mantener tus conversaciones seguras y que todo funcione sin problemas.",
+      "softBody": "Hay una versión más nueva de Accord disponible con mejoras que te gustarán.",
+      "updateButton": "Actualizar Accord",
+      "notNow": "Ahora no",
+      "nativeTitleRequired": "Actualización requerida",
+      "nativeTitleAvailable": "Actualización disponible",
+      "nativeBodyRequired": "Se requiere una nueva versión de Accord para continuar. Actualiza ahora.",
+      "nativeBodyAvailable": "Hay una nueva versión de Accord disponible con mejoras y correcciones de errores.",
+      "nativeUpdateNow": "Actualizar ahora",
+      "nativeLater": "Más tarde"
     }
   },
   "discover": {
@@ -250,6 +269,13 @@
       "upgradeMessage": "Actualiza a Premium para activar estas funciones y encontrar coincidencias en cualquier parte del mundo.",
       "upgradeToPremium": "Actualizar a Premium",
       "maybeLater": "Quizás después"
+    },
+    "match": {
+      "itsA": "Es un",
+      "exclamation": "¡Match!",
+      "bothLiked": "A ti y a {{name}} os habéis gustado",
+      "sendMessage": "Enviar mensaje",
+      "keepBrowsing": "Seguir explorando"
     }
   },
   "filters": {
@@ -712,6 +738,171 @@
       "enterOccupation": "Por favor ingresa tu ocupación.",
       "enterEducation": "Por favor ingresa tu educación.",
       "notAuthenticatedMessage": "No autenticado. Por favor inicia sesión nuevamente."
+    },
+    "options": {
+      "genders": {
+        "man": "Hombre",
+        "woman": "Mujer",
+        "non_binary": "No binario"
+      },
+      "pronouns": {
+        "she_her": "ella",
+        "he_him": "él",
+        "they_them": "elle",
+        "she_they": "ella/elle",
+        "he_they": "él/elle",
+        "any_pronouns": "cualquier pronombre",
+        "ask_me": "pregúntame",
+        "prefer_not_to_say": "prefiero no decirlo"
+      },
+      "orientations": {
+        "lesbian": "Lesbiana",
+        "gay": "Gay",
+        "bisexual": "Bisexual",
+        "straight": "Heterosexual",
+        "queer": "Queer",
+        "asexual": "Asexual",
+        "pansexual": "Pansexual",
+        "demisexual": "Demisexual",
+        "questioning": "En exploración",
+        "omnisexual": "Omnisexual",
+        "polysexual": "Polisexual",
+        "androsexual": "Androsexual",
+        "gynesexual": "Ginesexual",
+        "sapiosexual": "Sapiosexual",
+        "heteroflexible": "Heteroflexible",
+        "homoflexible": "Homoflexible",
+        "prefer_not_to_say": "Prefiero no decirlo",
+        "other": "Otro"
+      },
+      "genderPrefs": {
+        "men": "Hombres",
+        "women": "Mujeres",
+        "non_binary": "No binarie",
+        "everyone": "Todes"
+      },
+      "ethnicities": {
+        "asian": "Asiática",
+        "black_african": "Negra/Africana",
+        "hispanic_latinx": "Hispana/Latine",
+        "indigenous_native": "Indígena/Nativa",
+        "middle_eastern_north_african": "Oriente Medio/Norte de África",
+        "pacific_islander": "Isleña del Pacífico",
+        "south_asian": "Sudasiática",
+        "white_caucasian": "Blanca/Caucásica",
+        "multiracial": "Multirracial",
+        "other": "Otra",
+        "prefer_not_to_say": "Prefiero no decirlo"
+      },
+      "religions": {
+        "christian": "Cristiana",
+        "catholic": "Católica",
+        "protestant": "Protestante",
+        "muslim": "Musulmana",
+        "jewish": "Judía",
+        "hindu": "Hindú",
+        "buddhist": "Budista",
+        "sikh": "Sij",
+        "atheist": "Atea",
+        "agnostic": "Agnóstica",
+        "spiritual_but_not_religious": "Espiritual, no religiosa",
+        "other": "Otra",
+        "prefer_not_to_say": "Prefiero no decirlo"
+      },
+      "politicalViews": {
+        "liberal": "Liberal",
+        "progressive": "Progresista",
+        "moderate": "Moderada",
+        "conservative": "Conservadora",
+        "libertarian": "Libertaria",
+        "socialist": "Socialista",
+        "apolitical": "Apolítica",
+        "other": "Otra",
+        "prefer_not_to_say": "Prefiero no decirlo"
+      },
+      "relationshipTypes": {
+        "platonic": "Solo platónica",
+        "romantic": "Posiblemente romántica",
+        "open": "Acuerdo abierto"
+      },
+      "primaryReasons": {
+        "financial": "Estabilidad financiera",
+        "immigration": "Inmigración/Visa",
+        "family_pressure": "Presión familiar",
+        "legal_benefits": "Beneficios legales",
+        "companionship": "Compañía",
+        "safety": "Seguridad y protección",
+        "other": "Otro"
+      },
+      "childrenOptions": {
+        "yes": "Sí",
+        "no": "No",
+        "maybe": "Quizá / Abierto"
+      },
+      "familyPlans": {
+        "biological": "Hijos biológicos",
+        "adoption": "Adopción",
+        "surrogacy": "Gestación subrogada",
+        "ivf": "FIV/Tratamientos de fertilidad",
+        "co_parenting": "Coparentalidad",
+        "fostering": "Acogida",
+        "already_have": "Ya tengo hijos",
+        "open_discussion": "Abierto a hablarlo",
+        "other": "Otro"
+      },
+      "petsOptions": {
+        "love_them": "Los amo",
+        "like_them": "Me gustan",
+        "indifferent": "Indiferente",
+        "allergic": "Alérgique",
+        "dont_like": "No me gustan"
+      },
+      "housingPrefs": {
+        "separate_spaces": "Dormitorios/espacios separados",
+        "roommates": "Como compañeres de piso",
+        "separate_homes": "Casas separadas cerca",
+        "shared_bedroom": "Dormitorio compartido",
+        "flexible": "Flexible/negociable"
+      },
+      "financialArr": {
+        "separate": "Finanzas separadas",
+        "shared_expenses": "Compartir gastos",
+        "joint": "Finanzas conjuntas",
+        "prenup_required": "Capitulaciones requeridas",
+        "flexible": "Flexible/negociable"
+      },
+      "educationLevels": {
+        "high_school": "Secundaria",
+        "associates": "Técnico superior",
+        "bachelors": "Licenciatura",
+        "masters": "Máster",
+        "doctorate": "Doctorado",
+        "trade_school": "Formación profesional",
+        "self_taught": "Autodidacta",
+        "other": "Otro"
+      },
+      "drinkingOptions": {
+        "never": "Nunca",
+        "socially": "Socialmente",
+        "regularly": "Regularmente",
+        "prefer_not_to_say": "Prefiero no decirlo"
+      },
+      "smokingOptions": {
+        "never": "Nunca",
+        "socially": "Socialmente",
+        "regularly": "Regularmente",
+        "trying_to_quit": "Intentando dejarlo"
+      },
+      "weedOptions": {
+        "never": "Nunca",
+        "socially": "Socialmente",
+        "regularly": "Regularmente"
+      },
+      "drugOptions": {
+        "never": "Nunca",
+        "socially": "Socialmente",
+        "regularly": "Regularmente"
+      }
     }
   },
   "matchingPreferences": {
@@ -976,7 +1167,11 @@
       "success": "Reporte Enviado",
       "successMessage": "Gracias por ayudar a mantener Accord seguro. Nuestro equipo revisará este reporte.",
       "error": "Error al enviar el reporte. Por favor, inténtalo de nuevo."
-    }
+    },
+    "matchCountTitle": "{{current}} de {{limit}} matches activos",
+    "matchCountSubtitleFree": "Plan gratuito",
+    "matchCountSubtitleWarning": "Casi lleno — obtén matches ilimitados",
+    "matchCountSubtitleFull": "Elimina un match o actualiza para tenerlos ilimitados"
   },
   "messages": {
     "title": "Mensajes",
@@ -2082,7 +2277,14 @@
     "tooFarTitle": "Demasiado lejos",
     "tooFarMessage": "Las preferencias de búsqueda de esta persona no incluyen tu área.",
     "globalSearchPremiumTitle": "Búsqueda global ahora es Premium",
-    "globalSearchPremiumMessage": "La búsqueda global ahora es una función Premium. Tus matches se filtrarán por distancia. Mejora para seguir haciendo matches mundialmente."
+    "globalSearchPremiumMessage": "La búsqueda global ahora es una función Premium. Tus matches se filtrarán por distancia. Mejora para seguir haciendo matches mundialmente.",
+    "newMessageFrom": "Nuevo mensaje de {{name}}",
+    "userLikesYou": "¡A {{name}} le gustas!",
+    "someoneLikesYou": "¡A alguien le gustas!",
+    "tapToSeeProfile": "Toca para ver su perfil",
+    "upgradeToSeePremium": "Actualiza a Premium para ver quién",
+    "reactedWith": "{{name}} reaccionó con {{emoji}}",
+    "tapToViewConversation": "Toca para ver la conversación"
   },
   "prompts": {
     "idealMarriage": "Mi matrimonio lavanda ideal se ve como...",

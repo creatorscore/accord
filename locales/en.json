@@ -233,6 +233,25 @@
       "weeksAgo": "{{count}} weeks ago",
       "monthsAgo": "{{count}} months ago",
       "yearsAgo": "{{count}} years ago"
+    },
+    "errorBoundary": {
+      "title": "Oops! Something went wrong",
+      "message": "We encountered an unexpected error. Please try restarting the app.",
+      "restart": "Restart App"
+    },
+    "update": {
+      "forcedTitle": "We've made some important changes",
+      "softTitle": "Something new is waiting for you",
+      "forcedBody": "This version of Accord is no longer supported. Update to keep your conversations safe and everything running smoothly.",
+      "softBody": "A newer version of Accord is available with improvements you'll appreciate.",
+      "updateButton": "Update Accord",
+      "notNow": "Not now",
+      "nativeTitleRequired": "Update Required",
+      "nativeTitleAvailable": "Update Available",
+      "nativeBodyRequired": "A new version of Accord is required to continue. Please update now.",
+      "nativeBodyAvailable": "A new version of Accord is available with improvements and bug fixes.",
+      "nativeUpdateNow": "Update Now",
+      "nativeLater": "Later"
     }
   },
   "subscription": {
@@ -384,6 +403,13 @@
       "upgradeMessage": "Upgrade to Premium to activate these features and find matches anywhere in the world.",
       "upgradeToPremium": "Upgrade to Premium",
       "maybeLater": "Maybe Later"
+    },
+    "match": {
+      "itsA": "It's a",
+      "exclamation": "Match!",
+      "bothLiked": "You and {{name}} liked each other",
+      "sendMessage": "Send a Message",
+      "keepBrowsing": "Keep Browsing"
     }
   },
   "filters": {
@@ -953,7 +979,172 @@
       "profile": "Profile",
       "preferences": "Preferences"
     },
-    "previewLink": "Take a look around →"
+    "previewLink": "Take a look around →",
+    "options": {
+      "genders": {
+        "man": "Man",
+        "woman": "Woman",
+        "non_binary": "Non-binary"
+      },
+      "pronouns": {
+        "she_her": "she/her",
+        "he_him": "he/him",
+        "they_them": "they/them",
+        "she_they": "she/they",
+        "he_they": "he/they",
+        "any_pronouns": "any pronouns",
+        "ask_me": "ask me",
+        "prefer_not_to_say": "prefer not to say"
+      },
+      "orientations": {
+        "lesbian": "Lesbian",
+        "gay": "Gay",
+        "bisexual": "Bisexual",
+        "straight": "Straight",
+        "queer": "Queer",
+        "asexual": "Asexual",
+        "pansexual": "Pansexual",
+        "demisexual": "Demisexual",
+        "questioning": "Questioning",
+        "omnisexual": "Omnisexual",
+        "polysexual": "Polysexual",
+        "androsexual": "Androsexual",
+        "gynesexual": "Gynesexual",
+        "sapiosexual": "Sapiosexual",
+        "heteroflexible": "Heteroflexible",
+        "homoflexible": "Homoflexible",
+        "prefer_not_to_say": "Prefer not to say",
+        "other": "Other"
+      },
+      "genderPrefs": {
+        "men": "Men",
+        "women": "Women",
+        "non_binary": "Non-binary",
+        "everyone": "Everyone"
+      },
+      "ethnicities": {
+        "asian": "Asian",
+        "black_african": "Black/African",
+        "hispanic_latinx": "Hispanic/Latinx",
+        "indigenous_native": "Indigenous/Native",
+        "middle_eastern_north_african": "Middle Eastern/North African",
+        "pacific_islander": "Pacific Islander",
+        "south_asian": "South Asian",
+        "white_caucasian": "White/Caucasian",
+        "multiracial": "Multiracial",
+        "other": "Other",
+        "prefer_not_to_say": "Prefer not to say"
+      },
+      "religions": {
+        "christian": "Christian",
+        "catholic": "Catholic",
+        "protestant": "Protestant",
+        "muslim": "Muslim",
+        "jewish": "Jewish",
+        "hindu": "Hindu",
+        "buddhist": "Buddhist",
+        "sikh": "Sikh",
+        "atheist": "Atheist",
+        "agnostic": "Agnostic",
+        "spiritual_but_not_religious": "Spiritual but not religious",
+        "other": "Other",
+        "prefer_not_to_say": "Prefer not to say"
+      },
+      "politicalViews": {
+        "liberal": "Liberal",
+        "progressive": "Progressive",
+        "moderate": "Moderate",
+        "conservative": "Conservative",
+        "libertarian": "Libertarian",
+        "socialist": "Socialist",
+        "apolitical": "Apolitical",
+        "other": "Other",
+        "prefer_not_to_say": "Prefer not to say"
+      },
+      "relationshipTypes": {
+        "platonic": "Platonic Only",
+        "romantic": "Romantic Possible",
+        "open": "Open Arrangement"
+      },
+      "primaryReasons": {
+        "financial": "Financial Stability",
+        "immigration": "Immigration/Visa",
+        "family_pressure": "Family Pressure",
+        "legal_benefits": "Legal Benefits",
+        "companionship": "Companionship",
+        "safety": "Safety & Protection",
+        "other": "Other"
+      },
+      "childrenOptions": {
+        "yes": "Yes",
+        "no": "No",
+        "maybe": "Maybe / Open to it"
+      },
+      "familyPlans": {
+        "biological": "Biological Children",
+        "adoption": "Adoption",
+        "surrogacy": "Surrogacy",
+        "ivf": "IVF/Fertility Treatments",
+        "co_parenting": "Co-Parenting",
+        "fostering": "Fostering",
+        "already_have": "Already Have Children",
+        "open_discussion": "Open to Discussion",
+        "other": "Other"
+      },
+      "petsOptions": {
+        "love_them": "Love Them",
+        "like_them": "Like Them",
+        "indifferent": "Indifferent",
+        "allergic": "Allergic",
+        "dont_like": "Don't Like Them"
+      },
+      "housingPrefs": {
+        "separate_spaces": "Separate Bedrooms/Spaces",
+        "roommates": "Live Like Roommates",
+        "separate_homes": "Separate Homes Nearby",
+        "shared_bedroom": "Shared Bedroom",
+        "flexible": "Flexible/Negotiable"
+      },
+      "financialArr": {
+        "separate": "Keep Finances Separate",
+        "shared_expenses": "Share Bills/Expenses",
+        "joint": "Joint Finances",
+        "prenup_required": "Prenup Required",
+        "flexible": "Flexible/Negotiable"
+      },
+      "educationLevels": {
+        "high_school": "High School",
+        "associates": "Associate's Degree",
+        "bachelors": "Bachelor's Degree",
+        "masters": "Master's Degree",
+        "doctorate": "Doctorate / PhD",
+        "trade_school": "Trade School",
+        "self_taught": "Self-Taught",
+        "other": "Other"
+      },
+      "drinkingOptions": {
+        "never": "Never",
+        "socially": "Socially",
+        "regularly": "Regularly",
+        "prefer_not_to_say": "Prefer Not to Say"
+      },
+      "smokingOptions": {
+        "never": "Never",
+        "socially": "Socially",
+        "regularly": "Regularly",
+        "trying_to_quit": "Trying to Quit"
+      },
+      "weedOptions": {
+        "never": "Never",
+        "socially": "Socially",
+        "regularly": "Regularly"
+      },
+      "drugOptions": {
+        "never": "Never",
+        "socially": "Socially",
+        "regularly": "Regularly"
+      }
+    }
   },
   "matchingPreferences": {
     "title": "Matching Preferences",
@@ -1177,6 +1368,10 @@
     "connections": "{{count}} connections",
     "connection": "{{count}} connection",
     "matchCount": "{{current}}/{{limit}} matches used",
+    "matchCountTitle": "{{current}} of {{limit}} active matches",
+    "matchCountSubtitleFree": "Free plan",
+    "matchCountSubtitleWarning": "Almost full — get unlimited matches",
+    "matchCountSubtitleFull": "Unmatch someone or upgrade for unlimited",
     "loadingMatches": "Loading your matches...",
     "noMatchesYet": "Your matches live here",
     "noMatchesText": "When someone you like likes you back, you'll see them here first.",
@@ -2442,7 +2637,14 @@
     "tooFarTitle": "Too Far Away",
     "tooFarMessage": "This person's search preferences don't include your area.",
     "globalSearchPremiumTitle": "Search Globally is Now Premium",
-    "globalSearchPremiumMessage": "Global search is now a premium feature. Your matches will be filtered by distance. Upgrade to continue matching worldwide."
+    "globalSearchPremiumMessage": "Global search is now a premium feature. Your matches will be filtered by distance. Upgrade to continue matching worldwide.",
+    "newMessageFrom": "New message from {{name}}",
+    "userLikesYou": "{{name}} likes you!",
+    "someoneLikesYou": "Someone likes you!",
+    "tapToSeeProfile": "Tap to see their profile",
+    "upgradeToSeePremium": "Upgrade to Premium to see who",
+    "reactedWith": "{{name}} reacted {{emoji}}",
+    "tapToViewConversation": "Tap to view the conversation"
   },
   "prompts": {
     "idealMarriage": "My ideal lavender marriage looks like...",

@@ -1,0 +1,165 @@
+{
+  "genders": {
+    "man": "მამაკაცი",
+    "woman": "ქალი",
+    "non_binary": "არაბინარული"
+  },
+  "pronouns": {
+    "she_her": "ის (ქალი)",
+    "he_him": "ის (მამაკაცი)",
+    "they_them": "ისინი",
+    "she_they": "ის (ქალი)/ისინი",
+    "he_they": "ის (მამაკაცი)/ისინი",
+    "any_pronouns": "ნებისმიერი ნაცვალსახელი",
+    "ask_me": "მკითხე",
+    "prefer_not_to_say": "მირჩევნია არ ვთქვა"
+  },
+  "orientations": {
+    "lesbian": "ლესბოსელი",
+    "gay": "გეი",
+    "bisexual": "ბისექსუალი",
+    "straight": "ჰეტეროსექსუალი",
+    "queer": "კვირი",
+    "asexual": "ასექსუალი",
+    "pansexual": "პანსექსუალი",
+    "demisexual": "დემისექსუალი",
+    "questioning": "ვეძებ თავს",
+    "omnisexual": "ომნისექსუალი",
+    "polysexual": "პოლისექსუალი",
+    "androsexual": "ანდროსექსუალი",
+    "gynesexual": "გინესექსუალი",
+    "sapiosexual": "საპიოსექსუალი",
+    "heteroflexible": "ჰეტეროფლექსიბლი",
+    "homoflexible": "ჰომოფლექსიბლი",
+    "prefer_not_to_say": "მირჩევნია არ ვთქვა",
+    "other": "სხვა"
+  },
+  "genderPrefs": {
+    "men": "მამაკაცები",
+    "women": "ქალები",
+    "non_binary": "არაბინარულები",
+    "everyone": "ყველა"
+  },
+  "ethnicities": {
+    "asian": "აზიელი",
+    "black_african": "შავკანიანი/აფრიკელი",
+    "hispanic_latinx": "ესპანურენოვანი/ლათინური",
+    "indigenous_native": "ადგილობრივი მკვიდრი",
+    "middle_eastern_north_african": "ახლოაღმოსავლელი/ჩრდილოაფრიკელი",
+    "pacific_islander": "წყნარი ოკეანის კუნძულელი",
+    "south_asian": "სამხრეთ აზიელი",
+    "white_caucasian": "თეთრკანიანი/კავკასიელი",
+    "multiracial": "მრავალრასიანი",
+    "other": "სხვა",
+    "prefer_not_to_say": "მირჩევნია არ ვთქვა"
+  },
+  "religions": {
+    "christian": "ქრისტიანი",
+    "catholic": "კათოლიკე",
+    "protestant": "პროტესტანტი",
+    "muslim": "მუსლიმი",
+    "jewish": "იუდეველი",
+    "hindu": "ინდუისტი",
+    "buddhist": "ბუდისტი",
+    "sikh": "სიქჰი",
+    "atheist": "ათეისტი",
+    "agnostic": "აგნოსტიკოსი",
+    "spiritual_but_not_religious": "სულიერი, მაგრამ არა რელიგიური",
+    "other": "სხვა",
+    "prefer_not_to_say": "მირჩევნია არ ვთქვა"
+  },
+  "politicalViews": {
+    "liberal": "ლიბერალი",
+    "progressive": "პროგრესისტი",
+    "moderate": "ზომიერი",
+    "conservative": "კონსერვატორი",
+    "libertarian": "ლიბერტარიანელი",
+    "socialist": "სოციალისტი",
+    "apolitical": "აპოლიტიკური",
+    "other": "სხვა",
+    "prefer_not_to_say": "მირჩევნია არ ვთქვა"
+  },
+  "relationshipTypes": {
+    "platonic": "მხოლოდ პლატონური",
+    "romantic": "რომანტიკა შესაძლებელია",
+    "open": "ღია მოწყობა"
+  },
+  "primaryReasons": {
+    "financial": "ფინანსური სტაბილურობა",
+    "immigration": "იმიგრაცია/ვიზა",
+    "family_pressure": "ოჯახური ზეწოლა",
+    "legal_benefits": "იურიდიული სარგებელი",
+    "companionship": "კომპანიონობა",
+    "safety": "უსაფრთხოება და დაცვა",
+    "other": "სხვა"
+  },
+  "childrenOptions": {
+    "yes": "დიახ",
+    "no": "არა",
+    "maybe": "შესაძლოა / ღია ვარ"
+  },
+  "familyPlans": {
+    "biological": "ბიოლოგიური შვილები",
+    "adoption": "შვილად აყვანა",
+    "surrogacy": "სუროგატობა",
+    "ivf": "IVF/ფერტილობის მკურნალობა",
+    "co_parenting": "ერთობლივი მშობლობა",
+    "fostering": "მინდობით აღზრდა",
+    "already_have": "უკვე მყავს შვილები",
+    "open_discussion": "ღია ვარ საუბრისთვის",
+    "other": "სხვა"
+  },
+  "petsOptions": {
+    "love_them": "ძალიან მიყვარს",
+    "like_them": "მომწონს",
+    "indifferent": "გულგრილი ვარ",
+    "allergic": "ალერგია მაქვს",
+    "dont_like": "არ მომწონს"
+  },
+  "housingPrefs": {
+    "separate_spaces": "ცალკე ოთახები/სივრცეები",
+    "roommates": "თანამცხოვრებლებივით",
+    "separate_homes": "ცალკე სახლები ახლოს",
+    "shared_bedroom": "საერთო საძინებელი",
+    "flexible": "მოქნილი/მოსალაპარაკებელი"
+  },
+  "financialArr": {
+    "separate": "ცალკე ფინანსები",
+    "shared_expenses": "გაზიარებული ხარჯები",
+    "joint": "ერთობლივი ფინანსები",
+    "prenup_required": "საქორწინო ხელშეკრულება სავალდებულოა",
+    "flexible": "მოქნილი/მოსალაპარაკებელი"
+  },
+  "educationLevels": {
+    "high_school": "საშუალო სკოლა",
+    "associates": "ასოცირებული ხარისხი",
+    "bachelors": "ბაკალავრი",
+    "masters": "მაგისტრი",
+    "doctorate": "დოქტორი / PhD",
+    "trade_school": "პროფესიული სასწავლებელი",
+    "self_taught": "თვითნასწავლი",
+    "other": "სხვა"
+  },
+  "drinkingOptions": {
+    "never": "არასოდეს",
+    "socially": "სოციალურად",
+    "regularly": "რეგულარულად",
+    "prefer_not_to_say": "მირჩევნია არ ვთქვა"
+  },
+  "smokingOptions": {
+    "never": "არასოდეს",
+    "socially": "სოციალურად",
+    "regularly": "რეგულარულად",
+    "trying_to_quit": "თავის დანებებას ვცდილობ"
+  },
+  "weedOptions": {
+    "never": "არასოდეს",
+    "socially": "სოციალურად",
+    "regularly": "რეგულარულად"
+  },
+  "drugOptions": {
+    "never": "არასოდეს",
+    "socially": "სოციალურად",
+    "regularly": "რეგულარულად"
+  }
+}

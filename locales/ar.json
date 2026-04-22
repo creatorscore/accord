@@ -56,6 +56,25 @@
       "weeksAgo": "منذ {{count}} أسابيع",
       "monthsAgo": "منذ {{count}} أشهر",
       "yearsAgo": "منذ {{count}} سنوات"
+    },
+    "errorBoundary": {
+      "title": "عذراً! حدث خطأ ما",
+      "message": "واجهنا خطأً غير متوقع. يرجى إعادة تشغيل التطبيق.",
+      "restart": "إعادة تشغيل التطبيق"
+    },
+    "update": {
+      "forcedTitle": "أجرينا بعض التغييرات المهمة",
+      "softTitle": "شيء جديد في انتظارك",
+      "forcedBody": "هذه النسخة من أكورد لم تعد مدعومة. قم بالتحديث للحفاظ على أمان محادثاتك وتشغيل كل شيء بسلاسة.",
+      "softBody": "إصدار أحدث من أكورد متاح مع تحسينات ستعجبك.",
+      "updateButton": "تحديث أكورد",
+      "notNow": "ليس الآن",
+      "nativeTitleRequired": "التحديث مطلوب",
+      "nativeTitleAvailable": "تحديث متوفر",
+      "nativeBodyRequired": "يلزم تحديث أكورد للمتابعة. يرجى التحديث الآن.",
+      "nativeBodyAvailable": "إصدار جديد من أكورد متاح مع تحسينات وإصلاحات للأخطاء.",
+      "nativeUpdateNow": "تحديث الآن",
+      "nativeLater": "لاحقاً"
     }
   },
   "discover": {
@@ -171,6 +190,13 @@
       "upgradeMessage": "قم بالترقية إلى بريميوم لتفعيل هذه الميزات والعثور على مطابقات في أي مكان في العالم.",
       "upgradeToPremium": "ترقية إلى بريميوم",
       "maybeLater": "ربما لاحقًا"
+    },
+    "match": {
+      "itsA": "هذا",
+      "exclamation": "توافق!",
+      "bothLiked": "أنتما أعجبتما ببعضكما — أنت و{{name}}",
+      "sendMessage": "أرسل رسالة",
+      "keepBrowsing": "متابعة التصفح"
     }
   },
   "filters": {
@@ -633,6 +659,171 @@
       "enterOccupation": "يرجى إدخال مهنتك.",
       "enterEducation": "يرجى إدخال تعليمك.",
       "notAuthenticatedMessage": "غير مُوثّق. يرجى تسجيل الدخول مرة أخرى."
+    },
+    "options": {
+      "genders": {
+        "man": "رجل",
+        "woman": "امرأة",
+        "non_binary": "غير ثنائي"
+      },
+      "pronouns": {
+        "she_her": "هي",
+        "he_him": "هو",
+        "they_them": "هم",
+        "she_they": "هي/هم",
+        "he_they": "هو/هم",
+        "any_pronouns": "أي ضمائر",
+        "ask_me": "اسألني",
+        "prefer_not_to_say": "أفضل عدم القول"
+      },
+      "orientations": {
+        "lesbian": "مثلية",
+        "gay": "مثلي",
+        "bisexual": "ثنائي الميول",
+        "straight": "مستقيم",
+        "queer": "كوير",
+        "asexual": "لاجنسي",
+        "pansexual": "بانسيكشوال",
+        "demisexual": "ديميسكشوال",
+        "questioning": "مستكشف",
+        "omnisexual": "أومنيسيكشوال",
+        "polysexual": "بوليسيكشوال",
+        "androsexual": "أندروسكشوال",
+        "gynesexual": "جينيسكشوال",
+        "sapiosexual": "سابيوسيكشوال",
+        "heteroflexible": "هيتيروفليكسيبل",
+        "homoflexible": "هوموفليكسيبل",
+        "prefer_not_to_say": "أفضل عدم القول",
+        "other": "آخر"
+      },
+      "genderPrefs": {
+        "men": "رجال",
+        "women": "نساء",
+        "non_binary": "غير ثنائي",
+        "everyone": "الجميع"
+      },
+      "ethnicities": {
+        "asian": "آسيوي",
+        "black_african": "أسود/أفريقي",
+        "hispanic_latinx": "هسباني/لاتيني",
+        "indigenous_native": "سكان أصليون",
+        "middle_eastern_north_african": "شرق أوسطي/شمال أفريقي",
+        "pacific_islander": "من جزر المحيط الهادئ",
+        "south_asian": "جنوب آسيوي",
+        "white_caucasian": "أبيض/قوقازي",
+        "multiracial": "متعدد الأعراق",
+        "other": "آخر",
+        "prefer_not_to_say": "أفضل عدم القول"
+      },
+      "religions": {
+        "christian": "مسيحي",
+        "catholic": "كاثوليكي",
+        "protestant": "بروتستانتي",
+        "muslim": "مسلم",
+        "jewish": "يهودي",
+        "hindu": "هندوسي",
+        "buddhist": "بوذي",
+        "sikh": "سيخي",
+        "atheist": "ملحد",
+        "agnostic": "لا أدري",
+        "spiritual_but_not_religious": "روحاني لكن غير متدين",
+        "other": "آخر",
+        "prefer_not_to_say": "أفضل عدم القول"
+      },
+      "politicalViews": {
+        "liberal": "ليبرالي",
+        "progressive": "تقدمي",
+        "moderate": "معتدل",
+        "conservative": "محافظ",
+        "libertarian": "تحرري",
+        "socialist": "اشتراكي",
+        "apolitical": "غير سياسي",
+        "other": "آخر",
+        "prefer_not_to_say": "أفضل عدم القول"
+      },
+      "relationshipTypes": {
+        "platonic": "أفلاطوني فقط",
+        "romantic": "رومانسي محتمل",
+        "open": "ترتيب مفتوح"
+      },
+      "primaryReasons": {
+        "financial": "الاستقرار المالي",
+        "immigration": "الهجرة/التأشيرة",
+        "family_pressure": "ضغط عائلي",
+        "legal_benefits": "منافع قانونية",
+        "companionship": "الرفقة",
+        "safety": "السلامة والحماية",
+        "other": "آخر"
+      },
+      "childrenOptions": {
+        "yes": "نعم",
+        "no": "لا",
+        "maybe": "ربما / منفتح"
+      },
+      "familyPlans": {
+        "biological": "أطفال بيولوجيون",
+        "adoption": "تبني",
+        "surrogacy": "تأجير الأرحام",
+        "ivf": "تلقيح صناعي/علاج الخصوبة",
+        "co_parenting": "أبوة مشتركة",
+        "fostering": "رعاية بديلة",
+        "already_have": "لدي أطفال بالفعل",
+        "open_discussion": "منفتح للنقاش",
+        "other": "آخر"
+      },
+      "petsOptions": {
+        "love_them": "أحبها",
+        "like_them": "أحبها قليلاً",
+        "indifferent": "محايد",
+        "allergic": "لدي حساسية",
+        "dont_like": "لا أحبها"
+      },
+      "housingPrefs": {
+        "separate_spaces": "غرف/مساحات منفصلة",
+        "roommates": "العيش كزملاء سكن",
+        "separate_homes": "منازل منفصلة قريبة",
+        "shared_bedroom": "غرفة نوم مشتركة",
+        "flexible": "مرن/قابل للتفاوض"
+      },
+      "financialArr": {
+        "separate": "إبقاء المالية منفصلة",
+        "shared_expenses": "تقاسم الفواتير/المصاريف",
+        "joint": "مالية مشتركة",
+        "prenup_required": "اتفاقية ما قبل الزواج",
+        "flexible": "مرن/قابل للتفاوض"
+      },
+      "educationLevels": {
+        "high_school": "ثانوية عامة",
+        "associates": "شهادة الزمالة",
+        "bachelors": "بكالوريوس",
+        "masters": "ماجستير",
+        "doctorate": "دكتوراه",
+        "trade_school": "مدرسة مهنية",
+        "self_taught": "تعلم ذاتي",
+        "other": "آخر"
+      },
+      "drinkingOptions": {
+        "never": "أبداً",
+        "socially": "اجتماعياً",
+        "regularly": "بانتظام",
+        "prefer_not_to_say": "أفضل عدم القول"
+      },
+      "smokingOptions": {
+        "never": "أبداً",
+        "socially": "اجتماعياً",
+        "regularly": "بانتظام",
+        "trying_to_quit": "أحاول الإقلاع"
+      },
+      "weedOptions": {
+        "never": "أبداً",
+        "socially": "اجتماعياً",
+        "regularly": "بانتظام"
+      },
+      "drugOptions": {
+        "never": "أبداً",
+        "socially": "اجتماعياً",
+        "regularly": "بانتظام"
+      }
     }
   },
   "matchingPreferences": {
@@ -897,7 +1088,11 @@
       "success": "تم إرسال الإبلاغ",
       "successMessage": "شكراً لك على المساعدة في الحفاظ على أمان Accord. سيقوم فريقنا بمراجعة هذا الإبلاغ.",
       "error": "فشل إرسال الإبلاغ. يرجى المحاولة مرة أخرى."
-    }
+    },
+    "matchCountTitle": "{{current}} من {{limit}} توافقات نشطة",
+    "matchCountSubtitleFree": "الخطة المجانية",
+    "matchCountSubtitleWarning": "تكاد تمتلئ — احصل على توافقات غير محدودة",
+    "matchCountSubtitleFull": "ألغِ توافقاً مع شخص ما أو ترقَّ للحصول على توافقات غير محدودة"
   },
   "messages": {
     "title": "الرسائل",
@@ -2084,7 +2279,14 @@
     "tooFarTitle": "بعيد جداً",
     "tooFarMessage": "تفضيلات بحث هذا الشخص لا تشمل منطقتك.",
     "globalSearchPremiumTitle": "البحث العالمي أصبح ميزة Premium",
-    "globalSearchPremiumMessage": "البحث العالمي أصبح الآن ميزة Premium. ستتم تصفية تطابقاتك حسب المسافة. قم بالترقية لمواصلة التطابق عالمياً."
+    "globalSearchPremiumMessage": "البحث العالمي أصبح الآن ميزة Premium. ستتم تصفية تطابقاتك حسب المسافة. قم بالترقية لمواصلة التطابق عالمياً.",
+    "newMessageFrom": "رسالة جديدة من {{name}}",
+    "userLikesYou": "{{name}} معجب بك!",
+    "someoneLikesYou": "شخص ما معجب بك!",
+    "tapToSeeProfile": "اضغط لرؤية ملفه الشخصي",
+    "upgradeToSeePremium": "ترقّ إلى بريميوم لمعرفة من",
+    "reactedWith": "تفاعل {{name}} بـ {{emoji}}",
+    "tapToViewConversation": "اضغط لعرض المحادثة"
   },
   "prompts": {
     "idealMarriage": "زواجي اللافندري المثالي يبدو مثل...",

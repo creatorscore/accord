@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 import Animated, {
   useSharedValue,
@@ -46,6 +47,7 @@ export default function MatchCelebrationModal({
   onSendMessage,
   onKeepSwiping,
 }: MatchCelebrationModalProps) {
+  const { t } = useTranslation();
   const shouldBlurMatched = (matchedUser?.photoBlurEnabled || false) && !isAdmin;
   const scale = useSharedValue(0);
   const heartScale = useSharedValue(0);
@@ -117,10 +119,10 @@ export default function MatchCelebrationModal({
         >
           {/* Title */}
           <Animated.View style={[styles.titleContainer, titleStyle]}>
-            <Text style={styles.itsA}>It's a</Text>
-            <Text style={styles.match}>Match!</Text>
+            <Text style={styles.itsA}>{t('discover.match.itsA')}</Text>
+            <Text style={styles.match}>{t('discover.match.exclamation')}</Text>
             <Text style={styles.subtitle}>
-              You and {matchedUser.displayName} liked each other
+              {t('discover.match.bothLiked', { name: matchedUser.displayName })}
             </Text>
           </Animated.View>
 
@@ -162,11 +164,11 @@ export default function MatchCelebrationModal({
           <Animated.View style={[styles.buttonsContainer, buttonsStyle]}>
             <TouchableOpacity style={styles.messageButton} onPress={onSendMessage}>
               <MaterialCommunityIcons name="message-text" size={22} color="#A08AB7" />
-              <Text style={styles.messageButtonText}>Send a Message</Text>
+              <Text style={styles.messageButtonText}>{t('discover.match.sendMessage')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.keepSwipingButton} onPress={onKeepSwiping}>
-              <Text style={styles.keepSwipingText}>Keep Browsing</Text>
+              <Text style={styles.keepSwipingText}>{t('discover.match.keepBrowsing')}</Text>
             </TouchableOpacity>
           </Animated.View>
         </LinearGradient>

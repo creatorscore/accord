@@ -56,6 +56,25 @@
       "weeksAgo": "{{count}} ہفتے پہلے",
       "monthsAgo": "{{count}} مہینے پہلے",
       "yearsAgo": "{{count}} سال پہلے"
+    },
+    "errorBoundary": {
+      "title": "اوہ! کچھ غلط ہو گیا",
+      "message": "ہمیں ایک غیر متوقع خرابی کا سامنا ہوا۔ براہ کرم ایپ کو دوبارہ شروع کرنے کی کوشش کریں۔",
+      "restart": "ایپ دوبارہ شروع کریں"
+    },
+    "update": {
+      "forcedTitle": "ہم نے کچھ اہم تبدیلیاں کی ہیں",
+      "softTitle": "کچھ نیا آپ کا منتظر ہے",
+      "forcedBody": "Accord کا یہ ورژن اب معاون نہیں ہے۔ اپنی گفتگوؤں کو محفوظ رکھنے اور ہر چیز کو ہموار چلانے کے لیے اپ ڈیٹ کریں۔",
+      "softBody": "Accord کا ایک نیا ورژن بہتریوں کے ساتھ دستیاب ہے جو آپ کو پسند آئیں گی۔",
+      "updateButton": "Accord اپ ڈیٹ کریں",
+      "notNow": "ابھی نہیں",
+      "nativeTitleRequired": "اپ ڈیٹ درکار",
+      "nativeTitleAvailable": "اپ ڈیٹ دستیاب",
+      "nativeBodyRequired": "جاری رکھنے کے لیے Accord کا نیا ورژن درکار ہے۔ براہ کرم ابھی اپ ڈیٹ کریں۔",
+      "nativeBodyAvailable": "بہتریوں اور بگ فکسز کے ساتھ Accord کا نیا ورژن دستیاب ہے۔",
+      "nativeUpdateNow": "ابھی اپ ڈیٹ کریں",
+      "nativeLater": "بعد میں"
     }
   },
   "discover": {
@@ -171,6 +190,13 @@
       "upgradeMessage": "ان خصوصیات کو فعال کرنے اور دنیا میں کہیں بھی مماثلتیں تلاش کرنے کے لیے پریمیم میں اپ گریڈ کریں۔",
       "upgradeToPremium": "پریمیم میں اپ گریڈ",
       "maybeLater": "شاید بعد میں"
+    },
+    "match": {
+      "itsA": "یہ ہے ایک",
+      "exclamation": "میچ!",
+      "bothLiked": "آپ اور {{name}} نے ایک دوسرے کو پسند کیا",
+      "sendMessage": "پیغام بھیجیں",
+      "keepBrowsing": "براؤزنگ جاری رکھیں"
     }
   },
   "filters": {
@@ -633,6 +659,171 @@
       "enterOccupation": "براہ کرم اپنا پیشہ درج کریں۔",
       "enterEducation": "براہ کرم اپنی تعلیم درج کریں۔",
       "notAuthenticatedMessage": "تصدیق نہیں ہوئی۔ براہ کرم دوبارہ سائن ان کریں۔"
+    },
+    "options": {
+      "genders": {
+        "man": "مرد",
+        "woman": "عورت",
+        "non_binary": "نان-بائنری"
+      },
+      "pronouns": {
+        "she_her": "وہ (مؤنث)",
+        "he_him": "وہ (مذکر)",
+        "they_them": "وہ (غیر بائنری)",
+        "she_they": "وہ مؤنث/نان-بائنری",
+        "he_they": "وہ مذکر/نان-بائنری",
+        "any_pronouns": "کوئی بھی ضمیر",
+        "ask_me": "مجھ سے پوچھیں",
+        "prefer_not_to_say": "بتانا نہیں چاہتا"
+      },
+      "orientations": {
+        "lesbian": "لیسبیئن",
+        "gay": "گے",
+        "bisexual": "بائی سیکشوئل",
+        "straight": "سٹریٹ",
+        "queer": "کوئیر",
+        "asexual": "اے سیکشوئل",
+        "pansexual": "پین سیکشوئل",
+        "demisexual": "ڈیمی سیکشوئل",
+        "questioning": "سوالیہ",
+        "omnisexual": "اومنی سیکشوئل",
+        "polysexual": "پولی سیکشوئل",
+        "androsexual": "اینڈرو سیکشوئل",
+        "gynesexual": "جائنی سیکشوئل",
+        "sapiosexual": "سیپیو سیکشوئل",
+        "heteroflexible": "ہیٹرو فلیکسیبل",
+        "homoflexible": "ہومو فلیکسیبل",
+        "prefer_not_to_say": "بتانا نہیں چاہتا",
+        "other": "دیگر"
+      },
+      "genderPrefs": {
+        "men": "مرد",
+        "women": "عورتیں",
+        "non_binary": "نان-بائنری",
+        "everyone": "سب"
+      },
+      "ethnicities": {
+        "asian": "ایشیائی",
+        "black_african": "سیاہ فام/افریقی",
+        "hispanic_latinx": "ہسپانوی/لاطینی",
+        "indigenous_native": "مقامی",
+        "middle_eastern_north_african": "مشرقِ وسطیٰ/شمالی افریقی",
+        "pacific_islander": "بحرالکاہل کے جزائر",
+        "south_asian": "جنوبی ایشیائی",
+        "white_caucasian": "سفید فام/قفقازی",
+        "multiracial": "متعدد نسلی",
+        "other": "دیگر",
+        "prefer_not_to_say": "بتانا نہیں چاہتا"
+      },
+      "religions": {
+        "christian": "مسیحی",
+        "catholic": "کیتھولک",
+        "protestant": "پروٹسٹنٹ",
+        "muslim": "مسلمان",
+        "jewish": "یہودی",
+        "hindu": "ہندو",
+        "buddhist": "بدھ مت",
+        "sikh": "سکھ",
+        "atheist": "ملحد",
+        "agnostic": "لاادری",
+        "spiritual_but_not_religious": "روحانی مگر مذہبی نہیں",
+        "other": "دیگر",
+        "prefer_not_to_say": "بتانا نہیں چاہتا"
+      },
+      "politicalViews": {
+        "liberal": "لبرل",
+        "progressive": "ترقی پسند",
+        "moderate": "معتدل",
+        "conservative": "قدامت پسند",
+        "libertarian": "آزاد خیال",
+        "socialist": "سوشلسٹ",
+        "apolitical": "غیر سیاسی",
+        "other": "دیگر",
+        "prefer_not_to_say": "بتانا نہیں چاہتا"
+      },
+      "relationshipTypes": {
+        "platonic": "صرف افلاطونی",
+        "romantic": "رومانوی ممکن",
+        "open": "کھلا انتظام"
+      },
+      "primaryReasons": {
+        "financial": "مالی استحکام",
+        "immigration": "امیگریشن/ویزا",
+        "family_pressure": "خاندانی دباؤ",
+        "legal_benefits": "قانونی فوائد",
+        "companionship": "رفاقت",
+        "safety": "سلامتی اور تحفظ",
+        "other": "دیگر"
+      },
+      "childrenOptions": {
+        "yes": "جی ہاں",
+        "no": "نہیں",
+        "maybe": "شاید / کھلا"
+      },
+      "familyPlans": {
+        "biological": "حیاتیاتی اولاد",
+        "adoption": "گود لینا",
+        "surrogacy": "سروگیسی",
+        "ivf": "آئی وی ایف/علاج",
+        "co_parenting": "مشترکہ والدین",
+        "fostering": "فاسٹرنگ",
+        "already_have": "پہلے سے اولاد ہے",
+        "open_discussion": "بحث کے لیے تیار",
+        "other": "دیگر"
+      },
+      "petsOptions": {
+        "love_them": "بہت پسند",
+        "like_them": "پسند",
+        "indifferent": "غیر جانبدار",
+        "allergic": "الرجی ہے",
+        "dont_like": "پسند نہیں"
+      },
+      "housingPrefs": {
+        "separate_spaces": "الگ کمرے/جگہیں",
+        "roommates": "روم میٹس کی طرح",
+        "separate_homes": "قریب الگ گھر",
+        "shared_bedroom": "مشترکہ کمرہ",
+        "flexible": "لچکدار/قابل بحث"
+      },
+      "financialArr": {
+        "separate": "مالیات الگ رکھیں",
+        "shared_expenses": "اخراجات مشترک",
+        "joint": "مشترکہ مالیات",
+        "prenup_required": "پری نپ ضروری",
+        "flexible": "لچکدار/قابل بحث"
+      },
+      "educationLevels": {
+        "high_school": "ہائی اسکول",
+        "associates": "ایسوسی ایٹ ڈگری",
+        "bachelors": "بیچلر ڈگری",
+        "masters": "ماسٹرز ڈگری",
+        "doctorate": "پی ایچ ڈی",
+        "trade_school": "ٹریڈ اسکول",
+        "self_taught": "خود سکھایا",
+        "other": "دیگر"
+      },
+      "drinkingOptions": {
+        "never": "کبھی نہیں",
+        "socially": "سماجی طور پر",
+        "regularly": "باقاعدگی سے",
+        "prefer_not_to_say": "بتانا نہیں چاہتا"
+      },
+      "smokingOptions": {
+        "never": "کبھی نہیں",
+        "socially": "سماجی طور پر",
+        "regularly": "باقاعدگی سے",
+        "trying_to_quit": "چھوڑنے کی کوشش"
+      },
+      "weedOptions": {
+        "never": "کبھی نہیں",
+        "socially": "سماجی طور پر",
+        "regularly": "باقاعدگی سے"
+      },
+      "drugOptions": {
+        "never": "کبھی نہیں",
+        "socially": "سماجی طور پر",
+        "regularly": "باقاعدگی سے"
+      }
     }
   },
   "matchingPreferences": {
@@ -903,7 +1094,11 @@
     "waitingForOther": "آپ نے اپنا جائزہ جمع کرا دیا ہے۔ دوسرے فریق کا انتظار ہے۔",
     "youNeedToReview": "براہ کرم اپنا جائزہ جمع کرائیں",
     "reviewNow": "ابھی جائزہ لیں",
-    "revealed": "ظاہر ہو گیا"
+    "revealed": "ظاہر ہو گیا",
+    "matchCountTitle": "{{limit}} میں سے {{current}} فعال میچز",
+    "matchCountSubtitleFree": "مفت پلان",
+    "matchCountSubtitleWarning": "تقریباً بھر گیا — لامحدود میچز حاصل کریں",
+    "matchCountSubtitleFull": "کسی سے میچ ختم کریں یا لامحدود کے لیے اپ گریڈ کریں"
   },
   "messages": {
     "title": "پیغامات",
@@ -2090,7 +2285,14 @@
     "tooFarTitle": "بہت دور",
     "tooFarMessage": "اس شخص کی تلاش کی ترجیحات آپ کے علاقے کو شامل نہیں کرتیں۔",
     "globalSearchPremiumTitle": "عالمی تلاش اب Premium ہے",
-    "globalSearchPremiumMessage": "عالمی تلاش اب ایک Premium خصوصیت ہے۔ آپ کے میچ فاصلے کے لحاظ سے فلٹر ہوں گے۔ دنیا بھر میں میچنگ جاری رکھنے کے لیے اپ گریڈ کریں۔"
+    "globalSearchPremiumMessage": "عالمی تلاش اب ایک Premium خصوصیت ہے۔ آپ کے میچ فاصلے کے لحاظ سے فلٹر ہوں گے۔ دنیا بھر میں میچنگ جاری رکھنے کے لیے اپ گریڈ کریں۔",
+    "newMessageFrom": "{{name}} کی طرف سے نیا پیغام",
+    "userLikesYou": "{{name}} آپ کو پسند کرتا ہے!",
+    "someoneLikesYou": "کوئی آپ کو پسند کرتا ہے!",
+    "tapToSeeProfile": "ان کی پروفائل دیکھنے کے لیے ٹیپ کریں",
+    "upgradeToSeePremium": "یہ دیکھنے کے لیے کہ کون، پریمیم میں اپ گریڈ کریں",
+    "reactedWith": "{{name}} نے {{emoji}} کے ساتھ ردعمل ظاہر کیا",
+    "tapToViewConversation": "گفتگو دیکھنے کے لیے ٹیپ کریں"
   },
   "prompts": {
     "idealMarriage": "میرا مثالی لیونڈر میرج ایسا دکھتا ہے...",

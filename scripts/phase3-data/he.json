@@ -1,0 +1,165 @@
+{
+  "genders": {
+    "man": "גבר",
+    "woman": "אישה",
+    "non_binary": "א-בינרי"
+  },
+  "pronouns": {
+    "she_her": "היא",
+    "he_him": "הוא",
+    "they_them": "הם",
+    "she_they": "היא/הם",
+    "he_they": "הוא/הם",
+    "any_pronouns": "כל לשון פנייה",
+    "ask_me": "תשאלו אותי",
+    "prefer_not_to_say": "מעדיף/ה לא לומר"
+  },
+  "orientations": {
+    "lesbian": "לסבית",
+    "gay": "הומו",
+    "bisexual": "ביסקסואל",
+    "straight": "סטרייט",
+    "queer": "קווירי",
+    "asexual": "א-סקסואל",
+    "pansexual": "פאנסקסואל",
+    "demisexual": "דמיסקסואל",
+    "questioning": "מתלבט/ת",
+    "omnisexual": "אומניסקסואל",
+    "polysexual": "פוליסקסואל",
+    "androsexual": "אנדרוסקסואל",
+    "gynesexual": "גינסקסואל",
+    "sapiosexual": "סאפיוסקסואל",
+    "heteroflexible": "הטרופלקסיבל",
+    "homoflexible": "הומופלקסיבל",
+    "prefer_not_to_say": "מעדיף/ה לא לומר",
+    "other": "אחר"
+  },
+  "genderPrefs": {
+    "men": "גברים",
+    "women": "נשים",
+    "non_binary": "א-בינרים",
+    "everyone": "כולם"
+  },
+  "ethnicities": {
+    "asian": "אסייתי",
+    "black_african": "שחור/אפריקאי",
+    "hispanic_latinx": "היספני/לטיני",
+    "indigenous_native": "ילידי",
+    "middle_eastern_north_african": "מזרח תיכוני/צפון אפריקאי",
+    "pacific_islander": "מאיי האוקיינוס השקט",
+    "south_asian": "דרום אסייתי",
+    "white_caucasian": "לבן/קווקזי",
+    "multiracial": "רב-גזעי",
+    "other": "אחר",
+    "prefer_not_to_say": "מעדיף/ה לא לומר"
+  },
+  "religions": {
+    "christian": "נוצרי",
+    "catholic": "קתולי",
+    "protestant": "פרוטסטנטי",
+    "muslim": "מוסלמי",
+    "jewish": "יהודי",
+    "hindu": "הינדי",
+    "buddhist": "בודהיסטי",
+    "sikh": "סיקי",
+    "atheist": "אתאיסט",
+    "agnostic": "אגנוסטי",
+    "spiritual_but_not_religious": "רוחני אך לא דתי",
+    "other": "אחר",
+    "prefer_not_to_say": "מעדיף/ה לא לומר"
+  },
+  "politicalViews": {
+    "liberal": "ליברלי",
+    "progressive": "פרוגרסיבי",
+    "moderate": "מתון",
+    "conservative": "שמרני",
+    "libertarian": "ליברטריאני",
+    "socialist": "סוציאליסט",
+    "apolitical": "א-פוליטי",
+    "other": "אחר",
+    "prefer_not_to_say": "מעדיף/ה לא לומר"
+  },
+  "relationshipTypes": {
+    "platonic": "אפלטוני בלבד",
+    "romantic": "רומנטי אפשרי",
+    "open": "הסדר פתוח"
+  },
+  "primaryReasons": {
+    "financial": "יציבות כלכלית",
+    "immigration": "הגירה/ויזה",
+    "family_pressure": "לחץ משפחתי",
+    "legal_benefits": "הטבות משפטיות",
+    "companionship": "חברות",
+    "safety": "בטיחות והגנה",
+    "other": "אחר"
+  },
+  "childrenOptions": {
+    "yes": "כן",
+    "no": "לא",
+    "maybe": "אולי / פתוח/ה לכך"
+  },
+  "familyPlans": {
+    "biological": "ילדים ביולוגיים",
+    "adoption": "אימוץ",
+    "surrogacy": "פונדקאות",
+    "ivf": "הפריה חוץ גופית/טיפולי פוריות",
+    "co_parenting": "הורות משותפת",
+    "fostering": "אומנה",
+    "already_have": "כבר יש לי ילדים",
+    "open_discussion": "פתוח/ה לדיון",
+    "other": "אחר"
+  },
+  "petsOptions": {
+    "love_them": "אוהב/ת מאוד",
+    "like_them": "מחבב/ת",
+    "indifferent": "אדיש/ה",
+    "allergic": "אלרגי/ת",
+    "dont_like": "לא אוהב/ת"
+  },
+  "housingPrefs": {
+    "separate_spaces": "חדרים/מרחבים נפרדים",
+    "roommates": "לגור כשותפים",
+    "separate_homes": "בתים נפרדים בקרבת מקום",
+    "shared_bedroom": "חדר שינה משותף",
+    "flexible": "גמיש/נתון למשא ומתן"
+  },
+  "financialArr": {
+    "separate": "כספים נפרדים",
+    "shared_expenses": "שיתוף חשבונות/הוצאות",
+    "joint": "כספים משותפים",
+    "prenup_required": "נדרש הסכם קדם-נישואין",
+    "flexible": "גמיש/נתון למשא ומתן"
+  },
+  "educationLevels": {
+    "high_school": "תיכון",
+    "associates": "תואר שותף",
+    "bachelors": "תואר ראשון",
+    "masters": "תואר שני",
+    "doctorate": "דוקטורט",
+    "trade_school": "בית ספר מקצועי",
+    "self_taught": "לימוד עצמי",
+    "other": "אחר"
+  },
+  "drinkingOptions": {
+    "never": "אף פעם",
+    "socially": "חברתית",
+    "regularly": "באופן קבוע",
+    "prefer_not_to_say": "מעדיף/ה לא לומר"
+  },
+  "smokingOptions": {
+    "never": "אף פעם",
+    "socially": "חברתית",
+    "regularly": "באופן קבוע",
+    "trying_to_quit": "מנסה להפסיק"
+  },
+  "weedOptions": {
+    "never": "אף פעם",
+    "socially": "חברתית",
+    "regularly": "באופן קבוע"
+  },
+  "drugOptions": {
+    "never": "אף פעם",
+    "socially": "חברתית",
+    "regularly": "באופן קבוע"
+  }
+}
