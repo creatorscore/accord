@@ -260,11 +260,15 @@ export default function Likes() {
           .eq('id', profileId)
           .maybeSingle();
         if (!profErr && prof) {
-          const serverDate = prof.daily_likes_reset_date
-            ? new Date(prof.daily_likes_reset_date + 'T00:00:00Z').toDateString()
-            : null;
+          // Compare UTC date strings directly. Converting the UTC-midnight
+          // date via toDateString() in the client's local timezone shifted
+          // it to "yesterday" for west-of-UTC users, making every fresh
+          // server count look stale — so "5 remaining" persisted even after
+          // a like had incremented the server-side counter.
+          const todayUTC = new Date().toISOString().slice(0, 10);
+          const serverDateUTC = prof.daily_likes_reset_date || null;
           if (typeof prof.daily_likes_count === 'number') {
-            serverCount = serverDate === today ? prof.daily_likes_count : 0;
+            serverCount = serverDateUTC === todayUTC ? prof.daily_likes_count : 0;
           }
         }
       }

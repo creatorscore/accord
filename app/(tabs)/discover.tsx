@@ -798,14 +798,16 @@ export default function Discover() {
           .eq('id', currentProfileId)
           .maybeSingle();
         if (!profErr && prof) {
-          const serverDate = prof.daily_likes_reset_date
-            ? new Date(prof.daily_likes_reset_date + 'T00:00:00Z').toDateString()
-            : null;
+          // The server's daily_likes_reset_date is a DATE column (UTC).
+          // Compare it to today's UTC date directly as YYYY-MM-DD strings —
+          // previously we converted via toDateString() in the client's local
+          // timezone, which shifted the UTC date into yesterday for
+          // west-of-UTC users and made the client always treat server counts
+          // as stale (so likes never appeared decremented).
+          const todayUTC = new Date().toISOString().slice(0, 10);
+          const serverDateUTC = prof.daily_likes_reset_date || null;
           if (typeof prof.daily_likes_count === 'number') {
-            // If the server's reset_date is before today (trigger hasn't fired
-            // yet because the user hasn't tried to swipe), treat the count as 0
-            // — it will reset on the next like anyway.
-            serverCount = serverDate === today ? prof.daily_likes_count : 0;
+            serverCount = serverDateUTC === todayUTC ? prof.daily_likes_count : 0;
           }
         }
       }
@@ -3758,6 +3760,34 @@ export default function Discover() {
                     >
                       <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.search')}</Text>
                     </TouchableOpacity>
+
+                    {/* Daily likes remaining — free users only. Gives clear
+                        feedback that the 5/day limit is counting down, and
+                        lets them tap through to the paywall if they want
+                        unlimited. */}
+                    {!isPremium && !isPlatinum && (() => {
+                      const remaining = Math.max(0, DAILY_LIKE_LIMIT - likeCount);
+                      const depleted = remaining === 0;
+                      return (
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: depleted ? '#EF4444' : '#A08AB7',
+                            paddingHorizontal: 14,
+                            height: 33,
+                            borderRadius: 999,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                          }}
+                          onPress={() => setShowPaywall(true)}
+                          activeOpacity={0.85}
+                        >
+                          <MaterialCommunityIcons name="heart" size={14} color="#fff" style={{ marginRight: 4 }} />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff', lineHeight: 14 }}>
+                            {remaining}/{DAILY_LIKE_LIMIT}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })()}
 
                     {isPlatinum && (
                       <TouchableOpacity

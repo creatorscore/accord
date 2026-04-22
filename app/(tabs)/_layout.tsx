@@ -18,6 +18,17 @@ export default function TabsLayout() {
   const tabBarHeight = 60 + insets.bottom;
   const paddingBottom = insets.bottom + 5;
 
+  // Hardcoded tab bar icon colors. The tab bar background is always the
+  // dark brand color (#0A0A0B) regardless of the user's system theme, so
+  // icons need to be white-on-dark always. Relying on the tintColor props
+  // alone wasn't reliable on some Android devices — when a user had system
+  // dark-mode off, React Navigation's theme was bleeding through and
+  // rendering icons in theme.text (near-black), giving black-on-black
+  // invisible icons. Passing the color explicitly to every Icon bypasses
+  // that code path entirely.
+  const ACTIVE_ICON = '#FFFFFF';
+  const INACTIVE_ICON = 'rgba(255,255,255,0.6)';
+
   return (
     <Tabs
       screenListeners={{
@@ -26,8 +37,8 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         lazy: true,
-        tabBarActiveTintColor: '#FFFFFF',
-        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.5)',
+        tabBarActiveTintColor: ACTIVE_ICON,
+        tabBarInactiveTintColor: INACTIVE_ICON,
         tabBarStyle: {
           backgroundColor: '#0A0A0B',
           borderTopWidth: 0,
@@ -46,8 +57,8 @@ export default function TabsLayout() {
         name="discover"
         options={{
           title: t('tabs.discover'),
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name="search" size={22} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Ionicons name="search" size={22} color={focused ? ACTIVE_ICON : INACTIVE_ICON} />
           ),
         }}
       />
@@ -55,9 +66,9 @@ export default function TabsLayout() {
         name="likes"
         options={{
           title: t('tabs.likes'),
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ focused }) => (
             <View>
-              <FontAwesome5 name="star" size={22} color={color} />
+              <FontAwesome5 name="star" size={22} color={focused ? ACTIVE_ICON : INACTIVE_ICON} />
               {unreadLikeCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
@@ -73,8 +84,8 @@ export default function TabsLayout() {
         name="matches"
         options={{
           title: t('tabs.matches'),
-          tabBarIcon: ({ color, focused }) => (
-            <FontAwesome5 name="heart" size={22} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <FontAwesome5 name="heart" size={22} color={focused ? ACTIVE_ICON : INACTIVE_ICON} />
           ),
         }}
       />
@@ -82,9 +93,9 @@ export default function TabsLayout() {
         name="messages"
         options={{
           title: t('tabs.messages'),
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ focused }) => (
             <View>
-              <FontAwesome5 name="comment-alt" size={22} color={color} />
+              <FontAwesome5 name="comment-alt" size={22} color={focused ? ACTIVE_ICON : INACTIVE_ICON} />
               {unreadMessageCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
@@ -100,8 +111,8 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: t('tabs.profile'),
-          tabBarIcon: ({ color, focused }) => (
-            <FontAwesome5 name="user" size={22} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <FontAwesome5 name="user" size={22} color={focused ? ACTIVE_ICON : INACTIVE_ICON} />
           ),
         }}
       />

@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { TOTAL_ONBOARDING_STEPS } from '@/lib/onboarding-steps';
 import { getSectionProgress, ONBOARDING_SECTIONS } from '@/lib/onboarding-config';
 import { usePreviewModeStore } from '@/stores/previewModeStore';
@@ -65,6 +66,7 @@ export default function OnboardingLayout({
   currentRoute,
   children,
 }: OnboardingLayoutProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -153,7 +155,10 @@ export default function OnboardingLayout({
             })}
           </View>
           <Text style={[styles.sectionLabel, { color: isDark ? '#8E8E93' : '#A08AB7' }]}>
-            {sectionInfo.sectionLabel}
+            {/* Section label (Basics, Identity, Goals, etc.) routed through
+                i18n so non-English locales show a translated label. Falls
+                back to the hardcoded English from ONBOARDING_SECTIONS. */}
+            {t(`onboarding.sections.${ONBOARDING_SECTIONS.find(s => s.label === sectionInfo.sectionLabel)?.key ?? 'basics'}`, sectionInfo.sectionLabel)}
           </Text>
         </View>
 
@@ -264,7 +269,7 @@ export default function OnboardingLayout({
           {currentRoute ? (
             <TouchableOpacity onPress={handlePreviewPress} activeOpacity={0.7} style={styles.previewLink}>
               <Text style={[styles.previewLinkText, { color: isDark ? '#A08AB7' : '#8B72A8' }]}>
-                Take a look around →
+                {t('onboarding.previewLink', 'Take a look around \u2192')}
               </Text>
             </TouchableOpacity>
           ) : (
