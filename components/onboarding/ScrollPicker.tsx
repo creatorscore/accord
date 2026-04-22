@@ -91,24 +91,27 @@ export default function ScrollPicker({
   const isInitialized = useSharedValue(false);
   const hasInitialized = useRef(false);
 
-  // Scroll to selected value on mount, and when items change (unit switch)
+  // Scroll to selected value on mount, when items change (unit switch),
+  // AND when selectedValue changes (e.g. user navigated back to this step
+  // and the store-hydrated value is different from what's showing).
+  // Previously the dep array was `[items]` only, so returning to a step
+  // where heightInches was e.g. 70 would leave the picker at wherever it
+  // had been scrolled on last mount (often index 0 or the mid-range default).
   useEffect(() => {
     if (selectedValue === null) return;
     const index = items.findIndex((item) => item.value === selectedValue);
     if (index < 0) return;
 
     if (!hasInitialized.current) {
-      // First mount — short delay for layout
       setTimeout(() => {
         scrollTo(scrollRef, 0, index * ITEM_HEIGHT, false);
         hasInitialized.current = true;
         isInitialized.value = true;
       }, 150);
     } else {
-      // Items changed (unit switch) — jump immediately
       scrollTo(scrollRef, 0, index * ITEM_HEIGHT, false);
     }
-  }, [items]);
+  }, [items, selectedValue]);
 
   // Haptic tick as each item crosses center during scroll
   useAnimatedReaction(
@@ -133,6 +136,11 @@ export default function ScrollPicker({
       scrollY.value = event.contentOffset.y;
     },
     onMomentumEnd: (event) => {
+      // Gate onValueChange on isInitialized so the programmatic scrollTo
+      // we fire to position the wheel on mount doesn't report itself as a
+      // user selection. Previously this fired handleSelect(0) during mount,
+      // clobbering the stored heightInches with the list's first item (4ft).
+      if (!isInitialized.value) return;
       const index = Math.round(event.contentOffset.y / ITEM_HEIGHT);
       runOnJS(handleSelect)(index);
     },

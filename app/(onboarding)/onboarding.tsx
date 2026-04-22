@@ -72,6 +72,23 @@ export default function Onboarding() {
   const [notificationsGranted, setNotificationsGranted] = useState(false);
   const initialLoadDone = useRef(false);
 
+  // Seed notificationsGranted from the actual OS permission on mount, so a
+  // user who enabled notifications in a prior session (or on another step
+  // that triggered the prompt) sees the "enabled" state when they come back
+  // to step 2 instead of the enable button again.
+  useEffect(() => {
+    (async () => {
+      try {
+        const Notifications = require('expo-notifications');
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status === 'granted') setNotificationsGranted(true);
+      } catch {
+        // If expo-notifications is unavailable here, fall back to the user
+        // tapping the button explicitly.
+      }
+    })();
+  }, []);
+
   // Store accessors
   const store = useOnboardingStore();
   const setField = useOnboardingStore((s) => s.setField);
@@ -498,18 +515,32 @@ export default function Onboarding() {
       store.reset();
       router.replace('/(tabs)/discover');
     } else {
-      setSubStep(subStep + 1);
+      // Skip step 13 (family_plans) when the user said "no" to wanting
+      // children — the spec marks family_plans as "only shown if children
+      // ≠ No", so asking them how they'd grow a family they've said they
+      // don't want is noise.
+      let nextStep = subStep + 1;
+      if (subStep === 12 && store.wantsChildren === 'no' && nextStep === 13) {
+        nextStep = 14;
+      }
+      setSubStep(nextStep);
     }
-  }, [subStep, isStepValid, saveCheckpoint]);
+  }, [subStep, isStepValid, saveCheckpoint, store.wantsChildren]);
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (subStep === 0) {
       router.back();
     } else {
-      setSubStep(subStep - 1);
+      // Mirror the skip-family-plans logic on back-navigation so the user
+      // doesn't land on step 13 when they got there by skipping from 12 → 14.
+      let prevStep = subStep - 1;
+      if (subStep === 14 && store.wantsChildren === 'no' && prevStep === 13) {
+        prevStep = 12;
+      }
+      setSubStep(prevStep);
     }
-  }, [subStep]);
+  }, [subStep, store.wantsChildren]);
 
   const handleSkip = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

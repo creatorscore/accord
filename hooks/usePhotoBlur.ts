@@ -38,22 +38,23 @@ export function getTransformUrl(_photoUrl: string, _width = 300): string | null 
 export function usePhotoBlur({
   shouldBlur,
   photoUrl,
-  blurDataUri,
+  blurDataUri: _blurDataUri,
 }: UsePhotoBlurOptions): UsePhotoBlurReturn {
-  const hasBlurData = shouldBlur && !!blurDataUri;
-
+  // Always render the full-resolution photoUrl with a strong native
+  // blurRadius. The 20px-wide blur_data_uri thumbnail was previously
+  // being stretched to card size, which looked like a pixelated
+  // colored box rather than a blurred photo. Both expo-image (iOS)
+  // and React Native Image (Android via Fresco's IterativeBoxBlur)
+  // support native gaussian blur at this radius without crashing.
   const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
-    shouldBlur: shouldBlur && !hasBlurData,
-    blurIntensity: 30,
+    shouldBlur,
+    blurIntensity: 60,
   });
 
-  // When using blurDataUri, apply native blur on top for extra privacy
-  const dataUriBlurRadius = shouldBlur && hasBlurData ? 35 : 0;
-
   return {
-    imageUri: hasBlurData ? blurDataUri! : photoUrl,
-    isServerBlur: hasBlurData,
-    blurRadius: hasBlurData ? dataUriBlurRadius : blurRadius,
+    imageUri: photoUrl,
+    isServerBlur: false,
+    blurRadius,
     onImageLoad,
     onImageError,
   };

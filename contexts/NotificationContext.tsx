@@ -66,6 +66,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const permissionCheckInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<string | null>(null);
   const lastPermissionCheck = useRef<number>(0);
+  // Tracks the last (userId, token) combo we've saved to the DB. Prevents
+  // the savePushToken chain (GET /profiles → PATCH /profiles → DELETE/POST
+  // /device_tokens) from firing repeatedly when React re-runs our effects
+  // with a new `user` object reference but the same actual user.id + token
+  // values — which was the source of the ~30 req/sec profile query flood.
+  const lastSavedTokenKey = useRef<string | null>(null);
 
   // Keep pathname ref up to date for use in async callbacks
   useEffect(() => {
@@ -370,7 +376,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         permissionCheckInterval.current = null;
       }
     }
-  }, [user]);
+    // Key on user?.id not on `user` object identity — Supabase emits auth
+    // events (TOKEN_REFRESHED) that recreate the user object without
+    // changing user.id, and keying on the whole object caused this effect
+    // (which calls initializePushNotifications → savePushToken) to re-run
+    // constantly, generating hundreds of profile GET/PATCH/DELETE requests.
+  }, [user?.id]);
 
   const initializePushNotifications = async () => {
     try {
@@ -398,10 +409,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         setNotificationsEnabled(true);
         setPermissionStatus('granted');
 
-        // Save token to database
-        // Note: This may fail for new users during onboarding (no profile yet)
-        // The token will be saved again at onboarding completion
-        await savePushToken(user.id, token);
+        // Save token to database (skip if already saved for this user+token)
+        const key = `${user.id}:${token}`;
+        if (lastSavedTokenKey.current !== key) {
+          await savePushToken(user.id, token);
+          lastSavedTokenKey.current = key;
+        }
 
         // Set up notification listeners
         setupListeners();
@@ -454,7 +467,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           if (token && user?.id) {
             setPushToken(token);
             setNotificationsEnabled(true);
-            await savePushToken(user.id, token);
+            const key = `${user.id}:${token}`;
+            if (lastSavedTokenKey.current !== key) {
+              await savePushToken(user.id, token);
+              lastSavedTokenKey.current = key;
+            }
             setupListeners();
             stopPermissionMonitoring();
           }
@@ -501,7 +518,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (token) {
         setPushToken(token);
         setNotificationsEnabled(true);
-        await savePushToken(user.id, token);
+        const key = `${user.id}:${token}`;
+        if (lastSavedTokenKey.current !== key) {
+          await savePushToken(user.id, token);
+          lastSavedTokenKey.current = key;
+        }
 
         // Also ensure it's saved with retry mechanism
         retryCount.current = 0;
@@ -519,6 +540,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // This ensures push tokens are ALWAYS saved, even if profile creation is delayed
   const retrySavePushToken = async () => {
     if (!user?.id || !pushToken) return;
+    // Skip if this exact (user, token) combination has already been confirmed
+    // saved by a previous call (same-session guard against re-entry).
+    const key = `${user.id}:${pushToken}`;
+    if (lastSavedTokenKey.current === key) return;
     if (retryCount.current >= maxRetries) {
       console.warn('⚠️  Max retries reached for push token save');
       return;
@@ -529,6 +554,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (success) {
         retryCount.current = 0; // Reset on success
         retryTimeoutRef.current = null;
+        lastSavedTokenKey.current = key;
       } else {
         // Token not saved yet, schedule another retry
         retryCount.current++;
@@ -577,7 +603,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 setPushToken(newToken);
                 setNotificationsEnabled(true);
                 setPermissionStatus('granted');
-                await savePushToken(user.id, newToken);
+                const key = `${user.id}:${newToken}`;
+                if (lastSavedTokenKey.current !== key) {
+                  await savePushToken(user.id, newToken);
+                  lastSavedTokenKey.current = key;
+                }
                 setupListeners();
                 stopPermissionMonitoring();
               }
@@ -586,9 +616,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               setPermissionStatus(currentStatus);
               startPermissionMonitoring();
             } else if (pushToken) {
-              // We have a token - verify it's saved
-              retryCount.current = 0;
-              await ensurePushTokenSaved(user.id, pushToken);
+              // Token already known + saved once — no need to re-verify every
+              // foreground. ensurePushTokenSaved was firing GET+PATCH+DELETE+
+              // POST on every foreground and on every `user` reference change.
             }
           } catch (error) {
             console.warn('Error checking push token on foreground:', error);
@@ -601,16 +631,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return () => {
       subscription.remove();
     };
-  }, [user, pushToken, startPermissionMonitoring, stopPermissionMonitoring]);
+    // Key on user?.id / pushToken values (not object identity), so
+    // token-refresh events that re-wrap `user` don't re-register the listener.
+  }, [user?.id, pushToken, startPermissionMonitoring, stopPermissionMonitoring]);
 
-  // Initial retry mechanism - start retrying immediately after token is obtained
+  // Initial retry mechanism — fires only when we first obtain a token for
+  // this user. Previously the dep array was [user, pushToken] so every
+  // token-refresh event re-ran the retry loop (which in turn hammered
+  // savePushToken via ensurePushTokenSaved).
   useEffect(() => {
-    if (user && pushToken) {
-      // Start aggressive retry loop
+    if (user?.id && pushToken) {
+      const key = `${user.id}:${pushToken}`;
+      if (lastSavedTokenKey.current === key) return;
       retryCount.current = 0;
       retrySavePushToken();
     }
-  }, [user, pushToken]);
+  }, [user?.id, pushToken]);
 
   const setupListeners = () => {
     // CRITICAL: Listen for push token changes at runtime
@@ -619,9 +655,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     pushTokenListener.current = addPushTokenChangeListener(async (newToken: string) => {
       if (user?.id && newToken) {
         try {
-          // Update both in-memory state and database
+          // Update both in-memory state and database — only if token actually changed
           setPushToken(newToken);
-          await savePushToken(user.id, newToken);
+          const key = `${user.id}:${newToken}`;
+          if (lastSavedTokenKey.current !== key) {
+            await savePushToken(user.id, newToken);
+            lastSavedTokenKey.current = key;
+          }
         } catch (error) {
           console.error('[Push] ❌ Failed to update token after runtime change:', error);
           // Schedule retry
