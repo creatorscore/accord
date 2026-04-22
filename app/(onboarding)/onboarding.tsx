@@ -187,7 +187,23 @@ export default function Onboarding() {
       case 0: return store.displayName.trim().length >= 1;
       case 1: return store.birthDate !== null && store.age !== null && store.age >= 18;
       case 2: return true; // notifications now skippable
-      case 3: return !!(store.locationCity || store.locationState);
+      case 3: {
+        const result = !!(store.locationCity || store.locationState);
+        // TEMP DIAGNOSTIC: log each isStepValid call on location step so we
+        // can see from device logs what the store actually contains when the
+        // Continue button evaluates. Remove once the "can't continue on
+        // location" complaint is understood.
+        console.log('[Onboarding] isStepValid(3):', JSON.stringify({
+          locationCity: store.locationCity,
+          locationState: store.locationState,
+          locationCountry: store.locationCountry,
+          latitude: store.latitude,
+          longitude: store.longitude,
+          result,
+          saving,
+        }));
+        return result;
+      }
       case 4: return !!store.pronouns; // Pronouns required per ONBOARDING_SPEC (incl. "prefer not to say")
       case 5: return store.gender.length > 0;
       case 6: return store.sexualOrientation.length > 0;
@@ -234,10 +250,13 @@ export default function Onboarding() {
 
   // ── Save checkpoint to DB ──
   const saveCheckpoint = useCallback(async (step: number) => {
-    if (!user?.id) return;
+    console.log('[saveCheckpoint] enter, target step =', step, 'user?.id =', user?.id);
+    if (!user?.id) { console.log('[saveCheckpoint] no user, returning'); return; }
     setSaving(true);
     try {
+      console.log('[saveCheckpoint] getDeviceFingerprint...');
       const deviceFingerprint = await getDeviceFingerprint();
+      console.log('[saveCheckpoint] got fingerprint');
 
       // Profile data
       const profileData: Record<string, any> = {
@@ -274,22 +293,44 @@ export default function Onboarding() {
         ...(step >= TOTAL_ONBOARDING_STEPS - 1 ? { profile_complete: true } : {}),
       };
 
-      // Upsert profile (with 1 retry on transient failures)
-      const { data: upserted, error: profileError } = await withRetry(() =>
-        supabase
-          .from('profiles')
-          .upsert(profileData, { onConflict: 'user_id' })
-          .select('id')
-          .single()
+      // Upsert profile, then resolve the profile id with a short timeout race.
+      // Postgres logs show the write completes in ~100ms, but the supabase-js
+      // response can be queued behind a flood of in-flight requests from the
+      // push-token + ban-check + activity-tracker loops, leaving the await
+      // hanging indefinitely from the user's perspective. Cap at 8s — if the
+      // representation never comes back, fall through and re-resolve the id
+      // by user_id below.
+      console.log('[saveCheckpoint] upserting profile...');
+      const upsertPromise = supabase
+        .from('profiles')
+        .upsert(profileData, { onConflict: 'user_id' })
+        .select('id')
+        .single();
+      const timeoutPromise = new Promise<{ data: null; error: { code: 'TIMEOUT'; message: string } }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: { code: 'TIMEOUT', message: 'upsert response timed out — write likely succeeded' } }), 8000)
       );
+      const { data: upserted, error: profileError } = await Promise.race([upsertPromise, timeoutPromise]);
+      console.log('[saveCheckpoint] profile upsert done. err =', profileError?.message, 'id =', upserted?.id);
 
-      if (profileError) throw profileError;
+      // Treat real errors as fatal; treat the timeout as "probably saved, look it up".
+      if (profileError && profileError.code !== 'TIMEOUT') throw profileError;
 
-      const pid = upserted?.id || profileId;
+      let pid = upserted?.id || profileId;
+      if (!pid) {
+        console.log('[saveCheckpoint] no id from upsert, looking up by user_id...');
+        const { data: lookup } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        pid = lookup?.id || null;
+        console.log('[saveCheckpoint] id lookup result:', pid);
+      }
       if (pid && !profileId) setProfileId(pid);
 
       // Save preferences
       if (pid) {
+        console.log('[saveCheckpoint] upserting preferences for pid', pid);
         const prefsData: Record<string, any> = {
           profile_id: pid,
           gender_preference: expandGenderPreference(store.genderPreference),
@@ -315,22 +356,43 @@ export default function Onboarding() {
           willing_to_relocate: store.willingToRelocate,
         };
 
-        const { error: prefsError } = await withRetry(() =>
-          supabase
-            .from('preferences')
-            .upsert(prefsData, { onConflict: 'profile_id' })
+        // Same timeout race as the profile upsert above — protects against
+        // the supabase-js fetch queue stalling on a flood of in-flight requests.
+        const prefsUpsertPromise = supabase
+          .from('preferences')
+          .upsert(prefsData, { onConflict: 'profile_id' });
+        const prefsTimeoutPromise = new Promise<{ error: { code: 'TIMEOUT'; message: string } }>((resolve) =>
+          setTimeout(() => resolve({ error: { code: 'TIMEOUT', message: 'preferences upsert response timed out — write likely succeeded' } }), 8000)
         );
+        const { error: prefsError } = await Promise.race([prefsUpsertPromise, prefsTimeoutPromise]);
+        console.log('[saveCheckpoint] preferences upsert done. err =', prefsError?.message);
 
-        if (prefsError) throw prefsError;
+        if (prefsError && prefsError.code !== 'TIMEOUT') throw prefsError;
       }
 
-      // Save push token if granted
+      // Save push token if granted. Hard-capped with a timeout so a slow
+      // expo-notifications / APNs / FCM handshake doesn't block the user
+      // from advancing past the checkpoint — we've already saved the profile
+      // and preferences, the push token is a nice-to-have.
       if (notificationsGranted && pid) {
-        const token = await registerForPushNotifications().catch(() => null);
+        console.log('[saveCheckpoint] registering push token...');
+        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
+        const token = await Promise.race([
+          registerForPushNotifications().catch((e) => { console.log('[saveCheckpoint] register push failed:', e?.message); return null; }),
+          timeout,
+        ]);
         if (token) {
-          await ensurePushTokenSaved(pid, token).catch(() => {});
+          console.log('[saveCheckpoint] saving push token...');
+          await Promise.race([
+            ensurePushTokenSaved(pid, token).catch((e) => { console.log('[saveCheckpoint] save push token failed:', e?.message); }),
+            new Promise((resolve) => setTimeout(resolve, 3000)),
+          ]);
+        } else {
+          console.log('[saveCheckpoint] push token null or timed out, skipping save');
         }
+        console.log('[saveCheckpoint] push token step done');
       }
+      console.log('[saveCheckpoint] all done, returning');
     } catch (error: any) {
       console.error('Checkpoint save error:', error);
       captureException(error instanceof Error ? error : new Error(error?.message || 'Checkpoint save failed'), { step, context: 'onboarding_checkpoint' });
@@ -343,24 +405,26 @@ export default function Onboarding() {
 
   // ── Navigation ──
   const handleContinue = useCallback(async () => {
+    console.log('[Onboarding] handleContinue pressed at step', subStep);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Keyboard.dismiss();
 
-    if (!isStepValid()) {
+    const valid = isStepValid();
+    console.log('[Onboarding] handleContinue isStepValid =', valid);
+    if (!valid) {
       showToast({ type: 'info', title: 'Required', message: 'Please complete this step to continue.' });
       return;
     }
 
     // Save at checkpoints: after location (3), after pets (14), after drugs (26), final (30).
-    // In-memory answers between these checkpoints are protected by the zustand
-    // persist middleware (see stores/onboardingStore.ts) so an app kill doesn't
-    // wipe gender / gender preference / relationship / intent answers — they
-    // survive in AsyncStorage and hydrate back in when the user reopens.
     const checkpoints = [3, 14, 26, 30];
     if (checkpoints.includes(subStep)) {
+      console.log('[Onboarding] saveCheckpoint starting for step', subStep + 1);
       try {
         await saveCheckpoint(subStep + 1);
-      } catch {
+        console.log('[Onboarding] saveCheckpoint SUCCESS for step', subStep + 1);
+      } catch (err: any) {
+        console.log('[Onboarding] saveCheckpoint FAILED for step', subStep + 1, ':', err?.message || err);
         // Save failed — toast already shown by saveCheckpoint. Stay on current step.
         return;
       }
