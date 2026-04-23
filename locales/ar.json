@@ -2960,5 +2960,12 @@
     "timeHours": "منذ {{count}}س",
     "timeYesterday": "أمس",
     "timeDays": "منذ {{count}}ي"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "توافقات جديدة بالقرب منك ✨",
+      "bodySingular": "انضم {{count}} عضو متوافق جديد هذا الأسبوع. ألقِ نظرة.",
+      "bodyPlural": "انضم {{count}} أعضاء متوافقون جدد هذا الأسبوع. ألقِ نظرة."
+    }
   }
 }

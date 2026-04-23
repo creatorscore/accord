@@ -3194,5 +3194,12 @@
       "subtitle": "Verified profiles are trusted more and seen first",
       "verify": "Verify"
     }
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "New matches near you ✨",
+      "bodySingular": "{{count}} new compatible member joined this week. Come take a look.",
+      "bodyPlural": "{{count}} new compatible members joined this week. Come take a look."
+    }
   }
 }

@@ -2958,5 +2958,12 @@
     "timeHours": "{{count}}სთ წინ",
     "timeYesterday": "გუშინ",
     "timeDays": "{{count}}დ წინ"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "ახალი დამთხვევები თქვენთან ახლოს ✨",
+      "bodySingular": "ამ კვირაში შემოუერთდა {{count}} ახალი თავსებადი წევრი. გადახედეთ.",
+      "bodyPlural": "ამ კვირაში შემოუერთდა {{count}} ახალი თავსებადი წევრი. გადახედეთ."
+    }
   }
 }

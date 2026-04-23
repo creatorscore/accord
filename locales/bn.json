@@ -3023,5 +3023,12 @@
     "timeHours": "{{count}}ঘ আগে",
     "timeYesterday": "গতকাল",
     "timeDays": "{{count}}দি আগে"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "আপনার কাছে নতুন ম্যাচ ✨",
+      "bodySingular": "এই সপ্তাহে {{count}} নতুন সামঞ্জস্যপূর্ণ সদস্য যোগ দিয়েছেন। একবার দেখুন।",
+      "bodyPlural": "এই সপ্তাহে {{count}} নতুন সামঞ্জস্যপূর্ণ সদস্য যোগ দিয়েছেন। একবার দেখুন।"
+    }
   }
 }

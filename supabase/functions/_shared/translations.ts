@@ -69,6 +69,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "sent {{count}} Super Likes",
       madeMatch: "made {{count}} match",
       madeMatchesPlural: "made {{count}} matches"
+    },
+    newMatchesDigest: {
+      title: "New matches near you ✨",
+      bodySingular: "{{count}} new compatible member joined this week. Come take a look.",
+      bodyPlural: "{{count}} new compatible members joined this week. Come take a look."
     }
   },
   es: {
@@ -132,6 +137,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "enviado {{count}} Super Likes",
       madeMatch: "hecho {{count}} match",
       madeMatchesPlural: "hecho {{count}} matches"
+    },
+    newMatchesDigest: {
+      title: "Nuevas coincidencias cerca de ti ✨",
+      bodySingular: "{{count}} nuevo miembro compatible se unió esta semana. Echa un vistazo.",
+      bodyPlural: "{{count}} nuevos miembros compatibles se unieron esta semana. Echa un vistazo."
     }
   },
   fr: {
@@ -195,6 +205,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "envoyé {{count}} Super Likes",
       madeMatch: "fait {{count}} match",
       madeMatchesPlural: "fait {{count}} matchs"
+    },
+    newMatchesDigest: {
+      title: "De nouveaux matchs près de toi ✨",
+      bodySingular: "{{count}} nouveau membre compatible a rejoint cette semaine. Viens jeter un œil.",
+      bodyPlural: "{{count}} nouveaux membres compatibles ont rejoint cette semaine. Viens jeter un œil."
     }
   },
   de: {
@@ -258,6 +273,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "{{count}} Super Likes gesendet",
       madeMatch: "{{count}} Match gemacht",
       madeMatchesPlural: "{{count}} Matches gemacht"
+    },
+    newMatchesDigest: {
+      title: "Neue Matches in deiner Nähe ✨",
+      bodySingular: "{{count}} neues kompatibles Mitglied ist diese Woche beigetreten. Schau mal rein.",
+      bodyPlural: "{{count}} neue kompatible Mitglieder sind diese Woche beigetreten. Schau mal rein."
     }
   },
   ar: {
@@ -321,6 +341,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "أرسلت {{count}} إعجابات فائقة",
       madeMatch: "حققت {{count}} تطابق",
       madeMatchesPlural: "حققت {{count}} تطابقات"
+    },
+    newMatchesDigest: {
+      title: "توافقات جديدة بالقرب منك ✨",
+      bodySingular: "انضم {{count}} عضو متوافق جديد هذا الأسبوع. ألقِ نظرة.",
+      bodyPlural: "انضم {{count}} أعضاء متوافقون جدد هذا الأسبوع. ألقِ نظرة."
     }
   },
   hi: {
@@ -384,6 +409,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "{{count}} सुपर लाइक्स भेजे",
       madeMatch: "{{count}} मैच किया",
       madeMatchesPlural: "{{count}} मैच किए"
+    },
+    newMatchesDigest: {
+      title: "आपके पास नए मैच ✨",
+      bodySingular: "इस हफ़्ते {{count}} नया संगत सदस्य जुड़ा है। एक नज़र डालें।",
+      bodyPlural: "इस हफ़्ते {{count}} नए संगत सदस्य जुड़े हैं। एक नज़र डालें।"
     }
   },
   pt: {
@@ -447,6 +477,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "enviou {{count}} Super Likes",
       madeMatch: "fez {{count}} match",
       madeMatchesPlural: "fez {{count}} matches"
+    },
+    newMatchesDigest: {
+      title: "Novos matches perto de você ✨",
+      bodySingular: "{{count}} novo membro compatível entrou esta semana. Dá uma olhada.",
+      bodyPlural: "{{count}} novos membros compatíveis entraram esta semana. Dá uma olhada."
     }
   },
   ru: {
@@ -510,6 +545,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "отправили {{count}} Супер-лайков",
       madeMatch: "совпали {{count}} раз",
       madeMatchesPlural: "совпали {{count}} раз"
+    },
+    newMatchesDigest: {
+      title: "Новые совпадения рядом ✨",
+      bodySingular: "На этой неделе присоединился {{count}} новый подходящий участник. Загляните.",
+      bodyPlural: "На этой неделе присоединилось {{count}} новых подходящих участников. Загляните."
     }
   },
   zh: {
@@ -573,6 +613,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "发送了{{count}}个超级喜欢",
       madeMatch: "配对了{{count}}次",
       madeMatchesPlural: "配对了{{count}}次"
+    },
+    newMatchesDigest: {
+      title: "附近有新的匹配 ✨",
+      bodySingular: "本周有 {{count}} 位新的合适会员加入。来看看吧。",
+      bodyPlural: "本周有 {{count}} 位新的合适会员加入。来看看吧。"
     }
   },
   tr: {
@@ -636,6 +681,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "{{count}} Süper Beğeni gönderdin",
       madeMatch: "{{count}} eşleşme yaptın",
       madeMatchesPlural: "{{count}} eşleşme yaptın"
+    },
+    newMatchesDigest: {
+      title: "Yakınında yeni eşleşmeler ✨",
+      bodySingular: "Bu hafta {{count}} yeni uyumlu üye katıldı. Göz at.",
+      bodyPlural: "Bu hafta {{count}} yeni uyumlu üye katıldı. Göz at."
     }
   },
   it: {
@@ -699,6 +749,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "inviato {{count}} Super Like",
       madeMatch: "fatto {{count}} match",
       madeMatchesPlural: "fatto {{count}} match"
+    },
+    newMatchesDigest: {
+      title: "Nuovi match vicino a te ✨",
+      bodySingular: "{{count}} nuovo membro compatibile si è unito questa settimana. Dai un'occhiata.",
+      bodyPlural: "{{count}} nuovi membri compatibili si sono uniti questa settimana. Dai un'occhiata."
     }
   },
   pl: {
@@ -762,6 +817,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "wysłałeś {{count}} Super Like'ów",
       madeMatch: "dopasowałeś się {{count}} raz",
       madeMatchesPlural: "dopasowałeś się {{count}} razy"
+    },
+    newMatchesDigest: {
+      title: "Nowe dopasowania w pobliżu ✨",
+      bodySingular: "W tym tygodniu dołączył {{count}} nowy zgodny członek. Zajrzyj.",
+      bodyPlural: "W tym tygodniu dołączyło {{count}} nowych zgodnych członków. Zajrzyj."
     }
   },
   uk: {
@@ -825,6 +885,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "надіслали {{count}} Супер Лайків",
       madeMatch: "збіглися {{count}} раз",
       madeMatchesPlural: "збіглися {{count}} разів"
+    },
+    newMatchesDigest: {
+      title: "Нові збіги поруч ✨",
+      bodySingular: "Цього тижня приєднався {{count}} новий сумісний учасник. Зазирніть.",
+      bodyPlural: "Цього тижня приєдналося {{count}} нових сумісних учасників. Зазирніть."
     }
   },
   he: {
@@ -888,6 +953,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "שלחת {{count}} סופר לייקים",
       madeMatch: "עשית {{count}} התאמה",
       madeMatchesPlural: "עשית {{count}} התאמות"
+    },
+    newMatchesDigest: {
+      title: "התאמות חדשות בקרבתך ✨",
+      bodySingular: "השבוע הצטרף {{count}} חבר מתאים חדש. בואו תראו.",
+      bodyPlural: "השבוע הצטרפו {{count}} חברים מתאימים חדשים. בואו תראו."
     }
   },
   fa: {
@@ -951,6 +1021,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "{{count}} سوپر لایک فرستادید",
       madeMatch: "{{count}} مچ کردید",
       madeMatchesPlural: "{{count}} مچ کردید"
+    },
+    newMatchesDigest: {
+      title: "همخوانی‌های جدید در نزدیکی شما ✨",
+      bodySingular: "این هفته {{count}} عضو همخوان جدید ملحق شد. یک نگاه بیندازید.",
+      bodyPlural: "این هفته {{count}} عضو همخوان جدید ملحق شدند. یک نگاه بیندازید."
     }
   },
   ur: {
@@ -1014,6 +1089,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "{{count}} سپر لائکس بھیجے",
       madeMatch: "{{count}} میچ کیا",
       madeMatchesPlural: "{{count}} میچز کیے"
+    },
+    newMatchesDigest: {
+      title: "آپ کے قریب نئے میچز ✨",
+      bodySingular: "اس ہفتے {{count}} نیا موافق رکن شامل ہوا۔ ایک نظر ڈالیں۔",
+      bodyPlural: "اس ہفتے {{count}} نئے موافق ارکان شامل ہوئے۔ ایک نظر ڈالیں۔"
     }
   },
   bn: {
@@ -1077,6 +1157,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "{{count}}টি সুপার লাইক পাঠিয়েছেন",
       madeMatch: "{{count}}টি ম্যাচ করেছেন",
       madeMatchesPlural: "{{count}}টি ম্যাচ করেছেন"
+    },
+    newMatchesDigest: {
+      title: "আপনার কাছে নতুন ম্যাচ ✨",
+      bodySingular: "এই সপ্তাহে {{count}} নতুন সামঞ্জস্যপূর্ণ সদস্য যোগ দিয়েছেন। একবার দেখুন।",
+      bodyPlural: "এই সপ্তাহে {{count}} নতুন সামঞ্জস্যপূর্ণ সদস্য যোগ দিয়েছেন। একবার দেখুন।"
     }
   },
   id: {
@@ -1140,6 +1225,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "mengirim {{count}} Super Like",
       madeMatch: "membuat {{count}} cocok",
       madeMatchesPlural: "membuat {{count}} cocok"
+    },
+    newMatchesDigest: {
+      title: "Kecocokan baru di dekatmu ✨",
+      bodySingular: "Minggu ini {{count}} anggota cocok baru bergabung. Yuk, lihat.",
+      bodyPlural: "Minggu ini {{count}} anggota cocok baru bergabung. Yuk, lihat."
     }
   },
   ka: {
@@ -1203,6 +1293,11 @@ const translations: Record<string, Record<string, any>> = {
       sentSuperLikesPlural: "გაგზავნეთ {{count}} სუპერ მოწონება",
       madeMatch: "დაემთხვიეთ {{count}} ჯერ",
       madeMatchesPlural: "დაემთხვიეთ {{count}} ჯერ"
+    },
+    newMatchesDigest: {
+      title: "ახალი დამთხვევები თქვენთან ახლოს ✨",
+      bodySingular: "ამ კვირაში შემოუერთდა {{count}} ახალი თავსებადი წევრი. გადახედეთ.",
+      bodyPlural: "ამ კვირაში შემოუერთდა {{count}} ახალი თავსებადი წევრი. გადახედეთ."
     }
   }
 };

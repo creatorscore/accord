@@ -2958,5 +2958,12 @@
     "timeHours": "{{count}}g temu",
     "timeYesterday": "wczoraj",
     "timeDays": "{{count}}d temu"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "Nowe dopasowania w pobliżu ✨",
+      "bodySingular": "W tym tygodniu dołączył {{count}} nowy zgodny członek. Zajrzyj.",
+      "bodyPlural": "W tym tygodniu dołączyło {{count}} nowych zgodnych członków. Zajrzyj."
+    }
   }
 }

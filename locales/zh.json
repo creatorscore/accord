@@ -3023,5 +3023,12 @@
     "timeHours": "{{count}}小时前",
     "timeYesterday": "昨天",
     "timeDays": "{{count}}天前"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "附近有新的匹配 ✨",
+      "bodySingular": "本周有 {{count}} 位新的合适会员加入。来看看吧。",
+      "bodyPlural": "本周有 {{count}} 位新的合适会员加入。来看看吧。"
+    }
   }
 }
