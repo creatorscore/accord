@@ -2958,5 +2958,12 @@
     "timeHours": "{{count}}год тому",
     "timeYesterday": "вчора",
     "timeDays": "{{count}}д тому"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "Нові збіги поруч ✨",
+      "bodySingular": "Цього тижня приєднався {{count}} новий сумісний учасник. Зазирніть.",
+      "bodyPlural": "Цього тижня приєдналося {{count}} нових сумісних учасників. Зазирніть."
+    }
   }
 }

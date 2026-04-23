@@ -3029,5 +3029,12 @@
     "timeHours": "{{count}}sa önce",
     "timeYesterday": "dün",
     "timeDays": "{{count}}g önce"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "Yakınında yeni eşleşmeler ✨",
+      "bodySingular": "Bu hafta {{count}} yeni uyumlu üye katıldı. Göz at.",
+      "bodyPlural": "Bu hafta {{count}} yeni uyumlu üye katıldı. Göz at."
+    }
   }
 }

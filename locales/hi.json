@@ -2960,5 +2960,12 @@
     "timeHours": "{{count}}घं पहले",
     "timeYesterday": "कल",
     "timeDays": "{{count}}दि पहले"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "आपके पास नए मैच ✨",
+      "bodySingular": "इस हफ़्ते {{count}} नया संगत सदस्य जुड़ा है। एक नज़र डालें।",
+      "bodyPlural": "इस हफ़्ते {{count}} नए संगत सदस्य जुड़े हैं। एक नज़र डालें।"
+    }
   }
 }

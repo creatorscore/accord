@@ -3023,5 +3023,12 @@
     "timeHours": "{{count}}j lalu",
     "timeYesterday": "kemarin",
     "timeDays": "{{count}}h lalu"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "Kecocokan baru di dekatmu ✨",
+      "bodySingular": "Minggu ini {{count}} anggota cocok baru bergabung. Yuk, lihat.",
+      "bodyPlural": "Minggu ini {{count}} anggota cocok baru bergabung. Yuk, lihat."
+    }
   }
 }

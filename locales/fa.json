@@ -2960,5 +2960,12 @@
     "timeHours": "{{count}}س پیش",
     "timeYesterday": "دیروز",
     "timeDays": "{{count}}ر پیش"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "همخوانی‌های جدید در نزدیکی شما ✨",
+      "bodySingular": "این هفته {{count}} عضو همخوان جدید ملحق شد. یک نگاه بیندازید.",
+      "bodyPlural": "این هفته {{count}} عضو همخوان جدید ملحق شدند. یک نگاه بیندازید."
+    }
   }
 }

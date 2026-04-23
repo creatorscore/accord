@@ -747,6 +747,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           // Navigate to matches tab
           router.push('/(tabs)/matches');
           break;
+        case 'new_matches_digest':
+          router.push('/(tabs)/discover');
+          break;
         case 'new_message':
         case 'message_reaction':
           // Navigate to chat if matchId is available

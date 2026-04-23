@@ -2966,5 +2966,12 @@
     "timeHours": "{{count}}گھ پہلے",
     "timeYesterday": "کل",
     "timeDays": "{{count}}د پہلے"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "آپ کے قریب نئے میچز ✨",
+      "bodySingular": "اس ہفتے {{count}} نیا موافق رکن شامل ہوا۔ ایک نظر ڈالیں۔",
+      "bodyPlural": "اس ہفتے {{count}} نئے موافق ارکان شامل ہوئے۔ ایک نظر ڈالیں۔"
+    }
   }
 }

@@ -2960,5 +2960,12 @@
     "timeHours": "לפני {{count}}ש",
     "timeYesterday": "אתמול",
     "timeDays": "לפני {{count}}י"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "התאמות חדשות בקרבתך ✨",
+      "bodySingular": "השבוע הצטרף {{count}} חבר מתאים חדש. בואו תראו.",
+      "bodyPlural": "השבוע הצטרפו {{count}} חברים מתאימים חדשים. בואו תראו."
+    }
   }
 }

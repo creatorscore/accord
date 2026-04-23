@@ -2958,5 +2958,12 @@
     "timeHours": "{{count}}h fa",
     "timeYesterday": "ieri",
     "timeDays": "{{count}}g fa"
+  },
+  "notifications": {
+    "newMatchesDigest": {
+      "title": "Nuovi match vicino a te ✨",
+      "bodySingular": "{{count}} nuovo membro compatibile si è unito questa settimana. Dai un'occhiata.",
+      "bodyPlural": "{{count}} nuovi membri compatibili si sono uniti questa settimana. Dai un'occhiata."
+    }
   }
 }
