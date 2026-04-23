@@ -261,7 +261,7 @@ export default function Profile() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color="#A08AB7" />
           <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>{t('profile.loadingProfile')}</Text>
         </View>
       </View>
@@ -444,7 +444,7 @@ export default function Profile() {
 
             {/* Activity Center */}
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: isPremium ? '#F5F0FF' : colors.card, borderColor: isPremium ? '#A08AB7' : colors.border }]}
+              style={[styles.menuItem, { backgroundColor: isPremium ? '#F3F0F7' : colors.card, borderColor: isPremium ? '#A08AB7' : colors.border }]}
               onPress={handleActivityPress}
             >
               <View style={styles.menuItemLeft}>
@@ -658,7 +658,7 @@ export default function Profile() {
             <Text style={[styles.menuSectionTitle, { color: colors.mutedForeground }]}>{t('profile.sections.subscription')}</Text>
 
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: !isPremium ? '#F5F0FF' : colors.card, borderColor: !isPremium ? '#A08AB7' : colors.border, borderLeftWidth: !isPremium ? 4 : 0, borderLeftColor: '#A08AB7' }]}
+              style={[styles.menuItem, { backgroundColor: !isPremium ? '#F3F0F7' : colors.card, borderColor: !isPremium ? '#A08AB7' : colors.border, borderLeftWidth: !isPremium ? 4 : 0, borderLeftColor: '#A08AB7' }]}
               onPress={() => router.push('/settings/subscription')}
             >
               <View style={styles.menuItemLeft}>
@@ -787,17 +787,17 @@ export default function Profile() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#F5F0FF', borderColor: '#7C3AED', borderLeftWidth: 4, borderLeftColor: '#7C3AED' }]}
+                style={[styles.menuItem, { backgroundColor: '#F3F0F7', borderColor: '#A08AB7', borderLeftWidth: 4, borderLeftColor: '#A08AB7' }]}
                 onPress={() => router.push('/(onboarding)/welcome-info')}
               >
                 <View style={styles.menuItemLeft}>
-                  <MaterialCommunityIcons name="heart-multiple" size={24} color="#7C3AED" />
+                  <MaterialCommunityIcons name="heart-multiple" size={24} color="#A08AB7" />
                   <View>
-                    <Text style={[styles.menuItemText, { color: '#5B21B6', fontWeight: '700' }]}>Welcome Screen</Text>
-                    <Text style={[styles.adminSubtext, { color: '#5B21B6' }]}>Lavender marriage explanation</Text>
+                    <Text style={[styles.menuItemText, { color: '#473A56', fontWeight: '700' }]}>Welcome Screen</Text>
+                    <Text style={[styles.adminSubtext, { color: '#473A56' }]}>Lavender marriage explanation</Text>
                   </View>
                 </View>
-                <MaterialCommunityIcons name="chevron-right" size={24} color="#7C3AED" />
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
               </TouchableOpacity>
 
               <TouchableOpacity

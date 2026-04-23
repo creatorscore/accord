@@ -42,7 +42,7 @@ export default function Welcome() {
     ? ['#3D2B5F', '#241838'] as const
     : ['#A08AB7', '#CDC2E5'] as const;
 
-  const buttonBg = isDarkColorScheme ? '#A78BFA' : '#FFFFFF';
+  const buttonBg = isDarkColorScheme ? '#B7A4CC' : '#FFFFFF';
   const buttonTextColor = isDarkColorScheme ? '#FFFFFF' : '#A08AB7';
   const borderColor = isDarkColorScheme ? 'rgba(255, 255, 255, 0.3)' : '#FFFFFF';
   const iconOverlayBg = isDarkColorScheme ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)';

@@ -209,7 +209,7 @@ export default function Notifications() {
       <View>
         <View style={[styles.notificationCard, {
           backgroundColor: isEnabled
-            ? (isDark ? 'rgba(160,138,183,0.15)' : '#F5F3FF')
+            ? (isDark ? 'rgba(160,138,183,0.15)' : '#F3F0F7')
             : (isDark ? '#1C1C2E' : '#F8F7FA'),
         }]}>
           <View style={styles.notificationHeader}>

@@ -55,7 +55,7 @@ export default function NotificationsStep({ onGranted, granted = false }: Props)
       </Text>
 
       {granted ? (
-        <View style={[styles.enabledCard, { backgroundColor: isDark ? 'rgba(160,138,183,0.12)' : '#F5F3FF' }]}>
+        <View style={[styles.enabledCard, { backgroundColor: isDark ? 'rgba(160,138,183,0.12)' : '#F3F0F7' }]}>
           <MaterialCommunityIcons name="check-circle" size={24} color="#A08AB7" />
           <Text style={[styles.enabledText, { color: isDark ? '#D4C4E8' : '#A08AB7' }]}>
             Notifications enabled

@@ -446,7 +446,7 @@ export default function SubscriptionManagement() {
                           })()}
                         </Text>
                       </View>
-                      <View className="rounded-xl p-4" style={{ backgroundColor: isDarkColorScheme ? '#2C2C3E' : '#F5F3FF' }}>
+                      <View className="rounded-xl p-4" style={{ backgroundColor: isDarkColorScheme ? '#2C2C3E' : '#F3F0F7' }}>
                         <Text className="text-xs font-semibold mb-2" style={{ color: isDarkColorScheme ? '#D1D5DB' : '#374151' }}>{t('subscriptionSettings.premiumIncludes')}</Text>
                         <Text className="text-xs leading-5" style={{ color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }}>
                           {t('subscriptionSettings.premiumFeaturesList')}
@@ -606,7 +606,7 @@ export default function SubscriptionManagement() {
         <View className="mb-6">
           <Text className="text-xl font-bold mb-4" style={{ color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>{t('subscriptionSettings.premiumFeaturesTitle')}</Text>
 
-          <View className="rounded-3xl p-6" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#F5F3FF' }}>
+          <View className="rounded-3xl p-6" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#F3F0F7' }}>
             {[
               { icon: 'infinity', text: t('subscriptionSettings.features.unlimitedSwipes'), tier: 'premium' },
               { icon: 'eye', text: t('subscriptionSettings.features.seeWhoLikedYou'), tier: 'premium' },

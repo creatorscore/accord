@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ActivityIndicator, StyleSheet, Modal, Alert, Pressable, InteractionManager, useWindowDimensions, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -208,7 +206,6 @@ export default function Matches() {
   const currentProfileIdRef = useRef<string | null>(null);
   const unreadActivityCount = useUnreadActivityCount(currentProfileId);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [likesCount, setLikesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
@@ -256,9 +253,6 @@ export default function Matches() {
         setCurrentProfileId(myProfileId);
         setIsAdmin(profileResult.data.is_admin || false);
         setMyEncryptionPublicKey(profileResult.data.encryption_public_key || null);
-
-        // Fire likes count non-blocking (doesn't need to finish before matches load)
-        loadLikesCount();
 
         // Phase 2: Load matches with pre-fetched bans data
         await loadMatchesWithId(myProfileId, bansResult.data);
@@ -589,22 +583,6 @@ export default function Matches() {
     await loadMatchesWithId(profileId);
   };
 
-  const loadLikesCount = async () => {
-    try {
-      const profileId = currentProfileIdRef.current || currentProfileId;
-      if (!profileId) return;
-
-      // Use server-side RPC that counts unmatched likes (excludes matched, passed, blocked, banned)
-      // This is also secure: free users get the count without seeing WHO liked them
-      const { data: count, error } = await supabase.rpc('count_unmatched_received_likes');
-
-      if (error) throw error;
-      setLikesCount(count || 0);
-    } catch (error: any) {
-      console.error('Error loading likes count:', error);
-    }
-  };
-
   const subscribeToMatches = () => {
     const profileId = currentProfileIdRef.current || currentProfileId;
     if (!profileId) return;
@@ -622,7 +600,6 @@ export default function Matches() {
         },
         () => {
           loadMatches();
-          loadLikesCount();
         }
       )
       .on(
@@ -635,7 +612,6 @@ export default function Matches() {
         },
         () => {
           loadMatches();
-          loadLikesCount();
         }
       )
       .subscribe();
@@ -657,49 +633,24 @@ export default function Matches() {
       )
       .subscribe();
 
-    // Subscribe to new likes
-    const likesChannel = supabase
-      .channel('likes-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'likes',
-          filter: `liked_profile_id=eq.${profileId}`,
-        },
-        () => {
-          loadLikesCount();
-        }
-      )
-      .subscribe();
-
     // Register channels with realtime manager for cost protection
     realtimeManager.registerChannel(profileId, matchesChannel);
     realtimeManager.registerChannel(profileId, messagesChannel);
-    realtimeManager.registerChannel(profileId, likesChannel);
 
     return () => {
       // Unregister and cleanup
       realtimeManager.unregisterChannel(profileId, matchesChannel);
       realtimeManager.unregisterChannel(profileId, messagesChannel);
-      realtimeManager.unregisterChannel(profileId, likesChannel);
 
       matchesChannel.unsubscribe();
       messagesChannel.unsubscribe();
-      likesChannel.unsubscribe();
     };
   };
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     loadMatches();
-    loadLikesCount();
   }, [currentProfileId]);
-
-  const handleLikesPress = () => {
-    router.push('/likes');
-  };
 
   const handleUnmatch = (match: Match) => {
     Alert.alert(
@@ -956,84 +907,78 @@ export default function Matches() {
     );
   };
 
-  const renderLikesCard = () => {
-    if (likesCount === 0 && isPremium) return null; // Don't show if premium user has no likes
-
-    return (
-      <MotiView
-        from={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: 'spring', delay: 100 }}
-        style={styles.likesCardContainer}
-      >
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={handleLikesPress}
-        >
-          <LinearGradient
-            colors={['#A08AB7', '#CDC2E5']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.likesCard}
-          >
-            {/* Icon */}
-            <View style={styles.likesIconContainer}>
-              <MaterialCommunityIcons name="eye" size={32} color="white" />
-            </View>
-
-            {/* Content */}
-            <View style={styles.likesContent}>
-              <Text style={styles.likesTitle}>{t('matches.seeWhoLikesYou')}</Text>
-              {isPremium ? (
-                <Text style={styles.likesSubtitle}>
-                  {likesCount === 0
-                    ? t('matches.noNewLikes')
-                    : t('matches.likesCount', {
-                        count: likesCount,
-                        likes: likesCount === 1 ? t('matches.personHas') : t('matches.peopleHave')
-                      })}
-                </Text>
-              ) : (
-                <View style={styles.likesBlurContainer}>
-                  <SafeBlurView intensity={20} tint="dark" style={styles.likesBlur}>
-                    <MaterialCommunityIcons name="lock" size={16} color="white" />
-                    <Text style={styles.likesBlurText}>
-                      {likesCount > 0 ? t('matches.upgradeTo', { count: likesCount }) : t('matches.upgradeToSee')}
-                    </Text>
-                  </SafeBlurView>
-                  <MaterialCommunityIcons name="crown" size={16} color="#FFD700" style={styles.premiumIcon} />
-                </View>
-              )}
-            </View>
-
-            {/* Arrow */}
-            <MaterialCommunityIcons name="chevron-right" size={28} color="rgba(255,255,255,0.8)" />
-          </LinearGradient>
-        </TouchableOpacity>
-      </MotiView>
-    );
-  };
-
   const FREE_MATCH_LIMIT = 10;
 
-  const listHeader = useMemo(() => (
-    <>
-      {!isPremium && matches.length > 0 && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 10, marginHorizontal: 16, marginTop: 8, marginBottom: 4, backgroundColor: matches.length >= FREE_MATCH_LIMIT ? '#FEF2F2' : '#F5F0FF', borderRadius: 12 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: matches.length >= FREE_MATCH_LIMIT ? '#DC2626' : '#7C3AED' }}>
-              {t('matches.matchCount', { current: matches.length, limit: FREE_MATCH_LIMIT })}
-            </Text>
-          </View>
-          {matches.length >= FREE_MATCH_LIMIT && (
-            <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#DC2626" style={{ marginLeft: 8 }} />
-          )}
-        </View>
-      )}
-      {renderExpirationWarning()}
-      {renderLikesCard()}
-    </>
-  ), [matches, likesCount, isPremium, t]);
+  const listHeader = useMemo(() => {
+    const count = matches.length;
+    const isFull = count >= FREE_MATCH_LIMIT;
+    const isWarning = count >= FREE_MATCH_LIMIT - 2 && !isFull; // 8 or 9
+    const progressPct = Math.min((count / FREE_MATCH_LIMIT) * 100, 100);
+
+    // Brand-aligned palette (lavender). Warning and full states shift hue
+    // but stay within the warm purple/red family — no random Tailwind blues.
+    const accent = isFull ? '#C44569' : isWarning ? '#C49A4A' : '#A08AB7';
+    const bg = isFull ? '#FBEEF1' : isWarning ? '#FBF6EA' : '#F3F0F7';
+    const trackBg = isFull ? '#F3D9DF' : isWarning ? '#F1E5C8' : '#E2D8EC';
+
+    const headline = t('matches.matchCountTitle', {
+      current: count,
+      limit: FREE_MATCH_LIMIT,
+      defaultValue: `${count} of ${FREE_MATCH_LIMIT} active matches`,
+    });
+    const subtitle = isFull
+      ? t('matches.matchCountSubtitleFull', { defaultValue: 'Unmatch someone or upgrade for unlimited' })
+      : isWarning
+      ? t('matches.matchCountSubtitleWarning', { defaultValue: 'Almost full — get unlimited matches' })
+      : t('matches.matchCountSubtitleFree', { defaultValue: 'Free plan' });
+
+    return (
+      <>
+        {!isPremium && count > 0 && (
+          <Pressable
+            onPress={() => router.push('/settings/subscription')}
+            style={({ pressed }) => ({
+              marginHorizontal: 16,
+              marginTop: 8,
+              marginBottom: 4,
+              padding: 14,
+              backgroundColor: bg,
+              borderRadius: 14,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: accent + '22', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                <MaterialCommunityIcons
+                  name={isFull ? 'lock-outline' : 'heart-multiple-outline'}
+                  size={18}
+                  color={accent}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.foreground }}>
+                  {headline}
+                </Text>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
+                  {subtitle}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: accent, marginRight: 2 }}>
+                  {t('common.upgrade', { defaultValue: 'Upgrade' })}
+                </Text>
+                <MaterialCommunityIcons name="chevron-right" size={16} color={accent} />
+              </View>
+            </View>
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: trackBg, overflow: 'hidden' }}>
+              <View style={{ width: `${progressPct}%`, height: '100%', backgroundColor: accent, borderRadius: 3 }} />
+            </View>
+          </Pressable>
+        )}
+        {renderExpirationWarning()}
+      </>
+    );
+  }, [matches, isPremium, t, colors.foreground, colors.mutedForeground]);
 
   const matchKeyExtractor = useCallback((item: Match) => item.id, []);
 
@@ -1587,63 +1532,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#A08AB7',
     fontWeight: '500',
-  },
-  likesCardContainer: {
-    marginBottom: 16,
-  },
-  likesCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 20,
-    padding: 20,
-    gap: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  likesIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  likesContent: {
-    flex: 1,
-    gap: 6,
-  },
-  likesTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  likesSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.95)',
-  },
-  likesBlurContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  likesBlur: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  likesBlurText: {
-    fontSize: 13,
-    color: 'white',
-    fontWeight: '600',
-  },
-  premiumIcon: {
-    marginLeft: 4,
   },
   modalOverlay: {
     flex: 1,
