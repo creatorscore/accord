@@ -39,6 +39,23 @@ const SUGGESTIVE_LABELS = [
   'Revealing Clothes',
 ];
 
+// Regexes that indicate a scam photo pushing off-platform contact info
+// (phone numbers, URLs, emails, social handles). If any line of OCR text
+// detected by Rekognition DetectText matches one of these, the photo is
+// hard-rejected with reason: 'contact_info'. Tune conservatively — false
+// positives block legitimate users.
+const CONTACT_INFO_PATTERNS: { name: string; re: RegExp }[] = [
+  // 7+ digits in a phone-style sequence (allows +, spaces, dots, dashes, parens).
+  // Excludes '/' on purpose so dates like "09/05/2024" don't trigger.
+  { name: 'phone',  re: /(?:\+?\s*\d)(?:[\s\-\.\(\)]*\d){6,}/ },
+  // Explicit URLs or bare domains on common spam TLDs.
+  { name: 'url',    re: /\b(?:https?:\/\/|www\.)\S+|\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:com|net|org|io|co|me|gg|xyz|app|link|bio|tel|wa|page|site|online|store|info|fit|dev|live|chat|fun|buzz|top|shop|ly|to|pw)\b/i },
+  // Email addresses.
+  { name: 'email',  re: /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/ },
+  // Social-media handles (@username, 3+ chars).
+  { name: 'handle', re: /@[a-z0-9_.]{3,}\b/i },
+];
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -208,6 +225,34 @@ Deno.serve(async (req) => {
     console.log(`  - Highest explicit confidence: ${highestExplicitConfidence}%`);
     console.log(`  - Flagged labels: ${flaggedLabels.join(', ')}`);
 
+    // Also scan for contact-info overlays (phone numbers, URLs, @handles, emails)
+    // using Rekognition DetectText. Wrapped in try/catch so a missing IAM perm
+    // on rekognition:DetectText gracefully degrades to NSFW-only moderation
+    // rather than breaking uploads entirely.
+    let contactInfoMatches: string[] = [];
+    let detectedText = '';
+    try {
+      console.log('🚀 Calling AWS Rekognition DetectText...');
+      const textResult = await callRekognition('DetectText', {
+        Image: { Bytes: photoBase64 },
+        Filters: { WordFilter: { MinConfidence: 60 } },
+      });
+      const lines: string[] = (textResult.TextDetections ?? [])
+        .filter((t: any) => t?.Type === 'LINE')
+        .map((t: any) => (t?.DetectedText ?? '').toString())
+        .filter((s: string) => s.length > 0);
+      detectedText = lines.join(' | ');
+      if (detectedText) {
+        console.log(`  - OCR text: "${detectedText}"`);
+      }
+      for (const p of CONTACT_INFO_PATTERNS) {
+        if (p.re.test(detectedText)) contactInfoMatches.push(p.name);
+      }
+    } catch (textErr: any) {
+      // Most likely an IAM permission issue; don't block the whole upload.
+      console.warn('DetectText failed (skipping contact-info check):', textErr?.message ?? textErr);
+    }
+
     // Take action based on results
     if (isExplicit) {
       console.log('🚨 EXPLICIT CONTENT DETECTED - Rejecting photo');
@@ -357,6 +402,49 @@ Deno.serve(async (req) => {
           labels: flaggedLabels,
           auto_banned: !isServiceRole && highestExplicitConfidence >= AUTO_BAN_THRESHOLD,
           deferred_review: isServiceRole && highestExplicitConfidence >= AUTO_BAN_THRESHOLD,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
+
+    // Contact-info overlay (phone / URL / @handle / email) — classic off-platform
+    // scam pattern. Hard-reject the photo but do NOT auto-ban; the user can
+    // simply upload a different photo. Explicit NSFW takes priority over this
+    // (already handled above); suggestive is downgraded if contact info is found.
+    if (contactInfoMatches.length > 0) {
+      console.log(`🚨 CONTACT INFO DETECTED (${contactInfoMatches.join(', ')}) — Rejecting photo`);
+
+      if (photo_id) {
+        await supabaseAdmin
+          .from('photos')
+          .update({
+            moderation_status: 'rejected',
+            moderation_reason: `Contact info detected: ${contactInfoMatches.join(', ')}`,
+            moderated_at: new Date().toISOString(),
+          })
+          .eq('id', photo_id);
+      }
+
+      await supabaseAdmin
+        .from('moderation_logs')
+        .insert({
+          profile_id,
+          action: 'photo_rejected',
+          reason: `AWS Rekognition DetectText flagged contact info: ${contactInfoMatches.join(', ')}`,
+          details: {
+            photo_url,
+            photo_id,
+            contact_info_types: contactInfoMatches,
+            detected_text: detectedText,
+            deferred_scan: isServiceRole,
+          },
+        });
+
+      return new Response(
+        JSON.stringify({
+          approved: false,
+          reason: 'contact_info',
+          contact_info_types: contactInfoMatches,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );

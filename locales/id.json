@@ -1445,7 +1445,8 @@
     "chatPhoto": {
       "selectDifferent": "Silakan pilih foto yang berbeda",
       "rejectedTitle": "Foto Ditolak",
-      "rejectedMessage": "Foto ini mengandung konten yang tidak pantas dan tidak dapat dikirim."
+      "rejectedMessage": "Foto ini mengandung konten yang tidak pantas dan tidak dapat dikirim.",
+      "contactInfoMessage": "Foto ini menampilkan info kontak (nomor telepon, tautan, email, atau nama akun) dan tidak dapat dikirim."
     },
     "chatNotification": {
       "sentPhoto": "Mengirim foto",
@@ -2615,7 +2616,8 @@
     "tip2": "Tunjukkan wajah Anda dengan jelas",
     "tip3": "Sertakan variasi (close-up, seluruh badan, aktivitas)",
     "tip4": "Hindari foto grup sebagai foto utama",
-    "inappropriateContent": "Foto ini mengandung konten yang tidak pantas dan tidak dapat diunggah. Silakan pilih foto yang berbeda."
+    "inappropriateContent": "Foto ini mengandung konten yang tidak pantas dan tidak dapat diunggah. Silakan pilih foto yang berbeda.",
+    "contactInfoDetected": "Foto ini menampilkan info kontak (nomor telepon, tautan, email, atau nama akun). Silakan unggah foto lain."
   },
   "moderation": {
     "menu": {

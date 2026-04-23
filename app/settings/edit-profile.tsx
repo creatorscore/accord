@@ -1118,6 +1118,11 @@ export default function EditProfile() {
                 'Photo Rejected',
                 'This photo contains inappropriate content and cannot be uploaded. Please choose a different photo.'
               );
+            } else if (moderationResult?.approved === false && moderationResult.reason === 'contact_info') {
+              Alert.alert(
+                'Photo Rejected',
+                "Photos showing phone numbers, website links, emails, or social handles aren't allowed. Please upload a different photo."
+              );
             }
           } catch (moderationError: any) {
             console.error('Moderation check failed:', moderationError);

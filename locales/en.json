@@ -1713,7 +1713,8 @@
     "chatPhoto": {
       "selectDifferent": "Please select a different photo",
       "rejectedTitle": "Photo Rejected",
-      "rejectedMessage": "This photo contains inappropriate content and cannot be sent."
+      "rejectedMessage": "This photo contains inappropriate content and cannot be sent.",
+      "contactInfoMessage": "This photo shows contact info like a phone number, link, email, or social handle and cannot be sent."
     },
     "chatNotification": {
       "sentPhoto": "Sent a photo",
@@ -2874,7 +2875,8 @@
     "tip2": "Show your face clearly",
     "tip3": "Include variety (close-up, full body, activity)",
     "tip4": "Avoid group photos as your primary",
-    "inappropriateContent": "This photo contains inappropriate content and cannot be uploaded. Please choose a different photo."
+    "inappropriateContent": "This photo contains inappropriate content and cannot be uploaded. Please choose a different photo.",
+    "contactInfoDetected": "This photo shows contact info like a phone number, link, email, or social handle — please upload a different photo."
   },
   "moderation": {
     "menu": {

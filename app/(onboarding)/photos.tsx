@@ -320,8 +320,11 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
                 if (moderationResult?.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
                   throw new Error(t('onboardingPhotos.inappropriateContent'));
                 }
+                if (moderationResult?.approved === false && moderationResult.reason === 'contact_info') {
+                  throw new Error(t('onboardingPhotos.contactInfoDetected'));
+                }
               } catch (moderationError: any) {
-                if (moderationError.message?.includes('inappropriate content')) {
+                if (moderationError.message?.includes('inappropriate content') || moderationError.message?.includes('contact info')) {
                   throw moderationError;
                 }
                 console.error('Moderation check failed:', moderationError);
