@@ -1444,7 +1444,8 @@
     "chatPhoto": {
       "selectDifferent": "Por favor selecciona una foto diferente",
       "rejectedTitle": "Foto rechazada",
-      "rejectedMessage": "Esta foto contiene contenido inapropiado y no se puede enviar."
+      "rejectedMessage": "Esta foto contiene contenido inapropiado y no se puede enviar.",
+      "contactInfoMessage": "Esta foto muestra datos de contacto (teléfono, enlace, email o usuario de redes) y no se puede enviar."
     },
     "chatNotification": {
       "sentPhoto": "Envió una foto",
@@ -2550,7 +2551,8 @@
     "tip2": "Muestra tu rostro claramente",
     "tip3": "Incluye variedad (primer plano, cuerpo completo, actividad)",
     "tip4": "Evita fotos grupales como tu foto principal",
-    "inappropriateContent": "Esta foto contiene contenido inapropiado y no se puede subir. Por favor elige una foto diferente."
+    "inappropriateContent": "Esta foto contiene contenido inapropiado y no se puede subir. Por favor elige una foto diferente.",
+    "contactInfoDetected": "Esta foto muestra datos de contacto (teléfono, enlace, email o usuario de redes). Por favor, sube otra foto."
   },
   "moderation": {
     "menu": {

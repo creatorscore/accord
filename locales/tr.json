@@ -1451,7 +1451,8 @@
     "chatPhoto": {
       "selectDifferent": "Lütfen farklı bir fotoğraf seçin",
       "rejectedTitle": "Fotoğraf Reddedildi",
-      "rejectedMessage": "Bu fotoğraf uygunsuz içerik barındırıyor ve gönderilemez."
+      "rejectedMessage": "Bu fotoğraf uygunsuz içerik barındırıyor ve gönderilemez.",
+      "contactInfoMessage": "Bu fotoğrafta iletişim bilgisi (telefon, bağlantı, e-posta veya kullanıcı adı) var ve gönderilemez."
     },
     "chatNotification": {
       "sentPhoto": "Fotoğraf gönderdi",
@@ -2621,7 +2622,8 @@
     "tip2": "Yüzünüzü net gösterin",
     "tip3": "Çeşitlilik katın (yakın çekim, boy boy, aktivite)",
     "tip4": "Ana fotoğraf olarak grup fotoğrafından kaçının",
-    "inappropriateContent": "Bu fotoğraf uygunsuz içerik barındırıyor ve yüklenemez. Lütfen farklı bir fotoğraf seçin."
+    "inappropriateContent": "Bu fotoğraf uygunsuz içerik barındırıyor ve yüklenemez. Lütfen farklı bir fotoğraf seçin.",
+    "contactInfoDetected": "Bu fotoğrafta iletişim bilgisi (telefon, bağlantı, e-posta veya kullanıcı adı) görünüyor. Lütfen başka bir fotoğraf yükle."
   },
   "moderation": {
     "menu": {

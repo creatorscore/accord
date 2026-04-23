@@ -1764,6 +1764,12 @@ export default function Chat() {
               Alert.alert(t('chat.chatPhoto.rejectedTitle'), t('chat.chatPhoto.rejectedMessage'));
               return;
             }
+            if (moderationResult?.approved === false && moderationResult.reason === 'contact_info') {
+              await supabase.from('messages').delete().eq('id', insertedMessage?.id);
+              await supabase.storage.from('chat-media').remove([filePath]);
+              Alert.alert(t('chat.chatPhoto.rejectedTitle'), t('chat.chatPhoto.contactInfoMessage'));
+              return;
+            }
           } catch (moderationError) {
             console.error('Chat photo moderation check failed:', moderationError);
           }

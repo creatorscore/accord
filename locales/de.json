@@ -1444,7 +1444,8 @@
     "chatPhoto": {
       "selectDifferent": "Bitte wählen Sie ein anderes Foto",
       "rejectedTitle": "Foto abgelehnt",
-      "rejectedMessage": "Dieses Foto enthält unangemessene Inhalte und kann nicht gesendet werden."
+      "rejectedMessage": "Dieses Foto enthält unangemessene Inhalte und kann nicht gesendet werden.",
+      "contactInfoMessage": "Dieses Foto zeigt Kontaktdaten (Telefonnummer, Link, E-Mail oder Handle) und kann nicht gesendet werden."
     },
     "chatNotification": {
       "sentPhoto": "Hat ein Foto gesendet",
@@ -2550,7 +2551,8 @@
     "tip2": "Zeigen Sie Ihr Gesicht deutlich",
     "tip3": "Zeigen Sie Vielfalt (Nahaufnahme, Ganzkörper, Aktivität)",
     "tip4": "Vermeiden Sie Gruppenfotos als Hauptfoto",
-    "inappropriateContent": "Dieses Foto enthält unangemessene Inhalte und kann nicht hochgeladen werden. Bitte wählen Sie ein anderes Foto."
+    "inappropriateContent": "Dieses Foto enthält unangemessene Inhalte und kann nicht hochgeladen werden. Bitte wählen Sie ein anderes Foto.",
+    "contactInfoDetected": "Dieses Foto zeigt Kontaktdaten (Telefonnummer, Link, E-Mail oder Handle). Bitte lade ein anderes Foto hoch."
   },
   "moderation": {
     "menu": {

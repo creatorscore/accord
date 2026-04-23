@@ -1445,7 +1445,8 @@
     "chatPhoto": {
       "selectDifferent": "请选择其他照片",
       "rejectedTitle": "照片被拒绝",
-      "rejectedMessage": "此照片包含不当内容，无法发送。"
+      "rejectedMessage": "此照片包含不当内容，无法发送。",
+      "contactInfoMessage": "这张照片显示了联系方式（电话、链接、邮箱或社交账号），无法发送。"
     },
     "chatNotification": {
       "sentPhoto": "发送了一张照片",
@@ -2615,7 +2616,8 @@
     "tip2": "清楚地展示你的脸",
     "tip3": "包含多种类型（近照、全身照、活动照）",
     "tip4": "避免使用合照作为主照片",
-    "inappropriateContent": "此照片包含不当内容，无法上传。请选择其他照片。"
+    "inappropriateContent": "此照片包含不当内容，无法上传。请选择其他照片。",
+    "contactInfoDetected": "这张照片显示了联系方式（电话、链接、邮箱或社交账号），请上传其他照片。"
   },
   "moderation": {
     "menu": {
