@@ -9,8 +9,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const SKELETON_BASE = '#EDE9FE';     // lavender-100
-const SKELETON_HIGHLIGHT = '#F5F3FF'; // lavender-50
+const SKELETON_BASE = '#F3F0F7';     // lavender-100
+const SKELETON_HIGHLIGHT = '#F8F6FB'; // lavender-50
 
 function ShimmerOverlay({ width }: { width: number }) {
   const translateX = useSharedValue(-width);

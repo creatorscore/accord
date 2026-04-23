@@ -2672,7 +2672,7 @@ export default function Chat() {
                     <MaterialCommunityIcons
                       name={item.read_at ? "check-all" : "check"}
                       size={12}
-                      color={item.read_at ? "#4C1D95" : "rgba(0,0,0,0.35)"}
+                      color={item.read_at ? "#A08AB7" : "rgba(0,0,0,0.35)"}
                       style={styles.readReceipt}
                     />
                   ) : (
@@ -2727,7 +2727,7 @@ export default function Chat() {
                             <MaterialCommunityIcons
                               name={item.read_at ? "check-all" : "check"}
                               size={12}
-                              color={item.read_at ? "#4C1D95" : "rgba(0,0,0,0.35)"}
+                              color={item.read_at ? "#A08AB7" : "rgba(0,0,0,0.35)"}
                               style={styles.readReceipt}
                             />
                           ) : (
@@ -2819,7 +2819,7 @@ export default function Chat() {
                         <MaterialCommunityIcons
                           name={item.read_at ? "check-all" : "check"}
                           size={14}
-                          color={item.read_at ? "#4C1D95" : "rgba(0,0,0,0.35)"}
+                          color={item.read_at ? "#A08AB7" : "rgba(0,0,0,0.35)"}
                           style={styles.readReceipt}
                         />
                       ) : (

@@ -28,7 +28,7 @@ const toastConfig: Record<ToastType, { icon: string; color: string; bgColor: str
   like: { icon: 'heart', color: '#F43F5E', bgColor: '#FEF2F2' },
   match: { icon: 'heart-multiple', color: '#A08AB7', bgColor: '#F3F0F7' },
   reaction: { icon: 'emoticon-happy', color: '#F59E0B', bgColor: '#FFFBEB' },
-  info: { icon: 'information', color: '#3B82F6', bgColor: '#EFF6FF' },
+  info: { icon: 'information', color: '#A08AB7', bgColor: '#F3F0F7' },
   success: { icon: 'check-circle', color: '#10B981', bgColor: '#ECFDF5' },
   error: { icon: 'alert-circle', color: '#EF4444', bgColor: '#FEF2F2' },
 };

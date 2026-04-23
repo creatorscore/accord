@@ -62,8 +62,8 @@ export default function IntroMessages({
     container: isDark ? '#1C1C1E' : '#FFFFFF',
     border: isDark ? '#2C2C2E' : '#E5E7EB',
     headerGradient: isDark
-      ? ['rgba(139, 92, 246, 0.15)', 'rgba(236, 72, 153, 0.15)'] as const
-      : ['rgba(139, 92, 246, 0.1)', 'rgba(236, 72, 153, 0.1)'] as const,
+      ? ['rgba(160, 138, 183, 0.15)', 'rgba(236, 72, 153, 0.15)'] as const
+      : ['rgba(160, 138, 183, 0.1)', 'rgba(236, 72, 153, 0.1)'] as const,
     closeButtonBg: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
     closeIcon: isDark ? '#9CA3AF' : '#6B7280',
     cardGradient: isDark

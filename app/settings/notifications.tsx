@@ -296,7 +296,7 @@ export default function NotificationSettings() {
         {/* Master Push Toggle */}
         <View className="rounded-2xl p-5 mb-6" style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : '#F8F7FA' }}>
           <View className="flex-row items-center">
-            <View className="w-12 h-12 rounded-full items-center justify-center mr-3" style={{ backgroundColor: isDarkColorScheme ? '#2C2C3E' : '#EDE9FE' }}>
+            <View className="w-12 h-12 rounded-full items-center justify-center mr-3" style={{ backgroundColor: isDarkColorScheme ? '#2C2C3E' : '#F3F0F7' }}>
               <MaterialCommunityIcons name="bell" size={24} color="#A08AB7" />
             </View>
             <View className="flex-1">

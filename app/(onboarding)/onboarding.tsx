@@ -34,6 +34,7 @@ import {
   resolveResumeStep,
 } from '@/lib/onboarding-config';
 import { expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
+import { tOptions } from '@/lib/onboarding-labels';
 import { ensurePushTokenSaved, registerForPushNotifications } from '@/lib/notifications';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
@@ -571,13 +572,13 @@ export default function Onboarding() {
       case 2: return <NotificationsStep onGranted={() => setNotificationsGranted(true)} granted={notificationsGranted} />;
       case 3: return <LocationStep />;
       case 4: // Pronouns
-        return <ChipSelect options={PRONOUNS} selected={store.pronouns ? [store.pronouns] : []} onSelect={(v) => setField('pronouns', v[0] || '')} multi={false} />;
+        return <ChipSelect options={tOptions(t, 'pronouns', PRONOUNS)} selected={store.pronouns ? [store.pronouns] : []} onSelect={(v) => setField('pronouns', v[0] || '')} multi={false} />;
       case 5: // Gender
-        return <ChipSelect options={GENDERS} selected={store.gender} onSelect={(v) => setField('gender', v)} multi={false} />;
+        return <ChipSelect options={tOptions(t, 'genders', GENDERS)} selected={store.gender} onSelect={(v) => setField('gender', v)} multi={false} />;
       case 6: // Sexuality
-        return <ChipSelect options={Array.isArray(store.gender) && store.gender.includes('Man') ? getAvailableOrientations('Man') : ORIENTATIONS} selected={store.sexualOrientation} onSelect={(v) => setField('sexualOrientation', v)} multi={false} />;
+        return <ChipSelect options={tOptions(t, 'orientations', Array.isArray(store.gender) && store.gender.includes('Man') ? getAvailableOrientations('Man') : ORIENTATIONS)} selected={store.sexualOrientation} onSelect={(v) => setField('sexualOrientation', v)} multi={false} />;
       case 7: // Gender Preference
-        return <ChipSelect options={GENDER_PREF_OPTIONS} selected={store.genderPreference} onSelect={(newSelection) => {
+        return <ChipSelect options={tOptions(t, 'genderPrefs', GENDER_PREF_OPTIONS)} selected={store.genderPreference} onSelect={(newSelection) => {
           const prev = store.genderPreference;
           const added = newSelection.filter((v) => !prev.includes(v));
           if (added.includes('Everyone')) {
@@ -591,18 +592,18 @@ export default function Onboarding() {
           }
         }} />;
       case 8: // Relationship Type
-        return <ChipSelect options={RELATIONSHIP_TYPES} selected={store.relationshipType ? [store.relationshipType] : []} onSelect={(v) => setField('relationshipType', v[0] || '')} multi={false} />;
+        return <ChipSelect options={tOptions(t, 'relationshipTypes', RELATIONSHIP_TYPES)} selected={store.relationshipType ? [store.relationshipType] : []} onSelect={(v) => setField('relationshipType', v[0] || '')} multi={false} />;
       case 9: // Intention / Primary Reasons — multi-select per spec; users often have several reasons
-        return <ChipSelect options={PRIMARY_REASONS} selected={store.primaryReasons} onSelect={(v) => setField('primaryReasons', v)} multi={true} />;
+        return <ChipSelect options={tOptions(t, 'primaryReasons', PRIMARY_REASONS)} selected={store.primaryReasons} onSelect={(v) => setField('primaryReasons', v)} multi={true} />;
       case 10: return <HeightStep />;
       case 11: // Ethnicity
-        return <ChipSelect options={ETHNICITIES} selected={store.ethnicity} onSelect={(v) => setField('ethnicity', v)} />;
+        return <ChipSelect options={tOptions(t, 'ethnicities', ETHNICITIES)} selected={store.ethnicity} onSelect={(v) => setField('ethnicity', v)} />;
       case 12: // Children
-        return <ChipSelect options={CHILDREN_OPTIONS} selected={store.wantsChildren ? [store.wantsChildren] : []} onSelect={(v) => setField('wantsChildren', v[0] || '')} multi={false} />;
+        return <ChipSelect options={tOptions(t, 'childrenOptions', CHILDREN_OPTIONS)} selected={store.wantsChildren ? [store.wantsChildren] : []} onSelect={(v) => setField('wantsChildren', v[0] || '')} multi={false} />;
       case 13: // Family Plans
-        return <ChipSelect options={FAMILY_PLANS} selected={store.childrenArrangement} onSelect={(v) => setField('childrenArrangement', v)} />;
+        return <ChipSelect options={tOptions(t, 'familyPlans', FAMILY_PLANS)} selected={store.childrenArrangement} onSelect={(v) => setField('childrenArrangement', v)} />;
       case 14: // Pets
-        return <ChipSelect options={PETS_OPTIONS} selected={store.pets ? [store.pets] : []} onSelect={(v) => setField('pets', v[0] || '')} multi={false} showVisibility visible={vis('pets')} onVisibilityChange={(v) => setVis('pets', v)} />;
+        return <ChipSelect options={tOptions(t, 'petsOptions', PETS_OPTIONS)} selected={store.pets ? [store.pets] : []} onSelect={(v) => setField('pets', v[0] || '')} multi={false} showVisibility visible={vis('pets')} onVisibilityChange={(v) => setVis('pets', v)} />;
       case 15: // Hometown
         return <CityAutocompleteStep value={store.hometown} onSelect={(v) => setField('hometown', v)} placeholder="e.g. Los Angeles, CA" showVisibility visible={vis('hometown')} onVisibilityChange={(v) => setVis('hometown', v)} />;
       case 16: // Job Title
@@ -610,23 +611,23 @@ export default function Onboarding() {
       case 17: // School
         return <TextInputStep value={store.education} onChangeText={(v) => setField('education', v)} placeholder="e.g. UCLA, Harvard" showVisibility visible={vis('education')} onVisibilityChange={(v) => setVis('education', v)} />;
       case 18: // Education Level
-        return <ChipSelect options={EDUCATION_LEVELS} selected={store.educationLevel ? [store.educationLevel] : []} onSelect={(v) => setField('educationLevel', v[0] || '')} multi={false} showVisibility visible={vis('education_level')} onVisibilityChange={(v) => setVis('education_level', v)} />;
+        return <ChipSelect options={tOptions(t, 'educationLevels', EDUCATION_LEVELS)} selected={store.educationLevel ? [store.educationLevel] : []} onSelect={(v) => setField('educationLevel', v[0] || '')} multi={false} showVisibility visible={vis('education_level')} onVisibilityChange={(v) => setVis('education_level', v)} />;
       case 19: // Religion
-        return <ChipSelect options={RELIGIONS} selected={store.religion ? [store.religion] : []} onSelect={(v) => setField('religion', v[0] || '')} multi={false} showVisibility visible={vis('religion')} onVisibilityChange={(v) => setVis('religion', v)} />;
+        return <ChipSelect options={tOptions(t, 'religions', RELIGIONS)} selected={store.religion ? [store.religion] : []} onSelect={(v) => setField('religion', v[0] || '')} multi={false} showVisibility visible={vis('religion')} onVisibilityChange={(v) => setVis('religion', v)} />;
       case 20: // Politics
-        return <ChipSelect options={POLITICAL_VIEWS} selected={store.politicalViews ? [store.politicalViews] : []} onSelect={(v) => setField('politicalViews', v[0] || '')} multi={false} showVisibility visible={vis('political_views')} onVisibilityChange={(v) => setVis('political_views', v)} />;
+        return <ChipSelect options={tOptions(t, 'politicalViews', POLITICAL_VIEWS)} selected={store.politicalViews ? [store.politicalViews] : []} onSelect={(v) => setField('politicalViews', v[0] || '')} multi={false} showVisibility visible={vis('political_views')} onVisibilityChange={(v) => setVis('political_views', v)} />;
       case 21: // Financial Arrangement
-        return <ChipSelect options={FINANCIAL_ARRANGEMENTS} selected={store.financialArrangement} onSelect={(v) => setField('financialArrangement', v)} multi={false} />;
+        return <ChipSelect options={tOptions(t, 'financialArr', FINANCIAL_ARRANGEMENTS)} selected={store.financialArrangement} onSelect={(v) => setField('financialArrangement', v)} multi={false} />;
       case 22: // Housing
-        return <ChipSelect options={HOUSING_PREFERENCES} selected={store.housingPreference} onSelect={(v) => setField('housingPreference', v)} multi={false} />;
+        return <ChipSelect options={tOptions(t, 'housingPrefs', HOUSING_PREFERENCES)} selected={store.housingPreference} onSelect={(v) => setField('housingPreference', v)} multi={false} />;
       case 23: // Drinking
-        return <ChipSelect options={DRINKING_OPTIONS} selected={store.drinking ? [store.drinking] : []} onSelect={(v) => setField('drinking', v[0] || '')} multi={false} showVisibility visible={vis('drinking')} onVisibilityChange={(v) => setVis('drinking', v)} />;
+        return <ChipSelect options={tOptions(t, 'drinkingOptions', DRINKING_OPTIONS)} selected={store.drinking ? [store.drinking] : []} onSelect={(v) => setField('drinking', v[0] || '')} multi={false} showVisibility visible={vis('drinking')} onVisibilityChange={(v) => setVis('drinking', v)} />;
       case 24: // Smoking
-        return <ChipSelect options={SMOKING_OPTIONS} selected={store.smoking ? [store.smoking] : []} onSelect={(v) => setField('smoking', v[0] || '')} multi={false} showVisibility visible={vis('smoking')} onVisibilityChange={(v) => setVis('smoking', v)} />;
+        return <ChipSelect options={tOptions(t, 'smokingOptions', SMOKING_OPTIONS)} selected={store.smoking ? [store.smoking] : []} onSelect={(v) => setField('smoking', v[0] || '')} multi={false} showVisibility visible={vis('smoking')} onVisibilityChange={(v) => setVis('smoking', v)} />;
       case 25: // Weed
-        return <ChipSelect options={WEED_OPTIONS} selected={store.smokesWeed ? [store.smokesWeed] : []} onSelect={(v) => setField('smokesWeed', v[0] || '')} multi={false} showVisibility visible={vis('smokes_weed')} onVisibilityChange={(v) => setVis('smokes_weed', v)} />;
+        return <ChipSelect options={tOptions(t, 'weedOptions', WEED_OPTIONS)} selected={store.smokesWeed ? [store.smokesWeed] : []} onSelect={(v) => setField('smokesWeed', v[0] || '')} multi={false} showVisibility visible={vis('smokes_weed')} onVisibilityChange={(v) => setVis('smokes_weed', v)} />;
       case 26: // Drugs
-        return <ChipSelect options={DRUG_OPTIONS} selected={store.doesDrugs ? [store.doesDrugs] : []} onSelect={(v) => setField('doesDrugs', v[0] || '')} multi={false} showVisibility visible={vis('does_drugs')} onVisibilityChange={(v) => setVis('does_drugs', v)} />;
+        return <ChipSelect options={tOptions(t, 'drugOptions', DRUG_OPTIONS)} selected={store.doesDrugs ? [store.doesDrugs] : []} onSelect={(v) => setField('doesDrugs', v[0] || '')} multi={false} showVisibility visible={vis('does_drugs')} onVisibilityChange={(v) => setVis('does_drugs', v)} />;
       case 27: // Photos (embedded — manages its own continue)
         return <Suspense fallback={<StepFallback />}><PhotosStep embedded onContinue={handleContinue} onBack={handleBack} /></Suspense>;
       case 28: // Prompts (embedded — has internal sub-steps)
