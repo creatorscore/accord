@@ -28,7 +28,7 @@ import { useWatermark } from '@/hooks/useWatermark';
 import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import { useSafeBlur } from '@/hooks/useSafeBlur';
 import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
-import { getSignedUrl } from '@/lib/signed-urls';
+import { getSignedUrl, getSignedUrls } from '@/lib/signed-urls';
 import { isFieldVisible } from '@/lib/field-visibility';
 import { translateProfileValue, translateProfileArray } from '@/lib/translate-profile-values';
 import { ZoomablePhotoWrapper } from '@/components/shared/ZoomablePhotoWrapper';
@@ -318,9 +318,36 @@ export default function ImmersiveProfileCard({
     blurIntensity: 50,
   });
 
-  // Always show original photo URL — blur is applied via SafeBlurImage
+  // Sign-on-demand for bare-path photo URLs. The discover deck signs the first 5 profiles
+  // synchronously and the rest in a background batch — if the user opens the immersive view
+  // before that batch finishes, photo.url is still a bare storage path and would 404.
+  const [signedPhotoUrls, setSignedPhotoUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const barePaths = (profile.photos || [])
+      .map((p) => p.url)
+      .filter((url): url is string => !!url && !url.startsWith('http'));
+    if (barePaths.length === 0) return;
+
+    let cancelled = false;
+    getSignedUrls('profile-photos', barePaths).then((signed) => {
+      if (cancelled) return;
+      const next: Record<string, string> = {};
+      barePaths.forEach((path, i) => {
+        if (signed[i]) next[path] = signed[i]!;
+      });
+      setSignedPhotoUrls(next);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile.id]);
+
   const getPhotoUri = (photo: { url: string; blur_data_uri?: string | null }) => {
-    return photo.url;
+    if (!photo.url) return 'https://via.placeholder.com/400x600';
+    if (photo.url.startsWith('http')) return photo.url;
+    return signedPhotoUrls[photo.url] || 'https://via.placeholder.com/400x600';
   };
 
   // Blur radius for all platforms — SafeBlurImage handles platform differences
