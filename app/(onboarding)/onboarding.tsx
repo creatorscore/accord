@@ -32,6 +32,7 @@ import {
   getAvailableOrientations,
   mapOldStepToNew,
   resolveResumeStep,
+  earliestMissingRequiredStep,
 } from '@/lib/onboarding-config';
 import { expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
 import { tOptions } from '@/lib/onboarding-labels';
@@ -164,20 +165,38 @@ export default function Onboarding() {
             fieldVisibility: profile.field_visibility || {},
           });
 
-          // Determine resume step — prefer the URL param if it's plausible,
-          // but always override with earliestMissingRequiredStep so legacy
-          // users whose old flow never collected gender_preference /
-          // relationship_type / primary_reasons don't coast past those.
-          const urlStep = parseInt(resumeStep || '0', 10);
-          const storedStep = profile.onboarding_step && profile.onboarding_step > 9
-            ? Math.max(profile.onboarding_step, urlStep || 0)
-            : (profile.onboarding_step || 0);
-          const mappedStep = resolveResumeStep(
-            storedStep,
-            profile,
-            prefs,
-            TOTAL_ONBOARDING_STEPS,
-          );
+          // Determine resume step.
+          //
+          // Two inputs can tell us where the user belongs:
+          //   1. URL `resumeStep` — explicit "I was here" hint set when the
+          //      user taps "Take a look around" from onboarding into Discover.
+          //      When present, this is the most reliable signal.
+          //   2. `earliestMissingRequiredStep(profile, prefs)` — data-driven
+          //      heuristic that bounces legacy users back to the first
+          //      required field they never filled.
+          //
+          // Previously the URL was discarded whenever `profile.onboarding_step
+          // <= 9`, which meant every "back from preview" on a brand-new user
+          // landed at the heuristic's earliest-missing step instead of where
+          // the user actually was (causing either a backward bounce or a
+          // forward skip, depending on prior DB state). Honor the URL param as
+          // the TARGET; only bounce earlier if a required field *before* that
+          // target is genuinely missing.
+          const urlStep = parseInt(resumeStep || '0', 10) || 0;
+          let mappedStep: number;
+          if (urlStep > 0) {
+            const missing = earliestMissingRequiredStep(profile, prefs);
+            mappedStep = (missing !== null && missing < urlStep)
+              ? missing
+              : Math.min(urlStep, TOTAL_ONBOARDING_STEPS - 1);
+          } else {
+            mappedStep = resolveResumeStep(
+              profile.onboarding_step || 0,
+              profile,
+              prefs,
+              TOTAL_ONBOARDING_STEPS,
+            );
+          }
           setSubStep(mappedStep);
 
           // Warn if resuming past identity steps but critical prefs are missing
