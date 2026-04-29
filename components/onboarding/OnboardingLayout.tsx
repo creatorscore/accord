@@ -276,25 +276,51 @@ export default function OnboardingLayout({
             <View style={styles.previewLinkSpacer} />
           )}
 
-          {/* Continue */}
-          <TouchableOpacity
-            style={[
-              styles.continueCircle,
-              continueDisabled && styles.buttonDisabled,
-            ]}
-            onPress={onContinue}
-            disabled={continueDisabled}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel={isLastStep ? (continueLabel || 'Finish') : (continueLabel || 'Continue to next step')}
-            accessibilityState={{ disabled: continueDisabled }}
-          >
-            <MaterialCommunityIcons
-              name={isLastStep ? 'check' : 'arrow-right'}
-              size={24}
-              color={continueDisabled ? '#F0EDF4' : '#FFFFFF'}
-            />
-          </TouchableOpacity>
+          {/* Continue — last step renders a wide labeled "Finish" pill so
+              users don't miss that the matching-prefs sliders are submitted
+              by tapping a button (previously just a small circle with a
+              check icon, which was indistinguishable from the per-step
+              continue circle and led to a chunk of users abandoning at
+              step 30 with all their data filled in). */}
+          {isLastStep ? (
+            <TouchableOpacity
+              style={[styles.finishButton, continueDisabled && styles.buttonDisabled]}
+              onPress={onContinue}
+              disabled={continueDisabled}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={continueLabel || t('onboarding.finish', 'Finish')}
+              accessibilityState={{ disabled: continueDisabled }}
+            >
+              <Text style={styles.finishButtonText}>
+                {continueLabel || t('onboarding.finish', 'Finish')}
+              </Text>
+              <MaterialCommunityIcons
+                name="check"
+                size={20}
+                color={continueDisabled ? '#F0EDF4' : '#FFFFFF'}
+              />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.continueCircle,
+                continueDisabled && styles.buttonDisabled,
+              ]}
+              onPress={onContinue}
+              disabled={continueDisabled}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={continueLabel || 'Continue to next step'}
+              accessibilityState={{ disabled: continueDisabled }}
+            >
+              <MaterialCommunityIcons
+                name="arrow-right"
+                size={24}
+                color={continueDisabled ? '#F0EDF4' : '#FFFFFF'}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
