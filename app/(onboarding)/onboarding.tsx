@@ -508,6 +508,24 @@ export default function Onboarding() {
       }
     }
 
+    // After the last hard checkpoint (step 26 → 27), we still need to track
+    // where the user actually is so a closed/reopened app doesn't bounce
+    // them back to photos. Fire a lightweight onboarding_step-only update
+    // for transitions between steps 27, 28, 29 — non-blocking because the
+    // resume logic tolerates a slightly stale value, and we don't want to
+    // gate Continue on this network call. The full saveCheckpoint runs on
+    // step 30 (final) as before.
+    if (profileId && subStep >= 27 && subStep < TOTAL_ONBOARDING_STEPS - 1) {
+      const targetStep = subStep + 1;
+      supabase
+        .from('profiles')
+        .update({ onboarding_step: targetStep })
+        .eq('id', profileId)
+        .then(({ error }) => {
+          if (error) console.warn('[Onboarding] onboarding_step update failed', error.message);
+        });
+    }
+
     if (subStep >= TOTAL_ONBOARDING_STEPS - 1) {
       // Final step — save and exit
       try {
@@ -624,7 +642,7 @@ export default function Onboarding() {
       case 14: // Pets
         return <ChipSelect options={tOptions(t, 'petsOptions', PETS_OPTIONS)} selected={store.pets ? [store.pets] : []} onSelect={(v) => setField('pets', v[0] || '')} multi={false} showVisibility visible={vis('pets')} onVisibilityChange={(v) => setVis('pets', v)} />;
       case 15: // Hometown
-        return <CityAutocompleteStep value={store.hometown} onSelect={(v) => setField('hometown', v)} placeholder="e.g. Los Angeles, CA" showVisibility visible={vis('hometown')} onVisibilityChange={(v) => setVis('hometown', v)} />;
+        return <CityAutocompleteStep value={store.hometown} onSelect={(v) => setField('hometown', v)} placeholder="e.g. Los Angeles, CA" showVisibility visible={vis('hometown')} onVisibilityChange={(v) => setVis('hometown', v)} onSkip={handleSkip} />;
       case 16: // Job Title
         return <TextInputStep value={store.jobTitle} onChangeText={(v) => setField('jobTitle', v)} placeholder="e.g. Software Engineer" showVisibility visible={vis('job_title')} onVisibilityChange={(v) => setVis('job_title', v)} />;
       case 17: // School

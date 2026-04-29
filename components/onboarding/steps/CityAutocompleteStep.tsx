@@ -30,6 +30,11 @@ interface CityAutocompleteStepProps {
   showVisibility?: boolean;
   visible?: boolean;
   onVisibilityChange?: (visible: boolean) => void;
+  /** When provided, renders a clear inline "Skip for now" button below the
+   *  input. The header has its own small Skip link too, but on a free-text
+   *  step that link wasn't discoverable enough — users felt forced to type
+   *  something. */
+  onSkip?: () => void;
 }
 
 function formatCity(city: City): string {
@@ -78,6 +83,7 @@ export default function CityAutocompleteStep({
   showVisibility,
   visible = true,
   onVisibilityChange,
+  onSkip,
 }: CityAutocompleteStepProps) {
   const isDark = useColorScheme() === 'dark';
   const [query, setQuery] = useState(value);
@@ -230,6 +236,26 @@ export default function CityAutocompleteStep({
           />
         </View>
       )}
+
+      {/* Inline skip — only rendered when the parent passes onSkip. The
+          corner Skip in OnboardingLayout is too small for a text-input
+          step where the user is staring at the keyboard. */}
+      {onSkip && (
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            Keyboard.dismiss();
+            onSkip();
+          }}
+          style={styles.inlineSkipButton}
+          accessibilityRole="button"
+          accessibilityLabel="Skip this step"
+        >
+          <Text style={[styles.inlineSkipText, { color: isDark ? '#A08AB7' : '#8B72A8' }]}>
+            Skip for now
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -302,5 +328,16 @@ const styles = StyleSheet.create({
   visibilityLabel: {
     fontSize: 15,
     fontWeight: '500',
+  },
+  inlineSkipButton: {
+    alignSelf: 'center',
+    marginTop: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  inlineSkipText: {
+    fontSize: 16,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });
