@@ -40,10 +40,15 @@ const SUGGESTIVE_LABELS = [
 ];
 
 // Regexes that indicate a scam photo pushing off-platform contact info
-// (phone numbers, URLs, emails, social handles). If any line of OCR text
-// detected by Rekognition DetectText matches one of these, the photo is
-// hard-rejected with reason: 'contact_info'. Tune conservatively — false
-// positives block legitimate users.
+// (phone numbers, URLs, emails). If any line of OCR text detected by
+// Rekognition DetectText matches one of these, the photo is hard-rejected
+// with reason: 'contact_info'. Tune conservatively — false positives block
+// legitimate users.
+//
+// The bare `@handle` pattern was removed: OCR routinely picks up `@`-shaped
+// glyphs from t-shirts, captions, and even backgrounds, producing a high
+// false-positive rate that blocked legitimate users at the photo step.
+// Handles bundled inside a phone/url/email line still match those rules.
 const CONTACT_INFO_PATTERNS: { name: string; re: RegExp }[] = [
   // 7+ digits in a phone-style sequence (allows +, spaces, dots, dashes, parens).
   // Excludes '/' on purpose so dates like "09/05/2024" don't trigger.
@@ -52,8 +57,6 @@ const CONTACT_INFO_PATTERNS: { name: string; re: RegExp }[] = [
   { name: 'url',    re: /\b(?:https?:\/\/|www\.)\S+|\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:com|net|org|io|co|me|gg|xyz|app|link|bio|tel|wa|page|site|online|store|info|fit|dev|live|chat|fun|buzz|top|shop|ly|to|pw)\b/i },
   // Email addresses.
   { name: 'email',  re: /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/ },
-  // Social-media handles (@username, 3+ chars).
-  { name: 'handle', re: /@[a-z0-9_.]{3,}\b/i },
 ];
 
 Deno.serve(async (req) => {

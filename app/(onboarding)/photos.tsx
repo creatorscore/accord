@@ -31,6 +31,11 @@ interface Photo {
   id?: string;
   contentHash?: string;
   blurDataUri?: string;
+  // True once this photo has been uploaded + moderated successfully. Used to
+  // skip re-uploading on retry after a partial failure (e.g. another photo
+  // was rejected mid-loop). The local URI stays as-is so the grid keeps
+  // rendering the same image without a flicker.
+  uploaded?: boolean;
 }
 
 interface PhotosProps {
@@ -93,10 +98,17 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
 
   const loadExistingPhotos = async (profileId: string) => {
     try {
+      // Exclude rejected photos so the count the user sees matches what
+      // actually counts toward the 3-photo minimum. Otherwise a user with
+      // 2 approved + 1 rejected sees "3 photos", taps Continue, and is
+      // either rejected again or advances with an invisible-in-discovery
+      // photo. 'pending' is included so that in-flight moderations still
+      // appear during the brief window before the edge function returns.
       const { data: existingPhotos, error } = await supabase
         .from('photos')
-        .select('url, storage_path, display_order, content_hash')
+        .select('url, storage_path, display_order, content_hash, moderation_status')
         .eq('profile_id', profileId)
+        .neq('moderation_status', 'rejected')
         .order('display_order', { ascending: true });
 
       if (error) {
@@ -250,7 +262,14 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
       setUploading(true);
       setUploadProgress(0);
 
-      const newPhotos = photos.filter(photo => !photo.uri.startsWith('http'));
+      // Photos that need uploading: not already a remote URL AND not already
+      // marked uploaded from a prior partial-failure retry.
+      const newPhotos = photos.filter(photo => !photo.uri.startsWith('http') && !photo.uploaded);
+      // Track which local photos have been successfully uploaded+moderated so
+      // a partial-failure retry doesn't try to re-upload them and trigger a
+      // duplicate constraint or a redundant moderation call. Keyed by
+      // contentHash because the local URI is the only stable per-photo id.
+      const uploadedHashes: Set<string> = new Set();
 
       if (newPhotos.length === 0) {
         setUploadProgress(100);
@@ -331,6 +350,11 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
               }
             }
 
+            // Mark this photo as uploaded — on a later retry (e.g. moderation
+            // rejected a different photo) we'll skip re-uploading it.
+            if (photo.contentHash) {
+              uploadedHashes.add(photo.contentHash);
+            }
             setUploadProgress(Math.round(((i + 1) / newPhotos.length) * 100));
           } catch (photoError: any) {
             console.error(`Error processing photo ${i}:`, photoError);
@@ -357,6 +381,16 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
           .from('profiles')
           .update({ photo_blur_enabled: photoBlurEnabled })
           .eq('id', profileId);
+      }
+
+      // Mark uploaded photos in local state so a subsequent retry skips them
+      // (the filter at the top of this handler checks both `uri` and
+      // `uploaded`). Keeps the original local URI for rendering — no
+      // flicker on partial-failure retries.
+      if (uploadedHashes.size > 0 && isMounted.current) {
+        setPhotos(prev => prev.map(p =>
+          p.contentHash && uploadedHashes.has(p.contentHash) ? { ...p, uploaded: true } : p
+        ));
       }
 
       // Clean up persisted optimized images now that they're uploaded
