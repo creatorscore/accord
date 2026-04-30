@@ -12,12 +12,10 @@ import {
   Platform,
   Linking,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { MotiView } from 'moti';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeBlurView } from '@/components/shared/SafeBlurView';
-import { getOfferings, purchasePackage, checkTrialEligibility, getTrialInfo, TrialInfo } from '@/lib/revenue-cat';
+import { getOfferings, purchasePackage } from '@/lib/revenue-cat';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useTranslation } from 'react-i18next';
 
@@ -28,24 +26,24 @@ interface PremiumPaywallProps {
   feature?: string; // What triggered the paywall (e.g., "unlimited_swipes")
 }
 
-const PREMIUM_FEATURE_KEYS = [
-  { icon: 'infinity', titleKey: 'unlimitedLikes', descKey: 'unlimitedLikesDesc' },
-  { icon: 'eye', titleKey: 'seeWhoLikedYou', descKey: 'seeWhoLikedYouDesc' },
-  { icon: 'lightning-bolt', titleKey: 'activityCenter', descKey: 'activityCenterDesc' },
-  { icon: 'filter-variant', titleKey: 'advancedFilters', descKey: 'advancedFiltersDesc' },
-  { icon: 'incognito', titleKey: 'incognitoMode', descKey: 'incognitoModeDesc' },
-  { icon: 'check-all', titleKey: 'readReceipts', descKey: 'readReceiptsDesc' },
-  { icon: 'keyboard', titleKey: 'typingIndicators', descKey: 'typingIndicatorsDesc' },
-  { icon: 'microphone', titleKey: 'voiceMessages', descKey: 'voiceMessagesDesc' },
-  { icon: 'undo-variant', titleKey: 'rewind', descKey: 'rewindDesc' },
-  { icon: 'star', titleKey: 'superLikes', descKey: 'superLikesDesc' },
+// Top features — the bullets shown on the purple card. Ordered by impact
+// (most-asked-for at the top). The full feature list lives in account
+// settings under "What you get with Premium".
+const PREMIUM_HIGHLIGHT_KEYS = [
+  { icon: 'infinity', titleKey: 'unlimitedLikes' },
+  { icon: 'eye', titleKey: 'seeWhoLikedYou' },
+  { icon: 'star', titleKey: 'superLikes' },
+  { icon: 'filter-variant', titleKey: 'advancedFilters' },
+  { icon: 'incognito', titleKey: 'incognitoMode' },
+  { icon: 'check-all', titleKey: 'readReceipts' },
 ];
 
-const PLATINUM_EXTRA_KEYS = [
-  { icon: 'shield-check', titleKey: 'backgroundCheck', descKey: 'backgroundCheckDesc', comingSoon: true },
-  { icon: 'library', titleKey: 'legalResources', descKey: 'legalResourcesDesc', comingSoon: true },
-  { icon: 'headset', titleKey: 'prioritySupport', descKey: 'prioritySupportDesc', comingSoon: false },
-  { icon: 'rocket', titleKey: 'weeklyBoost', descKey: 'weeklyBoostDesc', comingSoon: true },
+const PLATINUM_HIGHLIGHT_KEYS = [
+  { icon: 'infinity', titleKey: 'unlimitedLikes' },
+  { icon: 'eye', titleKey: 'seeWhoLikedYou' },
+  { icon: 'rocket', titleKey: 'weeklyBoost' },
+  { icon: 'headset', titleKey: 'prioritySupport' },
+  { icon: 'shield-check', titleKey: 'backgroundCheck' },
 ];
 
 export default function PremiumPaywall({
@@ -56,104 +54,170 @@ export default function PremiumPaywall({
 }: PremiumPaywallProps) {
   const { refreshSubscription, syncWithDatabase } = useSubscription();
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'quarterly' | 'annual'>('monthly'); // Default to monthly (least commitment)
+  const [selectedPlan, setSelectedPlan] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('monthly'); // Default to monthly — weekly is shown as a low-commitment add-on for impulse buyers but should not be the recommended default (worse LTV)
+  // In dev (__DEV__) the weekly row is forced on so we can capture the
+  // App Store Connect review screenshot before the RevenueCat product
+  // exists. In production, this flips to true only when RevenueCat
+  // actually returns a weekly package.
+  const [hasWeeklyPackage, setHasWeeklyPackage] = useState(__DEV__);
   const [isClosing, setIsClosing] = useState(false);
 
-  const [trialEligibility, setTrialEligibility] = useState<Record<string, { eligible: boolean; trialInfo: TrialInfo }>>({});
-  const [livePrices, setLivePrices] = useState<Record<string, string>>({});
+  // Live RC packages keyed by lowercased product identifier. Stores
+  // priceString (localized formatted) AND the numeric price + currency
+  // code so we can compute per-month equivalents in the user's local
+  // currency instead of falling back to hardcoded USD.
+  const [livePackages, setLivePackages] = useState<Record<string, {
+    priceString: string;
+    price: number;
+    currencyCode: string;
+  }>>({});
 
   // Reset closing state when paywall opens
   useEffect(() => {
     if (visible) setIsClosing(false);
   }, [visible]);
 
-  // Check trial eligibility when paywall becomes visible
+  // Hide the Android navigation bar (gesture pill / 3-button bar) while
+  // the paywall is open so the gray card visually claims the bottom of
+  // the screen instead of being cut off by the system bar. Restores the
+  // user's normal nav bar when the paywall closes. iOS home indicator
+  // cannot be hidden from JS — that needs a native config change.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const NavigationBar = await import('expo-navigation-bar');
+        if (cancelled) return;
+        if (visible) {
+          await NavigationBar.setVisibilityAsync('hidden');
+          await NavigationBar.setBehaviorAsync('overlay-swipe');
+        } else {
+          await NavigationBar.setVisibilityAsync('visible');
+        }
+      } catch (err) {
+        // Library may not be available in Expo Go — silently no-op.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (Platform.OS !== 'android') return;
+      // Always restore the nav bar on unmount so we don't leak the
+      // hidden state into the rest of the app.
+      import('expo-navigation-bar')
+        .then((NavigationBar) => NavigationBar.setVisibilityAsync('visible'))
+        .catch(() => {});
+    };
+  }, [visible]);
+
+  // Fetch live RC offerings when paywall becomes visible. We only care
+  // about package metadata (price + currency + which periods are
+  // available) — there are no trials configured on any plan, so we
+  // skip the trial-eligibility check entirely.
   useEffect(() => {
     if (!visible || __DEV__) return;
 
     let cancelled = false;
 
-    const fetchTrialEligibility = async () => {
+    const fetchOfferings = async () => {
       try {
         const offerings = await getOfferings();
         if (!offerings || cancelled) return;
-        const eligibility = await checkTrialEligibility(offerings.availablePackages);
-        if (!cancelled) {
-          setTrialEligibility(eligibility);
-          // Extract live prices from RevenueCat packages
-          const prices: Record<string, string> = {};
-          for (const pkg of offerings.availablePackages) {
-            const id = pkg.product.identifier.toLowerCase();
-            prices[id] = pkg.product.priceString;
+        const packages: Record<string, { priceString: string; price: number; currencyCode: string }> = {};
+        let weeklyFound = false;
+        for (const pkg of offerings.availablePackages) {
+          const id = pkg.product.identifier.toLowerCase();
+          const pkgId = pkg.identifier.toLowerCase();
+          packages[id] = {
+            priceString: pkg.product.priceString,
+            price: pkg.product.price,
+            currencyCode: pkg.product.currencyCode,
+          };
+          // Detect a weekly package across the common naming schemes:
+          //   accord_premium_weekly, $rc_weekly, premium_1w, weekly, etc.
+          if ((id.includes('week') || id.includes('1w') || pkgId.includes('week') || pkgId === '$rc_weekly') &&
+              !id.includes('biweek')) {
+            weeklyFound = true;
           }
-          setLivePrices(prices);
         }
+        setLivePackages(packages);
+        setHasWeeklyPackage(weeklyFound);
       } catch (error) {
-        console.warn('⚠️ Failed to check trial eligibility:', error);
+        console.warn('⚠️ Failed to fetch RC offerings:', error);
       }
     };
 
-    fetchTrialEligibility();
+    fetchOfferings();
 
     return () => { cancelled = true; };
   }, [visible]);
 
-  /**
-   * Get trial text for a given tier and billing period.
-   * Looks through eligibility data to find a matching product.
-   */
-  const getTrialTextForPlan = (tier: 'premium' | 'platinum', period: 'monthly' | 'quarterly' | 'annual'): { text: string | null; eligible: boolean } => {
-    for (const [productId, data] of Object.entries(trialEligibility)) {
-      const id = productId.toLowerCase();
-      const tierMatch = tier === 'platinum' ? id.includes('platinum') : id.includes('premium');
-      if (!tierMatch) continue;
-
-      const isMonthly = (id.includes('month') || id.includes('1m')) && !id.includes('3m') && !id.includes('3_month');
-      const isQuarterly = id.includes('quarter') || id.includes('3m') || id.includes('3_month');
-      const isAnnual = id.includes('annual') || id.includes('year') || id.includes('12m');
-
-      let periodMatch = false;
-      if (period === 'monthly') periodMatch = isMonthly && !isQuarterly;
-      else if (period === 'quarterly') periodMatch = isQuarterly;
-      else periodMatch = isAnnual;
-
-      if (periodMatch && data.eligible && data.trialInfo.trialText) {
-        return { text: data.trialInfo.trialText, eligible: true };
-      }
-      if (periodMatch) {
-        return { text: null, eligible: false };
-      }
-    }
-    return { text: null, eligible: false };
-  };
-
   const isPlatinum = variant === 'platinum';
-  const featureKeys = isPlatinum ? [...PREMIUM_FEATURE_KEYS, ...PLATINUM_EXTRA_KEYS] : PREMIUM_FEATURE_KEYS;
+  const highlightKeys = isPlatinum ? PLATINUM_HIGHLIGHT_KEYS : PREMIUM_HIGHLIGHT_KEYS;
   const title = isPlatinum ? t('premiumPaywall.accordPlatinum') : t('premiumPaywall.accordPremium');
 
-  // Look up live price from RevenueCat, fall back to hardcoded defaults
-  const getLivePrice = (tier: string, period: string, fallback: string): string => {
-    for (const [id, price] of Object.entries(livePrices)) {
+  // Find the matching RC package for a given tier + period.
+  const findLivePackage = (tier: string, period: string) => {
+    for (const [id, pkg] of Object.entries(livePackages)) {
       const tierMatch = tier === 'platinum' ? id.includes('platinum') : (id.includes('premium') && !id.includes('platinum'));
       if (!tierMatch) continue;
+      const isWeekly = (id.includes('week') || id.includes('1w')) && !id.includes('biweek');
       const isMonthly = (id.includes('month') || id.includes('1m')) && !id.includes('3m') && !id.includes('3_month');
       const isQuarterly = id.includes('quarter') || id.includes('3m') || id.includes('3_month');
       const isAnnual = id.includes('annual') || id.includes('year') || id.includes('12m');
-      if (period === 'monthly' && isMonthly && !isQuarterly) return price;
-      if (period === 'quarterly' && isQuarterly) return price;
-      if (period === 'annual' && isAnnual) return price;
+      if (period === 'weekly' && isWeekly) return pkg;
+      if (period === 'monthly' && isMonthly && !isQuarterly && !isWeekly) return pkg;
+      if (period === 'quarterly' && isQuarterly) return pkg;
+      if (period === 'annual' && isAnnual) return pkg;
     }
-    return fallback;
+    return null;
+  };
+
+  // Localized priceString from RC, fall back to hardcoded USD.
+  const getLivePrice = (tier: string, period: string, fallback: string): string => {
+    return findLivePackage(tier, period)?.priceString ?? fallback;
+  };
+
+  // Format a numeric amount in a given currency. Uses Intl when available
+  // (Hermes 0.71+ ships ICU); fall back to a simple "<currency> <amount>"
+  // string so we never crash on older runtimes.
+  const formatLocalCurrency = (amount: number, currencyCode: string): string => {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: currencyCode,
+        maximumFractionDigits: 2,
+      }).format(amount);
+    } catch {
+      return `${currencyCode} ${amount.toFixed(2)}`;
+    }
+  };
+
+  // Per-month equivalent for a quarterly/annual plan, computed from the
+  // RC numeric price and formatted in the user's local currency. Falls
+  // back to the hardcoded USD string when RC data isn't available
+  // (e.g. Expo Go in dev).
+  const getPerMonthEq = (tier: string, period: 'monthly' | 'quarterly' | 'annual', fallback: string): string => {
+    const pkg = findLivePackage(tier, period);
+    if (!pkg) return fallback;
+    const monthsInPeriod = period === 'monthly' ? 1 : period === 'quarterly' ? 3 : 12;
+    return formatLocalCurrency(pkg.price / monthsInPeriod, pkg.currencyCode);
   };
 
   const tier = isPlatinum ? 'platinum' : 'premium';
+  // Weekly is currently Premium-only — Platinum stays on monthly/quarterly/annual.
+  const weeklyPrice = getLivePrice(tier, 'weekly', '$5.99');
   const monthlyPrice = getLivePrice(tier, 'monthly', isPlatinum ? '$24.99' : '$14.99');
   const quarterlyPrice = getLivePrice(tier, 'quarterly', isPlatinum ? '$54.99' : '$34.99');
   const annualPrice = getLivePrice(tier, 'annual', isPlatinum ? '$199.99' : '$119.99');
   const quarterlySavings = '22%';
   const annualSavings = '33%';
+  // Show weekly only for Premium (not Platinum) AND only when RevenueCat
+  // has actually returned a weekly package. This means the row stays
+  // hidden until you create the product in App Store Connect / Play
+  // Console / RevenueCat — no risk of users tapping a broken option.
+  const showWeekly = !isPlatinum && hasWeeklyPackage;
 
   const handlePurchase = async () => {
     try {
@@ -202,13 +266,16 @@ export default function PremiumPaywall({
           : (id.includes('premium') || productId.includes('premium'));
 
         // Check billing period with multiple patterns
+        const isWeekly = (id.includes('week') || productId.includes('week') || id.includes('1w') || productId.includes('1w')) && !id.includes('biweek') && !productId.includes('biweek');
         const isMonthly = id.includes('month') || productId.includes('month') || id.includes('1m') || productId.includes('1m');
         const isQuarterly = id.includes('quarter') || productId.includes('quarter') || id.includes('3m') || productId.includes('3m') || id.includes('3_month') || productId.includes('3_month');
         const isAnnual = id.includes('annual') || productId.includes('annual') || id.includes('year') || productId.includes('year') || id.includes('12m') || productId.includes('12m');
 
         let periodMatch = false;
-        if (selectedPlan === 'monthly') {
-          periodMatch = isMonthly && !isQuarterly;
+        if (selectedPlan === 'weekly') {
+          periodMatch = isWeekly;
+        } else if (selectedPlan === 'monthly') {
+          periodMatch = isMonthly && !isQuarterly && !isWeekly;
         } else if (selectedPlan === 'quarterly') {
           periodMatch = isQuarterly;
         } else {
@@ -388,481 +455,449 @@ export default function PremiumPaywall({
     }
   };
 
+  // Helpers used by the plan rows below.
+  const handleClose = () => { setIsClosing(true); setTimeout(onClose, 100); };
+
+  // Per-month equivalent strings shown on each plan card. Computed
+  // dynamically from the live RC numeric price + currency code so they
+  // localize correctly (¥1,500/mo, €12,99/mo, etc.). The fallback USD
+  // strings only show when RC isn't initialized (e.g. Expo Go in dev).
+  const monthlyEq = getPerMonthEq(tier, 'monthly', isPlatinum ? '$24.99' : '$14.99');
+  const quarterlyMonthlyEq = getPerMonthEq(tier, 'quarterly', isPlatinum ? '$18.33' : '$11.66');
+  const annualMonthlyEq = getPerMonthEq(tier, 'annual', isPlatinum ? '$16.66' : '$9.99');
+
+  const renderPlanCard = (
+    key: 'quarterly' | 'annual' | 'monthly' | 'weekly',
+    name: string,
+    totalPrice: string,
+    periodLabel: string,
+    perUnitPrice: string,
+    perUnitLabel: string,
+    badge?: { label: string; type: 'best' },
+  ) => {
+    const isSelected = selectedPlan === key;
+    return (
+      <TouchableOpacity
+        key={key}
+        style={[styles.planCard, isSelected && styles.planCardSelected]}
+        onPress={() => setSelectedPlan(key)}
+        activeOpacity={0.85}
+      >
+        {badge && (
+          <View style={styles.bestOfferBadge}>
+            <MaterialCommunityIcons name="fire" size={11} color="#1A1A2E" />
+            <Text style={styles.bestOfferText}>{badge.label}</Text>
+          </View>
+        )}
+        <View style={styles.planCardHeader}>
+          <Text style={styles.planCardName}>{name}</Text>
+          {isSelected && (
+            <View style={styles.checkCircle}>
+              <MaterialCommunityIcons name="check" size={14} color="#FFFFFF" />
+            </View>
+          )}
+        </View>
+        <View style={styles.planCardBody}>
+          <Text style={styles.planCardTotal}>{totalPrice}</Text>
+          <Text style={styles.planCardPeriod}>{periodLabel}</Text>
+        </View>
+        <View style={styles.planCardFooter}>
+          <Text style={styles.planCardPerUnit}>{perUnitPrice}</Text>
+          <Text style={styles.planCardPerUnitLabel}>{perUnitLabel}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
-      <View style={styles.containerFull}>
+      <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
         <StatusBar
-          barStyle="light-content"
-          backgroundColor="#A08AB7"
+          barStyle="dark-content"
+          backgroundColor="#FFFFFF"
           translucent={true}
           animated={true}
         />
-        <LinearGradient colors={['#A08AB7', '#CDC2E5']} style={styles.containerFull}>
-          <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-            {/* Close Button */}
+
+        {/* TOP CARD — solid light purple, extends to the very top of the
+            screen (behind the status bar). Inner SafeAreaView pushes the
+            close button + content below the status bar so they're not
+            occluded. Side and bottom margins keep the card visually
+            distinct from the page background. */}
+        <View style={styles.topCardWrapper}>
+          <View style={styles.topCard}>
+            <SafeAreaView edges={['top']}>
+            {/* Close X */}
             <TouchableOpacity
-              style={[styles.closeButton, { top: insets.top + 8 }]}
-              onPress={() => {
-                setIsClosing(true);
-                setTimeout(onClose, 100);
-              }}
+              style={styles.closeButton}
+              onPress={handleClose}
               disabled={isClosing}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
             >
-              <View style={[styles.closeBlur, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
-                <MaterialCommunityIcons name="close" size={24} color="white" />
-              </View>
+              <MaterialCommunityIcons name="close" size={26} color="#1A1A2E" />
             </TouchableOpacity>
 
-            <ScrollView
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-              contentInsetAdjustmentBehavior="automatic"
-            >
-          {/* Header */}
-          <MotiView
-            from={{ opacity: 0, translateY: -20 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 600 }}
-            style={styles.header}
-          >
-            {isPlatinum && (
-              <View style={styles.platinumBadge}>
-                <MaterialCommunityIcons name="crown" size={20} color="#FFD700" />
-                <Text style={styles.platinumBadgeText}>{t('premiumPaywall.platinum')}</Text>
-              </View>
-            )}
-            <Text style={styles.title}>{title}</Text>
-            <Text style={styles.subtitle}>
-              {feature === 'unlimited_swipes'
-                ? t('premiumPaywall.subtitleSwipes')
-                : feature
-                  ? t('premiumPaywall.subtitleFeature', { feature: feature.replace('_', ' ') })
-                  : t('premiumPaywall.subtitleDefault')}
-            </Text>
-          </MotiView>
-
-          {/* Plan Selection */}
-          <View style={styles.planContainer}>
-            {/* 3 Months - Most Popular (Featured) */}
-            <TouchableOpacity
-              style={[styles.planRow, selectedPlan === 'quarterly' && styles.planRowSelected, styles.planRowFeatured]}
-              onPress={() => setSelectedPlan('quarterly')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.planRowLeft}>
-                <View style={styles.radioOuter}>
-                  {selectedPlan === 'quarterly' && <View style={styles.radioInner} />}
+            {/* Title + benefits */}
+            <View style={styles.topContent}>
+              {isPlatinum && (
+                <View style={styles.platinumBadge}>
+                  <MaterialCommunityIcons name="crown" size={14} color="#FFD700" />
+                  <Text style={styles.platinumBadgeText}>{t('premiumPaywall.platinum')}</Text>
                 </View>
-                <View style={styles.planRowInfo}>
-                  <View style={styles.planNameRow}>
-                    <Text style={styles.planRowName}>{t('premiumPaywall.threeMonths')}</Text>
-                    <View style={styles.mostPopularBadgeInline}>
-                      <Text style={styles.mostPopularBadgeInlineText}>{t('premiumPaywall.mostPopular')}</Text>
-                    </View>
+              )}
+              <Text style={styles.title}>
+                {/* Hard linebreak so the headline reads on two lines like the
+                    reference design — a single line shrinks the vertical
+                    breathing room between the title and the benefit list. */}
+                {t(
+                  isPlatinum ? 'premiumPaywall.whatPlatinumGetsYou' : 'premiumPaywall.whatPremiumGetsYou',
+                  isPlatinum ? 'What Platinum\ngets you:' : 'What Premium\ngets you:',
+                )}
+              </Text>
+              <View style={styles.benefitList}>
+                {highlightKeys.map((feat) => (
+                  <View key={feat.titleKey} style={styles.benefitRow}>
+                    <MaterialCommunityIcons name="lightning-bolt" size={18} color="#1A1A2E" />
+                    <Text style={styles.benefitText}>
+                      {t(`premiumPaywall.features.${feat.titleKey}`)}
+                    </Text>
                   </View>
-                  <Text style={styles.planRowSubtext}>
-                    {(() => {
-                      const trial = getTrialTextForPlan(isPlatinum ? 'platinum' : 'premium', 'quarterly');
-                      return trial.eligible ? `$11.66/mo • ${trial.text}` : '$11.66/mo';
-                    })()}
-                  </Text>
-                </View>
+                ))}
               </View>
-              <View style={styles.planRowRight}>
-                <Text style={styles.planRowPrice}>{quarterlyPrice}</Text>
-                <View style={styles.savingsBadgeInline}>
-                  <Text style={styles.savingsBadgeInlineText}>{t('premiumPaywall.save', { percent: quarterlySavings })}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* Annual - Best Value */}
-            <TouchableOpacity
-              style={[styles.planRow, selectedPlan === 'annual' && styles.planRowSelected]}
-              onPress={() => setSelectedPlan('annual')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.planRowLeft}>
-                <View style={styles.radioOuter}>
-                  {selectedPlan === 'annual' && <View style={styles.radioInner} />}
-                </View>
-                <View style={styles.planRowInfo}>
-                  <View style={styles.planNameRow}>
-                    <Text style={styles.planRowName}>{t('premiumPaywall.annual')}</Text>
-                    <View style={styles.bestValueBadgeInline}>
-                      <Text style={styles.bestValueBadgeInlineText}>{t('premiumPaywall.bestValue')}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.planRowSubtext}>
-                    {(() => {
-                      const trial = getTrialTextForPlan(isPlatinum ? 'platinum' : 'premium', 'annual');
-                      return trial.eligible ? `$10.00/mo • ${trial.text}` : '$10.00/mo';
-                    })()}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.planRowRight}>
-                <Text style={styles.planRowPrice}>{annualPrice}</Text>
-                <View style={styles.savingsBadgeInline}>
-                  <Text style={styles.savingsBadgeInlineText}>{t('premiumPaywall.save', { percent: annualSavings })}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* Monthly */}
-            <TouchableOpacity
-              style={[styles.planRow, selectedPlan === 'monthly' && styles.planRowSelected]}
-              onPress={() => setSelectedPlan('monthly')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.planRowLeft}>
-                <View style={styles.radioOuter}>
-                  {selectedPlan === 'monthly' && <View style={styles.radioInner} />}
-                </View>
-                <View style={styles.planRowInfo}>
-                  <Text style={styles.planRowName}>{t('premiumPaywall.monthly')}</Text>
-                  <Text style={styles.planRowSubtext}>
-                    {(() => {
-                      const trial = getTrialTextForPlan(isPlatinum ? 'platinum' : 'premium', 'monthly');
-                      return trial.eligible ? `$14.99/mo • ${trial.text}` : '$14.99/mo';
-                    })()}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.planRowRight}>
-                <Text style={styles.planRowPrice}>{monthlyPrice}</Text>
-              </View>
-            </TouchableOpacity>
+            </View>
+            </SafeAreaView>
           </View>
+        </View>
 
-          {/* Features List */}
-          <View style={styles.featuresContainer}>
-            {featureKeys.map((feat, index) => (
-              <MotiView
-                key={feat.titleKey}
-                from={{ opacity: 0, translateX: -20 }}
-                animate={{ opacity: 1, translateX: 0 }}
-                transition={{ type: 'timing', duration: 400, delay: index * 50 }}
-                style={styles.featureItem}
-              >
-                <View style={styles.featureIcon}>
-                  <MaterialCommunityIcons name={feat.icon as any} size={24} color="#A08AB7" />
-                </View>
-                <View style={styles.featureText}>
-                  <Text style={styles.featureTitle}>{t(`premiumPaywall.features.${feat.titleKey}`)}</Text>
-                  <Text style={styles.featureDescription}>{t(`premiumPaywall.features.${feat.descKey}`)}</Text>
-                </View>
-              </MotiView>
-            ))}
-          </View>
-
-          {/* CTA Button */}
-          <TouchableOpacity
-            style={styles.ctaButton}
-            onPress={handlePurchase}
-            disabled={loading}
-            activeOpacity={0.8}
-          >
-            <View style={styles.ctaButtonContent}>
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                (() => {
-                  const trial = getTrialTextForPlan(isPlatinum ? 'platinum' : 'premium', selectedPlan);
-                  const price = selectedPlan === 'monthly' ? monthlyPrice : selectedPlan === 'quarterly' ? quarterlyPrice : annualPrice;
-                  const period = selectedPlan === 'monthly' ? t('premiumPaywall.periodMonth') : selectedPlan === 'quarterly' ? t('premiumPaywall.periodThreeMonths') : t('premiumPaywall.periodYear');
-                  return (
-                    <>
-                      <Text style={styles.ctaButtonText}>
-                        {trial.eligible && trial.text
-                          ? t('premiumPaywall.startTrial', { trial: trial.text.replace(/\b\w/g, (c: string) => c.toUpperCase()) })
-                          : t('premiumPaywall.subscribeNow')}
-                      </Text>
-                      {trial.eligible && (
-                        <Text style={styles.ctaButtonSubtext}>
-                          {t('premiumPaywall.thenPrice', { price, period })}
-                        </Text>
-                      )}
-                    </>
-                  );
-                })()
+        {/* BOTTOM CARD — light gray container floating on white,
+            holds white plan cards + CTA + exits + legal */}
+        <View style={styles.bottomCardWrapper}>
+          <View style={styles.bottomCard}>
+            <View style={styles.planContainer}>
+              {renderPlanCard(
+                'quarterly',
+                t('premiumPaywall.threeMonths'),
+                quarterlyPrice,
+                t('premiumPaywall.everyThreeMonths', 'every 3 months'),
+                quarterlyMonthlyEq,
+                t('premiumPaywall.perMonthLabel', 'per month'),
+                { label: t('premiumPaywall.bestOffer', 'BEST OFFER').toUpperCase(), type: 'best' },
+              )}
+              {renderPlanCard(
+                'annual',
+                t('premiumPaywall.annual'),
+                annualPrice,
+                t('premiumPaywall.everyYear', 'every year'),
+                annualMonthlyEq,
+                t('premiumPaywall.perMonthLabel', 'per month'),
+              )}
+              {renderPlanCard(
+                'monthly',
+                t('premiumPaywall.monthly'),
+                monthlyPrice,
+                t('premiumPaywall.everyMonth', 'every month'),
+                monthlyEq,
+                t('premiumPaywall.perMonthLabel', 'per month'),
+              )}
+              {showWeekly && renderPlanCard(
+                'weekly',
+                t('premiumPaywall.weekly', 'Weekly'),
+                weeklyPrice,
+                t('premiumPaywall.everyWeek', 'every week'),
+                weeklyPrice,
+                t('premiumPaywall.perWeekLabel', 'per week'),
               )}
             </View>
-          </TouchableOpacity>
 
-          {/* Restore Purchases */}
-          <TouchableOpacity onPress={handleRestore} disabled={loading}>
-            <Text style={styles.restoreText}>{t('premiumPaywall.restorePurchases')}</Text>
-          </TouchableOpacity>
-
-          {/* Fine Print */}
-          <Text style={styles.finePrint}>
-            {t('premiumPaywall.finePrint')}
-          </Text>
-
-          {/* Terms of Use & Privacy Policy (Required by App Store) */}
-          <View style={styles.legalLinks}>
-            <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}>
-              <Text style={styles.legalLinkText}>{t('premiumPaywall.termsOfUse')}</Text>
+            {/* CTA — platform-specific. The IAP is processed by the App
+                Store (iOS) or Google Play (Android), so the button text
+                + icon mirror that. No trial logic — Accord has no trial
+                period on any plan. */}
+            <TouchableOpacity
+              style={styles.ctaButton}
+              onPress={handlePurchase}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <View style={styles.ctaButtonInner}>
+                  <Text style={styles.ctaButtonText}>
+                    {t('premiumPaywall.subscribeWith', 'Subscribe with')}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name={Platform.OS === 'ios' ? 'apple' : 'google'}
+                    size={24}
+                    color="#FFFFFF"
+                    style={styles.ctaButtonIcon}
+                  />
+                </View>
+              )}
             </TouchableOpacity>
-            <Text style={styles.legalLinkSeparator}>•</Text>
-            <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}>
-              <Text style={styles.legalLinkText}>{t('premiumPaywall.privacyPolicy')}</Text>
-            </TouchableOpacity>
+
+            {/* Legal: Restore · Terms · Privacy */}
+            <View style={styles.bottomLinksRow}>
+              <TouchableOpacity onPress={handleRestore} disabled={loading}>
+                <Text style={styles.bottomLinkText}>{t('premiumPaywall.restorePurchases')}</Text>
+              </TouchableOpacity>
+              <Text style={styles.legalLinkSeparator}>·</Text>
+              <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}>
+                <Text style={styles.bottomLinkText}>{t('premiumPaywall.termsOfUse')}</Text>
+              </TouchableOpacity>
+              <Text style={styles.legalLinkSeparator}>·</Text>
+              <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}>
+                <Text style={styles.bottomLinkText}>{t('premiumPaywall.privacyPolicy')}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Auto-renewal disclosure — required for App Store review. */}
+            <Text style={styles.finePrint}>
+              {t(
+                'premiumPaywall.autoRenewDisclosure',
+                'Subscription auto-renews unless cancelled at least 24 hours before the end of the current period. Manage in your account settings.',
+              )}
+            </Text>
           </View>
-        </ScrollView>
-          </SafeAreaView>
-        </LinearGradient>
-      </View>
+        </View>
+      </SafeAreaView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  containerFull: {
+  root: {
     flex: 1,
-    backgroundColor: '#A08AB7', // Purple background to fill status bar area
+    backgroundColor: '#FFFFFF', // page bg — visible on all sides of both cards
   },
-  container: {
-    flex: 1,
+
+  // ── TOP CARD — solid light purple, runs to top edge, meets the gray
+  //    card flush with no white gap between them.
+  topCardWrapper: {
+    paddingHorizontal: 16,
+    // No paddingTop — card flows under the status bar; inner SafeAreaView
+    // handles status-bar clearance so the content sits below it.
+    // No paddingBottom — purple card meets the gray card edge-to-edge.
+  },
+  topCard: {
+    backgroundColor: '#D9CCE6', // lighter shade of brand purple — dark text pops
+    // Top corners square (card flows to the screen edge); bottom corners
+    // rounded — they touch the gray card directly with no white gap, but
+    // the curves stay visible.
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 18,
   },
   closeButton: {
-    position: 'absolute',
-    // top is set dynamically using insets
-    right: 20,
-    zIndex: 100,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  closeBlur: {
-    width: 40,
-    height: 40,
+    alignSelf: 'flex-end',
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scrollContent: {
-    paddingTop: 20, // Reduced since SafeAreaView handles top spacing now
-    paddingBottom: 40,
-    paddingHorizontal: 24,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 32,
+  topContent: {
+    paddingTop: 0,
   },
   platinumBadge: {
     flexDirection: 'row',
+    alignSelf: 'flex-start',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginBottom: 16,
+    gap: 4,
+    backgroundColor: 'rgba(26, 26, 46, 0.12)',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    marginBottom: 8,
   },
   platinumBadgeText: {
-    color: '#FFD700',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#1A1A2E',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: 'white',
+    fontSize: 38,
+    fontWeight: '600',
+    color: '#1A1A2E',
+    lineHeight: 44,
+    letterSpacing: -0.5,
     marginBottom: 12,
-    textAlign: 'center',
+    marginTop: -8, // pull title up tighter to the close button row
   },
-  subtitle: {
-    fontSize: 17,
-    color: 'rgba(255, 255, 255, 0.9)',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  planContainer: {
-    flexDirection: 'column',
+  benefitList: {
     gap: 12,
-    marginBottom: 32,
   },
-  planRow: {
+  benefitRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    gap: 12,
+  },
+  benefitText: {
+    fontSize: 16,
+    color: '#1A1A2E',
+    fontWeight: '500',
+    flex: 1,
+  },
+
+  // ── BOTTOM CARD — light gray, meets the purple card flush at the top,
+  //    floats above the white page bg at the bottom (rounded bottom
+  //    corners + bottom margin so the bottom edge is visible).
+  bottomCardWrapper: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 8, // white gap below the card so its bottom edge + corners are visible
+  },
+  bottomCard: {
+    flex: 1,
+    backgroundColor: '#F2F1F4', // light gray with a hint of purple to harmonize
+    borderRadius: 24, // all four corners rounded — card is fully visible
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 16,
+  },
+
+  // ── Plan cards — vertical, 2 per row grid ────────────────────────
+  planContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+  },
+  planCard: {
+    // Two columns: width less than 50% to leave room for the row gap.
+    // Using `width` (not flexBasis/flexGrow) — that combo can prevent
+    // wrap in React Native flexbox.
+    width: '48%',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
     borderWidth: 2,
     borderColor: 'transparent',
+    position: 'relative',
+    minHeight: 130,
   },
-  planRowSelected: {
-    borderColor: '#10B981',
-    backgroundColor: 'white',
+  planCardSelected: {
+    borderColor: '#1A1A2E',
   },
-  planRowFeatured: {
-    borderColor: '#A08AB7',
-    borderWidth: 2,
-  },
-  planRowLeft: {
+  planCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  radioOuter: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#A08AB7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#10B981',
-  },
-  planRowInfo: {
-    flex: 1,
-  },
-  planNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  planRowName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  planRowSubtext: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  planRowRight: {
-    alignItems: 'flex-end',
-  },
-  planRowPrice: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#A08AB7',
-  },
-  planRowPeriod: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  savingsBadgeInline: {
-    backgroundColor: '#10B981',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  savingsBadgeInlineText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  bestValueBadgeInline: {
-    backgroundColor: '#10B981',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-  },
-  bestValueBadgeInlineText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  mostPopularBadgeInline: {
-    backgroundColor: '#A08AB7',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-  },
-  mostPopularBadgeInlineText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  featuresContainer: {
-    gap: 20,
-    marginBottom: 32,
-  },
-  featureItem: {
-    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 16,
+    marginBottom: 10,
   },
-  featureIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featureText: {
+  planCardName: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#1A1A2E',
     flex: 1,
   },
-  featureTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: 'white',
-    marginBottom: 4,
+  planCardBody: {
+    marginBottom: 8,
   },
-  featureDescription: {
+  planCardTotal: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#1A1A2E',
+  },
+  planCardPeriod: {
+    fontSize: 11,
+    color: '#71717A',
+    marginTop: 1,
+  },
+  planCardFooter: {
+    marginTop: 'auto',
+  },
+  planCardPerUnit: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.85)',
-    lineHeight: 20,
+    fontWeight: '600',
+    color: '#1A1A2E',
   },
-  ctaButton: {
-    backgroundColor: 'white',
-    borderRadius: 28,
-    overflow: 'hidden',
-    marginBottom: 16,
+  planCardPerUnitLabel: {
+    fontSize: 11,
+    color: '#71717A',
+    marginTop: 1,
   },
-  ctaButtonContent: {
-    paddingVertical: 20,
+  // Only rendered when a card is selected — the empty unselected ring
+  // was visual noise on every other card.
+  checkCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1A1A2E',
+  },
+  // "BEST OFFER" yellow chip with flame icon — sits at the top edge of
+  // the card, slightly overlapping it.
+  bestOfferBadge: {
+    position: 'absolute',
+    top: -10,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFD84D',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    zIndex: 1,
+  },
+  bestOfferText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    letterSpacing: 0.5,
+  },
+
+  // ── CTA + exits + legal ───────────────────────────────────────────
+  ctaButton: {
+    backgroundColor: '#1A1A2E', // black, matches reference
+    borderRadius: 28,
+    paddingVertical: 18,
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  ctaButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ctaButtonIcon: {
+    marginLeft: 2,
   },
   ctaButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#A08AB7',
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: '500',
+    color: '#FFFFFF',
   },
-  ctaButtonSubtext: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  restoreText: {
-    textAlign: 'center',
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 15,
-    marginBottom: 16,
-  },
-  finePrint: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  legalLinks: {
+  bottomLinksRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 16,
     gap: 8,
+    marginTop: 4,
+    marginBottom: 6,
   },
-  legalLinkText: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.9)',
+  bottomLinkText: {
+    fontSize: 12,
+    color: '#A08AB7',
     textDecorationLine: 'underline',
   },
   legalLinkSeparator: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  finePrint: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    lineHeight: 15,
+    paddingHorizontal: 4,
   },
 });
