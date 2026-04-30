@@ -56,11 +56,10 @@ export default function PremiumPaywall({
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('monthly'); // Default to monthly — weekly is shown as a low-commitment add-on for impulse buyers but should not be the recommended default (worse LTV)
-  // In dev (__DEV__) the weekly row is forced on so we can capture the
-  // App Store Connect review screenshot before the RevenueCat product
-  // exists. In production, this flips to true only when RevenueCat
-  // actually returns a weekly package.
-  const [hasWeeklyPackage, setHasWeeklyPackage] = useState(__DEV__);
+  // Flips to true only when RevenueCat actually returns a weekly
+  // package in the offering. The product is now live in both stores;
+  // visibility is purely data-driven.
+  const [hasWeeklyPackage, setHasWeeklyPackage] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
   // Live RC packages keyed by lowercased product identifier. Stores
