@@ -71,7 +71,7 @@ module.exports = {
       },
       package: "com.privyreviews.accord",
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
-      versionCode: 60,
+      versionCode: 61,
       softwareKeyboardLayoutMode: "resize",
       permissions: [
         "android.permission.CAMERA",
