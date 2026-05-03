@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,21 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  TextInput,
+  Keyboard,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { updateUserLocation } from '@/lib/geolocation';
+import { openAppSettings } from '@/lib/open-settings';
+import { searchCities, CityResult } from '@/lib/city-search';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import PhotoVerificationCard from '@/components/security/PhotoVerificationCard';
 
@@ -29,6 +35,7 @@ interface PrivacySettings {
 }
 
 export default function PrivacySettings() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
   const { scrollTo } = useLocalSearchParams<{ scrollTo?: string }>();
@@ -45,6 +52,11 @@ export default function PrivacySettings() {
     hide_distance: false,
   });
   const [currentLocation, setCurrentLocation] = useState<string>('');
+  const [cityQuery, setCityQuery] = useState('');
+  const [cityResults, setCityResults] = useState<CityResult[]>([]);
+  const [showCitySearch, setShowCitySearch] = useState(false);
+  const [savingCity, setSavingCity] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadSettings();
@@ -63,7 +75,7 @@ export default function PrivacySettings() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('photo_blur_enabled, incognito_mode, hide_last_active, hide_distance')
+        .select('photo_blur_enabled, incognito_mode, hide_last_active, hide_distance, location_city, location_state, latitude, longitude')
         .eq('user_id', user?.id)
         .single();
 
@@ -76,10 +88,18 @@ export default function PrivacySettings() {
           hide_last_active: data.hide_last_active || false,
           hide_distance: data.hide_distance || false,
         });
+
+        // Show existing location
+        if (data.location_city || data.location_state) {
+          const parts = [data.location_city, data.location_state].filter(Boolean);
+          setCurrentLocation(parts.join(', '));
+        } else if (data.latitude && data.longitude) {
+          setCurrentLocation(`${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`);
+        }
       }
     } catch (error: any) {
       console.error('Error loading privacy settings:', error);
-      Alert.alert('Error', 'Failed to load privacy settings');
+      Alert.alert(t('common.error'), t('privacySettings.alerts.loadError'));
     } finally {
       setLoading(false);
     }
@@ -88,12 +108,10 @@ export default function PrivacySettings() {
   const updateSetting = async (key: keyof PrivacySettings, value: boolean) => {
     // CRITICAL: Gate incognito mode for premium/platinum users only
     if (key === 'incognito_mode' && value === true && !isPremium && !isPlatinum) {
-      console.log('🚫 Incognito mode requires premium subscription');
       setShowPaywall(true);
       return;
     }
 
-    console.log(`🔧 Updating ${key} to ${value} for user ${user?.id}`);
     const previousValue = settings[key];
 
     // Optimistically update UI
@@ -101,24 +119,32 @@ export default function PrivacySettings() {
     setSaving(true);
 
     try {
-      console.log(`📤 Sending update to database...`);
       const { data, error } = await supabase
         .from('profiles')
         .update({ [key]: value })
         .eq('user_id', user?.id)
-        .select();
+        .select('photo_blur_enabled, incognito_mode, hide_last_active, hide_distance')
+        .single();
 
       if (error) {
         console.error('❌ Database error:', error);
         throw error;
       }
 
-      console.log('✅ Setting updated successfully:', data);
+      // Verify the write actually took effect
+      if (data && (data as Record<string, boolean>)[key] !== value) {
+        throw new Error('Setting was not saved correctly');
+      }
+
     } catch (error: any) {
       console.error('❌ Error updating privacy setting:', error);
       // Revert on error
       setSettings(prev => ({ ...prev, [key]: previousValue }));
-      Alert.alert('Error', 'Failed to update privacy setting. Please try again.');
+      if (error?.code === 'P0001' && error?.message?.includes('Premium')) {
+        setShowPaywall(true);
+      } else {
+        Alert.alert(t('common.error'), t('privacySettings.alerts.updateError'));
+      }
     } finally {
       setSaving(false);
     }
@@ -130,8 +156,8 @@ export default function PrivacySettings() {
       const location = await updateUserLocation();
       if (!location) {
         Alert.alert(
-          'Permission Denied',
-          'Location permission is required to update your location. You can enable it in your device settings.'
+          t('privacySettings.alerts.permissionDenied'),
+          t('privacySettings.alerts.permissionDeniedMessage')
         );
         return;
       }
@@ -139,44 +165,99 @@ export default function PrivacySettings() {
       // Check if location accuracy is too low (approximate location enabled)
       if (location.error === 'approximate_location') {
         Alert.alert(
-          'Precise Location Required',
-          `Location accuracy is too low (${Math.round(location.accuracy || 0)} meters). Please enable "Precise Location" for Accord in your iPhone Settings:\n\n1. Open Settings\n2. Scroll to Accord\n3. Tap Location\n4. Enable "Precise Location"\n\nThis ensures accurate distance calculations for matching.`,
+          t('privacySettings.alerts.preciseLocationRequired'),
+          t('privacySettings.alerts.preciseLocationMessage', { accuracy: Math.round(location.accuracy || 0) }),
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: t('common.cancel'), style: 'cancel' },
             {
-              text: 'Open Settings',
-              onPress: () => Linking.openURL('app-settings:')
+              text: t('privacySettings.alerts.openSettings'),
+              onPress: () => openAppSettings()
             }
           ]
         );
         return;
       }
 
-      // Update profile in database
+      // Update profile in database (include city/state if available)
+      const updateData: any = {
+        latitude: location.latitude,
+        longitude: location.longitude,
+      };
+      if (location.city) updateData.location_city = location.city;
+      if (location.state) updateData.location_state = location.state;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      // Update display with city/state or coordinates
+      if (location.city || location.state) {
+        const parts = [location.city, location.state].filter(Boolean);
+        setCurrentLocation(parts.join(', '));
+      } else {
+        setCurrentLocation(`${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`);
+      }
+
+      Alert.alert(
+        t('common.success'),
+        location.city
+          ? t('privacySettings.alerts.locationSuccess', { location: `${location.city}${location.state ? ', ' + location.state : ''}` })
+          : t('privacySettings.alerts.locationSuccessGeneric')
+      );
+    } catch (error: any) {
+      console.error('Error updating location:', error);
+      Alert.alert(t('common.error'), t('privacySettings.alerts.locationError'));
+    } finally {
+      setUpdatingLocation(false);
+    }
+  };
+
+  const handleCitySearch = useCallback((query: string) => {
+    setCityQuery(query);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (query.length < 2) {
+      setCityResults([]);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      const results = searchCities(query, 8);
+      setCityResults(results);
+    }, 150);
+  }, []);
+
+  const handleSelectCity = async (city: CityResult) => {
+    Keyboard.dismiss();
+    setSavingCity(true);
+    try {
       const { error } = await supabase
         .from('profiles')
         .update({
-          latitude: location.latitude,
-          longitude: location.longitude,
+          location_city: city.city,
+          location_state: city.state,
+          location_country: city.countryCode,
+          latitude: city.latitude,
+          longitude: city.longitude,
         })
         .eq('user_id', user?.id);
 
       if (error) throw error;
 
-      // Update display with accuracy info
-      setCurrentLocation(
-        `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)} (±${Math.round(location.accuracy || 0)}m)`
-      );
+      setCurrentLocation(city.displayName);
+      setCityQuery('');
+      setCityResults([]);
+      setShowCitySearch(false);
 
-      Alert.alert(
-        'Success',
-        `Your location has been updated!\n\nAccuracy: ±${Math.round(location.accuracy || 0)} meters`
-      );
+      Alert.alert(t('common.success'), t('privacySettings.alerts.locationSuccess', { location: city.displayName }));
     } catch (error: any) {
-      console.error('Error updating location:', error);
-      Alert.alert('Error', 'Failed to update location. Please try again.');
+      console.error('Error setting city location:', error);
+      Alert.alert(t('common.error'), t('privacySettings.alerts.locationError'));
     } finally {
-      setUpdatingLocation(false);
+      setSavingCity(false);
     }
   };
 
@@ -220,16 +301,31 @@ export default function PrivacySettings() {
           </View>
           <Text style={styles.settingDescription}>
             {description}
-            {isLocked && ' Requires Premium.'}
+            {isLocked && t('privacySettings.incognitoMode.requiresPremium')}
           </Text>
         </View>
-        <Switch
-          value={value}
-          onValueChange={onValueChange}
-          trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
-          thumbColor={value ? '#A08AB7' : '#F3F4F6'}
-          disabled={saving || isLocked}
-        />
+        {isLocked ? (
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); onValueChange(true); }}
+            activeOpacity={0.7}
+          >
+            <Switch
+              value={false}
+              trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
+              thumbColor="#F3F4F6"
+              disabled={true}
+              pointerEvents="none"
+            />
+          </TouchableOpacity>
+        ) : (
+          <Switch
+            value={value}
+            onValueChange={(v) => { Haptics.selectionAsync(); onValueChange(v); }}
+            trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
+            thumbColor={value ? '#A08AB7' : '#F3F4F6'}
+            disabled={saving}
+          />
+        )}
       </MotiView>
     );
   };
@@ -241,12 +337,12 @@ export default function PrivacySettings() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Privacy Settings</Text>
+          <Text style={styles.headerTitle}>{t('privacySettings.title')}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#A08AB7" />
-          <Text style={styles.loadingText}>Loading settings...</Text>
+          <Text style={styles.loadingText}>{t('privacySettings.loading')}</Text>
         </View>
       </View>
     );
@@ -259,7 +355,7 @@ export default function PrivacySettings() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Privacy Settings</Text>
+        <Text style={styles.headerTitle}>{t('privacySettings.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -276,9 +372,9 @@ export default function PrivacySettings() {
         >
           <MaterialCommunityIcons name="shield-lock-outline" size={24} color="#3B82F6" />
           <View style={styles.infoBannerContent}>
-            <Text style={styles.infoBannerTitle}>Your Privacy Matters</Text>
+            <Text style={styles.infoBannerTitle}>{t('privacySettings.infoBannerTitle')}</Text>
             <Text style={styles.infoBannerText}>
-              Control how others see you on Accord. Changes take effect immediately.
+              {t('privacySettings.infoBannerText')}
             </Text>
           </View>
         </LinearGradient>
@@ -286,20 +382,20 @@ export default function PrivacySettings() {
 
       {/* Profile Visibility */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Profile Visibility</Text>
+        <Text style={styles.sectionTitle}>{t('privacySettings.sections.profileVisibility')}</Text>
 
         <SettingRow
           icon="image-off-outline"
-          title="Photo Blur"
-          description="Blur your photos until you match with someone"
+          title={t('privacySettings.photoBlur.title')}
+          description={t('privacySettings.photoBlur.description')}
           value={settings.photo_blur_enabled}
           onValueChange={(value) => updateSetting('photo_blur_enabled', value)}
         />
 
         <SettingRow
           icon="incognito"
-          title="Incognito Mode"
-          description="Hide your profile from discovery. Only matched users can see you."
+          title={t('privacySettings.incognitoMode.title')}
+          description={t('privacySettings.incognitoMode.description')}
           value={settings.incognito_mode}
           onValueChange={(value) => updateSetting('incognito_mode', value)}
           premium
@@ -312,7 +408,7 @@ export default function PrivacySettings() {
         style={styles.section}
         onLayout={(event) => setVerificationSectionY(event.nativeEvent.layout.y)}
       >
-        <Text style={styles.sectionTitle}>Verification</Text>
+        <Text style={styles.sectionTitle}>{t('privacySettings.sections.verification')}</Text>
         <View style={{ paddingHorizontal: 20 }}>
           <PhotoVerificationCard />
         </View>
@@ -320,96 +416,173 @@ export default function PrivacySettings() {
 
       {/* Activity Privacy */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Activity Privacy</Text>
+        <Text style={styles.sectionTitle}>{t('privacySettings.sections.activityPrivacy')}</Text>
 
         <SettingRow
           icon="clock-outline"
-          title="Hide Last Active"
-          description="Don't show when you were last active on Accord"
+          title={t('privacySettings.hideLastActive.title')}
+          description={t('privacySettings.hideLastActive.description')}
           value={settings.hide_last_active}
           onValueChange={(value) => updateSetting('hide_last_active', value)}
         />
 
         <SettingRow
           icon="map-marker-off-outline"
-          title="Hide Distance"
-          description='Show "nearby" instead of exact distance'
+          title={t('privacySettings.hideDistance.title')}
+          description={t('privacySettings.hideDistance.description')}
           value={settings.hide_distance}
           onValueChange={(value) => updateSetting('hide_distance', value)}
         />
+
+        {/* Privacy Info when distance is hidden */}
+        {settings.hide_distance && (
+          <View style={styles.warningCard}>
+            <MaterialCommunityIcons name="information" size={20} color="#F97316" />
+            <Text style={styles.warningText}>
+              {t('privacySettings.hideDistance.warning')}
+            </Text>
+          </View>
+        )}
       </View>
 
-      {/* Location Settings */}
+      {/* Location Settings - always show */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Location</Text>
+        <Text style={styles.sectionTitle}>{t('privacySettings.sections.location')}</Text>
 
         <MotiView
-          from={{ opacity: 0, translateY: 10 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 300 }}
-          style={styles.locationCard}
-        >
+            from={{ opacity: 0, translateY: 10 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 300 }}
+            style={styles.locationCard}
+          >
           <View style={styles.locationHeader}>
             <View style={styles.settingIcon}>
               <MaterialCommunityIcons name="map-marker" size={24} color="#A08AB7" />
             </View>
             <View style={styles.locationContent}>
-              <Text style={styles.settingTitle}>Update Location</Text>
+              <Text style={styles.settingTitle}>{t('privacySettings.location.title')}</Text>
               <Text style={styles.settingDescription}>
-                Refresh your GPS coordinates to show accurate distance to matches
+                {t('privacySettings.location.description')}
               </Text>
               {currentLocation && (
                 <Text style={styles.currentLocationText}>
-                  Current: {currentLocation}
+                  {t('privacySettings.location.current', { location: currentLocation })}
                 </Text>
               )}
             </View>
           </View>
 
-          <TouchableOpacity
-            style={[
-              styles.updateLocationButton,
-              updatingLocation && styles.updateLocationButtonDisabled,
-            ]}
-            onPress={handleUpdateLocation}
-            disabled={updatingLocation}
-          >
-            {updatingLocation ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <MaterialCommunityIcons
-                  name="crosshairs-gps"
-                  size={18}
-                  color="#fff"
-                />
-                <Text style={styles.updateLocationButtonText}>Update Now</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View style={styles.locationButtonsRow}>
+            <TouchableOpacity
+              style={[
+                styles.updateLocationButton,
+                { flex: 1 },
+                updatingLocation && styles.updateLocationButtonDisabled,
+              ]}
+              onPress={handleUpdateLocation}
+              disabled={updatingLocation}
+            >
+              {updatingLocation ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <MaterialCommunityIcons
+                    name="crosshairs-gps"
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={styles.updateLocationButtonText}>{t('privacySettings.location.useGps')}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.searchCityButton,
+                showCitySearch && styles.searchCityButtonActive,
+              ]}
+              onPress={() => {
+                setShowCitySearch(!showCitySearch);
+                if (showCitySearch) {
+                  setCityQuery('');
+                  setCityResults([]);
+                }
+              }}
+            >
+              <MaterialCommunityIcons
+                name="magnify"
+                size={18}
+                color={showCitySearch ? '#fff' : '#A08AB7'}
+              />
+              <Text style={[
+                styles.searchCityButtonText,
+                showCitySearch && { color: '#fff' },
+              ]}>
+                {t('privacySettings.location.searchCity')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {showCitySearch && (
+            <View style={styles.citySearchContainer}>
+              <TextInput
+                style={styles.citySearchInput}
+                placeholder={t('privacySettings.location.searchPlaceholder')}
+                placeholderTextColor="#9CA3AF"
+                value={cityQuery}
+                onChangeText={handleCitySearch}
+                autoFocus
+              />
+              {savingCity && (
+                <ActivityIndicator size="small" color="#A08AB7" style={{ marginTop: 8 }} />
+              )}
+              {cityResults.length > 0 && (
+                <View style={styles.cityResultsList}>
+                  {cityResults.map((result, index) => (
+                    <TouchableOpacity
+                      key={`${result.city}-${result.state}-${result.countryCode}-${index}`}
+                      style={[
+                        styles.cityResultItem,
+                        index < cityResults.length - 1 && styles.cityResultBorder,
+                      ]}
+                      onPress={() => handleSelectCity(result)}
+                    >
+                      <MaterialCommunityIcons name="map-marker-outline" size={18} color="#A08AB7" />
+                      <Text style={styles.cityResultText} numberOfLines={1}>
+                        {result.displayName}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              {cityQuery.length >= 2 && cityResults.length === 0 && !savingCity && (
+                <Text style={styles.noResultsText}>{t('privacySettings.location.noCitiesFound')}</Text>
+              )}
+            </View>
+          )}
         </MotiView>
       </View>
 
       {/* Privacy Tips */}
       <View style={styles.tipsSection}>
-        <Text style={styles.tipsTitle}>Privacy Tips</Text>
+        <Text style={styles.tipsTitle}>{t('privacySettings.tips.title')}</Text>
 
         {[
           {
             icon: 'shield-check',
-            text: 'All messages are end-to-end encrypted by default',
+            text: t('privacySettings.tips.encrypted'),
           },
           {
             icon: 'eye-off',
-            text: 'Blocked users cannot see your profile or message you',
+            text: t('privacySettings.tips.blocked'),
           },
           {
             icon: 'lock',
-            text: 'Your real name and contact info are never shared',
+            text: t('privacySettings.tips.namePrivacy'),
           },
           {
             icon: 'delete',
-            text: 'You can delete your account and data at any time',
+            text: t('privacySettings.tips.deleteAccount'),
           },
         ].map((tip, i) => (
           <View key={i} style={styles.tipRow}>
@@ -423,19 +596,19 @@ export default function PrivacySettings() {
       <View style={styles.legalSection}>
         <TouchableOpacity
           style={styles.learnMoreButton}
-          onPress={() => Linking.openURL('https://joinaccord.app/privacy')}
+          onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}
         >
           <MaterialCommunityIcons name="shield-lock-outline" size={20} color="#A08AB7" />
-          <Text style={styles.learnMoreText}>Privacy Policy</Text>
+          <Text style={styles.learnMoreText}>{t('privacySettings.legal.privacyPolicy')}</Text>
           <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.learnMoreButton}
-          onPress={() => Linking.openURL('https://joinaccord.app/terms')}
+          onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}
         >
           <MaterialCommunityIcons name="file-document-outline" size={20} color="#A08AB7" />
-          <Text style={styles.learnMoreText}>Terms of Service</Text>
+          <Text style={styles.learnMoreText}>{t('privacySettings.legal.termsOfService')}</Text>
           <MaterialCommunityIcons name="chevron-right" size={20} color="#D1D5DB" />
         </TouchableOpacity>
       </View>
@@ -686,5 +859,89 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  locationButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  searchCityButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3E8FF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  searchCityButtonActive: {
+    backgroundColor: '#A08AB7',
+  },
+  searchCityButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#A08AB7',
+  },
+  citySearchContainer: {
+    marginTop: 12,
+  },
+  citySearchInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#111827',
+  },
+  cityResultsList: {
+    marginTop: 8,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  cityResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 10,
+  },
+  cityResultBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  cityResultText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#374151',
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  warningCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+    borderRadius: 12,
+    padding: 12,
+    marginHorizontal: 20,
+    marginTop: 8,
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#9A3412',
+    lineHeight: 18,
   },
 });

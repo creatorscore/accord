@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
         `and(profile1_id.eq.${currentProfile.id},profile2_id.eq.${profileId}),and(profile1_id.eq.${profileId},profile2_id.eq.${currentProfile.id})`
       )
       .eq('status', 'active')
-      .single();
+      .maybeSingle();
 
     const hasMatched = !!match;
 
@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
       .from('profile_review_settings')
       .select('*')
       .eq('profile_id', profileId)
-      .single();
+      .maybeSingle();
 
     // If reviews are disabled, return early
     if (!settings || !settings.reviews_enabled) {
@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('review_aggregate_score, review_count')
       .eq('id', profileId)
-      .single();
+      .maybeSingle();
 
     // Check if minimum reviews threshold is met
     const reviewCount = profile?.review_count || 0;

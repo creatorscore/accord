@@ -61,15 +61,15 @@ function generateInactiveEmail(
     const textItems = [];
 
     if (stats.likesReceived > 0) {
-      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #9B87CE;">${stats.likesReceived}</div><div style="font-size: 12px; color: #666;">New Likes</div></td>`);
+      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #A08AB7;">${stats.likesReceived}</div><div style="font-size: 12px; color: #666;">New Likes</div></td>`);
       textItems.push(`${stats.likesReceived} new likes`);
     }
     if (stats.newMatches > 0) {
-      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #9B87CE;">${stats.newMatches}</div><div style="font-size: 12px; color: #666;">Matches</div></td>`);
+      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #A08AB7;">${stats.newMatches}</div><div style="font-size: 12px; color: #666;">Matches</div></td>`);
       textItems.push(`${stats.newMatches} matches`);
     }
     if (stats.potentialMatches > 0) {
-      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #9B87CE;">${stats.potentialMatches}+</div><div style="font-size: 12px; color: #666;">Potential Matches</div></td>`);
+      statItems.push(`<td style="text-align: center; padding: 10px;"><div style="font-size: 28px; font-weight: 700; color: #A08AB7;">${stats.potentialMatches}+</div><div style="font-size: 12px; color: #666;">Potential Matches</div></td>`);
       textItems.push(`${stats.potentialMatches}+ potential matches`);
     }
 
@@ -141,7 +141,7 @@ function generateInactiveEmail(
 
               <!-- Header -->
               <tr>
-                <td style="background: linear-gradient(135deg, #9B87CE 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
+                <td style="background: linear-gradient(135deg, #A08AB7 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
                   <div style="font-size: 56px; line-height: 1;">${template.emoji}</div>
                   <h1 style="color: white; margin: 15px 0 0 0; font-size: 28px; font-weight: 700; line-height: 1.2;">${template.headline}</h1>
                   <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px; line-height: 1.4;">${template.subheadline}</p>
@@ -167,15 +167,17 @@ function generateInactiveEmail(
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                           <tr>
                             <td style="background: linear-gradient(135deg, #F3E8FF 0%, #EDE9FE 100%); border-radius: 12px; padding: 25px; text-align: center;">
-                              <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
-                                <tr>
-                                  <td style="border-radius: 50px; background: linear-gradient(135deg, #9B87CE 0%, #A08AB7 100%); box-shadow: 0 4px 15px rgba(155, 135, 206, 0.4);">
-                                    <a href="https://joinaccord.app/discover" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
-                                      ${template.cta}
-                                    </a>
-                                  </td>
-                                </tr>
-                              </table>
+                              <div style="background: white; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <p style="font-size: 18px; color: #6B21A8; margin: 0 0 5px 0; font-weight: 700;">
+                                  ${template.emoji} ${template.headline}
+                                </p>
+                                <p style="font-size: 14px; color: #666; margin: 0;">
+                                  ${template.subheadline}
+                                </p>
+                              </div>
+                              <p style="font-size: 15px; color: #6B21A8; margin: 0; font-weight: 500; line-height: 1.4;">
+                                Open the Accord app on your phone to continue your journey!
+                              </p>
                             </td>
                           </tr>
                         </table>
@@ -201,12 +203,12 @@ function generateInactiveEmail(
                         <!-- Footer -->
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 0; line-height: 1.6;">
                           You're receiving this because you haven't visited Accord recently.<br>
-                          <a href="https://joinaccord.app/settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
+                          To manage email preferences, open the Accord app and go to Settings &gt; Notifications
                         </p>
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
                           Accord - Safe Connections for Meaningful Partnerships<br>
-                          <a href="https://joinaccord.app" style="color: #9B87CE; text-decoration: none;">joinaccord.app</a>
+                          <a href="https://joinaccord.app" style="color: #A08AB7; text-decoration: none;">joinaccord.app</a>
                         </p>
                       </td>
                     </tr>
@@ -230,13 +232,16 @@ ${template.subheadline}
 
 Your journey to finding a meaningful connection doesn't have to pause. Every day on Accord is an opportunity to meet someone who shares your goals and values.
 ${statsText}
-${template.cta}: https://joinaccord.app/discover
+${template.emoji} ${template.headline}
+${template.subheadline}
+
+Open the Accord app on your phone to continue your journey!
 
 Reminder: The most successful connections happen when both people are actively engaged. Your perfect match might be waiting right now!
 
 ---
 You're receiving this because you haven't visited Accord recently.
-Manage email preferences: https://joinaccord.app/settings/notifications
+To manage email preferences, open the Accord app and go to Settings > Notifications
 
 Accord - Safe Connections for Meaningful Partnerships
 joinaccord.app`;
@@ -283,13 +288,22 @@ serve(async (req) => {
       );
     }
 
-    // Get user emails
-    const { data: users, error: usersError } = await supabase.auth.admin.listUsers();
+    // Get user emails by fetching only the specific users we need (not all 20k+ users)
+    const userIds = inactiveProfiles.map(p => p.user_id).filter(Boolean);
+    const userEmailMap = new Map<string, string>();
 
-    if (usersError) {
-      console.error('Error fetching users:', usersError);
-      throw usersError;
+    for (const userId of userIds) {
+      try {
+        const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+        if (!userError && userData?.user?.email) {
+          userEmailMap.set(userId, userData.user.email);
+        }
+      } catch (e) {
+        console.error(`Error fetching user ${userId}:`, e);
+      }
     }
+
+    console.log(`Found ${userEmailMap.size} user emails for ${inactiveProfiles.length} profiles`);
 
     const results = [];
 
@@ -301,8 +315,8 @@ serve(async (req) => {
         continue; // Not in a notification window
       }
 
-      const user = users.users.find(u => u.id === profile.user_id);
-      if (!user?.email) {
+      const email = userEmailMap.get(profile.user_id);
+      if (!email) {
         console.log(`No email for user ${profile.user_id}`);
         continue;
       }
@@ -345,7 +359,7 @@ serve(async (req) => {
           body: JSON.stringify({
             userId: profile.user_id,
             emailType: 'inactive_reminder',
-            recipientEmail: user.email,
+            recipientEmail: email,
             recipientName: profile.display_name || 'there',
             subject,
             htmlContent: html,
@@ -355,8 +369,8 @@ serve(async (req) => {
       );
 
       const result = await response.json();
-      results.push({ email: user.email, level, result });
-      console.log(`Inactive user email (${level}) to ${user.email}:`, result);
+      results.push({ email, level, result });
+      console.log(`Inactive user email (${level}) to ${email}:`, result);
     }
 
     return new Response(

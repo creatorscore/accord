@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet, Keyboard } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,17 +7,41 @@ import { supabase } from '@/lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { trackUserAction, identifyUser } from '@/lib/analytics';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useColorScheme } from '@/lib/useColorScheme';
 
 export default function SignIn() {
-  const { t } = useTranslation();
+  const translationHook = useTranslation();
+  const t = translationHook?.t || ((key: string) => key); // Fallback if i18n not ready
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
   const { signIn, signOut } = useAuth();
+  const { isDarkColorScheme } = useColorScheme();
+
+  // Dynamic theme colors
+  const themeColors = {
+    background: isDarkColorScheme ? '#0F0F1A' : '#FFFFFF',
+    text: isDarkColorScheme ? '#F5F5F7' : '#1F2937',
+    mutedText: isDarkColorScheme ? '#9CA3AF' : '#71717A',
+    inputBg: isDarkColorScheme ? '#1C1C2E' : '#FFFFFF',
+    inputBorder: isDarkColorScheme ? '#2C2C3E' : '#E4E4E7',
+    dividerLine: isDarkColorScheme ? '#2C2C3E' : '#E4E4E7',
+    socialBtnBg: isDarkColorScheme ? '#1C1C2E' : '#FFFFFF',
+    socialBtnBorder: isDarkColorScheme ? '#2C2C3E' : '#E4E4E7',
+    socialBtnText: isDarkColorScheme ? '#F5F5F7' : '#1F2937',
+    iconContainerBg: isDarkColorScheme ? '#2C2C3E' : '#F5F2F7',
+  };
+
+  // Ref to prevent multiple simultaneous sign-in attempts (synchronous check for slow devices)
+  const isSigningIn = useRef(false);
 
   useEffect(() => {
     checkAppleAuth();
@@ -84,7 +108,7 @@ export default function SignIn() {
       console.error('Sign-in error:', error);
 
       // Parse error message - handle JSON errors and extract user-friendly message
-      let errorMessage = 'Failed to sign in';
+      let errorMessage = t('auth.signIn.failedSignIn');
       try {
         if (error.message) {
           errorMessage = error.message;
@@ -100,9 +124,9 @@ export default function SignIn() {
       // Handle rate limiting errors
       if (errorMessage.includes('rate limit') || errorMessage.includes('too many requests') || error.status === 429) {
         Alert.alert(
-          'Too Many Attempts',
-          'You\'ve made too many sign-in attempts. Please wait a few minutes and try again.',
-          [{ text: 'OK' }]
+          t('auth.signIn.tooManyAttempts'),
+          t('auth.signIn.tooManyAttemptsMessage'),
+          [{ text: t('common.ok') }]
         );
         return;
       }
@@ -121,11 +145,11 @@ export default function SignIn() {
             // If they signed up with email, credentials are just wrong
             if (provider === 'email') {
               Alert.alert(
-                'Incorrect Password',
-                'The password you entered is incorrect. Please try again or use "Forgot password?" to reset it.',
+                t('auth.signIn.incorrectPassword'),
+                t('auth.signIn.incorrectPasswordMessage'),
                 [
-                  { text: 'OK', style: 'cancel' },
-                  { text: 'Reset Password', onPress: () => router.push('/(auth)/forgot-password') }
+                  { text: t('common.ok'), style: 'cancel' },
+                  { text: t('auth.signIn.resetPassword'), onPress: () => router.push('/(auth)/forgot-password') }
                 ]
               );
               return;
@@ -134,9 +158,9 @@ export default function SignIn() {
             // If they signed up with Google
             if (provider === 'google') {
               Alert.alert(
-                'Use Google Sign-In',
-                'This email is registered with Google. Please tap "Continue with Google" below to sign in.',
-                [{ text: 'Got It' }]
+                t('auth.signIn.useGoogleSignIn'),
+                t('auth.signIn.useGoogleSignInMessage'),
+                [{ text: t('auth.signIn.gotIt') }]
               );
               return;
             }
@@ -144,44 +168,50 @@ export default function SignIn() {
             // If they signed up with Apple
             if (provider === 'apple') {
               Alert.alert(
-                'Use Apple Sign-In',
-                'This email is registered with Apple. Please tap "Continue with Apple" below to sign in.',
-                [{ text: 'Got It' }]
+                t('auth.signIn.useAppleSignIn'),
+                t('auth.signIn.useAppleSignInMessage'),
+                [{ text: t('auth.signIn.gotIt') }]
               );
               return;
             }
           } else {
             // Email doesn't exist - they need to sign up
             Alert.alert(
-              'Account Not Found',
-              'No account exists with this email. Would you like to create one?',
+              t('auth.signIn.accountNotFound'),
+              t('auth.signIn.accountNotFoundMessage'),
               [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Sign Up', onPress: () => router.push('/(auth)/sign-up') }
+                { text: t('common.cancel'), style: 'cancel' },
+                { text: t('auth.signIn.signUpLink'), onPress: () => router.push('/(auth)/sign-up') }
               ]
             );
             return;
           }
         } catch (checkError) {
-          console.log('Could not check providers:', checkError);
         }
 
         // Fallback generic message
         Alert.alert(
-          'Invalid Credentials',
-          'The email or password you entered is incorrect. If you signed up with Google or Apple, please use those buttons to sign in.',
-          [{ text: 'Got It' }]
+          t('auth.signIn.invalidCredentials'),
+          t('auth.signIn.invalidCredentialsGeneric'),
+          [{ text: t('auth.signIn.gotIt') }]
         );
         return;
       }
 
-      // Handle email not confirmed
+      // Handle email not confirmed — show OTP verification screen
       if (errorMessage.includes('Email not confirmed')) {
-        Alert.alert(
-          t('auth.signIn.errorEmailNotConfirmed'),
-          t('auth.signIn.errorEmailNotConfirmedMessage'),
-          [{ text: 'OK' }]
-        );
+        // Resend the verification code automatically
+        try {
+          await supabase.auth.resend({
+            type: 'signup',
+            email: email.toLowerCase().trim(),
+          });
+        } catch (_) {
+          // Best-effort resend — user can manually resend from the verification screen
+        }
+        setVerificationEmail(email.toLowerCase().trim());
+        setOtpCode('');
+        setShowVerification(true);
         return;
       }
 
@@ -192,6 +222,11 @@ export default function SignIn() {
   };
 
   const handleGoogleSignIn = async () => {
+    // Synchronous check to prevent ANR from multiple rapid taps on slow devices
+    if (isSigningIn.current) {
+      return;
+    }
+    isSigningIn.current = true;
     setLoading(true);
     try {
       const result = await signInWithGoogle();
@@ -220,7 +255,7 @@ export default function SignIn() {
       console.error('Google sign-in error:', error);
       if (error.message !== 'User cancelled') {
         // Parse error message
-        let errorMessage = 'Failed to sign in with Google';
+        let errorMessage = t('auth.signIn.failedGoogleSignIn');
         try {
           if (error.message) errorMessage = error.message;
           else if (error.error_description) errorMessage = error.error_description;
@@ -231,9 +266,9 @@ export default function SignIn() {
         // Handle rate limiting
         if (errorMessage.includes('rate limit') || errorMessage.includes('too many requests') || error.status === 429) {
           Alert.alert(
-            'Too Many Attempts',
-            'Please wait a few minutes before trying to sign in again.',
-            [{ text: 'OK' }]
+            t('auth.signIn.tooManyAttempts'),
+            t('auth.signIn.tooManyAttemptsShort'),
+            [{ text: t('common.ok') }]
           );
           return;
         }
@@ -241,11 +276,17 @@ export default function SignIn() {
         Alert.alert(t('common.error'), errorMessage);
       }
     } finally {
+      isSigningIn.current = false;
       setLoading(false);
     }
   };
 
   const handleAppleSignIn = async () => {
+    // Synchronous check to prevent ANR from multiple rapid taps on slow devices
+    if (isSigningIn.current) {
+      return;
+    }
+    isSigningIn.current = true;
     setLoading(true);
     try {
       const result = await signInWithApple();
@@ -271,7 +312,7 @@ export default function SignIn() {
     } catch (error: any) {
       console.error('Apple sign-in error:', error);
       // Parse error message
-      let errorMessage = 'Failed to sign in with Apple';
+      let errorMessage = t('auth.signIn.failedAppleSignIn');
       try {
         if (error.message) errorMessage = error.message;
         else if (error.error_description) errorMessage = error.error_description;
@@ -282,23 +323,148 @@ export default function SignIn() {
       // Handle rate limiting
       if (errorMessage.includes('rate limit') || errorMessage.includes('too many requests') || error.status === 429) {
         Alert.alert(
-          'Too Many Attempts',
-          'Please wait a few minutes before trying to sign in again.',
-          [{ text: 'OK' }]
+          t('auth.signIn.tooManyAttempts'),
+          t('auth.signIn.tooManyAttemptsShort'),
+          [{ text: t('common.ok') }]
         );
         return;
       }
 
       Alert.alert(t('common.error'), errorMessage);
     } finally {
+      isSigningIn.current = false;
       setLoading(false);
     }
   };
 
+  // Handle OTP verification for unconfirmed emails
+  const handleVerifyOtp = async () => {
+    if (otpCode.length !== 6) {
+      Alert.alert(t('common.error'), t('auth.signIn.enterOtpCode'));
+      return;
+    }
+
+    setVerifyingOtp(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: verificationEmail,
+        token: otpCode,
+        type: 'signup',
+      });
+
+      if (error) throw error;
+
+      if (data.session) {
+        Alert.alert(
+          t('common.success'),
+          t('auth.signIn.emailVerifiedSuccess'),
+          [{
+            text: 'OK',
+            onPress: () => {
+              Keyboard.dismiss();
+              router.replace('/');
+            }
+          }]
+        );
+      }
+    } catch (error: any) {
+      Alert.alert(
+        t('common.error'),
+        error.message || t('auth.signIn.invalidOrExpiredCode')
+      );
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  // Email verification screen for unconfirmed accounts
+  if (showVerification) {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16, backgroundColor: themeColors.background }]}
+      >
+        <ScrollView
+          contentContainerStyle={styles.verificationContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={[styles.iconContainer, { backgroundColor: themeColors.iconContainerBg }]}>
+            <Ionicons name="mail-outline" size={40} color="#A08AB7" />
+          </View>
+          <Text style={[styles.verificationTitle, { color: themeColors.text }]}>{t('auth.signIn.verifyYourEmail')}</Text>
+          <Text style={[styles.verificationMessage, { color: themeColors.mutedText }]}>{t('auth.signIn.otpSentMessage')}</Text>
+          <Text style={styles.verificationEmail}>{verificationEmail}</Text>
+
+          <View style={styles.otpContainer}>
+            <Text style={[styles.otpLabel, { color: themeColors.text }]}>{t('auth.signIn.enterVerificationCode')}</Text>
+            <TextInput
+              style={[styles.otpInput, { backgroundColor: themeColors.inputBg, color: themeColors.text }]}
+              placeholder="000000"
+              placeholderTextColor="#A1A1AA"
+              value={otpCode}
+              onChangeText={(text) => setOtpCode(text.replace(/[^0-9]/g, '').slice(0, 6))}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoFocus
+              textAlign="center"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.primaryButton, (verifyingOtp || otpCode.length !== 6) && styles.buttonDisabled]}
+            onPress={handleVerifyOtp}
+            disabled={verifyingOtp || otpCode.length !== 6}
+          >
+            <Text style={styles.primaryButtonText}>
+              {verifyingOtp ? t('auth.signIn.verifying') : t('auth.signIn.verifyEmail')}
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={[styles.verificationInstructions, { color: themeColors.mutedText }]}>
+            {t('auth.signIn.otpInstructions')}
+          </Text>
+
+          <TouchableOpacity
+            onPress={() => {
+              setShowVerification(false);
+              setOtpCode('');
+            }}
+            style={styles.secondaryLink}
+          >
+            <Text style={styles.linkText}>{t('auth.signIn.backToSignIn')}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tertiaryLink}
+            onPress={async () => {
+              try {
+                setLoading(true);
+                await supabase.auth.resend({
+                  type: 'signup',
+                  email: verificationEmail,
+                });
+                Alert.alert(t('common.success'), t('auth.signIn.verificationCodeResent'));
+              } catch (error) {
+                Alert.alert(t('common.error'), t('auth.signIn.failedResendCode'));
+              } finally {
+                setLoading(false);
+              }
+            }}
+            disabled={loading}
+          >
+            <Text style={[styles.tertiaryLinkText, { color: themeColors.mutedText }]}>
+              {loading ? t('auth.signIn.sending') : t('auth.signIn.resendVerificationCode')}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[styles.container, { paddingTop: insets.top }]}
+      style={[styles.container, { paddingTop: insets.top, backgroundColor: themeColors.background }]}
     >
       <ScrollView
         style={styles.scrollView}
@@ -316,20 +482,20 @@ export default function SignIn() {
           style={styles.backButton}
         >
           <Ionicons name="chevron-back" size={24} color="#A08AB7" />
-          <Text style={styles.backButtonText}>Back</Text>
+          <Text style={styles.backButtonText}>{t('auth.signIn.back')}</Text>
         </TouchableOpacity>
 
         {/* Header */}
-        <Text style={styles.title}>{t('auth.signIn.title')}</Text>
-        <Text style={styles.subtitle}>{t('auth.signIn.subtitle')}</Text>
+        <Text style={[styles.title, { color: themeColors.text }]}>{t('auth.signIn.title')}</Text>
+        <Text style={[styles.subtitle, { color: themeColors.mutedText }]}>{t('auth.signIn.subtitle')}</Text>
 
         {/* Form */}
         <View style={styles.form}>
           {/* Email Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>{t('auth.signIn.email')}</Text>
+            <Text style={[styles.label, { color: themeColors.text }]}>{t('auth.signIn.email')}</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: themeColors.inputBg, borderColor: themeColors.inputBorder, color: themeColors.text }]}
               placeholder={t('auth.signIn.emailPlaceholder')}
               placeholderTextColor="#A1A1AA"
               value={email}
@@ -342,9 +508,9 @@ export default function SignIn() {
 
           {/* Password Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>{t('auth.signIn.password')}</Text>
+            <Text style={[styles.label, { color: themeColors.text }]}>{t('auth.signIn.password')}</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: themeColors.inputBg, borderColor: themeColors.inputBorder, color: themeColors.text }]}
               placeholder={t('auth.signIn.passwordPlaceholder')}
               placeholderTextColor="#A1A1AA"
               value={password}
@@ -377,21 +543,21 @@ export default function SignIn() {
 
           {/* Divider */}
           <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>{t('auth.signIn.orContinueWith')}</Text>
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: themeColors.dividerLine }]} />
+            <Text style={[styles.dividerText, { color: themeColors.mutedText }]}>{t('auth.signIn.orContinueWith')}</Text>
+            <View style={[styles.dividerLine, { backgroundColor: themeColors.dividerLine }]} />
           </View>
 
           {/* Social Sign-In Buttons */}
           <View style={styles.socialButtons}>
             {/* Google Button */}
             <TouchableOpacity
-              style={styles.socialButton}
+              style={[styles.socialButton, { backgroundColor: themeColors.socialBtnBg, borderColor: themeColors.socialBtnBorder }]}
               onPress={handleGoogleSignIn}
               disabled={loading}
             >
               <Ionicons name="logo-google" size={20} color="#4285F4" />
-              <Text style={styles.socialButtonText}>{t('auth.signIn.continueWithGoogle')}</Text>
+              <Text style={[styles.socialButtonText, { color: themeColors.socialBtnText }]}>{t('auth.signIn.continueWithGoogle')}</Text>
             </TouchableOpacity>
 
             {/* Apple Button */}
@@ -409,7 +575,7 @@ export default function SignIn() {
 
           {/* Sign Up Link */}
           <View style={styles.signUpContainer}>
-            <Text style={styles.signUpText}>{t('auth.signIn.noAccount')}</Text>
+            <Text style={[styles.signUpText, { color: themeColors.mutedText }]}>{t('auth.signIn.noAccount')}</Text>
             <TouchableOpacity onPress={() => {
               Keyboard.dismiss();
               router.push('/(auth)/sign-up');
@@ -579,5 +745,88 @@ const styles = StyleSheet.create({
     color: '#A08AB7',
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
+  },
+  // Verification screen styles
+  verificationContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F5F2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  verificationTitle: {
+    fontSize: 28,
+    fontFamily: 'PlusJakartaSans-Bold',
+    color: '#1F2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  verificationMessage: {
+    fontSize: 17,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  verificationEmail: {
+    fontSize: 17,
+    fontFamily: 'Inter-SemiBold',
+    color: '#A08AB7',
+    marginBottom: 24,
+  },
+  verificationInstructions: {
+    fontSize: 16,
+    fontFamily: 'Inter',
+    color: '#71717A',
+    textAlign: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 16,
+    lineHeight: 24,
+  },
+  secondaryLink: {
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+  tertiaryLink: {
+    paddingVertical: 8,
+    marginTop: 16,
+  },
+  tertiaryLinkText: {
+    color: '#71717A',
+    fontFamily: 'Inter',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+  otpContainer: {
+    width: '100%',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  otpLabel: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#1F2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  otpInput: {
+    borderWidth: 2,
+    borderColor: '#A08AB7',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    color: '#1F2937',
+    fontSize: 28,
+    fontFamily: 'Inter-Bold',
+    letterSpacing: 8,
   },
 });

@@ -1,0 +1,165 @@
+{
+  "genders": {
+    "man": "Pria",
+    "woman": "Wanita",
+    "non_binary": "Nonbiner"
+  },
+  "pronouns": {
+    "she_her": "dia (perempuan)",
+    "he_him": "dia (laki-laki)",
+    "they_them": "mereka",
+    "she_they": "dia/mereka (p)",
+    "he_they": "dia/mereka (l)",
+    "any_pronouns": "apa saja",
+    "ask_me": "tanya saya",
+    "prefer_not_to_say": "tidak ingin menyebut"
+  },
+  "orientations": {
+    "lesbian": "Lesbian",
+    "gay": "Gay",
+    "bisexual": "Biseksual",
+    "straight": "Heteroseksual",
+    "queer": "Queer",
+    "asexual": "Aseksual",
+    "pansexual": "Panseksual",
+    "demisexual": "Demiseksual",
+    "questioning": "Sedang mencari tahu",
+    "omnisexual": "Omniseksual",
+    "polysexual": "Poliseksual",
+    "androsexual": "Androseksual",
+    "gynesexual": "Gineseksual",
+    "sapiosexual": "Sapioseksual",
+    "heteroflexible": "Heterofleksibel",
+    "homoflexible": "Homofleksibel",
+    "prefer_not_to_say": "Tidak ingin menyebut",
+    "other": "Lainnya"
+  },
+  "genderPrefs": {
+    "men": "Pria",
+    "women": "Wanita",
+    "non_binary": "Nonbiner",
+    "everyone": "Semua"
+  },
+  "ethnicities": {
+    "asian": "Asia",
+    "black_african": "Kulit Hitam/Afrika",
+    "hispanic_latinx": "Hispanik/Latinx",
+    "indigenous_native": "Pribumi/Adat",
+    "middle_eastern_north_african": "Timur Tengah/Afrika Utara",
+    "pacific_islander": "Kepulauan Pasifik",
+    "south_asian": "Asia Selatan",
+    "white_caucasian": "Kulit Putih/Kaukasia",
+    "multiracial": "Multiras",
+    "other": "Lainnya",
+    "prefer_not_to_say": "Tidak ingin menyebut"
+  },
+  "religions": {
+    "christian": "Kristen",
+    "catholic": "Katolik",
+    "protestant": "Protestan",
+    "muslim": "Muslim",
+    "jewish": "Yahudi",
+    "hindu": "Hindu",
+    "buddhist": "Buddha",
+    "sikh": "Sikh",
+    "atheist": "Ateis",
+    "agnostic": "Agnostik",
+    "spiritual_but_not_religious": "Spiritual tapi tidak beragama",
+    "other": "Lainnya",
+    "prefer_not_to_say": "Tidak ingin menyebut"
+  },
+  "politicalViews": {
+    "liberal": "Liberal",
+    "progressive": "Progresif",
+    "moderate": "Moderat",
+    "conservative": "Konservatif",
+    "libertarian": "Libertarian",
+    "socialist": "Sosialis",
+    "apolitical": "Apolitis",
+    "other": "Lainnya",
+    "prefer_not_to_say": "Tidak ingin menyebut"
+  },
+  "relationshipTypes": {
+    "platonic": "Hanya platonis",
+    "romantic": "Mungkin romantis",
+    "open": "Pengaturan terbuka"
+  },
+  "primaryReasons": {
+    "financial": "Stabilitas finansial",
+    "immigration": "Imigrasi/visa",
+    "family_pressure": "Tekanan keluarga",
+    "legal_benefits": "Manfaat hukum",
+    "companionship": "Teman hidup",
+    "safety": "Keamanan & perlindungan",
+    "other": "Lainnya"
+  },
+  "childrenOptions": {
+    "yes": "Ya",
+    "no": "Tidak",
+    "maybe": "Mungkin / terbuka"
+  },
+  "familyPlans": {
+    "biological": "Anak biologis",
+    "adoption": "Adopsi",
+    "surrogacy": "Surogasi",
+    "ivf": "Bayi tabung/fertilitas",
+    "co_parenting": "Pengasuhan bersama",
+    "fostering": "Anak asuh",
+    "already_have": "Sudah punya anak",
+    "open_discussion": "Terbuka untuk dibicarakan",
+    "other": "Lainnya"
+  },
+  "petsOptions": {
+    "love_them": "Sangat suka",
+    "like_them": "Suka",
+    "indifferent": "Biasa saja",
+    "allergic": "Alergi",
+    "dont_like": "Tidak suka"
+  },
+  "housingPrefs": {
+    "separate_spaces": "Kamar/ruang terpisah",
+    "roommates": "Seperti teman sekamar",
+    "separate_homes": "Rumah terpisah berdekatan",
+    "shared_bedroom": "Satu kamar tidur",
+    "flexible": "Fleksibel/bisa dirundingkan"
+  },
+  "financialArr": {
+    "separate": "Keuangan terpisah",
+    "shared_expenses": "Berbagi tagihan",
+    "joint": "Keuangan bersama",
+    "prenup_required": "Wajib perjanjian pranikah",
+    "flexible": "Fleksibel/bisa dirundingkan"
+  },
+  "educationLevels": {
+    "high_school": "SMA",
+    "associates": "Diploma",
+    "bachelors": "Sarjana (S1)",
+    "masters": "Magister (S2)",
+    "doctorate": "Doktor (S3)",
+    "trade_school": "Sekolah kejuruan",
+    "self_taught": "Belajar mandiri",
+    "other": "Lainnya"
+  },
+  "drinkingOptions": {
+    "never": "Tidak pernah",
+    "socially": "Saat bersosial",
+    "regularly": "Rutin",
+    "prefer_not_to_say": "Tidak ingin menyebut"
+  },
+  "smokingOptions": {
+    "never": "Tidak pernah",
+    "socially": "Saat bersosial",
+    "regularly": "Rutin",
+    "trying_to_quit": "Sedang berhenti"
+  },
+  "weedOptions": {
+    "never": "Tidak pernah",
+    "socially": "Saat bersosial",
+    "regularly": "Rutin"
+  },
+  "drugOptions": {
+    "never": "Tidak pernah",
+    "socially": "Saat bersosial",
+    "regularly": "Rutin"
+  }
+}

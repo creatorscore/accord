@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Keyboard, ScrollView, Dimensions } from 'react-native';
-import { MotiView } from 'moti';
+import { View, Text, TouchableOpacity, Alert, Modal, TextInput, Keyboard, ScrollView, RefreshControl, Dimensions, useWindowDimensions, Platform, Animated, AppState } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,9 +8,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
 import { useScreenProtection } from '@/hooks/useScreenProtection';
-import SwipeCard from '@/components/matching/SwipeCard';
+import DiscoveryProfileView, { DiscoveryProfileViewRef } from '@/components/matching/DiscoveryProfileView';
 import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
 import MatchModal from '@/components/matching/MatchModal';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
@@ -20,17 +20,23 @@ import ProfileBoostModal from '@/components/premium/ProfileBoostModal';
 import ReportUserModal from '@/components/moderation/ReportUserModal';
 // NOTE: Match and like notifications are sent via database triggers (notify_on_match, notify_on_like)
 // Do NOT import or call sendMatchNotification/sendLikeNotification from client code
-import { calculateCompatibilityScore, getCompatibilityBreakdown } from '@/lib/matching-algorithm';
+import { calculateScoreAndBreakdown } from '@/lib/matching-algorithm';
 import { initializeTracking } from '@/lib/tracking-permissions';
 import { DistanceUnit } from '@/lib/distance-utils';
+import { signProfileMediaUrls } from '@/lib/signed-urls';
 import { HeightUnit } from '@/lib/height-utils';
+import { usePreviewModeStore } from '@/stores/previewModeStore';
 import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { useColorScheme } from '@/lib/useColorScheme';
-import { trackUserAction, trackFunnel } from '@/lib/analytics';
+import { COLORS } from '@/theme/colors';
+import { expandGenderPreference } from '@/lib/gender-preferences';
+import { trackUserAction, trackFunnel, trackEvent } from '@/lib/analytics';
+import { captureException } from '@/lib/sentry';
 import { prefetchImages } from '@/components/shared/ConditionalImage';
 import VerificationBanner from '@/components/shared/VerificationBanner';
-import PopularityInsightsModal from '@/components/matching/PopularityInsightsModal';
+import HandshakeLoader from '@/components/shared/HandshakeLoader';
+import TrialExpirationBanner from '@/components/premium/TrialExpirationBanner';
 
 interface Profile {
   id: string;
@@ -41,19 +47,14 @@ interface Profile {
   ethnicity?: string | string[]; // Can be single or array: users can select multiple ethnicities
   location_city?: string;
   location_state?: string;
-  bio?: string;
-  occupation?: string;
-  education?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   height_inches?: number;
   zodiac_sign?: string;
-  personality_type?: string;
-  love_language?: string | string[]; // Can be single or array: users can select multiple love languages
   languages_spoken?: string[];
   religion?: string;
   political_views?: string;
-  hobbies?: string[];
-  interests?: any; // JSONB object with arrays
-  photos?: Array<{ url: string; is_primary: boolean; display_order?: number }>;
+  photos?: { url: string; storage_path?: string; is_primary: boolean; display_order?: number; blur_data_uri?: string | null }[];
   compatibility_score?: number;
   compatibilityBreakdown?: {
     total: number; // Changed from 'overall' to match matching-algorithm.ts
@@ -67,18 +68,22 @@ interface Profile {
   is_verified?: boolean;
   photo_verified?: boolean;
   distance?: number | null;
-  prompt_answers?: Array<{ prompt: string; answer: string }>;
+  prompt_answers?: { prompt: string; answer: string }[];
   voice_intro_url?: string;
   voice_intro_duration?: number;
+  hometown?: string;
+  occupation?: string;
+  education?: string;
   photo_blur_enabled?: boolean;
+  field_visibility?: Record<string, boolean>;
   hide_distance?: boolean;
   hide_last_active?: boolean;
   last_active_at?: string;
   preferences?: any;
 }
 
-// Daily swipe limit for free users
-const DAILY_SWIPE_LIMIT = 15;
+// Daily like limit for free users (unlimited browsing/passing, limited likes)
+const DAILY_LIKE_LIMIT = 5;
 
 // Helper function to hash phone numbers for contact blocking
 const hashPhoneNumber = async (phoneNumber: string): Promise<string> => {
@@ -99,14 +104,29 @@ export default function Discover() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
+  const { showToast } = useToast();
   const { colors } = useColorScheme();
+  const { isPreviewMode, returnRoute, exitPreviewMode } = usePreviewModeStore();
   const insets = useSafeAreaInsets();
-  const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const rightSafeArea = isLandscape ? Math.max(insets.right, Platform.OS === 'android' ? 48 : 0) : 0;
+  const [currentProfileId, _setCurrentProfileId] = useState<string | null>(null);
+  const currentProfileIdRef = useRef<string | null>(null);
+  const setCurrentProfileId = (id: string | null) => {
+    currentProfileIdRef.current = id;
+    _setCurrentProfileId(id);
+  };
+  // Hash of the filter set most recently passed to loadProfiles. If this diverges from
+  // the current DB preferences on focus, the feed needs to refetch — fixes the bug where
+  // editing preferences in settings didn't take effect until leaving & reopening the app.
+  const filtersSnapshotRef = useRef<string>('');
   const [currentUserPhoto, setCurrentUserPhoto] = useState<string | null>(null);
   const [currentUserGender, setCurrentUserGender] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const hasInitiallyLoaded = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedProfile, setMatchedProfile] = useState<Profile | null>(null);
@@ -114,17 +134,35 @@ export default function Discover() {
   const [showImmersiveProfile, setShowImmersiveProfile] = useState(false);
   const [currentProfilePreferences, setCurrentProfilePreferences] = useState<any>(null);
   const [showPaywall, setShowPaywall] = useState(false);
-  const [swipeCount, setSwipeCount] = useState(0);
+  const [likeCount, setLikeCount] = useState(0); // Daily likes used (5/day for free users)
   const [superLikesRemaining, setSuperLikesRemaining] = useState(5);
+  const [pendingLikesCount, setPendingLikesCount] = useState(0); // Likes received (for teaser banner)
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
-    ageMin: 22,
-    ageMax: 50,
+    // Free filters
+    ageMin: 18,
+    ageMax: 65,
     maxDistance: 100,
+    activeToday: false,
+    showBlurredPhotos: true,
+    // Premium filters
     religion: [],
     politicalViews: [],
     housingPreference: [],
     financialArrangement: [],
+    genderPreference: [],
+    ethnicity: [],
+    sexualOrientation: [],
+    heightMin: 48,
+    heightMax: 84,
+    zodiacSign: [],
+    languagesSpoken: [],
+    smoking: [],
+    drinking: [],
+    pets: [],
+    primaryReason: [],
+    relationshipType: [],
+    wantsChildren: null,
   });
   const [lastSwipe, setLastSwipe] = useState<{
     profile: Profile;
@@ -142,72 +180,234 @@ export default function Discover() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAgeSlider, setShowAgeSlider] = useState(false);
   const [showIntentionDropdown, setShowIntentionDropdown] = useState(false);
-  const [selectedIntention, setSelectedIntention] = useState<string | null>(null);
+  const [selectedIntention, _setSelectedIntention] = useState<string | null>(null);
+  const selectedIntentionRef = useRef<string | null>(null);
+  const setSelectedIntention = (value: string | null) => {
+    selectedIntentionRef.current = value;
+    _setSelectedIntention(value);
+  };
   const [tempAgeMin, setTempAgeMin] = useState(22);
   const [tempAgeMax, setTempAgeMax] = useState(50);
   const [activeToday, setActiveToday] = useState(false);
   const [photoReviewRequired, setPhotoReviewRequired] = useState(false);
+  const [photoReviewReason, setPhotoReviewReason] = useState<string | null>(null);
   const [isPhotoVerified, setIsPhotoVerified] = useState(true); // Default to true to hide banner initially
   const [showVerificationBanner, setShowVerificationBanner] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(true); // Default to true to avoid flash
   const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
+  const [showPhotoBlurBanner, setShowPhotoBlurBanner] = useState(false);
 
-  // Popularity Insights Modal state
-  const [showPopularityModal, setShowPopularityModal] = useState(false);
-  const [popularityData, setPopularityData] = useState({
-    newLikesCount: 0,
-    totalLikes: 0,
-    percentileRank: undefined as number | undefined,
-    streak: 0,
-  });
-  const hasCheckedPopularity = useRef(false);
 
   // Premium upgrade prompt for locked features
   const [showPremiumLocationPrompt, setShowPremiumLocationPrompt] = useState(false);
   const hasShownPremiumLocationPrompt = useRef(false);
 
+  // Hinge-style discovery refs and animation
+  const discoveryProfileRef = useRef<DiscoveryProfileViewRef>(null);
+  const profileOpacity = useRef(new Animated.Value(1)).current;
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const isInitialFocus = useRef(true); // Track if this is the first time screen is focused
+  const hasAdvancedOnFocus = useRef(false); // Prevent multiple advances per focus
+
+  // Store latest values in refs for focus effect (avoids stale closure)
+  const profilesRef = useRef(profiles);
+  const currentIndexRef = useRef(currentIndex);
+  useEffect(() => {
+    profilesRef.current = profiles;
+    currentIndexRef.current = currentIndex;
+  }, [profiles, currentIndex]);
+
+  // Safely advance to the next profile index, bounded by current profiles length
+  const advanceIndex = useCallback(() => {
+    setCurrentIndex(prev => {
+      const maxIndex = profilesRef.current.length;
+      return prev + 1 <= maxIndex ? prev + 1 : prev;
+    });
+  }, []);
+
+  // Transition to next profile with fade animation
+  const transitionToNextProfile = useCallback(() => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+
+    // Fade out current profile
+    Animated.timing(profileOpacity, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      // Update index
+      advanceIndex();
+      // Reset scroll position
+      discoveryProfileRef.current?.scrollToTop();
+      // Fade in next profile
+      Animated.timing(profileOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        setIsTransitioning(false);
+      });
+    });
+  }, [isTransitioning, profileOpacity]);
+
+  // Smart recommendations - dynamic array from database
+  const [smartRecommendations, setSmartRecommendations] = useState<{
+    type: 'age' | 'distance' | 'gender' | 'global';
+    count: number;
+    description: string;
+    increment?: number;
+    newDistance?: number;
+    newAgeMin?: number;
+    newAgeMax?: number;
+    addedGender?: string;
+  }[]>([]);
+
   // Quick filter options
-  const INTENTIONS = [
-    { label: 'All', value: null },
-    { label: 'Platonic', value: 'platonic' },
-    { label: 'Romantic', value: 'romantic' },
-    { label: 'Open', value: 'open' },
+  const INTENTIONS: { value: string | null }[] = [
+    { value: null },
+    { value: 'platonic' },
+    { value: 'romantic' },
+    { value: 'open' },
   ];
 
+  const intentionLabels: Record<string, string> = {
+    all: t('discover.intention.all'),
+    platonic: t('discover.intention.platonic'),
+    romantic: t('discover.intention.romantic'),
+    open: t('discover.intention.open'),
+  };
+
+  const getIntentionLabel = (value: string | null) => intentionLabels[value || 'all'] || intentionLabels.all;
+
   const getCurrentIntentionLabel = () => {
-    const intention = INTENTIONS.find(i => i.value === selectedIntention);
-    return intention ? intention.label : 'All';
+    return getIntentionLabel(selectedIntention);
   };
 
   useEffect(() => {
-    loadCurrentProfile();
-    loadSwipeCount();
+    if (user?.id) {
+      loadCurrentProfile();
+      loadLikeCount();
+    }
     // Request tracking permission on first app use
     initializeTracking();
-  }, []);
+  }, [user?.id]);
 
+  // loadLikeCount reconciles AsyncStorage with the server-side daily_likes_count
+  // but only when currentProfileId is set. On initial mount, loadLikeCount and
+  // loadCurrentProfile race — the counter is loaded before the profile id is
+  // known, so server reconciliation is skipped and the client may show "5 likes
+  // left" while the server trigger has already blown past the limit (e.g. after
+  // the 2026-04-20 back-sync migration). Re-reconcile once the profile id lands.
   useEffect(() => {
-    if (currentProfileId) {
-      loadSuperLikesCount();
-    }
+    if (currentProfileId) loadLikeCount();
   }, [currentProfileId]);
 
-  useEffect(() => {
-    if (currentProfileId && filters) {
-      loadProfiles();
-    }
-  }, [currentProfileId, filters]);
-
-  // Reload profiles every time the screen comes into focus
-  // This ensures fresh data when user returns from editing preferences or other screens
+  // Refresh user data when screen regains focus (returning from other tabs/screens)
+  // loadCurrentProfile already checks if filters changed via hash comparison
+  // and reloads profiles if needed (lines 727-732).
+  const isFirstFocusForReload = useRef(true);
   useFocusEffect(
     useCallback(() => {
-      if (currentProfileId && filters) {
-        console.log('🔄 Discovery screen focused - reloading profiles');
-        loadProfiles();
+      if (isFirstFocusForReload.current) {
+        isFirstFocusForReload.current = false;
+        return;
       }
-    }, [currentProfileId, filters])
+      // Reload current user's profile and like count (e.g. after settings changes)
+      // This picks up preference changes made on other screens.
+      loadCurrentProfile();
+      loadLikeCount();
+    }, [user?.id])
   );
+
+  // Hinge-style refresh: Show new profile when user returns to discovery screen
+  // This prevents analysis paralysis and creates healthy FOMO
+  useFocusEffect(
+    useCallback(() => {
+      // Skip on initial focus (when user first enters the screen)
+      if (isInitialFocus.current) {
+        isInitialFocus.current = false;
+        return;
+      }
+
+      // Only advance once per focus event
+      if (hasAdvancedOnFocus.current) {
+        return;
+      }
+
+      // Only advance if there are more profiles to show (use refs for latest values)
+      const currentProfiles = profilesRef.current;
+      const currentIdx = currentIndexRef.current;
+
+      let focusTimeout: ReturnType<typeof setTimeout> | null = null;
+
+      if (currentProfiles.length > 0 && currentIdx < currentProfiles.length - 1) {
+
+        hasAdvancedOnFocus.current = true;
+
+        // Small delay to ensure screen transition is complete
+        focusTimeout = setTimeout(() => {
+          advanceIndex();
+        }, 300);
+      }
+
+      // Reset flag and clear timeout when screen loses focus
+      return () => {
+        hasAdvancedOnFocus.current = false;
+        if (focusTimeout) {
+          clearTimeout(focusTimeout);
+        }
+      };
+    }, [])
+  );
+
+  // Handle app foregrounding (when user returns from background)
+  // This complements useFocusEffect which only handles in-app navigation
+  useEffect(() => {
+    let advanceTimeout: ReturnType<typeof setTimeout> | null = null;
+    let resetTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        // App came to foreground - always refresh like count (handles day rollover)
+        loadLikeCount();
+
+        // Skip on initial mount
+        if (isInitialFocus.current) {
+          return;
+        }
+
+        // Only advance once per app foreground event
+        if (hasAdvancedOnFocus.current) {
+          return;
+        }
+
+        // Only advance if there are more profiles to show
+        const currentProfiles = profilesRef.current;
+        const currentIdx = currentIndexRef.current;
+
+        if (currentProfiles.length > 0 && currentIdx < currentProfiles.length - 1) {
+
+          hasAdvancedOnFocus.current = true;
+
+          // Small delay to ensure app transition is complete
+          advanceTimeout = setTimeout(() => {
+            advanceIndex();
+            // Reset flag after advance
+            resetTimeout = setTimeout(() => {
+              hasAdvancedOnFocus.current = false;
+            }, 500);
+          }, 300);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+      if (advanceTimeout) clearTimeout(advanceTimeout);
+      if (resetTimeout) clearTimeout(resetTimeout);
+    };
+  }, []);
 
   // Refresh photo verification status when screen comes into focus
   // This ensures the banner disappears after user completes verification
@@ -242,11 +442,20 @@ export default function Discover() {
   // Prefetch images for upcoming profiles as user swipes
   useEffect(() => {
     if (profiles.length > 0 && currentIndex < profiles.length) {
-      // Prefetch next 3 profiles ahead
+      // Prefetch only the primary/first photo of next 3 profiles (not all 6 per profile)
+      // to limit memory pressure from cached images
       const upcomingProfiles = profiles.slice(currentIndex, currentIndex + 3);
       const imagesToPrefetch = upcomingProfiles
-        .flatMap(p => p.photos?.map(photo => photo.url) || [])
-        .filter(Boolean);
+        .map(p => {
+          const photos = p.photos?.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+          const primaryPhoto = photos?.find(ph => ph.is_primary) || photos?.[0];
+          // Skip blur-enabled profiles — blur_data_uri is base64, not a prefetchable URL
+          if (p.photo_blur_enabled && primaryPhoto?.blur_data_uri) {
+            return null;
+          }
+          return primaryPhoto?.url;
+        })
+        .filter(Boolean) as string[];
 
       if (imagesToPrefetch.length > 0) {
         prefetchImages(imagesToPrefetch);
@@ -254,11 +463,120 @@ export default function Discover() {
     }
   }, [currentIndex, profiles]);
 
+  // Load preferences for current profile (Hinge-style: profile shown inline)
+  useEffect(() => {
+    if (profiles.length > 0 && currentIndex < profiles.length) {
+      const targetProfile = profiles[currentIndex];
+      const prefs = (targetProfile as any).preferences;
+      setCurrentProfilePreferences(prefs);
+      // Track profile view
+      trackUserAction.profileViewed(targetProfile.id);
+      // Record view for "Who viewed me" feature (non-blocking)
+      if (currentProfileId) {
+        Promise.resolve(supabase.rpc('record_profile_view', { p_viewer_id: currentProfileId, p_viewed_id: targetProfile.id })).catch(() => {});
+      }
+    }
+  }, [currentIndex, profiles]);
+
   const [currentUserName, setCurrentUserName] = useState<string>('');
 
-  const loadCurrentProfile = async () => {
+  // Build a stable hash of the fields that actually influence the discover feed.
+  // Used to detect preference changes made elsewhere (e.g. settings) and refetch.
+  const computeFiltersHash = (f: FilterOptions): string => {
+    return JSON.stringify({
+      ageMin: f.ageMin,
+      ageMax: f.ageMax,
+      maxDistance: f.maxDistance,
+      genderPreference: [...(f.genderPreference || [])].sort(),
+      activeToday: f.activeToday,
+      showBlurredPhotos: f.showBlurredPhotos,
+      religion: [...(f.religion || [])].sort(),
+      politicalViews: [...(f.politicalViews || [])].sort(),
+      ethnicity: [...(f.ethnicity || [])].sort(),
+      sexualOrientation: [...(f.sexualOrientation || [])].sort(),
+      housingPreference: [...(f.housingPreference || [])].sort(),
+      financialArrangement: [...(f.financialArrangement || [])].sort(),
+      heightMin: f.heightMin,
+      heightMax: f.heightMax,
+      zodiacSign: [...(f.zodiacSign || [])].sort(),
+      languagesSpoken: [...(f.languagesSpoken || [])].sort(),
+      smoking: [...(f.smoking || [])].sort(),
+      drinking: [...(f.drinking || [])].sort(),
+      pets: [...(f.pets || [])].sort(),
+      primaryReason: [...(f.primaryReason || [])].sort(),
+      relationshipType: [...(f.relationshipType || [])].sort(),
+      wantsChildren: f.wantsChildren,
+    });
+  };
+
+  const persistFilters = async (newFilters: FilterOptions) => {
+    if (!currentProfileId) return;
     try {
-      const { data, error } = await supabase
+      const discoveryFilters = {
+        religion: newFilters.religion,
+        politicalViews: newFilters.politicalViews,
+        ethnicity: newFilters.ethnicity,
+        sexualOrientation: newFilters.sexualOrientation,
+        heightMin: newFilters.heightMin,
+        heightMax: newFilters.heightMax,
+        zodiacSign: newFilters.zodiacSign,
+        languagesSpoken: newFilters.languagesSpoken,
+        activeToday: newFilters.activeToday,
+        showBlurredPhotos: newFilters.showBlurredPhotos,
+        smoking: newFilters.smoking,
+        drinking: newFilters.drinking,
+        pets: newFilters.pets,
+        housingPreference: newFilters.housingPreference,
+        financialArrangement: newFilters.financialArrangement,
+        primaryReason: newFilters.primaryReason,
+        relationshipType: newFilters.relationshipType,
+        wantsChildren: newFilters.wantsChildren,
+      };
+      const { error: filterSaveError } = await supabase
+        .from('preferences')
+        .update({
+          age_min: newFilters.ageMin,
+          age_max: newFilters.ageMax,
+          max_distance_miles: newFilters.maxDistance,
+          // expandGenderPreference: ['Men'] → ['Man'], ['Everyone'] → [], etc.
+          // FilterModal already uses canonical values so this is usually a no-op,
+          // but the defensive wrap protects against any future UI that passes UI labels.
+          gender_preference: expandGenderPreference(newFilters.genderPreference),
+          discovery_filters: discoveryFilters,
+        })
+        .eq('profile_id', currentProfileId);
+      if (filterSaveError) {
+        console.error('Failed to persist filters:', filterSaveError);
+        showToast({
+          type: 'error',
+          title: t('common.error'),
+          message: t('toast.filtersSaveError') || "Couldn't save your filters. Please try again.",
+        });
+        return;
+      }
+      // Also cache locally for instant restore on app restart
+      await AsyncStorage.setItem('discovery_filters_cache', JSON.stringify(newFilters)).catch(() => {});
+    } catch (err) {
+      console.error('Failed to persist filters:', err);
+      showToast({
+        type: 'error',
+        title: t('common.error'),
+        message: t('toast.filtersSaveError') || "Couldn't save your filters. Please try again.",
+      });
+    }
+  };
+
+  const loadCurrentProfile = async () => {
+    if (!user?.id) {
+
+      return;
+    }
+    try {
+      // Race the profile fetch against a 12s timeout. If the supabase-js
+      // queue is stalled (see onboarding checkpoint notes), we don't want
+      // discover to sit on the animated loading screen indefinitely —
+      // drop to the empty/incomplete state so the user can navigate away.
+      const fetchPromise = supabase
         .from('profiles')
         .select(`
           id,
@@ -267,17 +585,32 @@ export default function Discover() {
           height_unit,
           is_admin,
           photo_review_required,
+          photo_review_reason,
           photo_verified,
           profile_complete,
+          super_likes_count,
+          super_likes_reset_date,
           photos (
             url,
+            storage_path,
             is_primary,
-            display_order
+            display_order,
+            blur_data_uri
           ),
           preferences:preferences(*)
         `)
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .single();
+      const timeoutPromise = new Promise<{ data: null; error: { code: 'TIMEOUT'; message: string } }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: { code: 'TIMEOUT', message: 'Profile fetch timed out' } }), 12000)
+      );
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+      if (error?.code === 'TIMEOUT') {
+        console.warn('[Discover] loadCurrentProfile timed out');
+        setLoading(false);
+        showToast({ type: 'info', title: t('common.slowConnection', { defaultValue: 'Slow connection' }), message: t('common.pullToRetry', { defaultValue: 'Pull down to retry.' }) });
+        return;
+      }
 
       if (error) throw error;
 
@@ -286,21 +619,70 @@ export default function Discover() {
       const userGender = data.gender || null;
 
       // Get primary photo or first photo
-      const photos = data.photos?.sort((a: any, b: any) => a.display_order - b.display_order);
+      const photos = data.photos?.sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
       const primaryPhoto = photos?.find((p: any) => p.is_primary) || photos?.[0];
       const photoUrl = primaryPhoto?.url || null;
 
       // Initialize filters from user's database preferences
       // Note: Supabase returns preferences as array even for single relationship
       const userPreferences = Array.isArray(data.preferences) ? data.preferences[0] : data.preferences;
-      const initialFilters = userPreferences ? {
-        ageMin: userPreferences.age_min || 22,
-        ageMax: userPreferences.age_max || 50,
+      const df = userPreferences?.discovery_filters || {};
+
+      // Normalize stale persisted filter values (old format used display labels instead of DB values)
+      const LEGACY_VALUE_MAP: Record<string, string> = {
+        // Relationship types
+        'Platonic': 'platonic', 'Romantic': 'romantic', 'Open': 'open',
+        // Primary reasons
+        'Financial Benefits': 'financial', 'Financial Stability': 'financial',
+        'Immigration': 'immigration', 'Immigration/Visa': 'immigration',
+        'Family Pressure': 'family_pressure', 'Legal Benefits': 'legal_benefits',
+        'Companionship': 'companionship', 'Safety': 'safety', 'Safety & Protection': 'safety',
+        'Other': 'other',
+        // Housing
+        'Separate Homes': 'separate_homes', 'Separate Spaces': 'separate_spaces',
+        'Roommates': 'roommates', 'Shared Bedroom': 'shared_bedroom', 'Flexible': 'flexible',
+        // Financial
+        'Separate': 'separate', 'Shared Expenses': 'shared_expenses',
+        'Joint': 'joint', 'Prenup Required': 'prenup_required',
+        // Smoking/Drinking
+        'Never': 'never', 'Socially': 'socially', 'Regularly': 'regularly',
+        // Pets (old values were completely wrong type - discard them)
+        'Dogs': '', 'Cats': '', 'Both': '', 'Other Pets': '', 'No Pets': '',
+        // Religion partial match
+        'Spiritual': 'Spiritual but not religious',
+      };
+      const normArr = (arr: string[] | undefined): string[] =>
+        (arr || []).map(v => LEGACY_VALUE_MAP[v] ?? v).filter(Boolean);
+
+      const initialFilters: FilterOptions = userPreferences ? {
+        // Free filters
+        ageMin: userPreferences.age_min || 18,
+        ageMax: userPreferences.age_max || 65,
         maxDistance: userPreferences.max_distance_miles || 100,
-        religion: [],
-        politicalViews: [],
-        housingPreference: [],
-        financialArrangement: [],
+        activeToday: df.activeToday || false,
+        showBlurredPhotos: df.showBlurredPhotos !== undefined ? df.showBlurredPhotos : true,
+        // Gender preference is a true discovery filter (who you want to see)
+        genderPreference: userPreferences.gender_preference || [],
+        // All other premium filters: only load from discovery_filters JSONB
+        // Do NOT load from the user's own preferences columns (housing_preference,
+        // relationship_type, etc.) — those are the user's OWN prefs, not filters
+        // for other profiles.
+        housingPreference: normArr(df.housingPreference),
+        financialArrangement: normArr(df.financialArrangement),
+        smoking: normArr(df.smoking),
+        drinking: normArr(df.drinking),
+        pets: normArr(df.pets),
+        relationshipType: normArr(df.relationshipType),
+        primaryReason: normArr(df.primaryReason),
+        religion: normArr(df.religion),
+        politicalViews: df.politicalViews || [],
+        ethnicity: df.ethnicity || [],
+        sexualOrientation: df.sexualOrientation || [],
+        heightMin: df.heightMin || 48,
+        heightMax: df.heightMax || 84,
+        zodiacSign: df.zodiacSign || [],
+        languagesSpoken: df.languagesSpoken || [],
+        wantsChildren: df.wantsChildren || null,
       } : filters;
 
       // Load distance unit preference (default to 'miles' for backward compatibility)
@@ -314,10 +696,14 @@ export default function Discover() {
       setCurrentUserGender(userGender);
       setCurrentUserPhoto(photoUrl);
       setFilters(initialFilters);
+      setActiveToday(initialFilters.activeToday);
+      setTempAgeMin(initialFilters.ageMin);
+      setTempAgeMax(initialFilters.ageMax);
       setDistanceUnit(userDistanceUnit as DistanceUnit);
       setHeightUnit(userHeightUnit as HeightUnit);
       setIsAdmin(data.is_admin || false);
       setPhotoReviewRequired(data.photo_review_required || false);
+      setPhotoReviewReason(data.photo_review_reason || null);
       setIsPhotoVerified(data.photo_verified || false);
       // Show verification banner if not verified (check AsyncStorage for dismiss state)
       if (!data.photo_verified) {
@@ -335,220 +721,134 @@ export default function Discover() {
         setShowOnboardingBanner(true);
       }
 
-      // Check popularity insights (shows celebratory modal if user has new likes)
-      // Only check if profile is complete to avoid showing to new users
+      // Show Photo Blur info banner (educate users about why some photos may be blurred)
+      // Only show for complete profiles (don't show to brand new users who haven't finished onboarding)
       if (profileComplete) {
-        checkPopularityInsights(profileId);
+        AsyncStorage.getItem('photo_blur_info_dismissed').then((dismissed) => {
+          if (!dismissed) {
+            setShowPhotoBlurBanner(true);
+          }
+        });
       }
 
-      // Immediately start loading profiles to reduce perceived lag
-      // Don't wait for next render cycle
-      setLoading(false); // Remove initial loading state immediately
+      // Process super likes count inline (saves a separate query)
+      const resetDate = new Date(data.super_likes_reset_date);
+      const now = new Date();
+      const daysSinceReset = Math.floor((now.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSinceReset >= 7) {
+        setSuperLikesRemaining(5);
+      } else {
+        setSuperLikesRemaining(5 - (data.super_likes_count || 0));
+      }
+
+      // Call loadProfiles directly on initial load (avoid render-cycle waterfall)
+      // loadProfiles uses currentProfileIdRef.current which is already set above
+      if (!hasInitiallyLoaded.current) {
+        hasInitiallyLoaded.current = true;
+        filtersSnapshotRef.current = computeFiltersHash(initialFilters);
+        loadProfiles(undefined, undefined, initialFilters);
+        // Fetch pending likes count for teaser banner (non-blocking)
+        supabase.rpc('count_unmatched_received_likes').then(({ data }) => {
+          if (data != null) setPendingLikesCount(data);
+        });
+      } else {
+        // Subsequent focus: if preferences changed elsewhere (e.g. matching-preferences
+        // screen, edit-profile, or another device), the feed is stale. Refetch with the
+        // freshly loaded filters and reset the index.
+        const newHash = computeFiltersHash(initialFilters);
+        if (newHash !== filtersSnapshotRef.current) {
+          filtersSnapshotRef.current = newHash;
+          setCurrentIndex(0);
+          loadProfiles(undefined, undefined, initialFilters);
+        }
+      }
     } catch (error: any) {
-      Alert.alert(t('common.error'), 'Failed to load your profile');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
+      // If loadCurrentProfile itself threw, drop out of the loading screen
+      // so the user isn't stuck on the animated heart forever. The empty
+      // state has its own pull-to-refresh.
       setLoading(false);
     }
   };
 
-  const loadSwipeCount = async () => {
+  const loadLikeCount = async () => {
     try {
       const today = new Date().toDateString();
-      const storedData = await AsyncStorage.getItem('swipe_data');
+      const storedData = await AsyncStorage.getItem('like_data');
 
+      let localCount = 0;
       if (storedData) {
         const { date, count } = JSON.parse(storedData);
-        // Reset count if it's a new day
-        if (date === today) {
-          setSwipeCount(count);
-        } else {
-          setSwipeCount(0);
-          await AsyncStorage.setItem('swipe_data', JSON.stringify({ date: today, count: 0 }));
-        }
-      } else {
-        setSwipeCount(0);
-        await AsyncStorage.setItem('swipe_data', JSON.stringify({ date: today, count: 0 }));
+        localCount = date === today && typeof count === 'number' ? count : 0;
       }
+
+      // Reconcile with server-side counter (enforce_like_limits trigger maintains
+      // profiles.daily_likes_count on every free-tier like). The server is the
+      // authoritative source: trust it whenever we got a response. If the fetch
+      // failed or the profile isn't found, fall back to the AsyncStorage value
+      // so offline users still see their last known count. Trusting the server
+      // makes admin resets (zeroing daily_likes_count from support) reach the
+      // user's device on next load — with the old max(local, server) strategy,
+      // stale AsyncStorage would keep the UI pinned at the old count.
+      let serverCount: number | null = null;
+      if (currentProfileId) {
+        const { data: prof, error: profErr } = await supabase
+          .from('profiles')
+          .select('daily_likes_count, daily_likes_reset_date')
+          .eq('id', currentProfileId)
+          .maybeSingle();
+        if (!profErr && prof) {
+          // The server's daily_likes_reset_date is a DATE column (UTC).
+          // Compare it to today's UTC date directly as YYYY-MM-DD strings —
+          // previously we converted via toDateString() in the client's local
+          // timezone, which shifted the UTC date into yesterday for
+          // west-of-UTC users and made the client always treat server counts
+          // as stale (so likes never appeared decremented).
+          const todayUTC = new Date().toISOString().slice(0, 10);
+          const serverDateUTC = prof.daily_likes_reset_date || null;
+          if (typeof prof.daily_likes_count === 'number') {
+            serverCount = serverDateUTC === todayUTC ? prof.daily_likes_count : 0;
+          }
+        }
+      }
+
+      const reconciled = serverCount !== null ? serverCount : localCount;
+      setLikeCount(reconciled);
+      await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: reconciled }));
     } catch (error) {
-      console.error('Error loading swipe count:', error);
+      console.error('Error loading like count:', error);
     }
   };
 
-  const incrementSwipeCount = async () => {
-    const newCount = swipeCount + 1;
-    setSwipeCount(newCount);
+  const incrementLikeCount = async () => {
+    const newCount = likeCount + 1;
+    setLikeCount(newCount);
 
     try {
       const today = new Date().toDateString();
-      await AsyncStorage.setItem('swipe_data', JSON.stringify({ date: today, count: newCount }));
+      await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: newCount }));
     } catch (error) {
-      console.error('Error saving swipe count:', error);
+      console.error('Error saving like count:', error);
     }
   };
 
-  // Check popularity insights - shows celebratory modal when user has new likes
-  const checkPopularityInsights = async (profileId: string) => {
-    // Only check once per session
-    if (hasCheckedPopularity.current) return;
-    hasCheckedPopularity.current = true;
-
-    try {
-      // Get last check timestamp from AsyncStorage
-      const lastCheckKey = `popularity_last_check_${profileId}`;
-      const lastCheckStr = await AsyncStorage.getItem(lastCheckKey);
-      const lastCheck = lastCheckStr ? new Date(lastCheckStr) : new Date(Date.now() - 24 * 60 * 60 * 1000); // Default to 24h ago
-
-      // Query likes received since last check
-      const [
-        { data: newLikes, error: newLikesError },
-        { data: totalLikesData, error: totalLikesError },
-        { count: totalActiveProfiles, error: profilesError },
-      ] = await Promise.all([
-        // New likes since last check
-        supabase
-          .from('likes')
-          .select('id, created_at')
-          .eq('liked_profile_id', profileId)
-          .gt('created_at', lastCheck.toISOString()),
-        // Total likes received all time
-        supabase
-          .from('likes')
-          .select('id')
-          .eq('liked_profile_id', profileId),
-        // Total active profiles (for percentile calculation)
-        supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('profile_complete', true)
-          .eq('incognito_mode', false),
-      ]);
-
-      const newLikesCount = newLikes?.length || 0;
-      const totalLikes = totalLikesData?.length || 0;
-
-      // Calculate percentile rank (approximate based on like count thresholds)
-      // We use a simple heuristic since getting exact rankings would be expensive
-      let percentileRank: number | undefined;
-      if (totalActiveProfiles && totalActiveProfiles > 10 && totalLikes > 0) {
-        // Approximate percentile based on like count
-        // These thresholds can be adjusted based on your user base
-        if (totalLikes >= 50) {
-          percentileRank = 1; // Top 1%
-        } else if (totalLikes >= 30) {
-          percentileRank = 5; // Top 5%
-        } else if (totalLikes >= 20) {
-          percentileRank = 10; // Top 10%
-        } else if (totalLikes >= 10) {
-          percentileRank = 25; // Top 25%
-        } else if (totalLikes >= 5) {
-          percentileRank = 50; // Top 50%
-        }
-        // If less than 5 likes, don't show percentile (not impressive enough)
-      }
-
-      // Calculate streak (consecutive days with likes)
-      let streak = 0;
-      if (newLikesCount > 0) {
-        const streakKey = `popularity_streak_${profileId}`;
-        const streakData = await AsyncStorage.getItem(streakKey);
-        if (streakData) {
-          const { lastLikeDate, currentStreak } = JSON.parse(streakData);
-          const today = new Date().toDateString();
-          const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
-
-          if (lastLikeDate === yesterday) {
-            streak = currentStreak + 1;
-          } else if (lastLikeDate === today) {
-            streak = currentStreak;
-          } else {
-            streak = 1;
-          }
-        } else {
-          streak = 1;
-        }
-
-        // Save streak
-        await AsyncStorage.setItem(`popularity_streak_${profileId}`, JSON.stringify({
-          lastLikeDate: new Date().toDateString(),
-          currentStreak: streak,
-        }));
-      }
-
-      // Update state
-      setPopularityData({
-        newLikesCount,
-        totalLikes,
-        percentileRank,
-        streak,
-      });
-
-      // Show modal if user has new likes OR if they're in top 25% (and haven't seen it today)
-      const showModalKey = `popularity_modal_shown_${profileId}_${new Date().toDateString()}`;
-      const alreadyShownToday = await AsyncStorage.getItem(showModalKey);
-
-      if (!alreadyShownToday && (newLikesCount > 0 || (percentileRank && percentileRank <= 25))) {
-        // Small delay to let the screen load first
-        setTimeout(() => {
-          setShowPopularityModal(true);
-        }, 1000);
-
-        // Mark as shown today
-        await AsyncStorage.setItem(showModalKey, 'true');
-      }
-
-      // Update last check timestamp
-      await AsyncStorage.setItem(lastCheckKey, new Date().toISOString());
-
-      console.log(`🎉 Popularity check: ${newLikesCount} new likes, ${totalLikes} total, top ${percentileRank}%, ${streak} day streak`);
-    } catch (error) {
-      console.error('Error checking popularity insights:', error);
-    }
-  };
-
-  const loadSuperLikesCount = async () => {
-    if (!currentProfileId) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('super_likes_count, super_likes_reset_date')
-        .eq('id', currentProfileId)
-        .single();
-
-      if (error) throw error;
-
-      if (data) {
-        const resetDate = new Date(data.super_likes_reset_date);
-        const now = new Date();
-        const daysSinceReset = Math.floor((now.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
-
-        // Reset if week has passed
-        if (daysSinceReset >= 7) {
-          setSuperLikesRemaining(5);
-        } else {
-          setSuperLikesRemaining(5 - (data.super_likes_count || 0));
-        }
-      }
-    } catch (error) {
-      console.error('Error loading super likes count:', error);
-    }
-  };
-
-  const checkSwipeLimit = (): boolean => {
-    // Premium users have unlimited swipes
+  const checkLikeLimit = (): boolean => {
+    // Premium users have unlimited likes
     if (isPremium) return true;
 
-    // Free users have daily limit (same for everyone)
-    if (swipeCount >= DAILY_SWIPE_LIMIT) {
+    // Free users have daily like limit (5 likes/day, unlimited browsing)
+    if (likeCount >= DAILY_LIKE_LIMIT) {
+      showToast({ type: 'info', title: t('discover.dailyLimitTitle'), message: t('discover.dailyLimitMessage') });
       setShowPaywall(true);
 
-      // Record when user hit swipe limit (for refresh notification)
+      // Record when user hit like limit (for refresh notification)
       if (currentProfileId) {
         supabase
           .from('notification_preferences')
           .update({ last_swipe_limit_hit_at: new Date().toISOString() })
           .eq('profile_id', currentProfileId)
           .then(({ error }) => {
-            if (error) console.warn('Failed to record swipe limit hit:', error);
+            if (error) console.warn('Failed to record like limit hit:', error);
           });
       }
 
@@ -558,16 +858,34 @@ export default function Discover() {
     return true;
   };
 
-  const loadProfiles = async (searchModeOverride?: boolean, searchKeywordOverride?: string) => {
+  // FIX #2: Helper function to calculate distance once (eliminates duplicate calculations)
+  const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 3959; // Earth's radius in miles
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c);
+  }, []);
+
+  const loadProfiles = async (searchModeOverride?: boolean, searchKeywordOverride?: string, filtersOverride?: Partial<FilterOptions>) => {
     // Use override values if provided, otherwise fall back to state
     // This fixes the React state timing issue where state updates are async
     const effectiveSearchMode = searchModeOverride !== undefined ? searchModeOverride : isSearchMode;
     const effectiveSearchKeyword = searchKeywordOverride !== undefined ? searchKeywordOverride : searchKeyword;
+    const effectiveFilters = filtersOverride ? { ...filters, ...filtersOverride } : filters;
+    // Use ref for profile ID to avoid stale closure issues
+    const profileId = currentProfileIdRef.current;
 
     try {
       setLoading(true);
 
-      if (!currentProfileId) {
+      if (!profileId) {
         return;
       }
 
@@ -576,7 +894,7 @@ export default function Discover() {
       // 2. Haven't been PASSED on yet (but INCLUDE people who liked you!)
       // 3. Match basic preferences
 
-      // Run all exclusion queries in PARALLEL for better performance
+      // Run all exclusion queries + current user data + boosted profiles in PARALLEL for better performance
       const [
         { data: alreadySwipedLikes },
         { data: alreadySwipedPasses },
@@ -585,44 +903,69 @@ export default function Discover() {
         { data: blockedMe },
         { data: contactBlocks },
         { data: bannedUsers },
+        { data: currentUserDataRaw, error: currentUserError },
+        { data: boostedProfiles },
+        { data: reportedByMe },
       ] = await Promise.all([
         // Get people you already LIKED (we'll exclude these)
         supabase
           .from('likes')
           .select('liked_profile_id')
-          .eq('liker_profile_id', currentProfileId),
+          .eq('liker_profile_id', profileId),
         // Get people you already PASSED (we'll exclude these)
         supabase
           .from('passes')
           .select('passed_profile_id')
-          .eq('passer_profile_id', currentProfileId),
+          .eq('passer_profile_id', profileId),
         // Get people who LIKED YOU (we'll PRIORITIZE these, not exclude!)
-        supabase
-          .from('likes')
-          .select('liker_profile_id')
-          .eq('liked_profile_id', currentProfileId),
+        // Premium users get prioritization via direct query; free users skip (RLS blocks it)
+        isPremium
+          ? supabase.from('likes').select('liker_profile_id').eq('liked_profile_id', profileId)
+          : Promise.resolve({ data: [], error: null }),
         // SAFETY: Users that current user has blocked
         supabase
           .from('blocks')
           .select('blocked_profile_id')
-          .eq('blocker_profile_id', currentProfileId),
+          .eq('blocker_profile_id', profileId),
         // SAFETY: Users who have blocked current user
         supabase
           .from('blocks')
           .select('blocker_profile_id')
-          .eq('blocked_profile_id', currentProfileId),
+          .eq('blocked_profile_id', profileId),
         // Contact-blocked phone numbers (hashed)
         supabase
           .from('contact_blocks')
           .select('phone_number')
-          .eq('profile_id', currentProfileId),
+          .eq('profile_id', profileId),
         // CRITICAL SAFETY: Get ALL banned users (active bans that haven't expired)
         supabase
           .from('bans')
           .select('banned_profile_id')
           .not('banned_profile_id', 'is', null)
           .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString()),
+        // Current user's full profile and preferences (for compatibility calculation)
+        supabase
+          .from('profiles')
+          .select(`
+            *,
+            preferences:preferences(*)
+          `)
+          .eq('id', profileId)
+          .single(),
+        // Boosted profiles (for prioritization in results)
+        supabase
+          .from('boosts')
+          .select('profile_id')
+          .eq('is_active', true)
+          .gt('expires_at', new Date().toISOString()),
+        // SAFETY: Users you've reported (exclude from discovery)
+        supabase
+          .from('reports')
+          .select('reported_profile_id')
+          .eq('reporter_profile_id', profileId),
       ]);
+
+      if (currentUserError) throw currentUserError;
 
       const peopleWhoLikedMeIds = new Set(peopleWhoLikedMe?.map(l => l.liker_profile_id) || []);
 
@@ -635,26 +978,19 @@ export default function Discover() {
 
       const bannedProfileIds = bannedUsers?.map(b => b.banned_profile_id).filter(Boolean) || [];
 
-      // Only exclude: already liked, already passed, blocked users, AND BANNED USERS
+      const boostedProfileIds = new Set(boostedProfiles?.map(b => b.profile_id) || []);
+
+      const reportedIds = reportedByMe?.map(r => r.reported_profile_id) || [];
+
+      // Only exclude: already liked, already passed, blocked users, banned users, AND REPORTED USERS
       // DO NOT exclude people who liked you!
       const swipedIds = [
         ...(alreadySwipedLikes?.map(l => l.liked_profile_id) || []),
         ...(alreadySwipedPasses?.map(p => p.passed_profile_id) || []),
         ...blockedIds,
-        ...bannedProfileIds
+        ...bannedProfileIds,
+        ...reportedIds,
       ];
-
-      // Get current user's full profile and preferences for compatibility calculation
-      const { data: currentUserDataRaw, error: currentUserError } = await supabase
-        .from('profiles')
-        .select(`
-          *,
-          preferences:preferences(*)
-        `)
-        .eq('id', currentProfileId)
-        .single();
-
-      if (currentUserError) throw currentUserError;
 
       // Extract preferences as single object (Supabase returns array for joined queries)
       const currentUserData = {
@@ -667,206 +1003,369 @@ export default function Discover() {
       // Check premium status (used for other features like advanced filters)
       const userHasPremium = currentUserData.is_premium || currentUserData.is_platinum || false;
 
-      // Global search is FREE for all users to help grow the user base
-      const isSearchingGlobally = currentUserData.preferences?.search_globally === true;
-      console.log('🌍 Global search enabled:', isSearchingGlobally);
+      // Global search is now PREMIUM ONLY
+      const isSearchingGlobally = currentUserData.preferences?.search_globally === true && userHasPremium;
+
+
+      // Alert free users who had search_globally enabled — disable on confirmation
+      if (!userHasPremium && currentUserData.preferences?.search_globally === true) {
+        Alert.alert(
+          t('toast.globalSearchPremiumTitle'),
+          t('toast.globalSearchPremiumMessage'),
+          [
+            { text: t('common.upgrade'), onPress: () => router.push('/settings/subscription') },
+            {
+              text: t('common.ok'),
+              onPress: async () => {
+                try {
+                  await supabase
+                    .from('preferences')
+                    .update({ search_globally: false })
+                    .eq('profile_id', profileId);
+                } catch (err) {
+                  console.error('[Discovery] Error disabling search_globally:', err);
+                }
+              },
+            },
+          ]
+        );
+      }
 
       // Get potential matches with all fields needed for compatibility
       // When searching globally or in search mode, fetch more profiles
       const shouldFetchMore = isSearchingGlobally || effectiveSearchMode;
-      let query = supabase
-        .from('profiles')
-        .select(`
-          *,
-          photos (
-            url,
-            is_primary,
-            display_order
-          ),
-          preferences:preferences(*)
-        `)
-        .neq('id', currentProfileId)
-        .eq('incognito_mode', false)
-        .eq('profile_complete', true) // Only show profiles that completed onboarding
-        .eq('photo_review_required', false) // Hide profiles flagged for photo review
-        .limit(effectiveSearchMode ? 500 : (shouldFetchMore ? 200 : 20)) // Fetch even more profiles when searching
-        .order('created_at', { ascending: false });
+
+      // For LOCAL search: Use distance-based RPC function to get ALL profiles within distance
+      // For GLOBAL search or SEARCH MODE: Use standard query
+      let data: any[] = [];
+      let error: any = null;
+
+      if (!isSearchingGlobally && !effectiveSearchMode && currentUserData.latitude && currentUserData.longitude) {
+        // PERFORMANCE: Try cached discovery feed first (pre-computed every 30min)
+        // Falls back to live RPC if cache is empty/stale
+        const { data: cachedFeed, error: cacheError } = await supabase.rpc('get_cached_discovery_feed', {
+          p_profile_id: profileId,
+          p_limit: 50,
+        });
+
+        let nearbyIds: string[] = [];
+
+        if (!cacheError && cachedFeed && cachedFeed.length > 0) {
+          // Cache hit — use pre-computed feed (skips 9 exclusion queries + RPC)
+          console.log(`✅ Discovery cache hit: ${cachedFeed.length} candidates`);
+          const swipedSet = new Set(swipedIds);
+          nearbyIds = cachedFeed
+            .map((c: any) => c.candidate_id)
+            .filter((id: string) => !swipedSet.has(id));
+        } else {
+          // Cache miss — fall back to live RPC
+          console.log('⚠️ Discovery cache miss, using live RPC');
+          // Gender prefs: use in-session filter only. Empty array = "Everyone" (RPC skips the filter).
+          // No DB fallback — if the user clears to Everyone but DB save raced, we honor the user's intent.
+          const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_profiles', {
+            p_user_lat: currentUserData.latitude,
+            p_user_lon: currentUserData.longitude,
+            p_max_distance_miles: effectiveFilters.maxDistance,
+            p_user_profile_id: profileId,
+            p_min_age: Math.max(18, effectiveFilters.ageMin),
+            p_max_age: effectiveFilters.ageMax,
+            p_gender_prefs: effectiveFilters.genderPreference || [],
+            p_result_limit: 50
+          });
+
+          if (rpcError) {
+            console.error('RPC error:', rpcError);
+            throw rpcError;
+          }
+
+          if (rpcData && rpcData.length > 0) {
+            const swipedSet = new Set(swipedIds);
+            nearbyIds = rpcData.map((p: any) => p.id).filter((id: string) => !swipedSet.has(id));
+          }
+        }
+
+        // Fetch full profile data with photos for the candidate IDs
+        if (nearbyIds.length > 0) {
+            const { data: fullProfiles, error: profilesError } = await supabase
+              .from('profiles')
+              .select(`
+                *,
+                photos (
+                  url,
+                  storage_path,
+                  is_primary,
+                  display_order,
+                  blur_data_uri
+                )
+              `)
+              .in('id', nearbyIds)
+              .eq('is_active', true)
+              .eq('profile_complete', true)
+              .eq('incognito_mode', false)
+              .eq('photo_review_required', false)
+              .or('policy_restricted.is.null,policy_restricted.eq.false');
+
+            if (profilesError) {
+              console.error('❌ Full profile fetch error:', profilesError);
+              throw profilesError;
+            }
+
+            data = fullProfiles || [];
+
+            // Fetch preference fields for filtering (relationship_type, etc.)
+            // SECURITY DEFINER RPC bypasses preferences RLS
+            if (data.length > 0) {
+              const profileIds = data.map((p: any) => p.id);
+              const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: profileIds });
+              if (prefsData) {
+                const prefsMap = new Map(prefsData.map((p: any) => [p.profile_id, p]));
+                data = data.map((profile: any) => ({
+                  ...profile,
+                  preferences: prefsMap.get(profile.id) || null,
+                }));
+              }
+            }
+        }
+      } else {
+        // GLOBAL SEARCH or SEARCH MODE: Use standard query
+
+        let query = supabase
+          .from('profiles')
+          .select(`
+            *,
+            photos (
+              url,
+              storage_path,
+              is_primary,
+              display_order,
+              blur_data_uri
+            ),
+            preferences:preferences(*)
+          `)
+          .neq('id', profileId)
+          .eq('is_active', true) // CRITICAL: Filter out banned/deactivated users
+          .or('policy_restricted.is.null,policy_restricted.eq.false') // Filter policy restricted users
+          .eq('incognito_mode', false)
+          .eq('profile_complete', true)
+          .eq('photo_review_required', false)
+          .limit(effectiveSearchMode ? 500 : 200)
+          .order('created_at', { ascending: false });
 
       // In SEARCH MODE: Only exclude blocked/banned users, NOT swiped profiles
       // This allows users to find profiles they may have already seen
       if (effectiveSearchMode) {
-        console.log('🔍 SEARCH MODE: Only excluding blocked/banned users, not swiped profiles');
+
 
         // Only exclude blocked and banned users in search mode
+        // Cap at 150 IDs to avoid PostgREST URL length limits (400 Bad Request)
         const searchExcludeIds = [...blockedIds, ...bannedProfileIds];
-        if (searchExcludeIds.length > 0) {
+        if (searchExcludeIds.length > 0 && searchExcludeIds.length <= 150) {
           query = query.not('id', 'in', `(${searchExcludeIds.join(',')})`);
         }
 
         // Add server-side search filter using ILIKE for scalar TEXT fields only
-        // Array fields (gender, ethnicity, love_language, sexual_orientation, hobbies, etc.)
+        // Array fields (gender, ethnicity, sexual_orientation, etc.)
         // are handled by the client-side filter instead
         if (effectiveSearchKeyword.trim()) {
           const keyword = effectiveSearchKeyword.trim();
           // Only search scalar text fields - NOT arrays
           query = query.or(
             `display_name.ilike.%${keyword}%,` +
-            `bio.ilike.%${keyword}%,` +
-            `occupation.ilike.%${keyword}%,` +
             `zodiac_sign.ilike.%${keyword}%,` +
             `location_city.ilike.%${keyword}%,` +
             `location_state.ilike.%${keyword}%,` +
-            `education.ilike.%${keyword}%,` +
             `religion.ilike.%${keyword}%,` +
-            `personality_type.ilike.%${keyword}%,` +
             `political_views.ilike.%${keyword}%`
           );
         }
 
-        // Only apply safety minimum age of 18
-        query = query.gte('age', 18);
+        // HARD FILTERS: Always enforce age range and gender preference, even in search mode.
+        // Users must NEVER see profiles outside their stated preferences.
+        // Safety: Always enforce minimum age of 18
+        query = query
+          .gte('age', Math.max(18, effectiveFilters.ageMin))
+          .lte('age', effectiveFilters.ageMax);
+
+        // Gender preference is a hard filter — enforce in search mode too.
+        // Use in-session effectiveFilters (not DB) so an in-session filter change takes
+        // effect immediately even if the DB write is still in flight.
+        // "Everyone" (or empty array) means skip the gender filter entirely.
+        if (effectiveFilters.genderPreference && effectiveFilters.genderPreference.length > 0) {
+          const genderPrefArray = effectiveFilters.genderPreference;
+          if (!genderPrefArray.includes('Everyone')) {
+            const pgArrayLiteral = `{${genderPrefArray.map((g: string) => `"${g}"`).join(',')}}`;
+            query = query.filter('gender', 'ov', pgArrayLiteral);
+          }
+        }
+
+        // Distance prefilter via bounding box — only when not searching globally.
+        // The client-side Haversine check (below) is the precise filter; the bbox
+        // just cuts the candidate set dramatically so we fetch fewer profile+photo rows.
+        if (!isSearchingGlobally && currentUserData.latitude && currentUserData.longitude) {
+          const latMiles = 69;
+          const lat0 = currentUserData.latitude;
+          const lng0 = currentUserData.longitude;
+          const latDelta = effectiveFilters.maxDistance / latMiles;
+          // cos(lat) shrinks longitude degrees at higher latitudes
+          const lngDelta = effectiveFilters.maxDistance / (Math.cos((lat0 * Math.PI) / 180) * latMiles);
+          query = query
+            .gte('latitude', lat0 - latDelta)
+            .lte('latitude', lat0 + latDelta)
+            .gte('longitude', lng0 - lngDelta)
+            .lte('longitude', lng0 + lngDelta);
+        }
       } else {
         // In NORMAL mode, exclude all swiped profiles
-        if (swipedIds.length > 0) {
+        // Cap at 150 IDs to avoid PostgREST URL length limits (400 Bad Request)
+        // When over 200, we filter client-side after the query
+        if (swipedIds.length > 0 && swipedIds.length <= 150) {
           query = query.not('id', 'in', `(${swipedIds.join(',')})`);
         }
         // Apply strict age filters (no buffer - respect user preferences exactly)
         // Safety: Always enforce minimum age of 18
-        console.log('🔍 Applying age filter:', Math.max(18, filters.ageMin), '-', filters.ageMax);
-        console.log('📋 Current user age:', currentUserData.age);
+
         query = query
-          .gte('age', Math.max(18, filters.ageMin))
-          .lte('age', filters.ageMax);
+          .gte('age', Math.max(18, effectiveFilters.ageMin))
+          .lte('age', effectiveFilters.ageMax);
 
-        // Apply gender preference filter (hard filter for all users)
-        // Users can multi-select genders, so this should be a hard requirement
-        // Use array overlap operator since gender is now an array in the database
-        if (currentUserData.preferences?.gender_preference && currentUserData.preferences.gender_preference.length > 0) {
-          // Convert gender_preference to array if it's a string (handles legacy data)
-          const genderPrefArray = Array.isArray(currentUserData.preferences.gender_preference)
-            ? currentUserData.preferences.gender_preference
-            : currentUserData.preferences.gender_preference.split(',').map((g: string) => g.trim());
-
-          // Use 'overlaps' operator for array-to-array matching
-          // Format as PostgreSQL array literal with quoted values: {"value1","value2"}
-          const pgArrayLiteral = `{${genderPrefArray.map((g: string) => `"${g}"`).join(',')}}`;
-          console.log('🔍 Applying gender filter:', genderPrefArray, '→', pgArrayLiteral);
-          query = query.filter('gender', 'ov', pgArrayLiteral);
+        // Apply gender preference filter (hard filter for all users).
+        // Source of truth: in-session effectiveFilters, not DB (so in-session changes
+        // take effect before the DB write settles).
+        // "Everyone" (or empty array) means skip the gender filter entirely.
+        if (effectiveFilters.genderPreference && effectiveFilters.genderPreference.length > 0) {
+          const genderPrefArray = effectiveFilters.genderPreference;
+          if (!genderPrefArray.includes('Everyone')) {
+            const pgArrayLiteral = `{${genderPrefArray.map((g: string) => `"${g}"`).join(',')}}`;
+            query = query.filter('gender', 'ov', pgArrayLiteral);
+          }
         }
       }
 
-      // Apply premium filters (only if user is premium AND filters are set AND not in search mode)
-      if (isPremium && !effectiveSearchMode) {
-        // Religion filter
-        if (filters.religion.length > 0) {
-          query = query.in('religion', filters.religion);
+        // Apply premium filters (only if user is premium AND filters are set AND not in search mode)
+        if (isPremium && !effectiveSearchMode) {
+          // Religion filter
+          if (effectiveFilters.religion.length > 0) {
+            query = query.in('religion', effectiveFilters.religion);
+          }
+
+          // Political views filter
+          if (effectiveFilters.politicalViews.length > 0) {
+            query = query.in('political_views', effectiveFilters.politicalViews);
+          }
         }
 
-        // Political views filter
-        if (filters.politicalViews.length > 0) {
-          query = query.in('political_views', filters.politicalViews);
+        const { data: queryData, error: queryError } = await query;
+        if (queryError) throw queryError;
+        data = queryData || [];
+        error = queryError;
+
+        // Fetch preference fields for global search results too
+        if (data.length > 0) {
+          const profileIds = data.map((p: any) => p.id);
+          const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: profileIds });
+          if (prefsData) {
+            const prefsMap = new Map(prefsData.map((p: any) => [p.profile_id, p]));
+            data = data.map((profile: any) => ({
+              ...profile,
+              preferences: prefsMap.get(profile.id) || null,
+            }));
+          }
         }
       }
-
-      const { data, error } = await query;
 
       if (error) throw error;
 
-
-      // Check for boosted profiles
-      const { data: boostedProfiles } = await supabase
-        .from('boosts')
-        .select('profile_id')
-        .eq('is_active', true)
-        .gt('expires_at', new Date().toISOString());
-
-      const boostedProfileIds = new Set(boostedProfiles?.map(b => b.profile_id) || []);
-
-      // Filter out contact-blocked profiles (by phone number hash)
-      // This happens BEFORE transformation to avoid unnecessary processing
+      // Client-side exclusion fallback when ID list was too large for server-side filter
+      // This handles users with 200+ swipes where the URL would exceed PostgREST limits
       let filteredData = data || [];
-
-      if (blockedPhoneHashes.size > 0) {
-        // Hash each profile's phone number and filter out matches
-        const filterPromises = filteredData.map(async (profile: any) => {
-          if (profile.phone_number) {
-            try {
-              const phoneHash = await hashPhoneNumber(profile.phone_number);
-              if (blockedPhoneHashes.has(phoneHash)) {
-                return null; // Mark for removal
-              }
-            } catch (err) {
-              console.error('Error hashing phone number:', err);
-            }
-          }
-          return profile;
-        });
-
-        const filterResults = await Promise.all(filterPromises);
-        filteredData = filterResults.filter(p => p !== null);
+      if (swipedIds.length > 150) {
+        const swipedSet = new Set(swipedIds);
+        filteredData = filteredData.filter((p: any) => !swipedSet.has(p.id));
       }
 
-      // SAFETY: Filter out profiles that have blocked viewer's country
-      // This protects users who don't want to be seen by people in specific countries
+      // PERF: Run contact blocking + country block queries in PARALLEL instead of sequentially
       const userCountry = currentUserData.location_country || 'US';
+      const profileIds = filteredData.map((p: any) => p.id);
 
-      if (userCountry && filteredData.length > 0) {
-        // Get profile IDs that have blocked the viewer's country
-        const profileIds = filteredData.map((p: any) => p.id);
-        const { data: countryBlockedProfiles } = await supabase
-          .from('country_blocks')
-          .select('profile_id')
-          .eq('country_code', userCountry)
-          .in('profile_id', profileIds);
+      const [contactBlockResult, countryBlockedResult, viewerBlockedResult] = await Promise.all([
+        // 1. Contact blocking using server-side function for privacy
+        blockedPhoneHashes.size > 0
+          ? supabase.rpc('get_contact_blocked_profile_ids', { requesting_profile_id: profileId })
+              .then(({ data, error }) => {
+                if (error) console.error('Error fetching contact-blocked profiles:', error);
+                return data || [];
+              })
+          : Promise.resolve([]),
+        // 2. Profiles that have blocked viewer's country
+        userCountry && profileIds.length > 0
+          ? supabase.from('country_blocks').select('profile_id')
+              .or(`country_code.eq.${userCountry},country_name.ilike.${userCountry}`)
+              .in('profile_id', profileIds)
+              .then(({ data }) => data || [])
+          : Promise.resolve([]),
+        // 3. Countries the viewer has blocked
+        supabase.from('country_blocks').select('country_code, country_name')
+          .eq('profile_id', profileId)
+          .then(({ data }) => data || []),
+      ]);
 
-        if (countryBlockedProfiles && countryBlockedProfiles.length > 0) {
-          const countryBlockedIds = new Set(countryBlockedProfiles.map(cb => cb.profile_id));
-          filteredData = filteredData.filter((p: any) => !countryBlockedIds.has(p.id));
-        }
+      // Apply contact blocking filter
+      if (contactBlockResult.length > 0) {
+        const blockedProfileIdSet = new Set(contactBlockResult);
+        filteredData = filteredData.filter((p: any) => !blockedProfileIdSet.has(p.id));
       }
 
-      // Transform and calculate real compatibility scores
+      // Apply country blocks (profiles that blocked viewer's country)
+      if (countryBlockedResult.length > 0) {
+        const countryBlockedIds = new Set(countryBlockedResult.map((cb: any) => cb.profile_id));
+        filteredData = filteredData.filter((p: any) => !countryBlockedIds.has(p.id));
+      }
+
+      // Apply viewer's blocked countries
+      if (viewerBlockedResult.length > 0) {
+        const blockedCountryCodes = new Set(viewerBlockedResult.map((cb: any) => cb.country_code));
+        const blockedCountryNames = new Set(viewerBlockedResult.map((cb: any) => cb.country_name?.toLowerCase()));
+        filteredData = filteredData.filter((p: any) => {
+          if (p.location_country) {
+            if (blockedCountryCodes.has(p.location_country)) return false;
+            if (blockedCountryNames.has(p.location_country.toLowerCase())) return false;
+          }
+          return true;
+        });
+      }
+
+      // ANR FIX: Transform profiles first with default scores, calculate compatibility after UI renders
+
+      // Log active filter state for debugging
+
+
       const transformedProfiles: Profile[] = filteredData
         .map((profile: any) => {
-          // Calculate real compatibility score and breakdown using the algorithm
-          let compatibilityScore = 75; // Default if can't calculate
+
+          // PERF: Calculate score + breakdown in a single pass (was previously double-calculating)
+          let compatibilityScore = 75;
           let compatibilityBreakdown = undefined;
-
-          try {
-            if (currentUserData.preferences && profile.preferences) {
-              compatibilityScore = calculateCompatibilityScore(
-                currentUserData,
-                profile,
+          const profilePrefs = Array.isArray(profile.preferences) ? profile.preferences[0] : profile.preferences;
+          const effectiveProfilePrefs = profilePrefs || {};
+          if (currentUserData.preferences) {
+            try {
+              const result = calculateScoreAndBreakdown(
+                currentUserData as any,
+                profile as any,
                 currentUserData.preferences,
-                profile.preferences
+                effectiveProfilePrefs
               );
-
-              // Also calculate detailed breakdown for display
-              compatibilityBreakdown = getCompatibilityBreakdown(
-                currentUserData,
-                profile,
-                currentUserData.preferences,
-                profile.preferences
-              );
+              compatibilityScore = result.score;
+              compatibilityBreakdown = result.breakdown;
+            } catch (err) {
+              console.warn('⚠️ Compatibility calculation failed for profile:', profile.id, err);
             }
-          } catch (err) {
-            console.error('Error calculating compatibility:', err);
           }
 
-          // Calculate real distance using Haversine formula
+          // FIX #2: Calculate real distance using helper function (eliminates duplicate calculations)
           let distance = null;
           if (currentUserData.latitude && currentUserData.longitude && profile.latitude && profile.longitude) {
-            const R = 3959; // Earth's radius in miles
-            const dLat = ((profile.latitude - currentUserData.latitude) * Math.PI) / 180;
-            const dLon = ((profile.longitude - currentUserData.longitude) * Math.PI) / 180;
-            const a =
-              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos((currentUserData.latitude * Math.PI) / 180) *
-                Math.cos((profile.latitude * Math.PI) / 180) *
-                Math.sin(dLon / 2) *
-                Math.sin(dLon / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            distance = Math.round(R * c);
+            distance = calculateDistance(currentUserData.latitude, currentUserData.longitude, profile.latitude, profile.longitude);
           }
 
           return {
@@ -878,37 +1377,37 @@ export default function Discover() {
             ethnicity: profile.ethnicity,
             location_city: profile.location_city,
             location_state: profile.location_state,
-            bio: profile.bio,
+            hometown: profile.hometown,
             occupation: profile.occupation,
             education: profile.education,
             height_inches: profile.height_inches,
             zodiac_sign: profile.zodiac_sign,
-            personality_type: profile.personality_type,
-            love_language: profile.love_language,
             languages_spoken: profile.languages_spoken,
             religion: profile.religion,
             political_views: profile.political_views,
-            hobbies: profile.hobbies,
-            interests: profile.interests,
             is_verified: profile.is_verified,
             prompt_answers: profile.prompt_answers,
-            photos: profile.photos?.sort((a: any, b: any) => a.display_order - b.display_order),
+            photos: profile.photos?.sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0)),
             compatibility_score: compatibilityScore,
             compatibilityBreakdown: compatibilityBreakdown,
             distance: distance,
             voice_intro_url: profile.voice_intro_url,
             voice_intro_duration: profile.voice_intro_duration,
             photo_blur_enabled: profile.photo_blur_enabled || false,
+            field_visibility: profile.field_visibility,
             hide_distance: profile.hide_distance || false,
             hide_last_active: profile.hide_last_active || false,
             last_active_at: profile.last_active_at,
+            is_premium: profile.is_premium || profile.is_platinum || false,
             // Supabase returns preferences as array when using joined queries, extract first element
             preferences: Array.isArray(profile.preferences) ? profile.preferences[0] : profile.preferences,
           };
         })
         .filter((profile: any) => {
+          try {
+
           // ====================================================================
-          // SAFETY FILTERS (ALWAYS APPLIED - NO BYPASS)
+          // SAFETY FILTERS (ALWAYS APPLIED - NO BYPASS, including search mode)
           // ====================================================================
 
           // 1. CRITICAL: Minimum age verification (prevent underage users)
@@ -919,6 +1418,7 @@ export default function Discover() {
 
           // 2. CRITICAL: Incognito mode double-check (privacy protection)
           if (profile.incognito_mode === true) {
+
             return false;
           }
 
@@ -928,11 +1428,35 @@ export default function Discover() {
             ...(blockedMe?.map((b: any) => b.blocker_profile_id) || [])
           ];
           if (allBlockedIds.includes(profile.id)) {
+
             return false;
           }
 
           // 4. CRITICAL: Photo requirement
           if (!profile.photos || profile.photos.length === 0) {
+
+            return false;
+          }
+
+          // 5. CRITICAL: Gender preference hard filter (client-side safety net)
+          // Defense-in-depth — server-side filters (RPC + SQL overlap) are authoritative
+          // but this catches any leaks. Source: effectiveFilters (in-session) so mid-session
+          // changes are enforced immediately, matching what the RPC/query was called with.
+          if (effectiveFilters.genderPreference && effectiveFilters.genderPreference.length > 0) {
+            const genderPrefArr = effectiveFilters.genderPreference;
+            // "Everyone" means no restriction — matches the RPC convention
+            if (!genderPrefArr.includes('Everyone')) {
+              const profileGenders = Array.isArray(profile.gender) ? profile.gender : (profile.gender ? [profile.gender] : []);
+              const hasGenderMatch = profileGenders.some((pg: string) => genderPrefArr.includes(pg));
+              if (!hasGenderMatch) {
+                return false;
+              }
+            }
+          }
+
+          // 6. CRITICAL: Age range hard filter (client-side safety net)
+          // Always enforce user's age preferences, even in search mode.
+          if (profile.age < effectiveFilters.ageMin || profile.age > effectiveFilters.ageMax) {
             return false;
           }
 
@@ -945,12 +1469,7 @@ export default function Discover() {
             // Build searchable text from all profile fields
             const searchableFields = [
               profile.display_name, // Allow searching by name
-              profile.bio,
-              profile.occupation,
-              profile.education,
               profile.zodiac_sign,
-              profile.personality_type,
-              profile.love_language,
               profile.religion,
               profile.political_views,
               profile.location_city,
@@ -958,30 +1477,22 @@ export default function Discover() {
               profile.gender, // Allow searching by gender
               profile.sexual_orientation, // Allow searching by orientation
               profile.ethnicity, // Allow searching by ethnicity
-              ...(profile.hobbies || []),
               ...(profile.languages_spoken || []),
-              ...(profile.prompt_answers?.map((pa: any) => pa.answer) || []),
+              ...(profile.prompt_answers?.flatMap((pa: any) => [pa.prompt, pa.answer]) || []),
             ];
 
-            // Handle interests (JSONB object with arrays)
-            if (profile.interests && typeof profile.interests === 'object') {
-              Object.values(profile.interests).forEach((arr: any) => {
-                if (Array.isArray(arr)) {
-                  searchableFields.push(...arr);
-                }
-              });
-            }
-
-            // Handle preferences fields (if searching in preferences is desired)
+            // Handle preferences fields
             if (profile.preferences) {
               const prefs = profile.preferences;
               searchableFields.push(
                 // Support both legacy primary_reason and new primary_reasons array
                 prefs.primary_reasons ? prefs.primary_reasons.join(' ') : prefs.primary_reason,
                 prefs.relationship_type,
-                prefs.financial_arrangement,
-                prefs.housing_preference,
-                prefs.children_arrangement
+                ...(Array.isArray(prefs.financial_arrangement) ? prefs.financial_arrangement : []),
+                ...(Array.isArray(prefs.housing_preference) ? prefs.housing_preference : []),
+                ...(Array.isArray(prefs.children_arrangement) ? prefs.children_arrangement : []),
+                ...(Array.isArray(prefs.dealbreakers) ? prefs.dealbreakers : []),
+                ...(Array.isArray(prefs.must_haves) ? prefs.must_haves : []),
               );
             }
 
@@ -994,78 +1505,32 @@ export default function Discover() {
               return false; // Keyword not found
             }
 
-            // In search mode, skip preference filters - show all keyword matches
-            // Only apply critical safety filters (minimum age 18)
-            if (profile.age < 18) {
-              return false;
-            }
-
-            // Search matched and passes safety check - include this profile!
-            return true;
+            // Keyword matched. Fall through to premium/preference filters below so
+            // a premium user searching "yoga" with religion=Jewish still only sees
+            // Jewish candidates who match "yoga" — filters are NEVER skipped because
+            // you typed something. Gender/age hard filters already ran above.
           }
 
           // ====================================================================
           // DEALBREAKER FILTERS (only in NORMAL mode, not search mode)
           // ====================================================================
 
-          // 1. STRICT AGE FILTER (no buffer, exact preferences)
-          if (profile.age < filters.ageMin || profile.age > filters.ageMax) {
-            return false;
-          }
+          // Age and gender preference are now enforced in the SAFETY FILTERS section above
+          // (always applied, including search mode). No duplicate check needed here.
 
           // 1b. RELATIONSHIP TYPE / INTENTION FILTER (quick filter)
-          if (selectedIntention && profile.preferences?.relationship_type) {
-            if (profile.preferences.relationship_type !== selectedIntention) {
+          if (selectedIntentionRef.current) {
+            if (!profile.preferences?.relationship_type || profile.preferences.relationship_type !== selectedIntentionRef.current) {
               return false;
             }
           }
 
-          // 1c. ACTIVE TODAY FILTER (quick filter)
-          if (activeToday && profile.last_active_at) {
-            const lastActive = new Date(profile.last_active_at);
-            const now = new Date();
-            const hoursSinceActive = (now.getTime() - lastActive.getTime()) / (1000 * 60 * 60);
-            if (hoursSinceActive > 24) {
-              return false;
-            }
-          }
 
-          // 2. BIDIRECTIONAL GENDER PREFERENCE (both directions must match)
-          // A. Check if current user wants this profile's gender
-          if (currentUserData.preferences?.gender_preference &&
-              currentUserData.preferences.gender_preference.length > 0) {
-            // Convert to array if string (handles legacy data)
-            const userGenderPrefArray = Array.isArray(currentUserData.preferences.gender_preference)
-              ? currentUserData.preferences.gender_preference
-              : currentUserData.preferences.gender_preference.split(',').map((g: string) => g.trim());
+          // 1c. ACTIVE TODAY FILTER is applied below with other free filters
 
-            const profileGenderArray = Array.isArray(profile.gender) ? profile.gender : [profile.gender];
-            const userWantsThisGender = profileGenderArray.some((g: string) =>
-              userGenderPrefArray.includes(g)
-            );
-            if (!userWantsThisGender) {
-              return false;
-            }
-          }
 
-          // B. Check if profile wants current user's gender
-          if (profile.preferences?.gender_preference &&
-              profile.preferences.gender_preference.length > 0) {
-            // Convert to array if string (handles legacy data)
-            const profileGenderPrefArray = Array.isArray(profile.preferences.gender_preference)
-              ? profile.preferences.gender_preference
-              : profile.preferences.gender_preference.split(',').map((g: string) => g.trim());
+          // 2. GENDER PREFERENCE - handled by RPC (p_gender_prefs), no client-side duplicate needed
 
-            const currentUserGenderArray = Array.isArray(currentUserData.gender)
-              ? currentUserData.gender
-              : [currentUserData.gender];
-            const profileWantsMyGender = currentUserGenderArray.some((g: string) =>
-              profileGenderPrefArray.includes(g)
-            );
-            if (!profileWantsMyGender) {
-              return false;
-            }
-          }
 
           // 3. SEXUAL ORIENTATION COMPATIBILITY - DISABLED FOR LAVENDER MARRIAGE APP
           // Note: Lavender marriages are specifically for LGBTQ+ individuals seeking marriages of
@@ -1114,43 +1579,25 @@ export default function Discover() {
           // AND profile is NOT in current user's preferred cities
           if (!userSearchGlobally && !profileInUserPreferredCity) {
 
-            // Recalculate distance in real-time (avoid stale data)
-            let realTimeDistance = profile.distance;
-            if (currentUserData.latitude && currentUserData.longitude &&
-                profile.latitude && profile.longitude) {
-              const R = 3959; // Earth's radius in miles
-              const dLat = ((profile.latitude - currentUserData.latitude) * Math.PI) / 180;
-              const dLon = ((profile.longitude - currentUserData.longitude) * Math.PI) / 180;
-              const a =
-                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos((currentUserData.latitude * Math.PI) / 180) *
-                  Math.cos((profile.latitude * Math.PI) / 180) *
-                  Math.sin(dLon / 2) *
-                  Math.sin(dLon / 2);
-              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-              realTimeDistance = Math.round(R * c);
-            }
+            // Use pre-calculated distance (computed earlier via calculateDistance)
+            if (profile.distance !== null && profile.distance !== undefined && profile.distance > effectiveFilters.maxDistance) {
 
-            if (realTimeDistance !== null && realTimeDistance > filters.maxDistance) {
               return false;
             }
           }
 
-          // 5. CHILDREN COMPATIBILITY (hard dealbreaker if both have strong opinions)
-          if (currentUserData.preferences?.wants_children !== undefined &&
-              currentUserData.preferences?.wants_children !== null &&
-              profile.preferences?.wants_children !== undefined &&
-              profile.preferences?.wants_children !== null) {
 
-            const userWants = currentUserData.preferences.wants_children;
-            const profileWants = profile.preferences.wants_children;
-
-            // Hard incompatibility: one wants (true), one doesn't want (false)
-            if ((userWants === true && profileWants === false) ||
-                (userWants === false && profileWants === true)) {
-              return false;
-            }
-          }
+          // 5. CHILDREN COMPATIBILITY - REMOVED AS BLOCKING FILTER
+          // Note: Children preferences are important for compatibility scoring, but should NOT
+          // be a hard dealbreaker in a lavender marriage app. Lavender marriages often involve
+          // negotiated arrangements where children decisions can be discussed and agreed upon.
+          //
+          // Example: Someone who wants children might match with someone who doesn't, because:
+          // - They might use surrogacy/adoption independently
+          // - The arrangement might involve co-parenting with outside partners
+          // - Preferences might change through conversation
+          //
+          // FILTER REMOVED - Compatibility score handles this preference instead of blocking.
 
           // 6. RELATIONSHIP TYPE COMPATIBILITY - REMOVED AS BLOCKING FILTER
           // Note: Relationship type preference (platonic, romantic, open) is important for
@@ -1166,52 +1613,211 @@ export default function Discover() {
           // FILTER REMOVED - Compatibility score handles this preference.
 
           // ====================================================================
-          // PREFERENCE FILTERS (Applied to all users, not just premium)
+          // FREE FILTERS (Active Today, Blurred Photos)
           // ====================================================================
 
-          // Religion filter
-          if (filters.religion.length > 0 && profile.religion) {
-            if (!filters.religion.includes(profile.religion)) {
+          // Active Today filter - only show users active in the last 24 hours
+          if (effectiveFilters.activeToday) {
+            const lastActiveAt = profile.last_active_at ? new Date(profile.last_active_at) : null;
+            if (lastActiveAt) {
+              const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+              if (lastActiveAt < twentyFourHoursAgo) {
+
+                return false;
+              }
+            } else {
+
               return false;
             }
           }
 
-          // Political views filter
-          if (filters.politicalViews.length > 0 && profile.political_views) {
-            if (!filters.politicalViews.includes(profile.political_views)) {
+          // Show Blurred Photos filter - hide profiles with photo blur if disabled
+          if (!effectiveFilters.showBlurredPhotos && profile.photo_blur_enabled) {
+
+            return false;
+          }
+
+
+          // ====================================================================
+          // PREFERENCE FILTERS (effectively premium — FilterModal gates these
+          // behind isPremium so the filter lists are empty for free users)
+          // ====================================================================
+
+          // Religion filter — premium only. Without this guard, a user who
+          // downgrades from premium still has religion/politics selections
+          // persisted in discovery_filters and silently narrows their feed.
+          if (isPremium && effectiveFilters.religion.length > 0 && profile.religion) {
+            if (!effectiveFilters.religion.includes(profile.religion)) {
+              return false;
+            }
+          }
+
+          // Political views filter — premium only (same reason as religion).
+          if (isPremium && effectiveFilters.politicalViews.length > 0 && profile.political_views) {
+            if (!effectiveFilters.politicalViews.includes(profile.political_views)) {
               return false;
             }
           }
 
           // Housing preference filter (for premium users with specific preferences)
-          if (isPremium && filters.housingPreference.length > 0 &&
+          if (isPremium && effectiveFilters.housingPreference.length > 0 &&
               profile.preferences?.housing_preference) {
             const profileHousing = Array.isArray(profile.preferences.housing_preference)
               ? profile.preferences.housing_preference
               : [profile.preferences.housing_preference];
 
-            const hasMatch = profileHousing.some((h: string) => filters.housingPreference.includes(h));
+            const hasMatch = profileHousing.some((h: string) => effectiveFilters.housingPreference.includes(h));
             if (!hasMatch) {
+
               return false;
             }
           }
 
           // Financial arrangement filter (for premium users with specific preferences)
-          if (isPremium && filters.financialArrangement.length > 0 &&
+          if (isPremium && effectiveFilters.financialArrangement.length > 0 &&
               profile.preferences?.financial_arrangement) {
             const profileFinancial = Array.isArray(profile.preferences.financial_arrangement)
               ? profile.preferences.financial_arrangement
               : [profile.preferences.financial_arrangement];
 
-            const hasMatch = profileFinancial.some((f: string) => filters.financialArrangement.includes(f));
+            const hasMatch = profileFinancial.some((f: string) => effectiveFilters.financialArrangement.includes(f));
+            if (!hasMatch) {
+
+              return false;
+            }
+          }
+
+          // ====================================================================
+          // PREMIUM FILTERS - Identity & Background
+          // ====================================================================
+
+          // Gender preference filter - handled by RPC (p_gender_prefs), no client-side duplicate needed
+          // Note: profile.gender can be an array, which caused .includes() to fail with strict equality
+
+          // Ethnicity filter (profile.ethnicity is text[] in DB)
+          if (isPremium && effectiveFilters.ethnicity.length > 0 && profile.ethnicity) {
+            const profileEthnicities = Array.isArray(profile.ethnicity) ? profile.ethnicity : [profile.ethnicity];
+            const ethnicityMatch = profileEthnicities.some((e: string) => effectiveFilters.ethnicity.includes(e));
+            if (!ethnicityMatch) {
+
+              return false;
+            }
+          }
+
+          // Sexual orientation filter (profile.sexual_orientation is text[] in DB)
+          if (isPremium && effectiveFilters.sexualOrientation.length > 0 && profile.sexual_orientation) {
+            const profileOrientations = Array.isArray(profile.sexual_orientation) ? profile.sexual_orientation : [profile.sexual_orientation];
+            const orientationMatch = profileOrientations.some((o: string) => effectiveFilters.sexualOrientation.includes(o));
+            if (!orientationMatch) {
+
+              return false;
+            }
+          }
+
+          // ====================================================================
+          // PREMIUM FILTERS - Physical & Personality
+          // ====================================================================
+
+          // Height filter
+          if (isPremium && (effectiveFilters.heightMin !== 48 || effectiveFilters.heightMax !== 84) && profile.height_inches) {
+            if (profile.height_inches < effectiveFilters.heightMin || profile.height_inches > effectiveFilters.heightMax) {
+              return false;
+            }
+          }
+
+          // Zodiac sign filter
+          if (isPremium && effectiveFilters.zodiacSign.length > 0 && profile.zodiac_sign) {
+            if (!effectiveFilters.zodiacSign.includes(profile.zodiac_sign)) {
+              return false;
+            }
+          }
+
+          // ====================================================================
+          // PREMIUM FILTERS - Lifestyle
+          // ====================================================================
+
+          // Languages spoken filter
+          if (isPremium && effectiveFilters.languagesSpoken.length > 0 && profile.languages_spoken) {
+            const profileLanguages = Array.isArray(profile.languages_spoken)
+              ? profile.languages_spoken
+              : [profile.languages_spoken];
+            const hasMatch = profileLanguages.some((lang: string) => effectiveFilters.languagesSpoken.includes(lang));
             if (!hasMatch) {
               return false;
             }
           }
 
+          // Smoking filter
+          if (isPremium && effectiveFilters.smoking.length > 0 && profile.preferences?.lifestyle_preferences?.smoking) {
+            if (!effectiveFilters.smoking.includes(profile.preferences.lifestyle_preferences.smoking)) {
+              return false;
+            }
+          }
+
+          // Drinking filter
+          if (isPremium && effectiveFilters.drinking.length > 0 && profile.preferences?.lifestyle_preferences?.drinking) {
+            if (!effectiveFilters.drinking.includes(profile.preferences.lifestyle_preferences.drinking)) {
+              return false;
+            }
+          }
+
+          // Pets filter
+          if (isPremium && effectiveFilters.pets.length > 0 && profile.preferences?.lifestyle_preferences?.pets) {
+            if (!effectiveFilters.pets.includes(profile.preferences.lifestyle_preferences.pets)) {
+              return false;
+            }
+          }
+
+          // ====================================================================
+          // PREMIUM FILTERS - Marriage Intentions
+          // ====================================================================
+
+          // Primary reason filter (supports both legacy scalar and new array)
+          if (isPremium && effectiveFilters.primaryReason.length > 0) {
+            const profileReasons = profile.preferences?.primary_reasons
+              ? (Array.isArray(profile.preferences.primary_reasons) ? profile.preferences.primary_reasons : [profile.preferences.primary_reasons])
+              : (profile.preferences?.primary_reason ? [profile.preferences.primary_reason] : []);
+            if (profileReasons.length > 0) {
+              const hasMatch = profileReasons.some((r: string) => effectiveFilters.primaryReason.includes(r));
+              if (!hasMatch) {
+                return false;
+              }
+            }
+          }
+
+          // Relationship type filter
+          if (isPremium && effectiveFilters.relationshipType.length > 0) {
+            if (!profile.preferences?.relationship_type || !effectiveFilters.relationshipType.includes(profile.preferences.relationship_type)) {
+              return false;
+            }
+          }
+
+          // Wants children filter - available to ALL users (not just premium)
+          // This is a fundamental life compatibility factor that shouldn't be paywalled
+
+          if (effectiveFilters.wantsChildren !== null && profile.preferences?.wants_children !== undefined) {
+            const wantsChildrenMap: { [key: string]: boolean | null } = {
+              'yes': true,
+              'no': false,
+              'maybe': null,
+            };
+            const filterValue = wantsChildrenMap[effectiveFilters.wantsChildren];
+            // If filter is 'maybe', allow all. Otherwise check exact match
+            if (filterValue !== null && profile.preferences.wants_children !== filterValue) {
+              return false;
+            }
+          }
+
           // All filters passed
+
           return true;
+          } catch (filterErr) {
+            console.error('❌ FILTER ERROR:', profile?.display_name, filterErr);
+            return false;
+          }
         });
+
+
 
       // Sort profiles with ORGANIC mixing of people who liked you (Hinge-style)
       // Instead of putting all "liked you" profiles at top (too obvious),
@@ -1221,13 +1827,21 @@ export default function Discover() {
       const profilesWhoLikedYou = transformedProfiles.filter(p => peopleWhoLikedMeIds.has(p.id));
       const otherProfiles = transformedProfiles.filter(p => !peopleWhoLikedMeIds.has(p.id));
 
-      // Sort other profiles by: 1) Boosted status, 2) Compatibility score
+      // Sort other profiles by: 1) Boosted status, 2) Subscriber status, 3) Compatibility score
+      // Subscribers get a ranking boost so they appear higher in feeds, increasing
+      // their match rate and reducing churn from low engagement.
       const sortedOtherProfiles = otherProfiles.sort((a, b) => {
         const aIsBoosted = boostedProfileIds.has(a.id);
         const bIsBoosted = boostedProfileIds.has(b.id);
 
         if (aIsBoosted && !bIsBoosted) return -1;
         if (!aIsBoosted && bIsBoosted) return 1;
+
+        // Subscribers rank higher than free users (within same boost tier)
+        const aIsSub = (a as any).is_premium === true;
+        const bIsSub = (b as any).is_premium === true;
+        if (aIsSub && !bIsSub) return -1;
+        if (!aIsSub && bIsSub) return 1;
 
         // Otherwise sort by compatibility score
         return (b.compatibility_score || 0) - (a.compatibility_score || 0);
@@ -1257,23 +1871,50 @@ export default function Discover() {
       // Add any remaining "liked you" profiles at the end (they'll still appear eventually)
       sortedProfiles = [...sortedProfiles, ...remainingLikedYou];
 
-      console.log(`📊 Deck composition: ${likedYouToMix.length} "liked you" mixed in first 10, ${remainingLikedYou.length} remaining, ${sortedOtherProfiles.length} others`);
 
-      setProfiles(sortedProfiles);
+
+      // PERFORMANCE: Sign first few profiles immediately, show them, then sign rest in background.
+      // This gets the first profile on screen 1-3 seconds faster than signing all 50 at once.
+      const IMMEDIATE_BATCH = 5;
+      const firstBatch = sortedProfiles.slice(0, IMMEDIATE_BATCH);
+      const restBatch = sortedProfiles.slice(IMMEDIATE_BATCH);
+
+      // Sign first batch — this is what the user sees immediately
+      const signedFirst = await signProfileMediaUrls(firstBatch);
+
+      // Show profiles NOW (first batch signed, rest unsigned but will be signed before user reaches them)
+      setProfiles([...signedFirst, ...restBatch]);
       setCurrentIndex(0);
+      hasInitiallyLoaded.current = true;
 
       // Prefetch images for the first few profiles for instant loading
-      const imagesToPrefetch = sortedProfiles
-        .slice(0, 5) // Prefetch first 5 profiles
-        .flatMap(p => p.photos?.map(photo => photo.url) || [])
+      const imagesToPrefetch = signedFirst
+        .flatMap(p => {
+          if (p.photo_blur_enabled) return [];
+          return p.photos?.map(photo => photo.url) || [];
+        })
         .filter(Boolean);
 
       if (imagesToPrefetch.length > 0) {
         prefetchImages(imagesToPrefetch);
       }
+
+      // Sign remaining profiles in background (non-blocking)
+      if (restBatch.length > 0) {
+        signProfileMediaUrls(restBatch).then(signedRest => {
+          setProfiles(prev => {
+            // Only update if profiles haven't been completely replaced (e.g., by a refresh)
+            if (prev.length >= IMMEDIATE_BATCH + restBatch.length) {
+              return [...prev.slice(0, IMMEDIATE_BATCH), ...signedRest];
+            }
+            return prev;
+          });
+        }).catch(err => console.warn('Background URL signing failed:', err));
+      }
     } catch (error: any) {
       console.error('❌ Error loading profiles:', error);
-      Alert.alert(t('common.error'), error.message || 'Failed to load profiles');
+      captureException(error instanceof Error ? error : new Error(error?.message || 'Discovery profile load failed'), { context: 'discovery_load' });
+      showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profilesLoadError') });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1285,23 +1926,16 @@ export default function Discover() {
       return false;
     }
 
-    // Block swiping if profile is incomplete
+    // In preview mode, allow passing so users can browse profiles
+    // But skip recording the pass if profile is incomplete (no profile row to reference)
     if (!isProfileComplete) {
-      Alert.alert(
-        'Complete Your Profile',
-        'You need to finish setting up your profile before you can start matching.',
-        [
-          { text: 'Later', style: 'cancel' },
-          { text: 'Complete Profile', onPress: () => router.push('/(onboarding)/basic-info') }
-        ]
-      );
-      return false;
+      transitionToNextProfile();
+      return true;
     }
 
-    // Check swipe limit
-    if (!checkSwipeLimit()) return false;
-
+    // Passing (swiping left) is unlimited for all users
     const targetProfile = profiles[currentIndex];
+    if (!targetProfile) return false;
 
     try {
       // Check if we already passed this profile (can happen in search mode)
@@ -1313,7 +1947,7 @@ export default function Discover() {
         .maybeSingle();
 
       if (existingPass) {
-        console.log('ℹ️ Already passed this profile, skipping insert');
+
         // Already passed - just move to next card
         const newIndex = currentIndex + 1;
         setCurrentIndex(newIndex);
@@ -1321,17 +1955,18 @@ export default function Discover() {
       }
 
       // Insert pass into database
-      await supabase.from('passes').insert({
+      const { error: passError } = await supabase.from('passes').insert({
         passer_profile_id: currentProfileId,
         passed_profile_id: targetProfile.id,
       });
+      if (passError) {
+        console.error('Failed to record pass:', passError);
+        // Non-blocking: still advance to next card, but log the failure
+      }
 
       // Track swipe left
       trackUserAction.swipedLeft(targetProfile.id);
       trackFunnel.profileCardSwiped();
-
-      // Increment swipe count
-      await incrementSwipeCount();
 
       // Track last swipe for rewind
       setLastSwipe({
@@ -1348,31 +1983,36 @@ export default function Discover() {
       console.error('❌ Error recording pass:', error);
       return false;
     }
-  }, [currentProfileId, currentIndex, profiles, swipeCount, isPremium, isProfileComplete]);
+  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete, transitionToNextProfile]);
 
-  const handleSwipeRight = useCallback(async (): Promise<boolean> => {
+  const handleSwipeRight = useCallback(async (message?: string, likedContentData?: { type: string; prompt?: string; answer?: string; index?: number }): Promise<boolean> => {
     if (!currentProfileId || currentIndex >= profiles.length) {
       return false;
     }
 
     // Block swiping if profile is incomplete
     if (!isProfileComplete) {
+      const destination = returnRoute || '/(onboarding)/onboarding';
       Alert.alert(
-        'Complete Your Profile',
-        'You need to finish setting up your profile before you can start matching.',
+        t('discover.completeProfile.title'),
+        t('discover.completeProfile.message'),
         [
-          { text: 'Later', style: 'cancel' },
-          { text: 'Complete Profile', onPress: () => router.push('/(onboarding)/basic-info') }
+          { text: t('common.later'), style: 'cancel' },
+          { text: t('discover.completeProfile.button'), onPress: () => {
+            exitPreviewMode();
+            router.replace(destination as any);
+          }}
         ]
       );
       return false;
     }
 
-    // Check swipe limit
-    if (!checkSwipeLimit()) return false;
+    // Check like limit (free users: 5 likes/day, premium: unlimited)
+    if (!checkLikeLimit()) return false;
 
     const targetProfile = profiles[currentIndex];
-    console.log('❤️ Liking:', targetProfile.display_name);
+    if (!targetProfile) return false;
+
 
     try {
       // Check if we already liked this profile (can happen in search mode)
@@ -1384,12 +2024,108 @@ export default function Discover() {
         .maybeSingle();
 
       if (existingLike) {
-        console.log('ℹ️ Already liked this profile, skipping insert');
-        // Already liked - just move to next card
-        Alert.alert(
-          'Already Liked',
-          `You've already liked ${targetProfile.display_name}. Check your matches to see if they liked you back!`
-        );
+
+
+        // Check if the OTHER person has also liked you (mutual like check)
+        // Uses SECURITY DEFINER RPC to bypass RLS (free users can't directly read received likes)
+        const { data: mutualLikeId } = await supabase
+          .rpc('check_mutual_like', { p_target_profile_id: targetProfile.id });
+
+        if (mutualLikeId) {
+          // Check if there's already an ACTIVE match
+          const profile1Id = currentProfileId < targetProfile.id ? currentProfileId : targetProfile.id;
+          const profile2Id = currentProfileId < targetProfile.id ? targetProfile.id : currentProfileId;
+
+          const { data: existingMatch } = await supabase
+            .from('matches')
+            .select('id, status')
+            .eq('profile1_id', profile1Id)
+            .eq('profile2_id', profile2Id)
+            .maybeSingle();
+
+          if (existingMatch?.status === 'active') {
+            // Already matched and active
+            showToast({ type: 'info', title: t('common.success'), message: t('toast.alreadyMatched', { name: targetProfile.display_name }) });
+            const newIndex = currentIndex + 1;
+            setCurrentIndex(newIndex);
+            return true;
+          }
+
+          // Either no match exists, or it was unmatched - create/recreate the match!
+
+
+          if (existingMatch && existingMatch.status === 'unmatched') {
+            // Update the existing unmatched record to active
+            const { data: reactivatedMatch, error: updateError } = await supabase
+              .from('matches')
+              .update({
+                status: 'active',
+                matched_at: new Date().toISOString(),
+                expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                unmatched_by: null,
+                unmatched_at: null,
+                unmatch_reason: null,
+                first_message_sent_at: null, // Reset expiration timer
+              })
+              .eq('id', existingMatch.id)
+              .select('id')
+              .single();
+
+            if (updateError) {
+              console.error('❌ Error reactivating match:', updateError);
+            } else {
+
+              trackUserAction.matched(reactivatedMatch?.id || '');
+              trackFunnel.matchReceived();
+
+              setMatchId(reactivatedMatch?.id || null);
+              setMatchedProfile(targetProfile);
+              setShowMatchModal(true);
+              return true;
+            }
+          } else {
+            // Create new match
+            const { data: newMatch, error: matchError } = await supabase
+              .from('matches')
+              .insert({
+                profile1_id: profile1Id,
+                profile2_id: profile2Id,
+                initiated_by: currentProfileId,
+                compatibility_score: targetProfile.compatibility_score,
+                status: 'active',
+              })
+              .select('id')
+              .single();
+
+            if (matchError) {
+              // Check if it's the match limit error
+              if (matchError.message?.includes('MATCH_LIMIT_REACHED')) {
+                Alert.alert(
+                  t('likes.matchLimitTitle'),
+                  t('likes.matchLimitMessage'),
+                  [
+                    { text: t('common.ok') },
+                    { text: t('likes.freeUser.revealPhoto'), onPress: () => setShowPaywall(true) },
+                  ]
+                );
+                return true;
+              }
+              console.error('❌ Match error:', matchError);
+            } else {
+              trackUserAction.matched(newMatch?.id || '');
+              trackFunnel.matchReceived();
+
+              setMatchId(newMatch?.id || null);
+              setMatchedProfile(targetProfile);
+              setShowMatchModal(true);
+              return true;
+            }
+          }
+        } else {
+          // No mutual like yet - just show info
+          showToast({ type: 'info', title: t('common.success'), message: t('toast.alreadyLiked', { name: targetProfile.display_name }) });
+        }
+
         const newIndex = currentIndex + 1;
         setCurrentIndex(newIndex);
         return true;
@@ -1399,28 +2135,43 @@ export default function Discover() {
       const { error: likeError } = await supabase.from('likes').insert({
         liker_profile_id: currentProfileId,
         liked_profile_id: targetProfile.id,
+        message: message || null,
+        liked_content: likedContentData ? JSON.stringify(likedContentData) : null,
       });
 
-      if (likeError) throw likeError;
+      if (likeError) {
+        if (likeError.code === 'P0001' && likeError.message?.includes('Daily like limit')) {
+          // Server says limit hit but client counter may be stale (e.g. back-sync
+          // from a migration). Sync the client count so the UI shows "0 remaining"
+          // and the user understands this is a daily-limit issue, not a paywall
+          // for browsing itself.
+          setLikeCount(DAILY_LIKE_LIMIT);
+          try {
+            const today = new Date().toDateString();
+            await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: DAILY_LIKE_LIMIT }));
+          } catch {}
+          showToast({ type: 'info', title: t('discover.dailyLimitTitle'), message: t('discover.dailyLimitMessage') });
+          setShowPaywall(true);
+          return false;
+        }
+        throw likeError;
+      }
 
       // Track swipe right (like)
       trackUserAction.swipedRight(targetProfile.id);
       trackFunnel.profileLiked();
 
-      // Increment swipe count
-      await incrementSwipeCount();
+      // Increment like count (free users limited to 5/day)
+      await incrementLikeCount();
 
       // Check if the OTHER person has also liked you (mutual like check)
-      const { data: mutualLike } = await supabase
-        .from('likes')
-        .select('id')
-        .eq('liker_profile_id', targetProfile.id)
-        .eq('liked_profile_id', currentProfileId)
-        .single();
+      // Uses SECURITY DEFINER RPC to bypass RLS (free users can't directly read received likes)
+      const { data: mutualLikeId } = await supabase
+        .rpc('check_mutual_like', { p_target_profile_id: targetProfile.id });
 
-      if (mutualLike) {
+      if (mutualLikeId) {
         // It's a mutual match! Create the match
-        console.log('💑 Mutual like found! Creating match...');
+
 
         const profile1Id = currentProfileId < targetProfile.id ? currentProfileId : targetProfile.id;
         const profile2Id = currentProfileId < targetProfile.id ? targetProfile.id : currentProfileId;
@@ -1443,8 +2194,6 @@ export default function Discover() {
           setMatchedProfile(targetProfile);
           setShowMatchModal(true);
         } else {
-          console.log('✅ Match created:', matchData?.id);
-
           // Track match
           trackUserAction.matched(matchData?.id || '');
           trackFunnel.matchReceived();
@@ -1471,7 +2220,7 @@ export default function Discover() {
       }
 
       // No match - proceed with normal flow
-      console.log('ℹ️ Like recorded, waiting for mutual like');
+
 
       // NOTE: Like notification is sent via database trigger (notify_on_like)
       // Do NOT call sendLikeNotification here - it causes duplicate notifications
@@ -1489,37 +2238,56 @@ export default function Discover() {
       return true;
     } catch (error: any) {
       console.error('❌ Error recording like:', error);
+      captureException(error instanceof Error ? error : new Error(error?.message || 'Like recording failed'), { context: 'discovery_like' });
+      if (error?.code === 'P0001' && error?.message?.includes('Daily like limit')) {
+        setLikeCount(DAILY_LIKE_LIMIT);
+        try {
+          const today = new Date().toDateString();
+          await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: DAILY_LIKE_LIMIT }));
+        } catch {}
+        showToast({ type: 'info', title: t('discover.dailyLimitTitle'), message: t('discover.dailyLimitMessage') });
+        setShowPaywall(true);
+      } else if (error?.code === 'P0001' && error?.message) {
+        // Surface other server-side rejections (profile incomplete, photo count,
+        // premium required for super like, etc.) instead of silently returning.
+        showToast({ type: 'error', title: t('common.error'), message: error.message });
+      }
       return false;
     }
-  }, [currentProfileId, currentIndex, profiles, swipeCount, isPremium, isProfileComplete]);
+  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete, returnRoute, exitPreviewMode]);
 
   const handleSwipeUp = useCallback(async (): Promise<boolean> => {
     if (!currentProfileId || currentIndex >= profiles.length) return false;
 
     // Block swiping if profile is incomplete
     if (!isProfileComplete) {
+      const destination = returnRoute || '/(onboarding)/onboarding';
       Alert.alert(
-        'Complete Your Profile',
-        'You need to finish setting up your profile before you can start matching.',
+        t('discover.completeProfile.title'),
+        t('discover.completeProfile.message'),
         [
-          { text: 'Later', style: 'cancel' },
-          { text: 'Complete Profile', onPress: () => router.push('/(onboarding)/basic-info') }
+          { text: t('common.later'), style: 'cancel' },
+          { text: t('discover.completeProfile.button'), onPress: () => {
+            exitPreviewMode();
+            router.replace(destination as any);
+          }}
         ]
       );
       return false;
     }
 
     const targetProfile = profiles[currentIndex];
+    if (!targetProfile) return false;
 
     // Check premium status FIRST before any async operations
     if (!isPremium) {
       // Free users need to upgrade - show alert and return immediately
       Alert.alert(
-        '💜 Upgrade to Premium',
-        'Super likes are a Premium feature! Upgrade to send 5 super likes per week.',
+        t('discover.premium.upgradeTitle'),
+        t('discover.premium.superLikesMessage'),
         [
           { text: t('common.cancel'), style: 'cancel' },
-          { text: 'Upgrade', onPress: () => setShowPaywall(true) },
+          { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
         ]
       );
       return false; // Don't proceed with the swipe
@@ -1542,13 +2310,14 @@ export default function Discover() {
         let currentCount = profileData.super_likes_count || 0;
         if (daysSinceReset >= 7) {
           currentCount = 0;
-          await supabase
+          const { error: resetError } = await supabase
             .from('profiles')
             .update({
               super_likes_count: 0,
               super_likes_reset_date: now.toISOString(),
             })
             .eq('id', currentProfileId);
+          if (resetError) console.error('Failed to reset super like count:', resetError);
         }
 
         // Check limit for premium users (5 per week)
@@ -1557,8 +2326,8 @@ export default function Discover() {
         if (currentCount >= weeklyLimit) {
           // Premium users hit their limit
           Alert.alert(
-            '✨ Super Like Limit Reached',
-            `You've used all 5 super likes this week. Your super likes will reset next ${getDayName((resetDate.getDay() + 7) % 7)}.`,
+            t('discover.premium.superLikeLimitTitle'),
+            t('discover.premium.superLikeLimitMessage', { day: getDayName((resetDate.getDay() + 7) % 7) }),
             [{ text: 'OK' }]
           );
           return false; // Don't proceed with the swipe
@@ -1574,7 +2343,11 @@ export default function Discover() {
         .maybeSingle();
 
       if (existingLike) {
-        // Update existing like to super_like
+        // Update existing like to super_like. The enforce_super_like_on_update
+        // trigger (migration 20260420_enforce_super_like_on_update) now applies
+        // the same premium + weekly-budget checks as the INSERT trigger, so a
+        // free user upgrading their own standard like is rejected server-side
+        // and a premium user's super_likes_count is incremented correctly.
         const { error: updateError } = await supabase
           .from('likes')
           .update({ like_type: 'super_like' })
@@ -1589,29 +2362,42 @@ export default function Discover() {
           like_type: 'super_like',
         });
 
-        if (likeError) throw likeError;
+        if (likeError) {
+          if (likeError.code === 'P0001' && likeError.message?.includes('Premium subscription')) {
+            Alert.alert(
+              t('subscription.upgradeToPremium'),
+              t('subscription.upgradeToPremiumSubtitle'),
+              [
+                { text: t('common.cancel'), style: 'cancel' },
+                { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
+              ]
+            );
+            return false;
+          }
+          throw likeError;
+        }
       }
 
       // Track super like
       trackUserAction.superLikeUsed(targetProfile.id);
 
       // Increment super like count
-      await supabase
+      const { error: superLikeCountError } = await supabase
         .from('profiles')
         .update({
           super_likes_count: (profileData?.super_likes_count || 0) + 1,
         })
         .eq('id', currentProfileId);
+      if (superLikeCountError) {
+        console.error('Failed to update super like count:', superLikeCountError);
+      }
 
       // Check if target user has already liked current user (mutual like = match)
-      const { data: mutualLike } = await supabase
-        .from('likes')
-        .select('id')
-        .eq('liker_profile_id', targetProfile.id)
-        .eq('liked_profile_id', currentProfileId)
-        .maybeSingle();
+      // Uses SECURITY DEFINER RPC to bypass RLS (free users can't directly read received likes)
+      const { data: mutualLikeId } = await supabase
+        .rpc('check_mutual_like', { p_target_profile_id: targetProfile.id });
 
-      if (mutualLike) {
+      if (mutualLikeId) {
         // It's a match! Check if match already exists
         const profile1Id = currentProfileId < targetProfile.id ? currentProfileId : targetProfile.id;
         const profile2Id = currentProfileId < targetProfile.id ? targetProfile.id : currentProfileId;
@@ -1665,38 +2451,65 @@ export default function Discover() {
       });
 
       // Show obsessed alert with counter
-      Alert.alert(
-        '💜 Obsessed!',
-        isPremium
-          ? `${targetProfile.display_name} will be notified that you're obsessed!\n\n${remaining} super likes remaining this week.`
-          : `${targetProfile.display_name} will be notified that you're obsessed!`
-      );
+      showToast({
+        type: 'success',
+        title: t('toast.obsessedTitle'),
+        message: isPremium
+          ? t('toast.obsessedWithRemaining', { name: targetProfile.display_name, remaining })
+          : t('toast.obsessedBasic', { name: targetProfile.display_name })
+      });
 
       // Move to next card
-      setCurrentIndex(prev => prev + 1);
+      advanceIndex();
       return true;
     } catch (error: any) {
       console.error('Error recording super like:', error);
-      Alert.alert(t('common.error'), 'Failed to send super like. Please try again.');
+      if (error?.code === 'P0001' && error?.message?.includes('Premium subscription')) {
+        Alert.alert(
+          t('subscription.upgradeToPremium'),
+          t('subscription.upgradeToPremiumSubtitle'),
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
+          ]
+        );
+      } else if (error?.code === 'P0001' && error?.message?.includes('Weekly super like limit')) {
+        // Surfaced by enforce_super_like_on_update when a premium user tries to
+        // promote a standard like after already using their 5 super-likes this
+        // week. Don't show the paywall — they already pay; show the limit.
+        Alert.alert(
+          t('discover.premium.superLikeLimitTitle'),
+          t('discover.premium.superLikeLimitMessage', { day: '' }),
+          [{ text: 'OK' }]
+        );
+      } else if (error?.code === 'P0001' && error?.message?.includes('Daily like limit')) {
+        setShowPaywall(true);
+      } else if (error?.code === 'P0001' && error?.message) {
+        // Surface any other server-side rejection (profile incomplete, photo
+        // count, etc.) instead of the generic superLikeError toast.
+        showToast({ type: 'error', title: t('common.error'), message: error.message });
+      } else {
+        showToast({ type: 'error', title: t('common.error'), message: t('toast.superLikeError') });
+      }
       return false;
     }
-  }, [currentProfileId, currentIndex, profiles, isPremium, isProfileComplete]);
+  }, [currentProfileId, currentIndex, profiles, isPremium, isProfileComplete, returnRoute, exitPreviewMode]);
 
   // Helper function to get day name
   const getDayName = (day: number) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[day];
+    const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    return t(`common.days.${dayKeys[day]}`);
   };
 
   const handleRewind = useCallback(async () => {
     // Premium-only feature
     if (!isPremium) {
       Alert.alert(
-        '💜 Upgrade to Premium',
-        'Rewind is a Premium feature! Upgrade to undo your last swipe.',
+        t('discover.premium.upgradeTitle'),
+        t('discover.premium.rewindMessage'),
         [
           { text: t('common.cancel'), style: 'cancel' },
-          { text: 'Upgrade', onPress: () => setShowPaywall(true) },
+          { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
         ]
       );
       return;
@@ -1704,14 +2517,14 @@ export default function Discover() {
 
     // Check if there's a last swipe to undo
     if (!lastSwipe) {
-      Alert.alert('No Recent Swipes', 'There are no recent swipes to undo.');
+      showToast({ type: 'info', title: t('toast.noRecentSwipes'), message: t('toast.noRecentSwipes') });
       return;
     }
 
     if (!currentProfileId) return;
 
     try {
-      console.log('⏪ Rewinding last swipe:', lastSwipe.action, 'on', lastSwipe.profile.display_name);
+
 
       // Delete the swipe from database based on action type
       if (lastSwipe.action === 'pass') {
@@ -1758,30 +2571,34 @@ export default function Discover() {
         }
       }
 
-      // Decrement swipe count if not premium
-      if (!isPremium && swipeCount > 0) {
-        const newCount = swipeCount - 1;
-        setSwipeCount(newCount);
+      // Decrement like count if not premium and action was a like (passes are unlimited)
+      if (!isPremium && lastSwipe.action === 'like' && likeCount > 0) {
+        const newCount = likeCount - 1;
+        setLikeCount(newCount);
         const today = new Date().toDateString();
-        await AsyncStorage.setItem('swipe_data', JSON.stringify({ date: today, count: newCount }));
+        await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count: newCount }));
       }
 
       // Go back to the previous profile
       setCurrentIndex(lastSwipe.index);
 
+      // Reset scroll position to top
+      discoveryProfileRef.current?.scrollToTop();
+
       // Clear last swipe
       setLastSwipe(null);
 
-      Alert.alert('✨ Rewound!', 'Your last swipe has been undone.');
+      showToast({ type: 'success', title: t('toast.swipeUndone'), message: t('toast.swipeUndone') });
     } catch (error: any) {
       console.error('❌ Error rewinding:', error);
-      Alert.alert(t('common.error'), 'Failed to undo swipe. Please try again.');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.undoSwipeError') });
     }
-  }, [lastSwipe, currentProfileId, isPremium, swipeCount]);
+  }, [lastSwipe, currentProfileId, isPremium, likeCount]);
 
   const handleProfilePress = useCallback(async () => {
     if (currentIndex >= profiles.length) return;
     const targetProfile = profiles[currentIndex];
+    if (!targetProfile) return;
 
     // Track profile view
     trackUserAction.profileViewed(targetProfile.id);
@@ -1792,6 +2609,96 @@ export default function Discover() {
     setCurrentProfilePreferences(prefs);
     setShowImmersiveProfile(true);
   }, [currentIndex, profiles]);
+
+  // Calculate smart recommendations using database function
+  const calculateSmartRecommendations = useCallback(async () => {
+    if (!currentProfileId) return;
+
+    try {
+      // Get current user's location and preferences IN PARALLEL for better performance
+      const [
+        { data: userData },
+        { data: prefsData }
+      ] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('latitude, longitude, is_premium, is_platinum')
+          .eq('id', currentProfileId)
+          .single(),
+        supabase
+          .from('preferences')
+          .select('gender_preference')
+          .eq('profile_id', currentProfileId)
+          .single()
+      ]);
+
+      if (!userData || !userData.latitude || !userData.longitude) {
+        console.warn('User location not available for smart recommendations');
+        return;
+      }
+
+      // Normalize gender preferences to ensure it's a proper array
+      let genderPrefs = prefsData?.gender_preference;
+
+
+      if (!genderPrefs || genderPrefs === '' || (Array.isArray(genderPrefs) && genderPrefs.length === 0)) {
+        genderPrefs = null; // Pass null instead of empty array/string
+      } else if (!Array.isArray(genderPrefs)) {
+        // If it's a string, try to parse it as an array
+        genderPrefs = typeof genderPrefs === 'string' ? [genderPrefs] : null;
+      }
+
+
+
+      // Call database RPC function for accurate recommendations
+      // Pass current filters so counts match what the discovery feed actually shows
+      const userIsPremium = userData.is_premium || userData.is_platinum || false;
+      const { data, error } = await supabase.rpc('get_smart_recommendations', {
+        p_user_profile_id: currentProfileId,
+        p_user_lat: userData.latitude,
+        p_user_lon: userData.longitude,
+        p_current_max_distance_miles: filters.maxDistance,
+        p_current_min_age: filters.ageMin,
+        p_current_max_age: filters.ageMax,
+        p_current_gender_prefs: genderPrefs,
+        p_discovery_filters: {
+          religion: filters.religion,
+          politicalViews: filters.politicalViews,
+          ethnicity: filters.ethnicity,
+          sexualOrientation: filters.sexualOrientation,
+          heightMin: filters.heightMin,
+          heightMax: filters.heightMax,
+          zodiacSign: filters.zodiacSign,
+          languagesSpoken: filters.languagesSpoken,
+          activeToday: filters.activeToday,
+          showBlurredPhotos: filters.showBlurredPhotos,
+          housingPreference: filters.housingPreference,
+          financialArrangement: filters.financialArrangement,
+          relationshipType: filters.relationshipType,
+        },
+        p_is_premium: userIsPremium
+      });
+
+      if (error) {
+        console.error('Error fetching smart recommendations:', error);
+        return;
+      }
+
+      // Set recommendations from database response
+      if (data && data.recommendations) {
+        setSmartRecommendations(data.recommendations);
+      }
+    } catch (error) {
+      console.error('Error calculating smart recommendations:', error);
+    }
+  }, [currentProfileId, filters]);
+
+  // Calculate smart recommendations when empty state is shown (only after first load)
+  useEffect(() => {
+    if (hasInitiallyLoaded.current && currentIndex >= profiles.length && currentProfileId && !loading && !isSearchMode) {
+      calculateSmartRecommendations();
+    }
+  }, [currentIndex, profiles.length, currentProfileId, loading, isSearchMode, calculateSmartRecommendations]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -1823,7 +2730,7 @@ export default function Discover() {
 
     // Advance to next card after closing match modal
     const newIndex = currentIndex + 1;
-    console.log('➡️ Match modal closed, moving to index:', newIndex);
+
     setCurrentIndex(newIndex);
   };
 
@@ -1832,7 +2739,7 @@ export default function Discover() {
 
     // Advance to next card after going to chat
     const newIndex = currentIndex + 1;
-    console.log('➡️ Navigating to chat, moving to index:', newIndex);
+
     setCurrentIndex(newIndex);
 
     if (matchId) {
@@ -1863,6 +2770,11 @@ export default function Discover() {
   const handleDismissVerificationBanner = async () => {
     setShowVerificationBanner(false);
     await AsyncStorage.setItem('verification_banner_dismissed', 'true');
+  };
+
+  const handleDismissPhotoBlurBanner = async () => {
+    setShowPhotoBlurBanner(false);
+    await AsyncStorage.setItem('photo_blur_info_dismissed', 'true');
   };
 
   const handleBlock = async () => {
@@ -1909,10 +2821,10 @@ export default function Discover() {
               // Move to next profile
               setCurrentIndex((prev) => prev + 1);
 
-              Alert.alert('Blocked', `You have blocked ${currentProfile.display_name}`);
+              showToast({ type: 'success', title: t('toast.blockSuccess'), message: t('toast.blockSuccess') });
             } catch (error: any) {
               console.error('Error blocking user:', error);
-              Alert.alert(t('common.error'), 'Failed to block user. Please try again.');
+              showToast({ type: 'error', title: t('common.error'), message: t('toast.blockError') });
             }
           },
         },
@@ -1932,181 +2844,39 @@ export default function Discover() {
     setShowImmersiveProfile(false);
   };
 
-  // Fun loading messages
-  const loadingMessages = [
-    t('discover.findingMatches'),
-    'Scanning the universe...',
-    'Finding your perfect match...',
-    'Almost there...',
-    'Good things take time...',
-  ];
-  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
-
-  // Rotate loading messages
-  useEffect(() => {
-    if (!loading) return;
-    const interval = setInterval(() => {
-      setLoadingMessageIndex((prev) => (prev + 1) % loadingMessages.length);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [loading]);
-
-  // Loading state with fun animation
+  // Loading state
   if (loading) {
-    const { width } = Dimensions.get('window');
-
     return (
-      <View className="flex-1 bg-background items-center justify-center overflow-hidden">
-        {/* Floating hearts background */}
-        {[...Array(8)].map((_, i) => (
-          <MotiView
-            key={i}
-            from={{
-              opacity: 0,
-              translateY: 100,
-              translateX: (i % 2 === 0 ? -1 : 1) * (20 + (i * 15)),
-              scale: 0.5,
-            }}
-            animate={{
-              opacity: [0, 0.6, 0],
-              translateY: -400,
-              translateX: (i % 2 === 0 ? 1 : -1) * (30 + (i * 10)),
-              scale: [0.5, 1, 0.8],
-            }}
-            transition={{
-              type: 'timing',
-              duration: 3000 + (i * 400),
-              loop: true,
-              delay: i * 300,
-            }}
-            style={{
-              position: 'absolute',
-              bottom: 100,
-              left: width / 2 - 12 + ((i - 4) * 25),
-            }}
-          >
-            <Text style={{ fontSize: 24 + (i % 3) * 8 }}>
-              {['💜', '💕', '✨', '💫', '💜', '💕', '✨', '💫'][i]}
-            </Text>
-          </MotiView>
-        ))}
-
-        {/* Pulsing rings */}
-        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-          {[0, 1, 2].map((i) => (
-            <MotiView
-              key={i}
-              from={{ opacity: 0.8, scale: 0.8 }}
-              animate={{ opacity: 0, scale: 2 }}
-              transition={{
-                type: 'timing',
-                duration: 2000,
-                loop: true,
-                delay: i * 600,
-              }}
-              style={{
-                position: 'absolute',
-                width: 100,
-                height: 100,
-                borderRadius: 50,
-                borderWidth: 3,
-                borderColor: '#A08AB7',
-              }}
-            />
-          ))}
-
-          {/* Center heart icon */}
-          <MotiView
-            from={{ scale: 0.9 }}
-            animate={{ scale: 1.1 }}
-            transition={{
-              type: 'timing',
-              duration: 800,
-              loop: true,
-              repeatReverse: true,
-            }}
-            style={{
-              width: 80,
-              height: 80,
-              borderRadius: 40,
-              backgroundColor: '#F3E8FF',
-              alignItems: 'center',
-              justifyContent: 'center',
-              shadowColor: '#A08AB7',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 8,
-            }}
-          >
-            <MaterialCommunityIcons name="cards-heart" size={40} color="#A08AB7" />
-          </MotiView>
-        </View>
-
-        {/* Animated loading text */}
-        <MotiView
-          from={{ opacity: 0, translateY: 10 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 500 }}
-          key={loadingMessageIndex}
-          style={{ marginTop: 32 }}
-        >
-          <Text className="text-muted-foreground text-base font-sans-medium text-center px-8">
-            {loadingMessages[loadingMessageIndex]}
-          </Text>
-        </MotiView>
-
-        {/* Animated dots */}
-        <View style={{ flexDirection: 'row', marginTop: 16, gap: 6 }}>
-          {[0, 1, 2].map((i) => (
-            <MotiView
-              key={i}
-              from={{ opacity: 0.3, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1.2 }}
-              transition={{
-                type: 'timing',
-                duration: 500,
-                loop: true,
-                repeatReverse: true,
-                delay: i * 150,
-              }}
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: '#A08AB7',
-              }}
-            />
-          ))}
-        </View>
+      <View className="flex-1 items-center justify-center overflow-hidden" style={{ backgroundColor: colors.background }}>
+        <HandshakeLoader />
       </View>
     );
   }
 
-  // Empty state - no more profiles
-  if (currentIndex >= profiles.length) {
+  // Empty state - no more profiles (only show after first load completes)
+  if (hasInitiallyLoaded.current && currentIndex >= profiles.length) {
     return (
-      <View className="flex-1 bg-background">
+      <View className="flex-1" style={{ backgroundColor: colors.background }}>
         {/* Header with Search/Filter Controls */}
-        <View className="bg-background dark:bg-background pb-4 px-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
+        <View className="pb-0" style={{ backgroundColor: colors.background, paddingTop: insets.top + 16 }}>
           {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
           <View className="flex-row items-center mb-3">
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8 }}
+              contentContainerStyle={{ gap: 6, paddingLeft: 12, paddingRight: 12, alignItems: 'center' }}
               style={{ flex: 1 }}
             >
               <TouchableOpacity
-                className="bg-muted rounded-full p-2.5"
+                style={{ backgroundColor: colors.background, height: 33, paddingHorizontal: 4, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', }}
                 onPress={() => setShowFilterModal(true)}
               >
-                <MaterialCommunityIcons name="filter-variant" size={20} color={colors.foreground} />
+                <MaterialCommunityIcons name="tune-vertical" size={26} color={colors.foreground} />
               </TouchableOpacity>
 
               {/* Age Quick Filter */}
               <TouchableOpacity
-                className="bg-muted rounded-full px-3 py-2 flex-row items-center"
+                style={{ backgroundColor: colors.card, borderWidth: 2, borderColor: colors.foreground, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => {
                   setTempAgeMin(filters.ageMin);
                   setTempAgeMax(filters.ageMax);
@@ -2114,69 +2884,54 @@ export default function Discover() {
                   setShowIntentionDropdown(false);
                 }}
               >
-                <Text className="text-foreground text-sm font-medium">Age</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.age')}</Text>
                 <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
               </TouchableOpacity>
 
               {/* Intention Quick Filter */}
               <TouchableOpacity
-                className="bg-muted rounded-full px-3 py-2 flex-row items-center"
+                style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => {
                   setShowIntentionDropdown(!showIntentionDropdown);
                   setShowAgeSlider(false);
                 }}
               >
-                <Text className="text-foreground text-sm font-medium">Dating Intentions</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.datingIntentions')}</Text>
                 <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
               </TouchableOpacity>
 
               {/* Active Today Toggle */}
               <TouchableOpacity
-                className={`rounded-full px-3 py-2 flex-row items-center ${activeToday ? 'bg-lavender-500' : 'bg-muted'}`}
+                style={{ backgroundColor: activeToday ? '#A08AB7' : colors.card, borderWidth: 1, borderColor: activeToday ? '#A08AB7' : colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => {
-                  setActiveToday(!activeToday);
-                  loadProfiles();
+                  const newActiveToday = !activeToday;
+                  setActiveToday(newActiveToday);
+                  const newFilters = { ...filters, activeToday: newActiveToday };
+                  setFilters(newFilters);
+                  loadProfiles(undefined, undefined, newFilters);
                 }}
               >
                 <MaterialCommunityIcons name="clock-outline" size={16} color={activeToday ? 'white' : colors.foreground} style={{ marginRight: 4 }} />
-                <Text className={`text-sm font-medium ${activeToday ? 'text-white' : 'text-foreground'}`}>Active Today</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: activeToday ? '#fff' : colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.activeToday')}</Text>
               </TouchableOpacity>
-            </ScrollView>
 
-            {/* Right side - Search, Refresh */}
-            <View className="flex-row gap-2 ml-2">
-              {!isPremium && (
-                <TouchableOpacity
-                  className="bg-gold-500 rounded-full px-3 py-2 flex-row items-center gap-1"
-                  style={{ backgroundColor: '#FFD700' }}
-                  onPress={() => setShowPaywall(true)}
-                >
-                  <MaterialCommunityIcons name="crown" size={16} color="#A08AB7" />
-                  <Text className="text-lavender-500 font-sans-bold text-xs">Upgrade</Text>
-                </TouchableOpacity>
-              )}
+              {/* Search */}
               <TouchableOpacity
-                className="bg-muted rounded-full p-2.5"
+                style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => setShowSearchBar(!showSearchBar)}
               >
-                <MaterialCommunityIcons name="magnify" size={20} color={colors.foreground} />
+                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.search')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                className="bg-muted rounded-full p-2.5"
-                onPress={handleRefresh}
-              >
-                <MaterialCommunityIcons name="refresh" size={20} color={colors.foreground} />
-              </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
 
           {/* Age Slider Panel */}
           {showAgeSlider && (
-            <View className="mt-3 bg-card dark:bg-card rounded-xl shadow-lg border border-border p-4">
-              <Text className="text-foreground font-semibold mb-3">Age Range: {tempAgeMin} - {tempAgeMax}</Text>
+            <View className="mt-3 rounded-xl shadow-lg p-4" style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }}>
+              <Text className="font-semibold mb-3" style={{ color: colors.foreground }}>{t('discover.ageSlider.ageRange', { min: tempAgeMin, max: tempAgeMax })}</Text>
 
               <View className="mb-4">
-                <Text className="text-muted-foreground text-sm mb-2">Minimum: {tempAgeMin}</Text>
+                <Text className="text-sm mb-2" style={{ color: colors.mutedForeground }}>{t('discover.ageSlider.minimum', { value: tempAgeMin })}</Text>
                 <Slider
                   minimumValue={18}
                   maximumValue={80}
@@ -2184,13 +2939,13 @@ export default function Discover() {
                   value={tempAgeMin}
                   onValueChange={(value) => setTempAgeMin(Math.min(value, tempAgeMax - 1))}
                   minimumTrackTintColor="#A08AB7"
-                  maximumTrackTintColor="#E5E7EB"
+                  maximumTrackTintColor={colors.border}
                   thumbTintColor="#A08AB7"
                 />
               </View>
 
               <View className="mb-4">
-                <Text className="text-muted-foreground text-sm mb-2">Maximum: {tempAgeMax}</Text>
+                <Text className="text-sm mb-2" style={{ color: colors.mutedForeground }}>{t('discover.ageSlider.maximum', { value: tempAgeMax })}</Text>
                 <Slider
                   minimumValue={18}
                   maximumValue={80}
@@ -2198,27 +2953,32 @@ export default function Discover() {
                   value={tempAgeMax}
                   onValueChange={(value) => setTempAgeMax(Math.max(value, tempAgeMin + 1))}
                   minimumTrackTintColor="#A08AB7"
-                  maximumTrackTintColor="#E5E7EB"
+                  maximumTrackTintColor={colors.border}
                   thumbTintColor="#A08AB7"
                 />
               </View>
 
               <View className="flex-row gap-2">
                 <TouchableOpacity
-                  className="flex-1 bg-muted rounded-full py-2"
-                  onPress={() => setShowAgeSlider(false)}
+                  className="flex-1 rounded-full py-2" style={{ backgroundColor: colors.muted }}
+                  onPress={() => {
+                    setTempAgeMin(filters.ageMin);
+                    setTempAgeMax(filters.ageMax);
+                    setShowAgeSlider(false);
+                  }}
                 >
-                  <Text className="text-center text-foreground font-medium">Cancel</Text>
+                  <Text className="text-center font-medium" style={{ color: colors.foreground }}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   className="flex-1 bg-lavender-500 rounded-full py-2"
                   onPress={() => {
-                    setFilters({ ...filters, ageMin: tempAgeMin, ageMax: tempAgeMax });
+                    const newFilters = { ...filters, ageMin: tempAgeMin, ageMax: tempAgeMax };
+                    setFilters(newFilters);
                     setShowAgeSlider(false);
-                    loadProfiles();
+                    loadProfiles(undefined, undefined, newFilters);
                   }}
                 >
-                  <Text className="text-center text-white font-medium">Apply</Text>
+                  <Text className="text-center text-white font-medium">{t('filters.applyFilters')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2226,7 +2986,7 @@ export default function Discover() {
 
           {/* Intention Dropdown */}
           {showIntentionDropdown && (
-            <View className="absolute top-full left-24 mt-1 bg-card dark:bg-card rounded-xl shadow-lg border border-border z-50" style={{ minWidth: 120 }}>
+            <View className="absolute top-full left-24 mt-1 rounded-xl shadow-lg z-50" style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, minWidth: 120 }}>
               {INTENTIONS.map((intention, index) => (
                 <TouchableOpacity
                   key={index}
@@ -2237,8 +2997,8 @@ export default function Discover() {
                     loadProfiles();
                   }}
                 >
-                  <Text className={`text-sm ${selectedIntention === intention.value ? 'text-lavender-500 font-semibold' : 'text-foreground'}`}>
-                    {intention.label}
+                  <Text style={{ fontSize: 12, fontWeight: selectedIntention === intention.value ? '600' : '400', color: selectedIntention === intention.value ? '#A08AB7' : colors.foreground }}>
+                    {getIntentionLabel(intention.value)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -2248,12 +3008,12 @@ export default function Discover() {
           {/* Keyword Search Bar - Expanded when showSearchBar is true */}
           {showSearchBar && (
             <View className="mt-3">
-              <View className="flex-row items-center bg-muted rounded-full px-4 py-2">
-                <MaterialCommunityIcons name="magnify" size={20} color="#71717A" />
+              <View className="flex-row items-center rounded-full px-4 py-2" style={{ backgroundColor: colors.muted }}>
+                <MaterialCommunityIcons name="magnify" size={20} color={colors.mutedForeground} />
                 <TextInput
-                  className="flex-1 ml-2 text-foreground text-base"
-                  placeholder="Search by keyword (e.g., 'travel', 'vegan')"
-                  placeholderTextColor="#A1A1AA"
+                  className="flex-1 ml-2 text-base" style={{ color: colors.foreground }}
+                  placeholder={t('discover.search.placeholder')}
+                  placeholderTextColor={colors.mutedForeground}
                   value={searchKeyword}
                   onChangeText={setSearchKeyword}
                   onSubmitEditing={handleSearch}
@@ -2262,12 +3022,12 @@ export default function Discover() {
                 />
                 {isSearchMode && (
                   <TouchableOpacity onPress={handleClearSearch} className="ml-2">
-                    <MaterialCommunityIcons name="close-circle" size={20} color="#71717A" />
+                    <MaterialCommunityIcons name="close-circle" size={20} color={colors.mutedForeground} />
                   </TouchableOpacity>
                 )}
                 {!isSearchMode && searchKeyword.trim() && (
                   <TouchableOpacity onPress={handleSearch} className="ml-2 bg-lavender-500 rounded-full px-3 py-1">
-                    <Text className="text-white font-semibold text-sm">Search</Text>
+                    <Text className="text-white font-semibold text-sm">{t('discover.search.button')}</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -2279,63 +3039,465 @@ export default function Discover() {
                   }}
                   className="ml-2"
                 >
-                  <MaterialCommunityIcons name="close" size={20} color="#71717A" />
+                  <MaterialCommunityIcons name="close" size={20} color={colors.mutedForeground} />
                 </TouchableOpacity>
               </View>
               {isSearchMode && (
-                <Text className="text-muted-foreground text-xs mt-2 text-center">
-                  💡 Tip: Like or pass to continue searching. Clear search to see all profiles.
+                <Text className="text-xs mt-2 text-center" style={{ color: colors.mutedForeground }}>
+                  {t('discover.search.tip')}
                 </Text>
               )}
             </View>
           )}
         </View>
 
-        {/* Empty State */}
-        <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-6xl mb-6">✨</Text>
-          <Text className="text-2xl font-display-bold text-foreground mb-3 text-center">
-            {isSearchMode ? `No results for "${searchKeyword}"` : t('discover.allCaughtUp')}
-          </Text>
-          <Text className="text-muted-foreground mb-8 text-center text-lg font-sans">
-            {isSearchMode
-              ? "Try different keywords or adjust your filters to find more matches."
-              : t('discover.checkBackSoon')}
-          </Text>
+        {/* Likes Teaser Banner — drive free users to upgrade */}
+        {pendingLikesCount > 0 && !isPremium && !isPlatinum && (
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/likes')}
+            activeOpacity={0.85}
+            style={{
+              marginHorizontal: 12, marginBottom: 8, borderRadius: 14,
+              backgroundColor: '#A08AB7', paddingVertical: 12, paddingHorizontal: 16,
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <MaterialCommunityIcons name="heart-multiple" size={22} color="#FFD700" />
+              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>
+                {pendingLikesCount === 1
+                  ? t('likesTeaser.personLikesYou')
+                  : t('likesTeaser.peopleLikeYou', { count: pendingLikesCount })}
+              </Text>
+            </View>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 12 }}>
+                {t('likesTeaser.seeWho', { defaultValue: 'See Who' })}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
+        {/* Smart Empty State with Dynamic Recommendations */}
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, justifyContent: 'center' }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#A08AB7" />
+          }
+        >
           {isSearchMode ? (
-            <TouchableOpacity
-              className="bg-lavender-500 rounded-full py-4 px-8 shadow-lg"
-              onPress={handleClearSearch}
-            >
-              <Text className="text-white font-sans-bold text-lg">Clear Search</Text>
-            </TouchableOpacity>
-          ) : (
-            <View className="items-center gap-4">
+            /* Search Mode Empty State */
+            <View className="items-center">
+              <Text className="text-6xl mb-4">🔍</Text>
+              <Text className="text-2xl font-display-bold mb-3 text-center" style={{ color: colors.foreground }}>
+                {t('discover.search.noResults', { keyword: searchKeyword })}
+              </Text>
+              <Text className="mb-6 text-center text-base font-sans" style={{ color: colors.mutedForeground }}>
+                {t('discover.search.noResultsHint')}
+              </Text>
               <TouchableOpacity
                 className="bg-lavender-500 rounded-full py-4 px-8 shadow-lg"
-                onPress={() => setShowSearchBar(true)}
+                onPress={handleClearSearch}
               >
-                <Text className="text-white font-sans-bold text-lg">Search by Keyword</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="border-2 border-lavender-500 rounded-full py-4 px-8"
-                onPress={handleRefresh}
-              >
-                <Text className="text-lavender-500 font-sans-bold text-lg">{t('discover.refresh')}</Text>
+                <Text className="text-white font-sans-bold text-lg">{t('discover.search.clearSearch')}</Text>
               </TouchableOpacity>
             </View>
+          ) : !isProfileComplete ? (
+            /* Finish Onboarding — dominant CTA when profile is incomplete */
+            <View className="items-center" style={{ paddingHorizontal: 8 }}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(160, 138, 183, 0.12)' }} className="items-center justify-center">
+                <MaterialCommunityIcons name="pencil-plus-outline" size={32} color="#A08AB7" />
+              </View>
+              <Text className="text-center" style={{ fontSize: 22, fontWeight: '700', letterSpacing: -0.3, marginTop: 16, marginBottom: 8, color: colors.foreground }}>
+                {t('discover.completeProfile.title')}
+              </Text>
+              <Text className="text-center font-sans" style={{ fontSize: 15, lineHeight: 22, maxWidth: 300, marginBottom: 24, color: colors.mutedForeground }}>
+                {t('discover.completeProfile.message')}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  const destination = returnRoute || '/(onboarding)/onboarding';
+                  exitPreviewMode();
+                  router.replace(destination as any);
+                }}
+                style={{
+                  backgroundColor: '#A08AB7',
+                  paddingVertical: 14,
+                  paddingHorizontal: 36,
+                  borderRadius: 999,
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600', letterSpacing: 0.1 }}>
+                  {t('discover.completeProfile.button')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* Smart Recommendations System */
+            <View>
+              {/* Hero Section */}
+              <View className="items-center" style={{ marginBottom: 24 }}>
+                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(160, 138, 183, 0.12)' }} className="items-center justify-center" >
+                  <MaterialCommunityIcons name="check-circle-outline" size={32} color="#A08AB7" />
+                </View>
+                <Text className="text-center" style={{ fontSize: 24, fontWeight: '700', letterSpacing: -0.5, marginTop: 16, marginBottom: 6, color: colors.foreground }}>
+                  {t('discover.emptyState.allCaughtUp')}
+                </Text>
+                <Text className="text-center font-sans" style={{ fontSize: 15, lineHeight: 21, maxWidth: 280, color: colors.mutedForeground }}>
+                  {t('discover.emptyState.checkBack')}
+                </Text>
+              </View>
+
+              {/* Premium CTA Banner */}
+              {!isPremium && (
+                <TouchableOpacity
+                  style={{
+                    borderRadius: 16,
+                    overflow: 'hidden',
+                    marginBottom: 24,
+                    backgroundColor: '#A08AB7',
+                    shadowColor: '#A08AB7',
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 12,
+                    elevation: 5,
+                  }}
+                  onPress={() => {
+                    trackEvent('empty_state_premium_cta_clicked', { source: 'discover_empty_state' });
+                    setShowPaywall(true);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16 }}>
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <MaterialCommunityIcons name="crown" size={18} color="rgba(255,255,255,0.9)" />
+                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginLeft: 6 }}>
+                          {t('discover.premiumCta.goPremium')}
+                        </Text>
+                      </View>
+                      <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 18 }}>
+                        {t('discover.premiumCta.description')}
+                      </Text>
+                    </View>
+                    <View style={{
+                      backgroundColor: '#fff',
+                      borderRadius: 20,
+                      paddingHorizontal: 18,
+                      paddingVertical: 10,
+                    }}>
+                      <Text style={{ color: '#A08AB7', fontSize: 14, fontWeight: '700' }}>{t('discover.premiumCta.upgrade')}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Smart Recommendations */}
+              {smartRecommendations.length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                <Text className="uppercase" style={{ fontSize: 12, fontWeight: '600', letterSpacing: 1.2, textAlign: 'center', marginBottom: 10, color: colors.mutedForeground }}>
+                  {t('discover.recommendations.expandReach')}
+                </Text>
+
+                <View style={{ gap: 8 }}>
+                  {smartRecommendations.map((rec, index) => {
+                    const getIcon = () => {
+                      switch (rec.type) {
+                        case 'distance': return 'map-marker-radius';
+                        case 'age': return 'calendar-range';
+                        case 'gender': return 'account-plus-outline';
+                        case 'global': return 'earth';
+                        default: return 'star';
+                      }
+                    };
+
+                    const getTitle = () => {
+                      switch (rec.type) {
+                        case 'distance':
+                          return t('discover.recommendations.increaseDistance', { count: rec.increment });
+                        case 'age':
+                          return t('discover.recommendations.widenAge', { count: rec.increment });
+                        case 'gender':
+                          return t('discover.recommendations.includeGender', { gender: rec.addedGender });
+                        case 'global':
+                          return t('discover.recommendations.searchGlobally');
+                        default:
+                          return t('discover.recommendations.expandSearch');
+                      }
+                    };
+
+                    const getSubtitle = () => {
+                      const count = rec.count || 0;
+                      if (count >= 1000) return t('discover.recommendations.newProfilesK', { count: parseFloat((count / 1000).toFixed(1)) });
+                      if (count === 1) return t('discover.recommendations.newProfileSingular');
+                      if (count > 0) return t('discover.recommendations.newProfiles', { count });
+                      return '';
+                    };
+
+                    const handlePress = async () => {
+
+                      try {
+                        if (rec.type === 'distance' && rec.newDistance) {
+
+                          setFilters({ ...filters, maxDistance: rec.newDistance });
+                          setCurrentIndex(0);
+                          trackEvent('smart_recommendation_clicked', {
+                            type: 'distance',
+                            increment: rec.increment,
+                            count: rec.count
+                          });
+                          loadProfiles(undefined, undefined, { maxDistance: rec.newDistance });
+                        } else if (rec.type === 'age' && rec.newAgeMin && rec.newAgeMax) {
+
+                          setFilters({ ...filters, ageMin: rec.newAgeMin, ageMax: rec.newAgeMax });
+                          setCurrentIndex(0);
+                          trackEvent('smart_recommendation_clicked', {
+                            type: 'age',
+                            increment: rec.increment,
+                            count: rec.count
+                          });
+                          loadProfiles(undefined, undefined, { ageMin: rec.newAgeMin, ageMax: rec.newAgeMax });
+                        } else if (rec.type === 'gender' && rec.addedGender) {
+                          const addedGender = rec.addedGender;
+                          Alert.alert(
+                            t('discover.recommendations.updatePreferencesTitle'),
+                            t('discover.recommendations.updatePreferencesMessage', { gender: addedGender }),
+                            [
+                              { text: t('common.cancel'), style: 'cancel' },
+                              {
+                                text: t('discover.recommendations.add'),
+                                onPress: async () => {
+                                  try {
+                                    const { data: currentPrefs, error: fetchError } = await supabase
+                                      .from('preferences')
+                                      .select('gender_preference')
+                                      .eq('profile_id', currentProfileId)
+                                      .maybeSingle();
+
+                                    if (fetchError) {
+                                      console.error('[Discovery] Error fetching preferences:', fetchError);
+                                      showToast({ type: 'error', title: t('common.error'), message: t('toast.filterError') });
+                                      return;
+                                    }
+
+                                    const currentGenderPrefs = currentPrefs?.gender_preference || [];
+                                    // Defensive expand: if addedGender is a UI label ("Men"), convert
+                                    // to the canonical DB value ("Man") before writing.
+                                    const newGenderPrefs = expandGenderPreference([...currentGenderPrefs, addedGender]);
+
+                                    const { error: updateError } = await supabase
+                                      .from('preferences')
+                                      .update({ gender_preference: newGenderPrefs })
+                                      .eq('profile_id', currentProfileId);
+
+                                    if (updateError) {
+                                      console.error('[Discovery] Error updating gender preference:', updateError);
+                                      showToast({ type: 'error', title: t('common.error'), message: t('toast.filterError') });
+                                      return;
+                                    }
+
+                                    trackEvent('smart_recommendation_clicked', {
+                                      type: 'gender',
+                                      addedGender,
+                                      count: rec.count
+                                    });
+                                    loadProfiles();
+                                  } catch (err) {
+                                    console.error('[Discovery] Unexpected error adding gender:', err);
+                                    showToast({ type: 'error', title: t('common.error'), message: t('toast.genericError') });
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        } else if (rec.type === 'global') {
+                          if (!isPremium && !isPlatinum) {
+                            Alert.alert(
+                              t('toast.globalSearchPremiumTitle'),
+                              t('toast.globalSearchPremiumMessage'),
+                              [
+                                { text: t('common.upgrade'), onPress: () => router.push('/settings/subscription') },
+                                { text: t('common.ok'), style: 'cancel' },
+                              ]
+                            );
+                            return;
+                          }
+
+                          Alert.alert(
+                            'Enable Global Search?',
+                            'Search for matches anywhere in the world? You can change this anytime in Settings > Matching Preferences.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Enable',
+                                onPress: async () => {
+                                  try {
+                                    const { error } = await supabase
+                                      .from('preferences')
+                                      .update({ search_globally: true })
+                                      .eq('profile_id', currentProfileId);
+
+                                    if (error) {
+                                      console.error('[Discovery] Error enabling global search:', error);
+                                      showToast({ type: 'error', title: t('common.error'), message: t('toast.globalSearchError') });
+                                      return;
+                                    }
+
+                                    trackEvent('smart_recommendation_clicked', {
+                                      type: 'global',
+                                      count: rec.count
+                                    });
+                                    loadProfiles();
+                                  } catch (err) {
+                                    console.error('[Discovery] Unexpected error enabling global search:', err);
+                                    showToast({ type: 'error', title: t('common.error'), message: t('toast.genericError') });
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }
+                      } catch (error) {
+                        console.error('[Discovery] Unexpected error in handlePress:', error);
+                        showToast({ type: 'error', title: t('common.error'), message: t('toast.genericError') });
+                      }
+                    };
+
+                    const subtitle = getSubtitle();
+                    const isGlobal = rec.type === 'global';
+
+                    return (
+                      <TouchableOpacity
+                        key={`recommendation-${index}`}
+                        style={{
+                          backgroundColor: isGlobal ? '#A08AB7' : colors.card,
+                          borderRadius: 14,
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          shadowColor: isGlobal ? '#A08AB7' : '#000',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: isGlobal ? 0.2 : 0.05,
+                          shadowRadius: isGlobal ? 10 : 6,
+                          elevation: isGlobal ? 4 : 2,
+                        }}
+                        onPress={handlePress}
+                        activeOpacity={0.7}
+                      >
+                        <View style={{
+                          width: 38, height: 38, borderRadius: 11,
+                          backgroundColor: isGlobal ? 'rgba(255,255,255,0.2)' : 'rgba(160, 138, 183, 0.12)',
+                          alignItems: 'center', justifyContent: 'center', marginRight: 12,
+                        }}>
+                          <MaterialCommunityIcons name={getIcon()} size={20} color={isGlobal ? '#fff' : '#A08AB7'} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: isGlobal ? '#fff' : colors.foreground, fontSize: 15, fontWeight: '600' }} numberOfLines={1}>
+                            {getTitle()}
+                          </Text>
+                        </View>
+                        {subtitle ? (
+                          <Text style={{ color: isGlobal ? 'rgba(255,255,255,0.8)' : '#A08AB7', fontSize: 12, fontWeight: '600', marginRight: 6 }}>{subtitle}</Text>
+                        ) : null}
+                        {isGlobal && !isPremium && !isPlatinum && (
+                          <View style={{ backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, marginRight: 6 }}>
+                            <Text style={{ color: '#A08AB7', fontSize: 10, fontWeight: '700' }}>PRO</Text>
+                          </View>
+                        )}
+                        <MaterialCommunityIcons name="chevron-right" size={20} color={isGlobal ? 'rgba(255,255,255,0.6)' : colors.grey3} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+              )}
+
+              {/* Quick Actions */}
+              <View style={{ gap: 8 }}>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: colors.card,
+                    borderRadius: 14,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 6,
+                    elevation: 2,
+                  }}
+                  onPress={() => {
+                    trackEvent('empty_state_recommendation_clicked', { action: 'open_filters' });
+                    setShowFilterModal(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{
+                    width: 38, height: 38, borderRadius: 11,
+                    backgroundColor: 'rgba(160, 138, 183, 0.12)',
+                    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+                  }}>
+                    <MaterialCommunityIcons name="tune-variant" size={20} color="#A08AB7" />
+                  </View>
+                  <Text style={{ color: colors.foreground, fontSize: 15, fontWeight: '600', flex: 1 }}>Adjust Filters</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.grey3} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: colors.card,
+                    borderRadius: 14,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 6,
+                    elevation: 2,
+                  }}
+                  onPress={() => {
+                    trackEvent('empty_state_action_clicked', { action: 'search' });
+                    setShowSearchBar(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{
+                    width: 38, height: 38, borderRadius: 11,
+                    backgroundColor: 'rgba(160, 138, 183, 0.12)',
+                    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+                  }}>
+                    <MaterialCommunityIcons name="magnify" size={20} color="#A08AB7" />
+                  </View>
+                  <Text style={{ color: colors.foreground, fontSize: 15, fontWeight: '600', flex: 1 }}>Search by Keyword</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.grey3} />
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
-        </View>
+        </ScrollView>
 
         {/* Filter Modal */}
         <FilterModal
           visible={showFilterModal}
           onClose={() => setShowFilterModal(false)}
-          onApply={(newFilters) => {
+          onApply={async (newFilters) => {
             setFilters(newFilters);
             setShowFilterModal(false);
-            handleRefresh();
+            filtersSnapshotRef.current = computeFiltersHash(newFilters);
+            // Clear stale profile queue immediately so the user can't swipe
+            // on pre-filter candidates during the refetch window.
+            setProfiles([]);
+            setCurrentIndex(0);
+            // Await persistFilters so the DB write completes (and the cache
+            // invalidation trigger fires) before we re-query.
+            await persistFilters(newFilters);
+            loadProfiles(undefined, undefined, newFilters);
           }}
           currentFilters={filters}
           isPremium={isPremium}
@@ -2358,334 +3520,355 @@ export default function Discover() {
 
   const currentProfile = profiles[currentIndex];
 
+  // Guard against undefined profile (race condition during loading/refresh)
+  if (!currentProfile) {
+    return null;
+  }
+
   return (
-    <View className="flex-1 bg-background">
-      {/* Header */}
-      <View className="bg-background dark:bg-background pb-4 px-6 border-b border-border" style={{ paddingTop: insets.top + 16 }}>
-        {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
-        <View className="flex-row items-center mb-3">
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8 }}
-            style={{ flex: 1 }}
-          >
-            <TouchableOpacity
-              className="bg-muted rounded-full p-2.5"
-              onPress={() => setShowFilterModal(true)}
-            >
-              <MaterialCommunityIcons name="filter-variant" size={20} color={colors.foreground} />
-            </TouchableOpacity>
-
-            {/* Age Quick Filter */}
-            <TouchableOpacity
-              className="bg-muted rounded-full px-3 py-2 flex-row items-center"
-              onPress={() => {
-                setTempAgeMin(filters.ageMin);
-                setTempAgeMax(filters.ageMax);
-                setShowAgeSlider(!showAgeSlider);
-                setShowIntentionDropdown(false);
-              }}
-            >
-              <Text className="text-foreground text-sm font-medium">Age</Text>
-              <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
-
-            {/* Intention Quick Filter */}
-            <TouchableOpacity
-              className="bg-muted rounded-full px-3 py-2 flex-row items-center"
-              onPress={() => {
-                setShowIntentionDropdown(!showIntentionDropdown);
-                setShowAgeSlider(false);
-              }}
-            >
-              <Text className="text-foreground text-sm font-medium">Dating Intentions</Text>
-              <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
-
-            {/* Active Today Toggle */}
-            <TouchableOpacity
-              className={`rounded-full px-3 py-2 flex-row items-center ${activeToday ? 'bg-lavender-500' : 'bg-muted'}`}
-              onPress={() => {
-                setActiveToday(!activeToday);
-                loadProfiles();
-              }}
-            >
-              <MaterialCommunityIcons name="clock-outline" size={16} color={activeToday ? 'white' : colors.foreground} style={{ marginRight: 4 }} />
-              <Text className={`text-sm font-medium ${activeToday ? 'text-white' : 'text-foreground'}`}>Active Today</Text>
-            </TouchableOpacity>
-          </ScrollView>
-
-          {/* Right side - Search, Refresh */}
-          <View className="flex-row gap-2 ml-2">
-            {!isPremium && (
-              <TouchableOpacity
-                className="bg-gold-500 rounded-full px-3 py-2 flex-row items-center gap-1"
-                style={{ backgroundColor: '#FFD700' }}
-                onPress={() => setShowPaywall(true)}
-              >
-                <MaterialCommunityIcons name="crown" size={16} color="#A08AB7" />
-                <Text className="text-lavender-500 font-sans-bold text-xs">Upgrade</Text>
-              </TouchableOpacity>
-            )}
-            {isPlatinum && (
-              <TouchableOpacity
-                className="rounded-full p-2.5"
-                style={{ backgroundColor: 'rgba(255, 215, 0, 0.3)' }}
-                onPress={() => setShowBoostModal(true)}
-              >
-                <MaterialCommunityIcons name="rocket" size={20} color="#FFD700" />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              className="bg-muted rounded-full p-2.5"
-              onPress={() => setShowSearchBar(!showSearchBar)}
-            >
-              <MaterialCommunityIcons name="magnify" size={20} color={colors.foreground} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="bg-muted rounded-full p-2.5"
-              onPress={handleRefresh}
-            >
-              <MaterialCommunityIcons name="refresh" size={20} color={colors.foreground} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Age Slider Panel */}
-        {showAgeSlider && (
-          <View className="mt-3 bg-card dark:bg-card rounded-xl shadow-lg border border-border p-4">
-            <Text className="text-foreground font-semibold mb-3">Age Range: {tempAgeMin} - {tempAgeMax}</Text>
-
-            <View className="mb-4">
-              <Text className="text-muted-foreground text-sm mb-2">Minimum: {tempAgeMin}</Text>
-              <Slider
-                minimumValue={18}
-                maximumValue={80}
-                step={1}
-                value={tempAgeMin}
-                onValueChange={(value) => setTempAgeMin(Math.min(value, tempAgeMax - 1))}
-                minimumTrackTintColor="#A08AB7"
-                maximumTrackTintColor="#E5E7EB"
-                thumbTintColor="#A08AB7"
-              />
-            </View>
-
-            <View className="mb-4">
-              <Text className="text-muted-foreground text-sm mb-2">Maximum: {tempAgeMax}</Text>
-              <Slider
-                minimumValue={18}
-                maximumValue={80}
-                step={1}
-                value={tempAgeMax}
-                onValueChange={(value) => setTempAgeMax(Math.max(value, tempAgeMin + 1))}
-                minimumTrackTintColor="#A08AB7"
-                maximumTrackTintColor="#E5E7EB"
-                thumbTintColor="#A08AB7"
-              />
-            </View>
-
-            <View className="flex-row gap-2">
-              <TouchableOpacity
-                className="flex-1 bg-muted rounded-full py-2"
-                onPress={() => setShowAgeSlider(false)}
-              >
-                <Text className="text-center text-foreground font-medium">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-1 bg-lavender-500 rounded-full py-2"
-                onPress={() => {
-                  setFilters({ ...filters, ageMin: tempAgeMin, ageMax: tempAgeMax });
-                  setShowAgeSlider(false);
-                  loadProfiles();
-                }}
-              >
-                <Text className="text-center text-white font-medium">Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Intention Dropdown */}
-        {showIntentionDropdown && (
-          <View className="absolute top-full left-24 mt-1 bg-card dark:bg-card rounded-xl shadow-lg border border-border z-50" style={{ minWidth: 120 }}>
-            {INTENTIONS.map((intention, index) => (
-              <TouchableOpacity
-                key={index}
-                className={`px-4 py-3 ${index !== INTENTIONS.length - 1 ? 'border-b border-gray-100' : ''}`}
-                onPress={() => {
-                  setSelectedIntention(intention.value);
-                  setShowIntentionDropdown(false);
-                  loadProfiles();
-                }}
-              >
-                <Text className={`text-sm ${selectedIntention === intention.value ? 'text-lavender-500 font-semibold' : 'text-foreground'}`}>
-                  {intention.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Keyword Search Bar - Expanded when showSearchBar is true */}
-        {showSearchBar && (
-          <View className="mt-3">
-            <View className="flex-row items-center bg-muted rounded-full px-4 py-2">
-              <MaterialCommunityIcons name="magnify" size={20} color="#71717A" />
-              <TextInput
-                className="flex-1 ml-2 text-foreground text-base"
-                placeholder="Search by keyword (e.g., 'travel', 'vegan')"
-                placeholderTextColor="#A1A1AA"
-                value={searchKeyword}
-                onChangeText={setSearchKeyword}
-                onSubmitEditing={handleSearch}
-                returnKeyType="search"
-                autoFocus
-              />
-              {isSearchMode && (
-                <TouchableOpacity onPress={handleClearSearch} className="ml-2">
-                  <MaterialCommunityIcons name="close-circle" size={20} color="#71717A" />
-                </TouchableOpacity>
-              )}
-              {!isSearchMode && searchKeyword.trim() && (
-                <TouchableOpacity onPress={handleSearch} className="ml-2 bg-lavender-500 rounded-full px-3 py-1">
-                  <Text className="text-white font-semibold text-sm">Search</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                onPress={() => {
-                  setShowSearchBar(false);
-                  if (isSearchMode) {
-                    handleClearSearch();
-                  }
-                }}
-                className="ml-2"
-              >
-                <MaterialCommunityIcons name="close" size={20} color="#71717A" />
-              </TouchableOpacity>
-            </View>
-            {isSearchMode && (
-              <Text className="text-muted-foreground text-xs mt-2 text-center">
-                💡 Tip: Like or pass to continue searching. Clear search to see all profiles.
-              </Text>
-            )}
-          </View>
-        )}
-      </View>
-
-      {/* Verification Banner - Prompt unverified users to verify */}
-      {showVerificationBanner && !isPhotoVerified && (
-        <VerificationBanner onDismiss={handleDismissVerificationBanner} />
-      )}
-
-      {/* Photo Review Required Banner */}
-      {photoReviewRequired && (
-        <TouchableOpacity
-          className="mx-4 mt-2 p-4 bg-amber-50 border border-amber-200 rounded-xl flex-row items-center"
-          onPress={() => router.push('/settings/edit-profile')}
-          activeOpacity={0.8}
-        >
-          <View className="w-10 h-10 bg-amber-100 rounded-full items-center justify-center mr-3">
-            <MaterialCommunityIcons name="camera-off" size={20} color="#F59E0B" />
-          </View>
-          <View className="flex-1">
-            <Text className="text-amber-900 font-semibold text-sm">Profile Hidden</Text>
-            <Text className="text-amber-700 text-xs mt-0.5">Your profile is temporarily hidden. Tap to upload new photos.</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
-        </TouchableOpacity>
-      )}
-
-      {/* Complete Profile Banner - For users who haven't finished onboarding */}
-      {showOnboardingBanner && !isProfileComplete && (
-        <TouchableOpacity
-          className="mx-4 mt-2 p-4 bg-lavender-50 border border-lavender-200 rounded-xl flex-row items-center"
-          onPress={() => router.push('/(onboarding)/basic-info')}
-          activeOpacity={0.8}
-        >
-          <View className="w-10 h-10 bg-lavender-100 rounded-full items-center justify-center mr-3">
-            <MaterialCommunityIcons name="account-edit" size={20} color="#9B87CE" />
-          </View>
-          <View className="flex-1">
-            <Text className="text-lavender-900 font-semibold text-sm">Complete Your Profile</Text>
-            <Text className="text-lavender-700 text-xs mt-0.5">Finish setting up to start matching. You can browse but can't like or be seen yet.</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#9B87CE" />
-        </TouchableOpacity>
-      )}
-
-      {/* Card Stack */}
-      <View className="flex-1 relative">
-        {/* Show current card and one behind it for depth */}
-        {currentIndex + 1 < profiles.length && (
-          <View className="absolute w-full h-full px-4 pt-4" style={{ opacity: 0.5, transform: [{ scale: 0.95 }] }}>
-            <View className="flex-1 bg-gray-300 rounded-3xl" />
-          </View>
-        )}
-
-        <SwipeCard
+    <View className="flex-1" style={{ backgroundColor: colors.background, paddingRight: rightSafeArea }}>
+      {/* Hinge-Style Scrollable Profile View */}
+      <Animated.View style={{ flex: 1, opacity: profileOpacity }}>
+        <DiscoveryProfileView
+          ref={discoveryProfileRef}
           key={currentProfile.id}
           profile={currentProfile as any}
-          onSwipeLeft={handleSwipeLeft}
-          onSwipeRight={handleSwipeRight}
-          onSwipeUp={handleSwipeUp}
-          onPress={handleProfilePress}
+          preferences={currentProfilePreferences}
+          compatibilityBreakdown={currentProfile.compatibilityBreakdown}
           distanceUnit={distanceUnit}
+          heightUnit={heightUnit}
+          onBlock={handleBlock}
+          onReport={handleReport}
+          onPass={handleSwipeLeft}
+          onLike={(_likedContent, message, likedContentData) => handleSwipeRight(message, likedContentData)}
+          onSuperLike={handleSwipeUp}
+          onRewind={handleRewind}
+          canRewind={!!lastSwipe && isPremium}
           isAdmin={isAdmin}
+          superLikesRemaining={superLikesRemaining}
+          likesRemaining={DAILY_LIKE_LIMIT - likeCount}
+          dailyLikeLimit={DAILY_LIKE_LIMIT}
+          isPremium={isPremium}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          renderHeader={() => (
+            <>
+              {/* Header with Search/Filter Controls */}
+              <View className="pt-4 pb-0" style={{ backgroundColor: colors.background, marginHorizontal: -16 }}>
+                {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
+                <View className="flex-row items-center mb-3">
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 6, paddingLeft: 12, paddingRight: 12, alignItems: 'center' }}
+                    style={{ flex: 1 }}
+                  >
+                    <TouchableOpacity
+                      className="rounded-full p-2.5" style={{ backgroundColor: colors.background }}
+                      onPress={() => setShowFilterModal(true)}
+                    >
+                      <MaterialCommunityIcons name="tune-vertical" size={24} color={colors.foreground} />
+                    </TouchableOpacity>
+
+                    {/* Age Quick Filter */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: colors.card, borderWidth: 2, borderColor: colors.foreground, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      onPress={() => {
+                        setTempAgeMin(filters.ageMin);
+                        setTempAgeMax(filters.ageMax);
+                        setShowAgeSlider(!showAgeSlider);
+                        setShowIntentionDropdown(false);
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.age')}</Text>
+                      <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
+                    </TouchableOpacity>
+
+                    {/* Intention Quick Filter */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      onPress={() => {
+                        setShowIntentionDropdown(!showIntentionDropdown);
+                        setShowAgeSlider(false);
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.datingIntentions')}</Text>
+                      <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
+                    </TouchableOpacity>
+
+                    {/* Active Today Toggle */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: activeToday ? '#A08AB7' : colors.card, borderWidth: 1, borderColor: activeToday ? '#A08AB7' : colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      onPress={() => {
+                        const newActiveToday = !activeToday;
+                        setActiveToday(newActiveToday);
+                        const newFilters = { ...filters, activeToday: newActiveToday };
+                        setFilters(newFilters);
+                        loadProfiles(undefined, undefined, newFilters);
+                      }}
+                    >
+                      <MaterialCommunityIcons name="clock-outline" size={16} color={activeToday ? 'white' : colors.foreground} style={{ marginRight: 4 }} />
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: activeToday ? '#fff' : colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.activeToday')}</Text>
+                    </TouchableOpacity>
+
+                    {/* Search */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      onPress={() => setShowSearchBar(!showSearchBar)}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.search')}</Text>
+                    </TouchableOpacity>
+
+                    {/* Daily likes remaining — free users only. Gives clear
+                        feedback that the 5/day limit is counting down, and
+                        lets them tap through to the paywall if they want
+                        unlimited. */}
+                    {!isPremium && !isPlatinum && (() => {
+                      const remaining = Math.max(0, DAILY_LIKE_LIMIT - likeCount);
+                      const depleted = remaining === 0;
+                      return (
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: depleted ? '#EF4444' : '#A08AB7',
+                            paddingHorizontal: 14,
+                            height: 33,
+                            borderRadius: 999,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                          }}
+                          onPress={() => setShowPaywall(true)}
+                          activeOpacity={0.85}
+                        >
+                          <MaterialCommunityIcons name="heart" size={14} color="#fff" style={{ marginRight: 4 }} />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff', lineHeight: 14 }}>
+                            {remaining}/{DAILY_LIKE_LIMIT}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })()}
+
+                    {isPlatinum && (
+                      <TouchableOpacity
+                        className="rounded-full p-2.5"
+                        style={{ backgroundColor: 'rgba(255, 215, 0, 0.3)' }}
+                        onPress={() => setShowBoostModal(true)}
+                      >
+                        <MaterialCommunityIcons name="rocket" size={20} color="#FFD700" />
+                      </TouchableOpacity>
+                    )}
+                  </ScrollView>
+                </View>
+
+                {/* Age Slider Panel */}
+                {showAgeSlider && (
+                  <View className="mt-3 rounded-xl shadow-lg p-4" style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }}>
+                    <Text className="font-semibold mb-3" style={{ color: colors.foreground }}>{t('discover.ageSlider.ageRange', { min: tempAgeMin, max: tempAgeMax })}</Text>
+
+                    <View className="mb-4">
+                      <Text className="text-sm mb-2" style={{ color: colors.mutedForeground }}>{t('discover.ageSlider.minimum', { value: tempAgeMin })}</Text>
+                      <Slider
+                        minimumValue={18}
+                        maximumValue={80}
+                        step={1}
+                        value={tempAgeMin}
+                        onValueChange={(value) => setTempAgeMin(Math.min(value, tempAgeMax - 1))}
+                        minimumTrackTintColor="#A08AB7"
+                        maximumTrackTintColor={colors.border}
+                        thumbTintColor="#A08AB7"
+                      />
+                    </View>
+
+                    <View className="mb-4">
+                      <Text className="text-sm mb-2" style={{ color: colors.mutedForeground }}>{t('discover.ageSlider.maximum', { value: tempAgeMax })}</Text>
+                      <Slider
+                        minimumValue={18}
+                        maximumValue={80}
+                        step={1}
+                        value={tempAgeMax}
+                        onValueChange={(value) => setTempAgeMax(Math.max(value, tempAgeMin + 1))}
+                        minimumTrackTintColor="#A08AB7"
+                        maximumTrackTintColor={colors.border}
+                        thumbTintColor="#A08AB7"
+                      />
+                    </View>
+
+                    <View className="flex-row gap-2">
+                      <TouchableOpacity
+                        className="flex-1 rounded-full py-2" style={{ backgroundColor: colors.muted }}
+                        onPress={() => {
+                          setTempAgeMin(filters.ageMin);
+                          setTempAgeMax(filters.ageMax);
+                          setShowAgeSlider(false);
+                        }}
+                      >
+                        <Text className="text-center font-medium" style={{ color: colors.foreground }}>{t('common.cancel')}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        className="flex-1 bg-lavender-500 rounded-full py-2"
+                        onPress={() => {
+                          const newFilters = { ...filters, ageMin: tempAgeMin, ageMax: tempAgeMax };
+                          setFilters(newFilters);
+                          setShowAgeSlider(false);
+                          loadProfiles(undefined, undefined, newFilters);
+                        }}
+                      >
+                        <Text className="text-center text-white font-medium">{t('filters.applyFilters')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* Intention Dropdown */}
+                {showIntentionDropdown && (
+                  <View className="absolute top-full left-24 mt-1 rounded-xl shadow-lg z-50" style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, minWidth: 120 }}>
+                    {INTENTIONS.map((intention, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        className={`px-4 py-3 ${index !== INTENTIONS.length - 1 ? 'border-b border-gray-100' : ''}`}
+                        onPress={() => {
+                          setSelectedIntention(intention.value);
+                          setShowIntentionDropdown(false);
+                          loadProfiles();
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: selectedIntention === intention.value ? '600' : '400', color: selectedIntention === intention.value ? '#A08AB7' : colors.foreground }}>
+                          {getIntentionLabel(intention.value)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Keyword Search Bar - Expanded when showSearchBar is true */}
+                {showSearchBar && (
+                  <View className="mt-3">
+                    <View className="flex-row items-center rounded-full px-4 py-2" style={{ backgroundColor: colors.muted }}>
+                      <MaterialCommunityIcons name="magnify" size={20} color={colors.mutedForeground} />
+                      <TextInput
+                        className="flex-1 ml-2 text-base" style={{ color: colors.foreground }}
+                        placeholder={t('discover.search.placeholder')}
+                        placeholderTextColor={colors.mutedForeground}
+                        value={searchKeyword}
+                        onChangeText={setSearchKeyword}
+                        onSubmitEditing={handleSearch}
+                        returnKeyType="search"
+                        autoFocus
+                      />
+                      {isSearchMode && (
+                        <TouchableOpacity onPress={handleClearSearch} className="ml-2">
+                          <MaterialCommunityIcons name="close-circle" size={20} color={colors.mutedForeground} />
+                        </TouchableOpacity>
+                      )}
+                      {!isSearchMode && searchKeyword.trim() && (
+                        <TouchableOpacity onPress={handleSearch} className="ml-2 bg-lavender-500 rounded-full px-3 py-1">
+                          <Text className="text-white font-semibold text-sm">{t('discover.search.button')}</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        onPress={() => {
+                          setShowSearchBar(false);
+                          if (isSearchMode) {
+                            handleClearSearch();
+                          }
+                        }}
+                        className="ml-2"
+                      >
+                        <MaterialCommunityIcons name="close" size={20} color={colors.mutedForeground} />
+                      </TouchableOpacity>
+                    </View>
+                    {isSearchMode && (
+                      <Text className="text-xs mt-2 text-center" style={{ color: colors.mutedForeground }}>
+                        {t('discover.search.tip')}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              {/* Verification Banner - Prompt unverified users to verify (hidden if onboarding incomplete) */}
+              {showVerificationBanner && !isPhotoVerified && isProfileComplete && (
+                <VerificationBanner onDismiss={handleDismissVerificationBanner} />
+              )}
+
+              {/* Trial Expiration Banner - Warn users when trial is about to end */}
+              <TrialExpirationBanner key="trial-expiration-banner" />
+
+              {/* Photo Blur Info Banner - Explain why some photos may be blurred */}
+              {showPhotoBlurBanner && (
+                <View className="mx-4 mt-2 p-4 rounded-xl" style={{ backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' }}>
+                  <View className="flex-row items-start">
+                    <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={{ backgroundColor: '#DBEAFE' }}>
+                      <MaterialCommunityIcons name="image-off-outline" size={20} color="#3B82F6" />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="font-semibold text-sm" style={{ color: '#1E3A5F' }}>{t('discover.banner.photoBlurTitle')}</Text>
+                      <Text className="text-xs mt-1 leading-5" style={{ color: '#1D4ED8' }}>
+                        {t('discover.banner.photoBlurDescription')}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={handleDismissPhotoBlurBanner}
+                      className="ml-2 w-6 h-6 items-center justify-center"
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <MaterialCommunityIcons name="close" size={20} color="#3B82F6" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Photo Review Required Banner */}
+              {photoReviewRequired && (
+                <TouchableOpacity
+                  className="mx-4 mt-2 p-4 bg-amber-50 border border-amber-200 rounded-xl flex-row items-center"
+                  onPress={() => router.push('/settings/edit-profile')}
+                  activeOpacity={0.8}
+                >
+                  <View className="w-10 h-10 bg-amber-100 rounded-full items-center justify-center mr-3">
+                    <MaterialCommunityIcons name="camera-off" size={20} color="#F59E0B" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-amber-900 font-semibold text-sm">{t('discover.banner.profileHidden')}</Text>
+                    <Text className="text-amber-700 text-xs mt-0.5" numberOfLines={2}>
+                      {photoReviewReason
+                        ? `${t('discover.banner.profileHiddenDescription')} (${photoReviewReason})`
+                        : t('discover.banner.profileHiddenDescription')}
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={24} color="#F59E0B" />
+                </TouchableOpacity>
+              )}
+
+              {/* Complete Profile Banner - For users who haven't finished onboarding */}
+              {showOnboardingBanner && !isProfileComplete && (
+                <TouchableOpacity
+                  className="mx-4 mt-2 p-4 bg-lavender-50 border border-lavender-200 rounded-xl flex-row items-center"
+                  onPress={() => {
+                    const destination = returnRoute || '/(onboarding)/onboarding';
+                    exitPreviewMode();
+                    router.replace(destination as any);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View className="w-10 h-10 bg-lavender-100 rounded-full items-center justify-center mr-3">
+                    <MaterialCommunityIcons name={isPreviewMode ? "arrow-left" : "account-edit"} size={20} color="#A08AB7" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-lavender-900 font-semibold text-sm">
+                      {isPreviewMode ? t('discover.banner.completeProfileToMatch') : t('discover.banner.completeProfile')}
+                    </Text>
+                    <Text className="text-lavender-700 text-xs mt-0.5">
+                      {isPreviewMode
+                        ? t('discover.banner.completeProfilePreview')
+                        : t('discover.banner.completeProfileDefault')}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
         />
-      </View>
-
-      {/* Action Buttons */}
-      <View className="pb-8 px-6">
-        <View className="flex-row justify-center items-center gap-4">
-          {/* Rewind Button */}
-          <TouchableOpacity
-            className={`rounded-full w-14 h-14 items-center justify-center shadow-lg ${
-              lastSwipe && isPremium ? 'bg-lavender-400' : 'bg-gray-300'
-            }`}
-            onPress={handleRewind}
-            disabled={!lastSwipe && isPremium}
-          >
-            <MaterialCommunityIcons
-              name="undo-variant"
-              size={28}
-              color={lastSwipe && isPremium ? 'white' : '#9CA3AF'}
-            />
-          </TouchableOpacity>
-
-          {/* Pass Button */}
-          <TouchableOpacity
-            className="bg-card dark:bg-card rounded-full w-16 h-16 items-center justify-center shadow-lg border-2 border-border"
-            onPress={handleSwipeLeft}
-          >
-            <MaterialCommunityIcons name="close" size={32} color="#EF4444" />
-          </TouchableOpacity>
-
-          {/* Obsessed Button (Super Like) */}
-          <TouchableOpacity
-            className="bg-lavender-500 rounded-full w-16 h-16 items-center justify-center shadow-lg"
-            onPress={handleSwipeUp}
-          >
-            <MaterialCommunityIcons name="star" size={32} color="white" />
-          </TouchableOpacity>
-
-          {/* Like Button */}
-          <TouchableOpacity
-            className="bg-card dark:bg-card rounded-full w-16 h-16 items-center justify-center shadow-lg border-2 border-border"
-            onPress={handleSwipeRight}
-          >
-            <MaterialCommunityIcons name="heart" size={32} color="#10B981" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Action Labels */}
-        <View className="flex-row justify-center items-center gap-4 mt-2">
-          <Text className="text-muted-foreground text-xs font-sans-medium w-14 text-center">Rewind</Text>
-          <Text className="text-muted-foreground text-xs font-sans-medium w-16 text-center">Pass</Text>
-          <Text className="text-lavender-500 text-xs font-sans-bold w-16 text-center">Obsessed</Text>
-          <Text className="text-muted-foreground text-xs font-sans-medium w-16 text-center">Like</Text>
-        </View>
-      </View>
+      </Animated.View>
 
       {/* Match Modal */}
       {matchedProfile && (
@@ -2693,11 +3876,19 @@ export default function Discover() {
           visible={showMatchModal}
           onClose={handleCloseMatchModal}
           onSendMessage={handleSendMessage}
-          matchedProfile={{
-            display_name: matchedProfile.display_name,
-            photo_url: matchedProfile.photos?.find(p => p.is_primary)?.url || matchedProfile.photos?.[0]?.url,
-            compatibility_score: matchedProfile.compatibility_score,
-          }}
+          matchedProfile={(() => {
+            const primaryPhoto = matchedProfile.photos?.find(p => p.is_primary) || matchedProfile.photos?.[0];
+            const blurEnabled = matchedProfile.photo_blur_enabled || false;
+            // Respect photo_blur_enabled: match does not equal reveal
+            const photoUrl = blurEnabled && primaryPhoto?.blur_data_uri
+              ? primaryPhoto.blur_data_uri
+              : primaryPhoto?.url;
+            return {
+              display_name: matchedProfile.display_name,
+              photo_url: photoUrl,
+              compatibility_score: matchedProfile.compatibility_score,
+            };
+          })()}
           currentUserPhoto={currentUserPhoto || undefined}
         />
       )}
@@ -2709,20 +3900,22 @@ export default function Discover() {
         presentationStyle="fullScreen"
         onRequestClose={handleCloseImmersiveProfile}
       >
-        {currentIndex < profiles.length && (
+        {currentIndex < profiles.length && profiles[currentIndex] && (
           <ImmersiveProfileCard
             profile={profiles[currentIndex] as any}
             preferences={currentProfilePreferences}
-            compatibilityBreakdown={profiles[currentIndex].compatibilityBreakdown}
+            compatibilityBreakdown={profiles[currentIndex]?.compatibilityBreakdown}
             onSwipeLeft={handleImmersiveSwipeLeft}
             onSwipeRight={handleImmersiveSwipeRight}
             onSuperLike={handleImmersiveSwipeUp}
             onClose={handleCloseImmersiveProfile}
             visible={showImmersiveProfile}
             heightUnit={heightUnit}
+            distanceUnit={distanceUnit}
             onBlock={handleBlock}
             onReport={handleReport}
             currentProfileId={currentProfileId || undefined}
+            isAdmin={isAdmin}
           />
         )}
       </Modal>
@@ -2745,10 +3938,13 @@ export default function Discover() {
       <FilterModal
         visible={showFilterModal}
         onClose={() => setShowFilterModal(false)}
-        onApply={(newFilters) => {
+        onApply={async (newFilters) => {
           setFilters(newFilters);
           setShowFilterModal(false);
-          handleRefresh();
+          filtersSnapshotRef.current = computeFiltersHash(newFilters);
+          setCurrentIndex(0);
+          await persistFilters(newFilters);
+          loadProfiles(undefined, undefined, newFilters);
         }}
         currentFilters={filters}
         isPremium={isPremium}
@@ -2766,50 +3962,6 @@ export default function Discover() {
         feature="unlimited_swipes"
       />
 
-      {/* Popularity Insights Modal - Gamification for engagement */}
-      <PopularityInsightsModal
-        visible={showPopularityModal}
-        onClose={() => setShowPopularityModal(false)}
-        newLikesCount={popularityData.newLikesCount}
-        totalLikes={popularityData.totalLikes}
-        percentileRank={popularityData.percentileRank}
-        isPremium={isPremium || isPlatinum}
-        streak={popularityData.streak}
-      />
-
-      {/* ADMIN ONLY: Debug buttons to test Popularity Modal */}
-      {isAdmin && (
-        <View className="absolute bottom-32 left-4 z-50 gap-2">
-          <TouchableOpacity
-            onPress={() => {
-              setPopularityData({ newLikesCount: 1, totalLikes: 5, percentileRank: 50, streak: 1 });
-              setShowPopularityModal(true);
-            }}
-            className="bg-purple-500 px-3 py-2 rounded-lg opacity-80"
-          >
-            <Text className="text-white text-xs font-medium">Test: 1 Like</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {
-              setPopularityData({ newLikesCount: 3, totalLikes: 15, percentileRank: 20, streak: 3 });
-              setShowPopularityModal(true);
-            }}
-            className="bg-purple-600 px-3 py-2 rounded-lg opacity-80"
-          >
-            <Text className="text-white text-xs font-medium">Test: 3 Likes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {
-              setPopularityData({ newLikesCount: 7, totalLikes: 50, percentileRank: 5, streak: 7 });
-              setShowPopularityModal(true);
-            }}
-            className="bg-orange-500 px-3 py-2 rounded-lg opacity-80"
-          >
-            <Text className="text-white text-xs font-medium">Test: 7 Likes 🔥</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Report User Modal */}
       {reportingProfile && (
         <ReportUserModal
@@ -2820,6 +3972,10 @@ export default function Discover() {
           }}
           reportedProfileId={reportingProfile.id}
           reportedProfileName={reportingProfile.name}
+          onReportSuccess={(reportedId, didBlock) => {
+            // Remove the reported profile from the deck so they can't reappear
+            setProfiles(prev => prev.filter(p => p.id !== reportedId));
+          }}
         />
       )}
 
@@ -2831,36 +3987,36 @@ export default function Discover() {
         onRequestClose={() => setShowPremiumLocationPrompt(false)}
       >
         <View className="flex-1 bg-black/60 justify-center items-center px-6">
-          <View className="bg-card dark:bg-card rounded-3xl w-full max-w-sm overflow-hidden">
+          <View className="rounded-3xl w-full max-w-sm overflow-hidden" style={{ backgroundColor: colors.card }}>
             {/* Header */}
             <View className="bg-lavender-500 p-6 items-center">
               <View className="w-16 h-16 rounded-full bg-white/20 items-center justify-center mb-3">
                 <MaterialCommunityIcons name="earth" size={32} color="#fff" />
               </View>
               <Text className="text-white text-xl font-sans-bold text-center">
-                Unlock Global Search
+                {t('discover.premiumLocation.title')}
               </Text>
             </View>
 
             {/* Body */}
             <View className="p-6">
-              <Text className="text-foreground dark:text-foreground text-center text-base mb-4">
-                You have location preferences saved that require Premium to use:
+              <Text className="text-center text-base mb-4" style={{ color: colors.foreground }}>
+                {t('discover.premiumLocation.description')}
               </Text>
 
-              <View className="bg-lavender-50 dark:bg-lavender-900/30 rounded-xl p-4 mb-4">
+              <View className="rounded-xl p-4 mb-4" style={{ backgroundColor: colors.secondary }}>
                 <View className="flex-row items-center mb-2">
                   <MaterialCommunityIcons name="check-circle" size={20} color="#A08AB7" />
-                  <Text className="text-foreground dark:text-foreground ml-2">Search globally for matches</Text>
+                  <Text className="ml-2" style={{ color: colors.foreground }}>{t('discover.premiumLocation.searchGlobally')}</Text>
                 </View>
                 <View className="flex-row items-center">
                   <MaterialCommunityIcons name="check-circle" size={20} color="#A08AB7" />
-                  <Text className="text-foreground dark:text-foreground ml-2">Match in specific cities</Text>
+                  <Text className="ml-2" style={{ color: colors.foreground }}>{t('discover.premiumLocation.matchCities')}</Text>
                 </View>
               </View>
 
-              <Text className="text-muted-foreground dark:text-muted-foreground text-center text-sm mb-6">
-                Upgrade to Premium to activate these features and find matches anywhere in the world.
+              <Text className="text-center text-sm mb-6" style={{ color: colors.mutedForeground }}>
+                {t('discover.premiumLocation.upgradeMessage')}
               </Text>
 
               {/* Buttons */}
@@ -2872,7 +4028,7 @@ export default function Discover() {
                 }}
               >
                 <Text className="text-white text-center font-sans-bold text-base">
-                  Upgrade to Premium
+                  {t('discover.premiumLocation.upgradeToPremium')}
                 </Text>
               </TouchableOpacity>
 
@@ -2880,8 +4036,8 @@ export default function Discover() {
                 className="py-3"
                 onPress={() => setShowPremiumLocationPrompt(false)}
               >
-                <Text className="text-muted-foreground dark:text-muted-foreground text-center text-sm">
-                  Maybe Later
+                <Text className="text-center text-sm" style={{ color: colors.mutedForeground }}>
+                  {t('discover.premiumLocation.maybeLater')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2889,26 +4045,7 @@ export default function Discover() {
         </View>
       </Modal>
 
-      {/* Swipe Counter for Free Users */}
-      {!isPremium && (
-        <View className="absolute bottom-32 right-6 bg-card dark:bg-card rounded-full px-4 py-2 shadow-lg border-2 border-lavender-500">
-          <Text className="text-lavender-500 font-sans-bold text-sm">
-            {t('discover.swipesRemaining', { count: swipeCount, limit: DAILY_SWIPE_LIMIT })}
-          </Text>
-        </View>
-      )}
 
-      {/* Super Like Counter for Premium Users */}
-      {isPremium && (
-        <View className="absolute bottom-32 right-6 bg-card dark:bg-card rounded-full px-4 py-2 shadow-lg border-2 border-lavender-500">
-          <View className="flex-row items-center gap-1">
-            <MaterialCommunityIcons name="star" size={16} color="#A08AB7" />
-            <Text className="text-lavender-500 font-sans-bold text-sm">
-              {t('discover.superLikesRemaining', { count: superLikesRemaining })}
-            </Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 }

@@ -37,7 +37,15 @@ export async function checkMessagingVersionRequirement(): Promise<{
   minimumVersion?: string;
 }> {
   try {
-    const currentVersion = getCurrentVersion();
+    // Fail-open if Constants.expoConfig isn't populated yet (cold-start race on
+    // Android/Hermes returned '1.0.0' fallback and incorrectly blocked legitimate
+    // 2.x users from sending text. Photos/voice weren't gated → users saw
+    // "text doesn't work, photos do" and had to reinstall).
+    const rawVersion = Constants.expoConfig?.version;
+    if (!rawVersion) {
+      return { allowed: true };
+    }
+    const currentVersion = rawVersion;
 
     // Fetch minimum messaging version from database
     const { data, error } = await supabase

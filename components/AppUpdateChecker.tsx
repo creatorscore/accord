@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,16 +7,32 @@ import {
   StyleSheet,
   Linking,
   Platform,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
+
+// Native in-app updates - uses Google Play Core on Android, App Store on iOS
+// Only load on native platforms to avoid web bundling errors
+let SpInAppUpdates: any = null;
+let IAUUpdateKind: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    const inAppUpdatesModule = require('sp-react-native-in-app-updates');
+    SpInAppUpdates = inAppUpdatesModule.default;
+    IAUUpdateKind = inAppUpdatesModule.IAUUpdateKind;
+  } catch (e) {
+  }
+}
 
 // Get current app version from app.json
 const CURRENT_VERSION = Constants.expoConfig?.version || '1.0.0';
 
-// Store links - verified URLs
+// Store links - fallback if native update fails
 const APP_STORE_URL = 'https://apps.apple.com/ca/app/accord-lavender-marriage/id6753855469';
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.privyreviews.accord';
 
@@ -27,51 +43,80 @@ interface UpdateInfo {
   minimum_version_android?: string;
   update_message?: string;
   is_forced: boolean;
+  admin_test_update?: boolean; // Only show update modal to admins for testing
+}
+
+// Preview component for admins to test the update modal
+export function UpdateModalPreview({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  const mockInfo: UpdateInfo = {
+    latest_version: '99.0.0',
+    minimum_version: '99.0.0',
+    is_forced: true,
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.screen}>
+        <View style={styles.content}>
+          <View style={styles.dots}>
+            <View style={[styles.dot, styles.dotSmall, { left: '15%', top: 0 }]} />
+            <View style={[styles.dot, styles.dotMedium, { right: '20%', top: 20 }]} />
+            <View style={[styles.dot, styles.dotSmall, { left: '35%', top: 40 }]} />
+          </View>
+          <Text style={styles.emoji}>{'\u{1F527}'}</Text>
+          <Text style={styles.title}>{t('common.update.forcedTitle')}</Text>
+          <Text style={styles.body}>{t('common.update.forcedBody')}</Text>
+          <View style={styles.versionPill}>
+            <Text style={styles.versionPillText}>
+              v{CURRENT_VERSION}  →  v{mockInfo.latest_version}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.updateButton} onPress={onClose} activeOpacity={0.85}>
+            <Text style={styles.updateButtonText}>{t('common.update.updateButton')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.laterButton} onPress={onClose} activeOpacity={0.7}>
+            <Text style={styles.laterButtonText}>Close Preview</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 export default function AppUpdateChecker() {
-  const [showModal, setShowModal] = useState(false);
+  const { t } = useTranslation();
+  const [showFallbackModal, setShowFallbackModal] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isForced, setIsForced] = useState(false);
+  const [isAdminTest, setIsAdminTest] = useState(false);
+  const appState = useRef<AppStateStatus>(AppState.currentState);
+  const inAppUpdates = useRef<any>(null);
 
   useEffect(() => {
-    checkForUpdates();
-  }, []);
-
-  const checkForUpdates = async () => {
-    try {
-      // Fetch latest version info from database
-      const { data, error } = await supabase
-        .from('app_config')
-        .select('*')
-        .eq('key', 'app_version')
-        .single();
-
-      if (error || !data) {
-        console.log('No app version config found');
-        return;
-      }
-
-      const config = data.value as UpdateInfo;
-
-      // Get platform-specific minimum version, fallback to general minimum_version
-      const minimumVersion = Platform.OS === 'ios'
-        ? (config.minimum_version_ios || config.minimum_version)
-        : (config.minimum_version_android || config.minimum_version);
-
-      // Compare versions
-      const needsUpdate = compareVersions(CURRENT_VERSION, config.latest_version) < 0;
-      const isForcedUpdate = compareVersions(CURRENT_VERSION, minimumVersion) < 0;
-
-      if (needsUpdate) {
-        setUpdateInfo(config);
-        setIsForced(isForcedUpdate);
-        setShowModal(true);
-      }
-    } catch (error) {
-      console.error('Error checking for updates:', error);
+    // Initialize native in-app updates
+    if (SpInAppUpdates) {
+      inAppUpdates.current = new SpInAppUpdates(false); // false = not debug mode
     }
-  };
+
+    checkForUpdates();
+
+    // Also check when app comes to foreground (user might have updated)
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        checkForUpdates();
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   const compareVersions = (v1: string, v2: string): number => {
     const parts1 = v1.split('.').map(Number);
@@ -86,80 +131,196 @@ export default function AppUpdateChecker() {
     return 0;
   };
 
-  const handleUpdate = () => {
-    const storeUrl = Platform.OS === 'ios' ? APP_STORE_URL : PLAY_STORE_URL;
-    Linking.openURL(storeUrl);
-  };
+  const checkForUpdates = async () => {
+    try {
+      // First, check our database for version requirements
+      const { data, error } = await supabase
+        .from('app_config')
+        .select('*')
+        .eq('key', 'app_version')
+        .single();
 
-  const handleLater = () => {
-    if (!isForced) {
-      setShowModal(false);
+      if (error || !data) {
+        // Fall back to native store check
+        await checkNativeUpdate(false);
+        return;
+      }
+
+      const config = data.value as UpdateInfo;
+
+      // Check if this is admin-only test mode
+      if (config.admin_test_update) {
+        // Only show to admins - check current user's admin status
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_admin')
+            .eq('user_id', user.id)
+            .single();
+
+          if (!profile?.is_admin) {
+            return; // Not an admin, skip update check
+          }
+        } else {
+          return; // No user, skip
+        }
+      }
+
+      // Get platform-specific minimum version
+      const minimumVersion = Platform.OS === 'ios'
+        ? (config.minimum_version_ios || config.minimum_version)
+        : (config.minimum_version_android || config.minimum_version);
+
+      // Check if update is required (forced)
+      const isForcedUpdate = compareVersions(CURRENT_VERSION, minimumVersion) < 0 || !!config.admin_test_update;
+      const needsUpdate = compareVersions(CURRENT_VERSION, config.latest_version) < 0 || config.admin_test_update;
+
+      if (!needsUpdate) {
+        return; // Already up to date
+      }
+
+      setUpdateInfo(config);
+      setIsForced(isForcedUpdate);
+      setIsAdminTest(!!config.admin_test_update);
+
+      // Try native in-app update first (skip for admin test since no real update exists)
+      if (!config.admin_test_update) {
+        const nativeUpdateShown = await checkNativeUpdate(isForcedUpdate);
+        if (nativeUpdateShown) {
+          return;
+        }
+      }
+
+      // Show fallback modal for forced updates or admin test
+      if (isForcedUpdate) {
+        setShowFallbackModal(true);
+      }
+    } catch (error) {
+      console.error('Error checking for updates:', error);
     }
   };
 
-  if (!showModal || !updateInfo) {
+  const checkNativeUpdate = async (isForced: boolean): Promise<boolean> => {
+    if (!inAppUpdates.current) {
+      return false;
+    }
+
+    try {
+      // Check if there's an update available from the store
+      const result = await inAppUpdates.current.checkNeedsUpdate({
+        curVersion: CURRENT_VERSION,
+      });
+
+      if (result.shouldUpdate) {
+        // Show native update dialog
+        if (Platform.OS === 'android') {
+          // Android: Use Google Play Core In-App Updates
+          // IMMEDIATE = full screen, blocks app until updated (for forced updates)
+          // FLEXIBLE = shows banner, allows user to continue using app
+          await inAppUpdates.current.startUpdate({
+            updateType: isForced ? IAUUpdateKind.IMMEDIATE : IAUUpdateKind.FLEXIBLE,
+          });
+        } else {
+          // iOS: Show App Store prompt
+          await inAppUpdates.current.startUpdate({
+            title: isForced ? i18n.t('common.update.nativeTitleRequired') : i18n.t('common.update.nativeTitleAvailable'),
+            message: isForced
+              ? i18n.t('common.update.nativeBodyRequired')
+              : i18n.t('common.update.nativeBodyAvailable'),
+            buttonUpgradeText: i18n.t('common.update.nativeUpdateNow'),
+            buttonCancelText: isForced ? undefined : i18n.t('common.update.nativeLater'),
+            forceUpgrade: isForced,
+          });
+        }
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Native update check failed:', error);
+      return false;
+    }
+  };
+
+  const handleUpdate = () => {
+    const storeUrl = Platform.OS === 'ios' ? APP_STORE_URL : PLAY_STORE_URL;
+    Linking.openURL(storeUrl).catch(() => {});
+  };
+
+  const handleLater = () => {
+    if (!isForced || isAdminTest) {
+      setShowFallbackModal(false);
+    }
+  };
+
+  // Fallback modal - only shown if native update dialog fails
+  if (!showFallbackModal || !updateInfo) {
     return null;
   }
 
   return (
     <Modal
-      visible={showModal}
-      transparent
+      visible={showFallbackModal}
       animationType="fade"
       onRequestClose={handleLater}
+      statusBarTranslucent
     >
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          {/* Icon */}
-          <View style={styles.iconContainer}>
-            <LinearGradient
-              colors={['#9B87CE', '#B8A9DD']}
-              style={styles.iconGradient}
-            >
-              <MaterialCommunityIcons
-                name={isForced ? 'alert-circle' : 'arrow-up-circle'}
-                size={48}
-                color="#FFF"
-              />
-            </LinearGradient>
+      <View style={styles.screen}>
+        <View style={styles.content}>
+          {/* Decorative dots */}
+          <View style={styles.dots}>
+            <View style={[styles.dot, styles.dotSmall, { left: '15%', top: 0 }]} />
+            <View style={[styles.dot, styles.dotMedium, { right: '20%', top: 20 }]} />
+            <View style={[styles.dot, styles.dotSmall, { left: '35%', top: 40 }]} />
           </View>
 
-          {/* Title */}
+          {/* Emoji — simple, human, no gradient blob */}
+          <Text style={styles.emoji}>
+            {isForced ? '\u{1F527}' : '\u{2728}'}
+          </Text>
+
+          {/* Headline */}
           <Text style={styles.title}>
-            {isForced ? 'Update Required' : 'Update Available'}
+            {isForced ? t('common.update.forcedTitle') : t('common.update.softTitle')}
           </Text>
 
-          {/* Version info */}
-          <Text style={styles.versionText}>
-            Version {updateInfo.latest_version} is available
+          {/* Body */}
+          <Text style={styles.body}>
+            {updateInfo.update_message
+              ? updateInfo.update_message
+              : isForced
+                ? t('common.update.forcedBody')
+                : t('common.update.softBody')}
           </Text>
-          <Text style={styles.currentVersion}>
-            You have version {CURRENT_VERSION}
-          </Text>
 
-          {/* Message */}
-          {updateInfo.update_message && (
-            <Text style={styles.message}>{updateInfo.update_message}</Text>
-          )}
+          {/* Version pill */}
+          <View style={styles.versionPill}>
+            <Text style={styles.versionPillText}>
+              v{CURRENT_VERSION}  →  v{updateInfo.latest_version}
+            </Text>
+          </View>
+        </View>
 
-          {/* Forced update warning */}
-          {isForced && (
-            <View style={styles.warningBox}>
-              <MaterialCommunityIcons name="information" size={20} color="#DC2626" />
-              <Text style={styles.warningText}>
-                This update is required to continue using Accord
-              </Text>
-            </View>
-          )}
-
-          {/* Buttons */}
-          <TouchableOpacity style={styles.updateButton} onPress={handleUpdate}>
-            <Text style={styles.updateButtonText}>Update Now</Text>
+        {/* Bottom actions — anchored to bottom */}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={styles.updateButton}
+            onPress={handleUpdate}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.updateButtonText}>{t('common.update.updateButton')}</Text>
           </TouchableOpacity>
 
-          {!isForced && (
-            <TouchableOpacity style={styles.laterButton} onPress={handleLater}>
-              <Text style={styles.laterButtonText}>Maybe Later</Text>
+          {(!isForced || isAdminTest) && (
+            <TouchableOpacity
+              style={styles.laterButton}
+              onPress={handleLater}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.laterButtonText}>
+                {isAdminTest ? 'Close (Admin Test)' : t('common.update.notNow')}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -169,90 +330,97 @@ export default function AppUpdateChecker() {
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  screen: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: '#FAFAFA',
+    justifyContent: 'space-between',
+  },
+  content: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 36,
   },
-  container: {
-    backgroundColor: '#FFF',
-    borderRadius: 24,
-    padding: 24,
-    width: '100%',
-    maxWidth: 340,
-    alignItems: 'center',
+  dots: {
+    position: 'absolute',
+    top: '18%',
+    left: 0,
+    right: 0,
+    height: 60,
   },
-  iconContainer: {
-    marginBottom: 20,
+  dot: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: '#E8E0F0',
   },
-  iconGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  dotSmall: {
+    width: 8,
+    height: 8,
+  },
+  dotMedium: {
+    width: 12,
+    height: 12,
+    backgroundColor: '#D5CAE8',
+  },
+  emoji: {
+    fontSize: 56,
+    marginBottom: 28,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
+    color: '#1A1A2E',
     textAlign: 'center',
+    lineHeight: 36,
+    letterSpacing: -0.5,
+    marginBottom: 16,
   },
-  versionText: {
+  body: {
     fontSize: 16,
-    color: '#374151',
-    marginBottom: 4,
-  },
-  currentVersion: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 16,
-  },
-  message: {
-    fontSize: 14,
-    color: '#374151',
+    color: '#6B6B80',
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 16,
+    lineHeight: 24,
+    maxWidth: 300,
+    marginBottom: 24,
   },
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 20,
-    gap: 8,
+  versionPill: {
+    backgroundColor: '#F0ECF5',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
   },
-  warningText: {
-    flex: 1,
+  versionPillText: {
     fontSize: 13,
-    color: '#DC2626',
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#8B7AAD',
+    letterSpacing: 0.3,
+  },
+  actions: {
+    paddingHorizontal: 24,
+    paddingBottom: 48,
+    paddingTop: 12,
   },
   updateButton: {
-    backgroundColor: '#9B87CE',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 24,
+    backgroundColor: '#1A1A2E',
+    paddingVertical: 18,
+    borderRadius: 16,
     width: '100%',
     marginBottom: 12,
   },
   updateButtonText: {
     color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
   laterButton: {
-    paddingVertical: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
   },
   laterButtonText: {
-    color: '#6B7280',
-    fontSize: 14,
+    color: '#9B9BAD',
+    fontSize: 15,
     fontWeight: '500',
   },
 });

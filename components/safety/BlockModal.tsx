@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 
 interface BlockModalProps {
   visible: boolean;
@@ -24,6 +24,7 @@ export default function BlockModal({
   onConfirm,
   profileName,
 }: BlockModalProps) {
+  const { t } = useTranslation();
   const [blocking, setBlocking] = useState(false);
 
   const handleConfirm = async () => {
@@ -37,6 +38,13 @@ export default function BlockModal({
       setBlocking(false);
     }
   };
+
+  const bulletItems = [
+    t('moderation.blockAlt.removeMatches'),
+    t('moderation.blockAlt.hideProfile'),
+    t('moderation.blockAlt.preventMatching'),
+    t('moderation.blockAlt.deleteMessages'),
+  ];
 
   return (
     <Modal
@@ -60,21 +68,16 @@ export default function BlockModal({
           </View>
 
           {/* Title */}
-          <Text style={styles.title}>Block {profileName}?</Text>
+          <Text style={styles.title}>{t('moderation.blockAlt.title', { name: profileName })}</Text>
 
           {/* Description */}
           <Text style={styles.description}>
-            Blocking {profileName} will:
+            {t('moderation.blockAlt.description', { name: profileName })}
           </Text>
 
           {/* What happens list */}
           <View style={styles.bulletList}>
-            {[
-              'Remove them from your matches',
-              'Hide your profile from them',
-              'Prevent future matching',
-              'Permanently delete all messages (cannot be undone)',
-            ].map((item, i) => (
+            {bulletItems.map((item, i) => (
               <View key={i} style={styles.bulletItem}>
                 <MaterialCommunityIcons name="circle-small" size={20} color="#6B7280" />
                 <Text style={styles.bulletText}>{item}</Text>
@@ -89,7 +92,7 @@ export default function BlockModal({
               onPress={onClose}
               disabled={blocking}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -100,7 +103,7 @@ export default function BlockModal({
               {blocking ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text style={styles.blockButtonText}>Block</Text>
+                <Text style={styles.blockButtonText}>{t('moderation.blockAlt.block')}</Text>
               )}
             </TouchableOpacity>
           </View>

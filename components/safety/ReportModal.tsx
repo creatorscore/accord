@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { optimizeImage, uriToArrayBuffer } from '@/lib/image-optimization';
+import { useTranslation } from 'react-i18next';
 
 interface ReportModalProps {
   visible: boolean;
@@ -26,15 +27,15 @@ interface ReportModalProps {
   profileName: string;
 }
 
-const REPORT_REASONS = [
-  { id: 'blackmail', label: 'Blackmail / Screenshot sharing', icon: 'shield-alert', requiresEvidence: true },
-  { id: 'harassment', label: 'Harassment or bullying', icon: 'alert-circle' },
-  { id: 'fake_profile', label: 'Fake profile or scam', icon: 'account-alert' },
-  { id: 'inappropriate_content', label: 'Inappropriate photos or messages', icon: 'image-off' },
-  { id: 'spam', label: 'Spam or solicitation', icon: 'email-alert' },
-  { id: 'underage', label: 'Underage user', icon: 'account-cancel' },
-  { id: 'safety_concern', label: 'Safety concern', icon: 'shield-alert' },
-  { id: 'other', label: 'Other', icon: 'dots-horizontal' },
+const REPORT_REASON_IDS = [
+  { id: 'blackmail', labelKey: 'blackmail', icon: 'shield-alert', requiresEvidence: true },
+  { id: 'harassment', labelKey: 'harassment', icon: 'alert-circle' },
+  { id: 'fake_profile', labelKey: 'fakeProfile', icon: 'account-alert' },
+  { id: 'inappropriate_content', labelKey: 'inappropriateContent', icon: 'image-off' },
+  { id: 'spam', labelKey: 'spam', icon: 'email-alert' },
+  { id: 'underage', labelKey: 'underage', icon: 'account-cancel' },
+  { id: 'safety_concern', labelKey: 'safetyConcern', icon: 'shield-alert' },
+  { id: 'other', labelKey: 'other', icon: 'dots-horizontal' },
 ];
 
 export default function ReportModal({
@@ -43,6 +44,7 @@ export default function ReportModal({
   onSubmit,
   profileName,
 }: ReportModalProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [description, setDescription] = useState('');
@@ -55,7 +57,7 @@ export default function ReportModal({
       // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please allow access to your photo library to upload evidence.');
+        Alert.alert(t('moderation.report.permissionRequired'), t('moderation.report.permissionMessage'));
         return;
       }
 
@@ -95,15 +97,11 @@ export default function ReportModal({
 
             if (uploadError) throw uploadError;
 
-            // Get public URL
-            const { data: { publicUrl } } = supabase.storage
-              .from('reports')
-              .getPublicUrl(filePath);
-
-            uploadedUrls.push(publicUrl);
+            // Store the storage path (buckets are private)
+            uploadedUrls.push(filePath);
           } catch (error: any) {
             console.error('Error uploading photo:', error);
-            Alert.alert('Upload Failed', 'Failed to upload one or more photos. Please try again.');
+            Alert.alert(t('moderation.report.uploadFailed'), t('moderation.report.uploadFailedMessage'));
           }
         }
 
@@ -113,7 +111,7 @@ export default function ReportModal({
       }
     } catch (error: any) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to select photos. Please try again.');
+      Alert.alert(t('common.error'), t('moderation.report.selectPhotoError'));
       setUploadingPhoto(false);
     }
   };
@@ -126,11 +124,11 @@ export default function ReportModal({
     if (!selectedReason || !description.trim()) return;
 
     // Check if blackmail report requires evidence
-    const reason = REPORT_REASONS.find(r => r.id === selectedReason);
+    const reason = REPORT_REASON_IDS.find(r => r.id === selectedReason);
     if (reason?.requiresEvidence && evidencePhotos.length === 0) {
       Alert.alert(
-        'Evidence Required',
-        'Blackmail reports require screenshot evidence. Please upload at least one photo.'
+        t('moderation.report.evidenceRequired'),
+        t('moderation.reportAlt.evidenceRequiredMessage')
       );
       return;
     }
@@ -176,8 +174,8 @@ export default function ReportModal({
           {/* Header */}
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Report {profileName}</Text>
-              <Text style={styles.subtitle}>Help us keep Accord safe</Text>
+              <Text style={styles.title}>{t('moderation.reportAlt.title', { name: profileName })}</Text>
+              <Text style={styles.subtitle}>{t('moderation.reportAlt.subtitle')}</Text>
             </View>
             <TouchableOpacity onPress={handleClose} disabled={submitting}>
               <MaterialCommunityIcons name="close" size={24} color="#9CA3AF" />
@@ -190,9 +188,9 @@ export default function ReportModal({
             showsVerticalScrollIndicator={false}
           >
             {/* Reasons */}
-            <Text style={styles.sectionTitle}>Why are you reporting this profile?</Text>
+            <Text style={styles.sectionTitle}>{t('moderation.reportAlt.whyReporting')}</Text>
             <View style={styles.reasonsList}>
-              {REPORT_REASONS.map((reason) => (
+              {REPORT_REASON_IDS.map((reason) => (
                 <TouchableOpacity
                   key={reason.id}
                   style={[
@@ -216,7 +214,7 @@ export default function ReportModal({
                       selectedReason === reason.id && styles.reasonLabelSelected,
                     ]}
                   >
-                    {reason.label}
+                    {t(`moderation.reportAlt.reasons.${reason.labelKey}`)}
                   </Text>
                   {selectedReason === reason.id && (
                     <MaterialCommunityIcons name="check-circle" size={20} color="#A08AB7" />
@@ -227,12 +225,12 @@ export default function ReportModal({
 
             {/* Description */}
             <Text style={styles.sectionTitle}>
-              Please provide details <Text style={styles.required}>*</Text>
+              {t('moderation.reportAlt.provideDetails')} <Text style={styles.required}>*</Text>
             </Text>
             <View style={styles.textAreaContainer}>
               <TextInput
                 style={styles.textArea}
-                placeholder="Help us understand what happened (minimum 10 characters)"
+                placeholder={t('moderation.reportAlt.detailsPlaceholder')}
                 placeholderTextColor="#9CA3AF"
                 value={description}
                 onChangeText={setDescription}
@@ -247,8 +245,8 @@ export default function ReportModal({
             <View style={styles.evidenceSection}>
               <View style={styles.evidenceHeader}>
                 <Text style={styles.sectionTitle}>
-                  Evidence Photos
-                  {REPORT_REASONS.find(r => r.id === selectedReason)?.requiresEvidence && (
+                  {t('moderation.report.evidencePhotos')}
+                  {REPORT_REASON_IDS.find(r => r.id === selectedReason)?.requiresEvidence && (
                     <Text style={styles.required}> *</Text>
                   )}
                 </Text>
@@ -262,7 +260,7 @@ export default function ReportModal({
                   ) : (
                     <>
                       <MaterialCommunityIcons name="camera-plus" size={20} color="#A08AB7" />
-                      <Text style={styles.uploadButtonText}>Upload</Text>
+                      <Text style={styles.uploadButtonText}>{t('moderation.report.upload')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -272,7 +270,7 @@ export default function ReportModal({
                 <View style={styles.evidenceInfo}>
                   <MaterialCommunityIcons name="information" size={16} color="#3B82F6" />
                   <Text style={styles.evidenceInfoText}>
-                    Upload screenshots showing your profile with watermark visible. This helps us identify who shared it.
+                    {t('moderation.reportAlt.evidenceInfo')}
                   </Text>
                 </View>
               )}
@@ -299,7 +297,7 @@ export default function ReportModal({
             <View style={styles.infoBox}>
               <MaterialCommunityIcons name="information" size={20} color="#3B82F6" />
               <Text style={styles.infoText}>
-                Reports are reviewed by our team. False reports may result in account suspension.
+                {t('moderation.reportAlt.infoNotice')}
               </Text>
             </View>
           </ScrollView>
@@ -311,7 +309,7 @@ export default function ReportModal({
               onPress={handleClose}
               disabled={submitting}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -326,7 +324,7 @@ export default function ReportModal({
                   colors={canSubmit ? ['#EF4444', '#DC2626'] : ['#D1D5DB', '#9CA3AF']}
                   style={styles.submitButtonGradient}
                 >
-                  <Text style={styles.submitButtonText}>Submit Report</Text>
+                  <Text style={styles.submitButtonText}>{t('moderation.report.submitReport')}</Text>
                 </LinearGradient>
               )}
             </TouchableOpacity>

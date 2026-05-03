@@ -15,16 +15,16 @@ import { Platform } from 'react-native';
  * Lavender palette - Our signature color
  */
 export const LAVENDER = {
-  50:  '#F5F3FF',
-  100: '#EDE9FE',
-  200: '#DDD6FE',
-  300: '#C4B5FD',
-  400: '#A78BFA',
-  500: '#8B5CF6', // Primary
-  600: '#7C3AED',
-  700: '#6D28D9',
-  800: '#5B21B6',
-  900: '#4C1D95',
+  50:  '#F8F6FB',
+  100: '#F3F0F7',
+  200: '#E2D8EC',
+  300: '#CDC2E5',
+  400: '#B7A4CC',
+  500: '#A08AB7', // Primary brand purple
+  600: '#7B6794',
+  700: '#5F4F73',
+  800: '#473A56',
+  900: '#2F2638',
 } as const;
 
 /**
@@ -47,21 +47,21 @@ const LIGHT_COLORS = {
   popover: 'rgb(255, 255, 255)',
   popoverForeground: 'rgb(31, 41, 55)',
 
-  // Primary - Lavender
-  primary: 'rgb(139, 92, 246)',         // lavender-500
+  // Primary - Brand lavender (#A08AB7)
+  primary: 'rgb(160, 138, 183)',         // lavender-500
   primaryForeground: 'rgb(255, 255, 255)',
 
   // Secondary
-  secondary: 'rgb(245, 243, 255)',       // lavender-50
-  secondaryForeground: 'rgb(91, 33, 182)', // lavender-800
+  secondary: 'rgb(248, 246, 251)',       // lavender-50
+  secondaryForeground: 'rgb(71, 58, 86)', // lavender-800
 
   // Muted
   muted: 'rgb(249, 250, 251)',
   mutedForeground: 'rgb(107, 114, 128)',
 
   // Accent
-  accent: 'rgb(237, 233, 254)',          // lavender-100
-  accentForeground: 'rgb(76, 29, 149)',  // lavender-900
+  accent: 'rgb(243, 240, 247)',          // lavender-100
+  accentForeground: 'rgb(47, 38, 56)',   // lavender-900
 
   // Destructive
   destructive: 'rgb(239, 68, 68)',
@@ -70,7 +70,7 @@ const LIGHT_COLORS = {
   // Border & Input
   border: 'rgb(229, 231, 235)',
   input: 'rgb(229, 231, 235)',
-  ring: 'rgb(139, 92, 246)',
+  ring: 'rgb(160, 138, 183)',
 
   // Semantic
   success: 'rgb(34, 197, 94)',
@@ -106,13 +106,13 @@ const DARK_COLORS = {
   popover: 'rgb(24, 24, 27)',
   popoverForeground: 'rgb(250, 250, 250)',
 
-  // Primary - Brighter lavender for dark mode
-  primary: 'rgb(167, 139, 250)',         // lavender-400
+  // Primary - Brighter brand lavender for dark mode (#B7A4CC)
+  primary: 'rgb(183, 164, 204)',         // lavender-400
   primaryForeground: 'rgb(10, 10, 11)',
 
   // Secondary
   secondary: 'rgb(39, 39, 42)',
-  secondaryForeground: 'rgb(221, 214, 254)', // lavender-200
+  secondaryForeground: 'rgb(226, 216, 236)', // lavender-200
 
   // Muted
   muted: 'rgb(39, 39, 42)',
@@ -120,7 +120,7 @@ const DARK_COLORS = {
 
   // Accent
   accent: 'rgb(63, 63, 70)',
-  accentForeground: 'rgb(196, 181, 253)', // lavender-300
+  accentForeground: 'rgb(205, 194, 229)', // lavender-300
 
   // Destructive
   destructive: 'rgb(220, 38, 38)',
@@ -129,7 +129,7 @@ const DARK_COLORS = {
   // Border & Input
   border: 'rgb(39, 39, 42)',
   input: 'rgb(39, 39, 42)',
-  ring: 'rgb(167, 139, 250)',
+  ring: 'rgb(183, 164, 204)',
 
   // Semantic
   success: 'rgb(74, 222, 128)',

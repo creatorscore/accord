@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform, Modal, KeyboardAvoidingView, Pressable } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Modal, useColorScheme, StyleSheet, AppState } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import * as Location from 'expo-location';
-import { GradientButton } from '@/components/shared/GradientButton';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { validateDisplayName, getModerationErrorMessage } from '@/lib/content-moderation';
 import { initializeEncryption } from '@/lib/encryption';
@@ -12,88 +11,76 @@ import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { useTranslation } from 'react-i18next';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
+import { openAppSettings } from '@/lib/open-settings';
+import { searchCities, CityResult } from '@/lib/city-search';
+import { useToast } from '@/contexts/ToastContext';
+import { InteractionManager } from 'react-native';
+import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
+import OnboardingChips from '@/components/onboarding/OnboardingChips';
+import VisibilityToggle from '@/components/onboarding/VisibilityToggle';
+import { getGlobalStep } from '@/lib/onboarding-steps';
+import { useOnboardingDraft } from '@/hooks/useOnboardingDraft';
 
-const GENDERS = [
-  'Man',
-  'Woman',
-  'Non-binary',
-  'Trans Man',
-  'Trans Woman',
-  'Genderfluid',
-  'Genderqueer',
-  'Agender',
-  'Bigender',
-  'Two-Spirit',
-  'Intersex',
-  'Demigender',
-  'Neutrois',
-  'Questioning',
-  'Prefer not to say',
-  'Other',
-];
+interface BasicInfoDraft {
+  displayName: string;
+  birthDate: string | null; // ISO string
+  ageCertified: boolean;
+  gender: string;
+  pronouns: string;
+  orientation: string[];
+  ethnicity: string[];
+  locationCity: string;
+  locationState: string;
+  locationCountry: string;
+  locationCoords: { latitude: number; longitude: number } | null;
+  hideLocation: boolean;
+  fieldVisibility: Record<string, boolean>;
+  hometown: string;
+  occupation: string;
+  education: string;
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const GENDERS = ['Man', 'Woman', 'Non-binary'];
 
 const ORIENTATIONS = [
-  'Lesbian',
-  'Gay',
-  'Bisexual',
-  'Straight',
-  'Queer',
-  'Asexual',
-  'Pansexual',
-  'Demisexual',
-  'Questioning',
-  'Omnisexual',
-  'Polysexual',
-  'Androsexual',
-  'Gynesexual',
-  'Sapiosexual',
-  'Heteroflexible',
-  'Homoflexible',
-  'Prefer not to say',
-  'Other',
+  'Lesbian', 'Gay', 'Bisexual', 'Straight', 'Queer', 'Asexual',
+  'Pansexual', 'Demisexual', 'Questioning', 'Omnisexual', 'Polysexual',
+  'Androsexual', 'Gynesexual', 'Sapiosexual', 'Heteroflexible',
+  'Homoflexible', 'Prefer not to say', 'Other',
 ];
 
 const PRONOUNS = [
-  'she/her',
-  'he/him',
-  'they/them',
-  'she/they',
-  'he/they',
-  'any pronouns',
-  'ask me',
-  'prefer not to say',
+  'she/her', 'he/him', 'they/them', 'she/they',
+  'he/they', 'any pronouns', 'ask me', 'prefer not to say',
 ];
 
 const ETHNICITIES = [
-  'Asian',
-  'Black/African',
-  'Hispanic/Latinx',
-  'Indigenous/Native',
-  'Middle Eastern/North African',
-  'Pacific Islander',
-  'South Asian',
-  'White/Caucasian',
-  'Multiracial',
-  'Other',
-  'Prefer not to say',
+  'Asian', 'Black/African', 'Hispanic/Latinx', 'Indigenous/Native',
+  'Middle Eastern/North African', 'Pacific Islander', 'South Asian',
+  'White/Caucasian', 'Multiracial', 'Other', 'Prefer not to say',
 ];
 
-// Helper function to calculate age from birth date
+function getAvailableOrientations(selectedGender: string): string[] {
+  let filtered = ORIENTATIONS;
+  if (selectedGender === 'Man') {
+    filtered = filtered.filter(o => o !== 'Straight' && o !== 'Lesbian');
+  }
+  return filtered;
+}
+
 function calculateAge(birthDate: Date): number {
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
   return age;
 }
 
-// Helper function to calculate zodiac sign from birth date
 function calculateZodiac(birthDate: Date): string {
-  const month = birthDate.getMonth() + 1; // JavaScript months are 0-indexed
+  const month = birthDate.getMonth() + 1;
   const day = birthDate.getDate();
-
   if ((month === 3 && day >= 21) || (month === 4 && day <= 19)) return 'Aries';
   if ((month === 4 && day >= 20) || (month === 5 && day <= 20)) return 'Taurus';
   if ((month === 5 && day >= 21) || (month === 6 && day <= 20)) return 'Gemini';
@@ -105,23 +92,118 @@ function calculateZodiac(birthDate: Date): string {
   if ((month === 11 && day >= 22) || (month === 12 && day <= 21)) return 'Sagittarius';
   if ((month === 12 && day >= 22) || (month === 1 && day <= 19)) return 'Capricorn';
   if ((month === 1 && day >= 20) || (month === 2 && day <= 18)) return 'Aquarius';
-  return 'Pisces'; // Feb 19 - Mar 20
+  return 'Pisces';
 }
 
-// Calculate date limits for DOB picker (18-100 years old)
 const today = new Date();
-const maxBirthDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate()); // Must be at least 18
-const minBirthDate = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate()); // Max 100 years old
+const maxBirthDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+const minBirthDate = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
+
+// ─── Sub-step definitions ────────────────────────────────────────────────────
+
+const SUB_STEPS = [
+  { key: 'name',        title: "What should we call you?",      subtitle: "This is how you'll appear on Accord." },
+  { key: 'birthday',    title: "What's your date of birth?",     subtitle: "You must be 18 or older to use Accord." },
+  { key: 'gender',      title: "Which gender best describes you?", subtitle: "We use broad categories so everyone gets seen by more people. You can share more about yourself in your profile." },
+  { key: 'pronouns',    title: "What are your pronouns?",       subtitle: null },
+  { key: 'orientation', title: "What's your orientation?",      subtitle: null },
+  { key: 'ethnicity',   title: "What's your ethnicity?",        subtitle: "Select all that apply. This is optional." },
+  { key: 'location',    title: "Where are you based?",          subtitle: "We use this to find people near you." },
+  { key: 'hometown',    title: "Where are you from?",           subtitle: "Your hometown helps others connect with you." },
+  { key: 'occupation',  title: "What do you do?",               subtitle: "Share your occupation or profession." },
+  { key: 'education',   title: "What's your education?",        subtitle: "Your school, trade program, or self-taught journey." },
+] as const;
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function BasicInfo() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  // Label mappings for arrays defined outside the component
+  const genderLabel = (value: string): string => {
+    const map: Record<string, string> = {
+      'Man': t('onboarding.genderOptions.man'),
+      'Woman': t('onboarding.genderOptions.woman'),
+      'Non-binary': t('onboarding.genderOptions.nonBinary'),
+    };
+    return map[value] || value;
+  };
+
+  const orientationLabel = (value: string): string => {
+    const keyMap: Record<string, string> = {
+      'Lesbian': 'lesbian', 'Gay': 'gay', 'Bisexual': 'bisexual', 'Straight': 'straight',
+      'Queer': 'queer', 'Asexual': 'asexual', 'Pansexual': 'pansexual', 'Demisexual': 'demisexual',
+      'Questioning': 'questioning', 'Omnisexual': 'omnisexual', 'Polysexual': 'polysexual',
+      'Androsexual': 'androsexual', 'Gynesexual': 'gynesexual', 'Sapiosexual': 'sapiosexual',
+      'Heteroflexible': 'heteroflexible', 'Homoflexible': 'homoflexible',
+      'Prefer not to say': 'preferNotToSay', 'Other': 'other',
+    };
+    const key = keyMap[value];
+    return key ? t(`onboarding.orientationOptions.${key}`) : value;
+  };
+
+  const pronounLabel = (value: string): string => {
+    const keyMap: Record<string, string> = {
+      'she/her': 'sheHer', 'he/him': 'heHim', 'they/them': 'theyThem',
+      'she/they': 'sheThey', 'he/they': 'heThey', 'any pronouns': 'anyPronouns',
+      'ask me': 'askMe', 'prefer not to say': 'preferNotToSay',
+    };
+    const key = keyMap[value];
+    return key ? t(`onboarding.pronounOptions.${key}`) : value;
+  };
+
+  const ethnicityLabel = (value: string): string => {
+    const keyMap: Record<string, string> = {
+      'Asian': 'asian', 'Black/African': 'blackAfrican', 'Hispanic/Latinx': 'hispanicLatinx',
+      'Indigenous/Native': 'indigenousNative', 'Middle Eastern/North African': 'middleEastern',
+      'Pacific Islander': 'pacificIslander', 'South Asian': 'southAsian',
+      'White/Caucasian': 'whiteCaucasian', 'Multiracial': 'multiracial',
+      'Other': 'other', 'Prefer not to say': 'preferNotToSay',
+    };
+    const key = keyMap[value];
+    return key ? t(`onboarding.ethnicityOptions.${key}`) : value;
+  };
+
+  const getStepTitles = (stepKey: string) => {
+    const titles: Record<string, { title: string; subtitle?: string }> = {
+      name: { title: t('onboarding.basicInfoSteps.nameTitle'), subtitle: t('onboarding.basicInfoSteps.nameSubtitle') },
+      birthday: { title: t('onboarding.basicInfoSteps.birthdayTitle'), subtitle: t('onboarding.basicInfoSteps.birthdaySubtitle') },
+      gender: { title: t('onboarding.basicInfoSteps.genderTitle'), subtitle: t('onboarding.basicInfoSteps.genderSubtitle') },
+      pronouns: { title: t('onboarding.basicInfoSteps.pronounsTitle') },
+      orientation: { title: t('onboarding.basicInfoSteps.orientationTitle') },
+      ethnicity: { title: t('onboarding.basicInfoSteps.ethnicityTitle'), subtitle: t('onboarding.basicInfoSteps.ethnicitySubtitle') },
+      location: { title: t('onboarding.basicInfoSteps.locationTitle'), subtitle: t('onboarding.basicInfoSteps.locationSubtitle') },
+      hometown: { title: t('onboarding.basicInfoSteps.hometownTitle'), subtitle: t('onboarding.basicInfoSteps.hometownSubtitle') },
+      occupation: { title: t('onboarding.basicInfoSteps.occupationTitle'), subtitle: t('onboarding.basicInfoSteps.occupationSubtitle') },
+      education: { title: t('onboarding.basicInfoSteps.educationTitle'), subtitle: t('onboarding.basicInfoSteps.educationSubtitle') },
+    };
+    return titles[stepKey] || { title: '', subtitle: undefined };
+  };
+
+  // Sub-step navigation
+  const [subStep, setSubStep] = useState(0);
+
+  // Form state
   const [displayName, setDisplayName] = useState('');
   const [birthDate, setBirthDate] = useState<Date | undefined>(undefined);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const [gender, setGender] = useState<string[]>([]);
+  // Dismiss DatePicker when app backgrounds to prevent RNCDatePicker crash
+  // (Android Activity destruction causes "not attached to Activity" error)
+  useEffect(() => {
+    if (!showDatePicker || Platform.OS !== 'android') return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') setShowDatePicker(false);
+    });
+    return () => sub.remove();
+  }, [showDatePicker]);
+  const [ageCertified, setAgeCertified] = useState(false);
+  const [gender, setGender] = useState('');
   const [pronouns, setPronouns] = useState('');
   const [ethnicity, setEthnicity] = useState<string[]>([]);
   const [orientation, setOrientation] = useState<string[]>([]);
@@ -131,14 +213,28 @@ export default function BasicInfo() {
   const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationSearch, setLocationSearch] = useState('');
   const [searchingLocation, setSearchingLocation] = useState(false);
-  const [locationSuggestions, setLocationSuggestions] = useState<Array<{ city: string; state: string; country: string; latitude: number; longitude: number }>>([]);
+  const [locationSuggestions, setLocationSuggestions] = useState<CityResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [hometown, setHometown] = useState('');
+  const [hometownSuggestions, setHometownSuggestions] = useState<CityResult[]>([]);
+  const [showHometownSuggestions, setShowHometownSuggestions] = useState(false);
+  const hometownSearchRef = useRef<NodeJS.Timeout>(null);
+  const [occupation, setOccupation] = useState('');
+  const [education, setEducation] = useState('');
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
-  const [ageCertified, setAgeCertified] = useState(false);
-  const [manualLocationMode, setManualLocationMode] = useState(false); // For users without location permission
+  const [hideLocation, setHideLocation] = useState(false);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [fieldVisibility, setFieldVisibility] = useState<Record<string, boolean>>({
+    gender: true, sexual_orientation: true, ethnicity: true,
+  });
 
-  // Check authentication and load existing data on mount
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const { loadDraft, saveDraft, clearDraft } = useOnboardingDraft<BasicInfoDraft>(user?.id, 'basic-info');
+
+  // ─── Load existing profile ─────────────────────────────────────────────────
+
   useEffect(() => {
     checkAuth();
     loadExistingProfile();
@@ -147,33 +243,8 @@ export default function BasicInfo() {
   const checkAuth = async () => {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) {
-      Alert.alert('Not Authenticated', 'Please sign in to continue');
+      showToast({ type: 'error', title: t('onboarding.errors.notAuthenticated'), message: t('onboarding.errors.pleaseSignIn') });
       router.replace('/(auth)/welcome');
-    }
-  };
-
-  // Toggle functions for multi-select fields
-  const toggleGender = (g: string) => {
-    if (gender.includes(g)) {
-      setGender(gender.filter(item => item !== g));
-    } else {
-      setGender([...gender, g]);
-    }
-  };
-
-  const toggleEthnicity = (e: string) => {
-    if (ethnicity.includes(e)) {
-      setEthnicity(ethnicity.filter(item => item !== e));
-    } else {
-      setEthnicity([...ethnicity, e]);
-    }
-  };
-
-  const toggleOrientation = (o: string) => {
-    if (orientation.includes(o)) {
-      setOrientation(orientation.filter(item => item !== o));
-    } else {
-      setOrientation([...orientation, o]);
     }
   };
 
@@ -184,1000 +255,1029 @@ export default function BasicInfo() {
 
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('display_name, birth_date, gender, pronouns, ethnicity, sexual_orientation, location_city, location_state, location_country, latitude, longitude')
+        .select('display_name, birth_date, gender, pronouns, ethnicity, sexual_orientation, location_city, location_state, location_country, latitude, longitude, hide_distance, field_visibility, hometown, occupation, education')
         .eq('user_id', currentUser.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        // PGRST116 = no rows returned (new user)
-        console.error('Error loading profile:', error);
-        return;
-      }
+      if (error && error.code !== 'PGRST116') return;
 
-      // Pre-fill form if data exists
       if (profile) {
         if (profile.display_name) setDisplayName(profile.display_name);
-        if (profile.birth_date) {
-          setBirthDate(new Date(profile.birth_date));
-        }
-        if (profile.gender) setGender(Array.isArray(profile.gender) ? profile.gender : [profile.gender]);
+        if (profile.birth_date) setBirthDate(new Date(profile.birth_date));
+        if (profile.gender) setGender(Array.isArray(profile.gender) ? profile.gender[0] : profile.gender);
         if (profile.pronouns) setPronouns(profile.pronouns);
         if (profile.ethnicity) setEthnicity(Array.isArray(profile.ethnicity) ? profile.ethnicity : [profile.ethnicity]);
         if (profile.sexual_orientation) setOrientation(Array.isArray(profile.sexual_orientation) ? profile.sexual_orientation : [profile.sexual_orientation]);
         if (profile.location_city) setLocationCity(profile.location_city);
         if (profile.location_state) setLocationState(profile.location_state);
         if (profile.location_country) setLocationCountry(profile.location_country);
-        if (profile.latitude && profile.longitude) {
-          setLocationCoords({
-            latitude: profile.latitude,
-            longitude: profile.longitude
-          });
+        if (profile.latitude && profile.longitude) setLocationCoords({ latitude: profile.latitude, longitude: profile.longitude });
+        if (profile.hometown) setHometown(profile.hometown);
+        if (profile.occupation) setOccupation(profile.occupation);
+        if (profile.education) setEducation(profile.education);
+        if (profile.hide_distance !== undefined) setHideLocation(profile.hide_distance);
+        if (profile.field_visibility) {
+          setFieldVisibility(prev => ({ ...prev, ...profile.field_visibility }));
         }
+      }
+
+      // Overlay draft on top of DB data (draft is more recent unsaved input)
+      const draft = await loadDraft();
+      if (draft) {
+        const d = draft.data;
+        if (d.displayName) setDisplayName(d.displayName);
+        if (d.birthDate) setBirthDate(new Date(d.birthDate));
+        if (d.ageCertified) setAgeCertified(d.ageCertified);
+        if (d.gender) setGender(d.gender);
+        if (d.pronouns) setPronouns(d.pronouns);
+        if (d.orientation?.length) setOrientation(d.orientation);
+        if (d.ethnicity?.length) setEthnicity(d.ethnicity);
+        if (d.locationCity) setLocationCity(d.locationCity);
+        if (d.locationState) setLocationState(d.locationState);
+        if (d.locationCountry) setLocationCountry(d.locationCountry);
+        if (d.locationCoords) setLocationCoords(d.locationCoords);
+        if (d.hideLocation !== undefined) setHideLocation(d.hideLocation);
+        if (d.hometown) setHometown(d.hometown);
+        if (d.occupation) setOccupation(d.occupation);
+        if (d.education) setEducation(d.education);
+        if (d.fieldVisibility) setFieldVisibility(prev => ({ ...prev, ...d.fieldVisibility }));
+        setSubStep(draft.subStep);
       }
     } catch (error) {
       console.error('Error loading existing profile:', error);
     }
   };
 
+  // ─── Gender selection (clears invalid orientations) ────────────────────────
+
+  const selectGender = (g: string) => {
+    setGender(g);
+    if (g === 'Man' && (orientation.includes('Straight') || orientation.includes('Lesbian'))) setOrientation([]);
+  };
+
+  // ─── Location helpers ──────────────────────────────────────────────────────
+
   const handleGetLocation = async () => {
     try {
       setGettingLocation(true);
-
-      // Request foreground location permissions
       const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== 'granted') {
         if (canAskAgain) {
-          Alert.alert(
-            'Permission Denied',
-            'Location access is needed to find matches near you. Please grant location permission.'
-          );
+          showToast({ type: 'error', title: t('onboarding.errors.permissionDenied'), message: t('onboarding.errors.needLocationAccess') });
         } else {
-          Alert.alert(
-            'Location Permission Required',
-            'Accord needs precise location to find matches nearby. Please enable location in your device Settings.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Open Settings', onPress: () => Location.enableNetworkProviderAsync() },
-            ]
-          );
+          Alert.alert(t('onboarding.errors.permissionRequired'), t('onboarding.errors.enableInSettings'), [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('onboarding.errors.openSettings'), onPress: () => openAppSettings() },
+          ]);
         }
         return;
       }
 
-      // Request HIGHEST accuracy for precise GPS coordinates
-      // This is critical for accurate distance calculations in dating apps
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest, // Use highest accuracy (GPS)
-        timeInterval: 5000,
-        distanceInterval: 0,
-      });
+      await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
 
-      console.log('📍 Location accuracy:', location.coords.accuracy, 'meters');
-      console.log('📍 Coordinates:', location.coords.latitude, location.coords.longitude);
+      let location: Location.LocationObject | null = null;
 
-      // Check if we got accurate coordinates (iOS can return approximate)
-      if (!location.coords || (location.coords.accuracy !== null && location.coords.accuracy > 100)) {
-        Alert.alert(
-          'Precise Location Required',
-          `Location accuracy is too low (${Math.round(location.coords?.accuracy || 0)} meters). Please enable "Precise Location" for Accord in your iPhone Settings:\n\n1. Open Settings\n2. Scroll to Accord\n3. Tap Location\n4. Enable "Precise Location"\n\nOr use the search feature to find your city instead.`,
-          [
-            { text: 'OK', style: 'cancel' }
-          ]
-        );
-        // DO NOT store inaccurate coordinates - return early
+      try {
+        const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 60000, requiredAccuracy: 1000 });
+        if (lastKnown?.coords) location = lastKnown;
+      } catch {}
+
+      if (!location) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        try {
+          location = await Promise.race([
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            new Promise<Location.LocationObject>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000)),
+          ]);
+        } catch {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          try {
+            location = await Promise.race([
+              Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low }),
+              new Promise<Location.LocationObject>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000)),
+            ]);
+          } catch {
+            location = await Promise.race([
+              Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Lowest }),
+              new Promise<Location.LocationObject>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000)),
+            ]);
+          }
+        }
+      }
+
+      if (!location?.coords) throw new Error('No coordinates received');
+
+      if (Platform.OS === 'ios' && location.coords.accuracy !== null && location.coords.accuracy > 100) {
+        showToast({ type: 'error', title: t('common.error'), message: t('toast.locationErrorPrecise') });
         return;
       }
 
-      // Store coordinates only if accuracy is good
-      setLocationCoords({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
+      setLocationCoords({ latitude: location.coords.latitude, longitude: location.coords.longitude });
+      await new Promise(resolve => setTimeout(resolve, 50));
 
-      // Reverse geocode to get city/state
-      const [address] = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
+      const geocodeResult = await Promise.race([
+        Location.reverseGeocodeAsync({ latitude: location.coords.latitude, longitude: location.coords.longitude }),
+        new Promise<Location.LocationGeocodedAddress[]>((_, reject) => setTimeout(() => reject(new Error('Geocode timeout')), 5000)),
+      ]);
+      const [address] = geocodeResult;
 
-      if (address.city) setLocationCity(address.city);
-      if (address.region) setLocationState(address.region);
-      if (address.country) setLocationCountry(address.country);
+      let city = address.city || address.district || address.subregion || address.name || '';
+      let state = address.region || address.subregion || '';
+      const country = address.country || '';
 
-      console.log('✅ Location captured:', {
-        city: address.city,
-        state: address.region,
-        accuracy: location.coords.accuracy,
-        coords: `${location.coords.latitude}, ${location.coords.longitude}`
-      });
+      const constituentRegions = [
+        'Wales', 'Scotland', 'England', 'Northern Ireland',
+        'Catalonia', 'Andalusia', 'Galicia', 'Basque Country',
+        'Bavaria', 'Saxony', 'Hesse',
+        'Lombardy', 'Tuscany', 'Sicily', 'Veneto',
+        'Queensland', 'Victoria', 'New South Wales',
+        'Ontario', 'Quebec', 'British Columbia', 'Alberta',
+      ];
+      if (constituentRegions.some(r => city.toLowerCase() === r.toLowerCase())) {
+        const originalCity = city;
+        city = address.district || address.subregion || address.name || '';
+        state = originalCity;
+      }
+
+      if (city) setLocationCity(city);
+      if (state) setLocationState(state);
+      if (country) setLocationCountry(country);
     } catch (error: any) {
       console.error('Location error:', error);
-      Alert.alert(
-        'Location Error',
-        'Could not get your location. Please check your location settings or enter your location manually.',
-        [{ text: 'OK' }]
-      );
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.locationErrorGeneric') });
     } finally {
       setGettingLocation(false);
     }
   };
 
-  // Debounce timer ref
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
-
-  // Request location permission on Android when user wants to search
-  const requestLocationPermissionForSearch = async () => {
-    if (Platform.OS === 'android' && !locationPermissionGranted) {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        setLocationPermissionGranted(true);
-        return true;
-      } else {
-        Alert.alert(
-          'Permission Required',
-          'Location permission is needed to search for cities on Android. You can also use "Get My Location" button instead.',
-          [{ text: 'OK' }]
-        );
-        return false;
-      }
-    }
-    return true; // iOS doesn't need permission for geocoding
-  };
-
-  const handleLocationSearch = async (searchText: string) => {
+  const handleLocationSearch = (searchText: string) => {
     setLocationSearch(searchText);
-
-    // Clear previous suggestions if search is too short
     if (searchText.trim().length < 2) {
       setLocationSuggestions([]);
       setShowSuggestions(false);
       return;
     }
-
-    // Clear previous timeout
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    // Debounce search by 400ms (faster for better UX)
-    searchTimeoutRef.current = setTimeout(async () => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      setSearchingLocation(true);
       try {
-        setSearchingLocation(true);
-
-        // Android requires location permission for geocoding - check if already granted
-        if (Platform.OS === 'android' && !locationPermissionGranted) {
-          const hasPermission = await requestLocationPermissionForSearch();
-          if (!hasPermission) {
-            setSearchingLocation(false);
-            return;
-          }
-        }
-
-        // Use expo-location geocoding to find the location
-        const results = await Location.geocodeAsync(searchText);
-
-        if (results.length > 0) {
-          // Get address details for each result (limit to first 5)
-          const suggestions = await Promise.all(
-            results.slice(0, 5).map(async (result) => {
-              try {
-                const [address] = await Location.reverseGeocodeAsync({
-                  latitude: result.latitude,
-                  longitude: result.longitude,
-                });
-
-                // Extract city - try multiple fields as different countries use different conventions
-                let city = address.city || address.district || address.subregion || address.name || '';
-                let state = address.region || address.subregion || '';
-                const country = address.country || '';
-
-                // Handle countries with constituent countries/regions (UK, Spain, etc.)
-                // These places have regions that are more like "states" than cities
-                const constituentRegions = [
-                  'Wales', 'Scotland', 'England', 'Northern Ireland', // UK
-                  'Catalonia', 'Andalusia', 'Galicia', 'Basque Country', // Spain
-                  'Bavaria', 'Saxony', 'Hesse', // Germany
-                  'Lombardy', 'Tuscany', 'Sicily', 'Veneto', // Italy
-                  'Queensland', 'Victoria', 'New South Wales', // Australia
-                  'Ontario', 'Quebec', 'British Columbia', 'Alberta', // Canada
-                ];
-
-                // If city is a constituent region, use district/subregion as city instead
-                if (constituentRegions.some(r => city.toLowerCase() === r.toLowerCase())) {
-                  const originalCity = city;
-                  city = address.district || address.subregion || address.name || '';
-                  // If we still don't have a city, use the search term's first part
-                  if (!city) {
-                    city = searchText.split(',')[0].trim();
-                  }
-                  // Use the constituent region as the state
-                  state = originalCity;
-                }
-
-                // If city is still empty, try to extract from name or use search term
-                if (!city && address.name) {
-                  city = address.name;
-                }
-
-                // For countries without states/regions (small countries), leave state empty
-                // but ensure we have at least the country
-                if (!state && city) {
-                  // Some small countries don't have regions - that's okay
-                  state = '';
-                }
-
-                return {
-                  city: city,
-                  state: state,
-                  country: country,
-                  latitude: result.latitude,
-                  longitude: result.longitude,
-                };
-              } catch (error) {
-                console.log('Reverse geocode failed:', error);
-                return null;
-              }
-            })
-          );
-
-          // Filter out null results and results without a city
-          const validSuggestions = suggestions.filter(
-            (s): s is { city: string; state: string; country: string; latitude: number; longitude: number } =>
-              s !== null && s.city !== ''
-          );
-
-          // Deduplicate by city+state+country combination
-          const uniqueSuggestions = validSuggestions.filter((s, index, self) =>
-            index === self.findIndex((t) =>
-              t.city.toLowerCase() === s.city.toLowerCase() &&
-              t.state.toLowerCase() === s.state.toLowerCase() &&
-              t.country.toLowerCase() === s.country.toLowerCase()
-            )
-          );
-
-          console.log('📍 Location suggestions:', uniqueSuggestions.length, 'results for:', searchText);
-          setLocationSuggestions(uniqueSuggestions);
-          setShowSuggestions(uniqueSuggestions.length > 0);
-        } else {
-          console.log('📍 No geocode results for:', searchText);
-          setLocationSuggestions([]);
-          setShowSuggestions(false);
-        }
-      } catch (error: any) {
-        console.error('Location search error:', error);
+        const results = searchCities(searchText, 15);
+        setLocationSuggestions(results);
+        setShowSuggestions(results.length > 0);
+      } catch {
         setLocationSuggestions([]);
         setShowSuggestions(false);
       } finally {
         setSearchingLocation(false);
       }
-    }, 400);
+    }, 150);
   };
 
-  const selectLocation = (suggestion: { city: string; state: string; country: string; latitude: number; longitude: number }) => {
+  const selectLocation = (suggestion: CityResult) => {
     setLocationCity(suggestion.city);
     setLocationState(suggestion.state);
     setLocationCountry(suggestion.country);
-    setLocationCoords({
-      latitude: suggestion.latitude,
-      longitude: suggestion.longitude,
-    });
+    setLocationCoords({ latitude: suggestion.latitude, longitude: suggestion.longitude });
     setLocationSearch(`${suggestion.city}, ${suggestion.state}`);
     setShowSuggestions(false);
     setLocationSuggestions([]);
-
-    console.log('✅ Location selected:', {
-      city: suggestion.city,
-      state: suggestion.state,
-      country: suggestion.country,
-      coords: `${suggestion.latitude}, ${suggestion.longitude}`
-    });
   };
+
+  const clearLocation = () => {
+    setLocationCity('');
+    setLocationState('');
+    setLocationCountry('');
+    setLocationCoords(null);
+    setLocationSearch('');
+    setShowManualEntry(false);
+  };
+
+  // ─── Validation per sub-step ───────────────────────────────────────────────
+
+  const canContinue = (): boolean => {
+    switch (SUB_STEPS[subStep].key) {
+      case 'name': return displayName.trim().length >= 2;
+      case 'birthday': return !!birthDate && ageCertified && calculateAge(birthDate) >= 18;
+      case 'gender': return !!gender;
+      case 'pronouns': return !!pronouns;
+      case 'orientation': return orientation.length > 0;
+      case 'ethnicity': return true; // optional
+      case 'location': return !!locationCoords && !!locationCity;
+      case 'hometown': return hometown.trim().length >= 2;
+      case 'occupation': return occupation.trim().length >= 2;
+      case 'education': return education.trim().length >= 2;
+      default: return false;
+    }
+  };
+
+  // ─── Per-step validation with error messages ───────────────────────────────
+
+  const validateCurrentStep = (): boolean => {
+    switch (SUB_STEPS[subStep].key) {
+      case 'name': {
+        if (!displayName.trim()) {
+          showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.errors.enterName') });
+          return false;
+        }
+        const mod = validateDisplayName(displayName);
+        if (!mod.isClean) {
+          showToast({ type: 'error', title: t('onboarding.errors.inappropriateContent'), message: getModerationErrorMessage('display name') });
+          return false;
+        }
+        return true;
+      }
+      case 'birthday': {
+        if (!birthDate) {
+          showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.errors.selectBirthDate') });
+          return false;
+        }
+        const age = calculateAge(birthDate);
+        if (age < 18) {
+          showToast({ type: 'error', title: t('onboarding.errors.ageRequirement'), message: t('onboarding.errors.mustBe18') });
+          return false;
+        }
+        if (!ageCertified) {
+          showToast({ type: 'error', title: t('onboarding.errors.ageCertRequired'), message: t('onboarding.errors.confirmAge18') });
+          return false;
+        }
+        return true;
+      }
+      case 'gender':
+        if (!gender) { showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.errors.selectGender') }); return false; }
+        return true;
+      case 'pronouns':
+        if (!pronouns) { showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.errors.selectPronouns') }); return false; }
+        return true;
+      case 'orientation':
+        if (orientation.length === 0) { showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.errors.selectOrientation') }); return false; }
+        return true;
+      case 'ethnicity': return true;
+      case 'location':
+        if (!locationCoords) { showToast({ type: 'error', title: t('onboarding.errors.locationRequired'), message: t('onboarding.errors.useLocationButton') }); return false; }
+        if (!locationCity || !locationState) { showToast({ type: 'error', title: t('onboarding.errors.locationError'), message: t('onboarding.errors.couldNotDetermineCity') }); return false; }
+        return true;
+      case 'hometown':
+        if (hometown.trim().length < 2) { showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.additionalErrors.enterHometown') }); return false; }
+        return true;
+      case 'occupation':
+        if (occupation.trim().length < 2) { showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.additionalErrors.enterOccupation') }); return false; }
+        return true;
+      case 'education':
+        if (education.trim().length < 2) { showToast({ type: 'error', title: t('onboarding.errors.required'), message: t('onboarding.additionalErrors.enterEducation') }); return false; }
+        return true;
+      default: return true;
+    }
+  };
+
+  // ─── Draft snapshot helper ─────────────────────────────────────────────────
+
+  const buildDraftSnapshot = (): BasicInfoDraft => ({
+    displayName,
+    birthDate: birthDate ? birthDate.toISOString() : null,
+    ageCertified,
+    gender,
+    pronouns,
+    orientation,
+    ethnicity,
+    locationCity,
+    locationState,
+    locationCountry,
+    locationCoords,
+    hideLocation,
+    fieldVisibility,
+    hometown,
+    occupation,
+    education,
+  });
+
+  // ─── Navigation ────────────────────────────────────────────────────────────
 
   const handleContinue = async () => {
-    // Validation
-    if (!displayName.trim()) {
-      Alert.alert('Required', 'Please enter your name');
-      return;
-    }
+    if (!validateCurrentStep()) return;
 
-    // Check for profanity in display name
-    const nameModeration = validateDisplayName(displayName);
-    if (!nameModeration.isClean) {
-      Alert.alert('Inappropriate Content', getModerationErrorMessage('display name'));
-      return;
+    if (subStep < SUB_STEPS.length - 1) {
+      const nextStep = subStep + 1;
+      saveDraft(nextStep, buildDraftSnapshot());
+      setSubStep(nextStep);
+    } else {
+      await saveProfile();
     }
-
-    if (!birthDate) {
-      Alert.alert('Required', 'Please select your birth date');
-      return;
-    }
-
-    const birthDateObj = new Date(birthDate as Date);
-    const age = calculateAge(birthDateObj);
-    if (age < 18) {
-      Alert.alert('Age Requirement', 'You must be at least 18 years old to use Accord');
-      return;
-    }
-
-    if (age > 100) {
-      Alert.alert('Invalid Birth Date', 'Please enter a valid birth date');
-      return;
-    }
-
-    if (!ageCertified) {
-      Alert.alert('Age Certification Required', 'Please confirm that you are 18 years or older');
-      return;
-    }
-
-    if (gender.length === 0) {
-      Alert.alert('Required', 'Please select at least one gender');
-      return;
-    }
-
-    if (!pronouns) {
-      Alert.alert('Required', 'Please select your pronouns');
-      return;
-    }
-
-    if (orientation.length === 0) {
-      Alert.alert('Required', 'Please select at least one sexual orientation');
-      return;
-    }
-
-    if (!locationCity || !locationState) {
-      Alert.alert('Required', 'Please enter your location');
-      return;
-    }
-
-    // Warn if no precise coordinates captured (only if not in manual mode)
-    // In manual mode, user explicitly chose to enter location without GPS
-    if (!locationCoords && !manualLocationMode) {
-      Alert.alert(
-        'Improve Accuracy',
-        'For best matching results, we recommend using "Get My Location" or the search feature to get precise coordinates.\n\nContinue with manual entry?',
-        [
-          { text: 'Go Back', style: 'cancel', onPress: () => {} },
-          { text: 'Continue Anyway', style: 'default', onPress: () => proceedWithSave() },
-        ]
-      );
-      return;
-    }
-
-    await proceedWithSave();
   };
 
-  const proceedWithSave = async () => {
+  const handleBack = () => {
+    if (subStep > 0) {
+      const prevStep = subStep - 1;
+      saveDraft(prevStep, buildDraftSnapshot());
+      setSubStep(prevStep);
+    } else {
+      // First step of first screen — sign out or go to auth
+      router.replace('/(auth)/welcome');
+    }
+  };
+
+  const handleSkip = () => {
+    if (subStep < SUB_STEPS.length - 1) {
+      const nextStep = subStep + 1;
+      saveDraft(nextStep, buildDraftSnapshot());
+      setSubStep(nextStep);
+    }
+  };
+
+  // ─── Save ──────────────────────────────────────────────────────────────────
+
+  const saveProfile = async () => {
     try {
       setLoading(true);
-
-      // Get the current user from Supabase session (more reliable than context)
       const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+      if (userError || !currentUser) throw new Error(t('onboarding.additionalErrors.notAuthenticatedMessage'));
 
-      if (userError || !currentUser) {
-        throw new Error('Not authenticated. Please sign in again.');
-      }
-
-      // Use stored coordinates if available (from "Use my location"), otherwise geocode the city
-      let coords = locationCoords;
-      if (!coords) {
-        try {
-          const geocoded = await Location.geocodeAsync(`${locationCity}, ${locationState}`);
-          coords = geocoded[0] ? {
-            latitude: geocoded[0].latitude,
-            longitude: geocoded[0].longitude
-          } : null;
-        } catch (geocodeError) {
-          // Geocoding failed, but we can still save without coordinates
-          console.warn('Geocoding failed:', geocodeError);
-        }
-      }
-
-      // Calculate age and zodiac sign from birth date
       const birthDateObj = new Date(birthDate as Date);
       const age = calculateAge(birthDateObj);
       const zodiac_sign = calculateZodiac(birthDateObj);
 
-      // Initialize encryption keys for this user
-      // This generates a private key (stored securely on device) and public key (stored in DB)
       let encryptionPublicKey: string | null = null;
-      try {
-        encryptionPublicKey = await initializeEncryption(currentUser.id);
-        console.log('✅ Encryption keys initialized successfully');
-      } catch (encryptionError) {
-        console.error('⚠️ Failed to initialize encryption keys:', encryptionError);
-        // Don't block onboarding if encryption fails - user can still proceed
-        // Encryption will be attempted again if needed when sending first message
-      }
+      try { encryptionPublicKey = await initializeEncryption(currentUser.id); } catch {}
 
-      // Get device fingerprint for ban evasion prevention
       let deviceFingerprint: string | null = null;
-      try {
-        deviceFingerprint = await getDeviceFingerprint();
-        console.log('✅ Device fingerprint captured for ban prevention');
-      } catch (fingerprintError) {
-        console.error('⚠️ Failed to get device fingerprint:', fingerprintError);
-        // Don't block onboarding if fingerprinting fails
-      }
+      try { deviceFingerprint = await getDeviceFingerprint(); } catch {}
 
-      // Create or update profile
       const { error } = await supabase
         .from('profiles')
         .upsert({
           user_id: currentUser.id,
           display_name: displayName,
-          birth_date: birthDateObj.toISOString().split('T')[0], // Store as YYYY-MM-DD
-          age, // Calculated age
-          zodiac_sign, // Calculated zodiac
-          gender: gender, // Always store as array (TEXT[])
+          birth_date: birthDateObj.toISOString().split('T')[0],
+          age,
+          zodiac_sign,
+          gender: gender ? [gender] : ['Other'],
           pronouns,
-          ethnicity: ethnicity && ethnicity.length > 0 ? ethnicity : null, // Always store as array (TEXT[])
-          sexual_orientation: orientation, // Always store as array (TEXT[])
+          ethnicity: ethnicity.length > 0 ? ethnicity : null,
+          sexual_orientation: orientation.length > 0 ? orientation : ['Other'],
           location_city: locationCity,
           location_state: locationState,
           location_country: locationCountry || null,
-          latitude: coords?.latitude || null,
-          longitude: coords?.longitude || null,
-          encryption_public_key: encryptionPublicKey, // Store public key for E2E encryption
-          device_id: deviceFingerprint, // Store device fingerprint for ban evasion prevention
+          latitude: locationCoords?.latitude ?? null,
+          longitude: locationCoords?.longitude ?? null,
+          hide_distance: hideLocation,
+          hometown: hometown.trim() || null,
+          occupation: occupation.trim() || null,
+          education: education.trim() || null,
+          encryption_public_key: encryptionPublicKey,
+          device_id: deviceFingerprint,
+          field_visibility: fieldVisibility,
+          preferred_language: i18n.language || 'en',
+          terms_accepted_at: new Date().toISOString(),
+          terms_version: '1.0',
           onboarding_step: 1,
-        }, {
-          onConflict: 'user_id'
-        });
+          // profile_complete is set after photos are uploaded. Client requires 3 photos
+          // (photos.tsx). DB trigger check_minimum_photos still enforces 2 for backward
+          // compat with older app versions — bump to 3 once old clients have churned out.
+        }, { onConflict: 'user_id' });
 
       if (error) throw error;
 
-      // Track onboarding step completion
+      await clearDraft();
       trackUserAction.onboardingStepCompleted(1, 'basic-info');
       trackFunnel.onboardingStep1_BasicInfo();
-
       router.push('/(onboarding)/photos');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save profile');
+      showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profileSaveError') });
     } finally {
       setLoading(false);
     }
   };
 
-  // Ref for scrolling to location input
-  const scrollViewRef = useRef<ScrollView>(null);
-  const locationInputRef = useRef<View>(null);
+  // ─── Render each sub-step ──────────────────────────────────────────────────
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-      className="flex-1 bg-cream"
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-    >
-      <ScrollView
-        ref={scrollViewRef}
-        className="flex-1"
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
-      >
-        <View className="px-6 pb-8" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64 }}>
-        {/* Progress */}
-        <View className="mb-8">
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 1 of 8</Text>
-            <Text className="text-sm text-lavender-400 font-bold">12%</Text>
-          </View>
-          <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
-            <View
-              className="h-3 bg-lavender-400 rounded-full"
-              style={{ width: '12%' }}
-            />
-          </View>
-        </View>
+  const renderContent = () => {
+    const step = SUB_STEPS[subStep];
 
-        {/* Header */}
-        <View className="mb-8 items-center">
-          <Text className="text-5xl mb-4">💜</Text>
-          <Text className="text-4xl font-bold text-charcoal mb-3 text-center">
-            Let's get to know you
-          </Text>
-          <Text className="text-gray-600 text-lg text-center">
-            First things first — the basics
-          </Text>
-        </View>
-
-        {/* Form */}
-        <View className="space-y-6">
-          {/* Name */}
+    switch (step.key) {
+      // ── Name ──────────────────────────────────────────────────────────────
+      case 'name':
+        return (
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.displayName')}</Text>
             <TextInput
-              className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-              placeholder={t('onboarding.displayNamePlaceholder')}
+              style={[s.textInput, {
+                backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+                color: isDark ? '#F5F5F7' : '#1A1A2E',
+              }]}
+              placeholder={t('onboarding.basicInfoSteps.namePlaceholder')}
+              placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
               value={displayName}
               onChangeText={setDisplayName}
               maxLength={50}
+              autoFocus
             />
+            <Text style={[s.hint, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
+              {t('onboarding.basicInfoSteps.nameHint')}
+            </Text>
           </View>
+        );
 
-          {/* Birth Date */}
+      // ── Birthday ──────────────────────────────────────────────────────────
+      case 'birthday':
+        return (
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.birthDate')}</Text>
             <TouchableOpacity
-              className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 flex-row items-center justify-between"
+              style={[s.dateButton, {
+                backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+              }]}
               onPress={() => setShowDatePicker(true)}
             >
-              <Text className={birthDate ? "text-gray-900" : "text-gray-500"}>
-                {birthDate ? new Date(birthDate as Date).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                }) : 'Select your birth date'}
+              <Text style={[s.dateButtonText, {
+                color: birthDate ? (isDark ? '#F5F5F7' : '#1A1A2E') : (isDark ? '#6B7280' : '#9CA3AF'),
+              }]}>
+                {birthDate
+                  ? birthDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                  : t('onboarding.basicInfoSteps.selectBirthDate')}
               </Text>
-              <MaterialCommunityIcons name="calendar" size={20} color="#9CA3AF" />
+              <MaterialCommunityIcons name="calendar" size={22} color="#A08AB7" />
             </TouchableOpacity>
+
             {birthDate && (
-              <Text className="text-xs text-gray-600 mt-1">
-                Age: {calculateAge(new Date(birthDate as Date))} • {calculateZodiac(new Date(birthDate as Date))}
+              <Text style={[s.ageDisplay, { color: isDark ? '#A08AB7' : '#8B72A8' }]}>
+                {calculateAge(birthDate)} years old  ·  {calculateZodiac(birthDate)}
               </Text>
             )}
-          </View>
 
-          {/* Age Certification Checkbox */}
-          {birthDate && (
-            <TouchableOpacity
-              className="flex-row items-start bg-purple-50 border-2 border-purple-200 rounded-xl p-4"
-              onPress={() => setAgeCertified(!ageCertified)}
-              activeOpacity={0.7}
-            >
-              <View className={`w-6 h-6 rounded-md border-2 mr-3 items-center justify-center ${
-                ageCertified ? 'bg-lavender-500 border-lavender-500' : 'bg-white border-gray-300'
-              }`}>
-                {ageCertified && (
-                  <MaterialCommunityIcons name="check" size={16} color="white" />
-                )}
-              </View>
-              <View className="flex-1">
-                <Text className="text-gray-900 font-semibold mb-1">
-                  I certify that I am 18 years of age or older
+            {/* Age certification */}
+            {birthDate && (
+              <TouchableOpacity
+                style={[s.certifyRow, {
+                  backgroundColor: isDark ? '#1A1628' : '#F5F0FA',
+                }]}
+                onPress={() => setAgeCertified(!ageCertified)}
+                activeOpacity={0.7}
+              >
+                <View style={[s.checkbox, ageCertified && s.checkboxChecked]}>
+                  {ageCertified && <MaterialCommunityIcons name="check" size={14} color="white" />}
+                </View>
+                <Text style={[s.certifyText, { color: isDark ? '#E5E7EB' : '#374151' }]}>
+                  {t('onboarding.basicInfoSteps.ageCertification')}
                 </Text>
-                <Text className="text-xs text-gray-600 leading-5">
-                  By checking this box, you confirm that you meet the minimum age requirement to use Accord and agree to our Terms of Service.
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )}
+              </TouchableOpacity>
+            )}
 
-          {/* Calendar Date Picker - Platform specific */}
-          {Platform.OS === 'ios' ? (
-            // iOS: Use Modal with inline spinner
-            <Modal
-              visible={showDatePicker}
-              transparent
-              animationType="slide"
-              onRequestClose={() => setShowDatePicker(false)}
-            >
-              <View className="flex-1 bg-black/50 justify-end">
-                <View className="bg-white rounded-t-3xl p-6 pb-8">
-                  {/* Header */}
-                  <View className="flex-row items-center justify-between mb-4">
-                    <Text className="text-2xl font-bold text-gray-900">Select Birth Date</Text>
-                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                      <MaterialCommunityIcons name="close" size={28} color="#6B7280" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <Text className="text-sm text-gray-500 mb-4">
-                    You must be at least 18 years old to use Accord
-                  </Text>
-
-                  {/* Calendar Date Picker */}
-                  <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 8 }}>
+            {/* Date picker */}
+            {Platform.OS === 'ios' ? (
+              <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
+                <View style={s.modalOverlay}>
+                  <View style={[s.modalSheet, { backgroundColor: isDark ? '#1C1C2E' : '#FFFFFF' }]}>
+                    <View style={s.modalHeader}>
+                      <Text style={[s.modalTitle, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}>{t('onboarding.basicInfoSteps.birthDateModalTitle')}</Text>
+                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                        <MaterialCommunityIcons name="close" size={24} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                      </TouchableOpacity>
+                    </View>
                     <DateTimePicker
                       mode="date"
                       value={birthDate || maxBirthDate}
-                      onChange={(event, selectedDate) => {
-                        if (selectedDate) {
-                          setBirthDate(selectedDate);
-                        }
-                      }}
+                      onChange={(_, d) => { if (d) setBirthDate(d); }}
                       maximumDate={maxBirthDate}
                       minimumDate={minBirthDate}
                       display="spinner"
-                      themeVariant="light"
+                      themeVariant={isDark ? 'dark' : 'light'}
                     />
+                    <TouchableOpacity
+                      style={[s.modalConfirm, !birthDate && { opacity: 0.5 }]}
+                      onPress={() => setShowDatePicker(false)}
+                      disabled={!birthDate}
+                    >
+                      <Text style={s.modalConfirmText}>{t('common.confirm')}</Text>
+                    </TouchableOpacity>
                   </View>
-
-                  {/* Confirm Button */}
-                  <TouchableOpacity
-                    className={`rounded-full py-4 items-center mt-4 ${
-                      birthDate ? 'bg-lavender-500' : 'bg-gray-300'
-                    }`}
-                    onPress={() => setShowDatePicker(false)}
-                    disabled={!birthDate}
-                  >
-                    <Text className="text-white font-bold text-lg">
-                      {birthDate ? 'Confirm' : 'Select a date'}
-                    </Text>
-                  </TouchableOpacity>
                 </View>
-              </View>
-            </Modal>
-          ) : (
-            // Android: Use spinner date picker for easier year selection
-            showDatePicker && (
-              <DateTimePicker
-                mode="date"
-                value={birthDate || maxBirthDate}
-                onChange={(event, selectedDate) => {
-                  setShowDatePicker(false); // Android closes picker on any action
-                  if (event.type === 'set' && selectedDate) {
-                    setBirthDate(selectedDate);
-                  }
-                }}
-                maximumDate={maxBirthDate}
-                minimumDate={minBirthDate}
-                display="spinner"
-              />
-            )
-          )}
+              </Modal>
+            ) : (
+              showDatePicker && (
+                <DateTimePicker
+                  mode="date"
+                  value={birthDate || maxBirthDate}
+                  onChange={(event, d) => {
+                    setShowDatePicker(false);
+                    if (event.type === 'set' && d) setBirthDate(d);
+                  }}
+                  maximumDate={maxBirthDate}
+                  minimumDate={minBirthDate}
+                  display="spinner"
+                />
+              )
+            )}
+          </View>
+        );
 
-          {/* Gender */}
+      // ── Gender ────────────────────────────────────────────────────────────
+      case 'gender':
+        return (
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.gender')}</Text>
-            <Text className="text-xs text-gray-500 mb-2">Select all that apply</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {GENDERS.map((g) => (
+            {GENDERS.map((g, i) => {
+              const selected = gender === g;
+              return (
                 <TouchableOpacity
                   key={g}
-                  className={`px-4 py-2 rounded-full border ${
-                    gender.includes(g)
-                      ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white border-gray-300'
-                  }`}
-                  onPress={() => toggleGender(g)}
+                  style={{
+                    paddingVertical: 16,
+                    marginBottom: i < GENDERS.length - 1 ? 4 : 0,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                  onPress={() => selectGender(g)}
+                  activeOpacity={0.7}
                 >
-                  <Text
-                    className={`${
-                      gender.includes(g) ? 'text-white' : 'text-gray-700'
-                    } font-medium`}
-                  >
-                    {g}
+                  <Text style={{ fontSize: 16, fontWeight: '500', color: selected ? '#A08AB7' : (isDark ? '#E5E7EB' : '#374151') }}>
+                    {genderLabel(g)}
                   </Text>
+                  {selected && (
+                    <MaterialCommunityIcons name="check" size={22} color="#A08AB7" />
+                  )}
                 </TouchableOpacity>
-              ))}
-            </View>
-            {gender.length > 0 && (
-              <Text className="text-xs text-lavender-500 mt-2">
-                Selected: {gender.join(', ')}
+              );
+            })}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 12, paddingVertical: 12, paddingHorizontal: 14, backgroundColor: isDark ? '#1C1C2E' : '#F3F0F8', borderRadius: 12 }}>
+              <MaterialCommunityIcons name="information-outline" size={18} color="#A08AB7" style={{ marginTop: 1 }} />
+              <Text style={{ flex: 1, fontSize: 13, lineHeight: 18, color: isDark ? '#D1D5DB' : '#6B7280' }}>
+                {t('onboarding.basicInfoSteps.genderInfoText')}
               </Text>
-            )}
-          </View>
-
-          {/* Pronouns */}
-          <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.pronouns')}</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {PRONOUNS.map((p) => (
-                <TouchableOpacity
-                  key={p}
-                  className={`px-4 py-2 rounded-full border ${
-                    pronouns === p
-                      ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white border-gray-300'
-                  }`}
-                  onPress={() => setPronouns(p)}
-                >
-                  <Text
-                    className={`${
-                      pronouns === p ? 'text-white' : 'text-gray-700'
-                    } font-medium`}
-                  >
-                    {p}
-                  </Text>
-                </TouchableOpacity>
-              ))}
             </View>
           </View>
+        );
 
-          {/* Ethnicity */}
+      // ── Pronouns ──────────────────────────────────────────────────────────
+      case 'pronouns':
+        return (
+          <OnboardingChips
+            options={PRONOUNS.map(p => ({ label: pronounLabel(p), value: p }))}
+            value={pronouns}
+            onChange={setPronouns}
+          />
+        );
+
+      // ── Orientation ───────────────────────────────────────────────────────
+      case 'orientation':
+        return (
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.ethnicity')}</Text>
-            <Text className="text-xs text-gray-500 mb-2">{t('onboarding.ethnicityHelp')}</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {ETHNICITIES.map((e) => (
-                <TouchableOpacity
-                  key={e}
-                  className={`px-4 py-2 rounded-full border ${
-                    ethnicity.includes(e)
-                      ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white border-gray-300'
-                  }`}
-                  onPress={() => toggleEthnicity(e)}
-                >
-                  <Text
-                    className={`${
-                      ethnicity.includes(e) ? 'text-white' : 'text-gray-700'
-                    } font-medium`}
-                  >
-                    {e}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {ethnicity.length > 0 && (
-              <Text className="text-xs text-lavender-500 mt-2">
-                Selected: {ethnicity.join(', ')}
-              </Text>
-            )}
+            <OnboardingChips
+              options={getAvailableOrientations(gender).map(o => ({ label: orientationLabel(o), value: o }))}
+              value={orientation[0] || ''}
+              onChange={(v: string) => setOrientation(v ? [v] : [])}
+            />
           </View>
+        );
 
-          {/* Sexual Orientation */}
+      // ── Ethnicity ─────────────────────────────────────────────────────────
+      case 'ethnicity':
+        return (
           <View>
-            <Text className="text-sm font-medium text-gray-700 mb-2">{t('onboarding.sexualOrientation')}</Text>
-            <Text className="text-xs text-gray-500 mb-2">Select all that apply</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {ORIENTATIONS.map((o) => (
-                <TouchableOpacity
-                  key={o}
-                  className={`px-4 py-2 rounded-full border ${
-                    orientation.includes(o)
-                      ? 'bg-lavender-500 border-lavender-500'
-                      : 'bg-white border-gray-300'
-                  }`}
-                  onPress={() => toggleOrientation(o)}
-                >
-                  <Text
-                    className={`${
-                      orientation.includes(o) ? 'text-white' : 'text-gray-700'
-                    } font-medium`}
-                  >
-                    {o}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {orientation.length > 0 && (
-              <Text className="text-xs text-lavender-500 mt-2">
-                Selected: {orientation.join(', ')}
-              </Text>
-            )}
+            <OnboardingChips
+              options={ETHNICITIES.map(e => ({ label: ethnicityLabel(e), value: e }))}
+              value={ethnicity}
+              onChange={setEthnicity}
+              multiSelect
+            />
+            <VisibilityToggle
+              visible={fieldVisibility.ethnicity !== false}
+              onToggle={(v) => setFieldVisibility(prev => ({ ...prev, ethnicity: v }))}
+            />
           </View>
+        );
 
-          {/* Location */}
+      // ── Location ──────────────────────────────────────────────────────────
+      case 'location':
+        return (
           <View>
-            <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-sm font-medium text-gray-700">{t('onboarding.location')}</Text>
-              {!manualLocationMode && (
-                <TouchableOpacity onPress={handleGetLocation} disabled={gettingLocation}>
-                  <Text className="text-lavender-500 font-medium">
+            {/* Privacy toggle */}
+            <View style={s.privacyRow}>
+              <TouchableOpacity
+                style={[s.privacyOption, {
+                  backgroundColor: !hideLocation ? (isDark ? '#1A1628' : '#F5F0FA') : (isDark ? '#1C1C2E' : '#F8F7FA'),
+                }]}
+                onPress={() => setHideLocation(false)}
+              >
+                <MaterialCommunityIcons name="crosshairs-gps" size={20} color={!hideLocation ? '#A08AB7' : '#9CA3AF'} />
+                <Text style={[s.privacyOptionTitle, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}>{t('onboarding.locationStep.showDistance')}</Text>
+                <Text style={[s.privacyOptionDesc, { color: isDark ? '#8E8E93' : '#71717A' }]}>{t('onboarding.locationStep.showDistanceDesc')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.privacyOption, {
+                  backgroundColor: hideLocation ? (isDark ? '#1A1628' : '#F5F0FA') : (isDark ? '#1C1C2E' : '#F8F7FA'),
+                }]}
+                onPress={() => setHideLocation(true)}
+              >
+                <MaterialCommunityIcons name="shield-lock" size={20} color={hideLocation ? '#A08AB7' : '#9CA3AF'} />
+                <Text style={[s.privacyOptionTitle, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}>{t('onboarding.locationStep.hideDistance')}</Text>
+                <Text style={[s.privacyOptionDesc, { color: isDark ? '#8E8E93' : '#71717A' }]}>{t('onboarding.locationStep.hideDistanceDesc')}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Location result or input */}
+            {locationCity && locationState ? (
+              <View style={[s.locationResult, {
+                backgroundColor: isDark ? '#1A1628' : '#F5F0FA',
+              }]}>
+                <MaterialCommunityIcons name="map-marker-check" size={24} color="#A08AB7" />
+                <View style={s.locationResultText}>
+                  <Text style={[s.locationCity, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}>
+                    {locationCity}, {locationState}
+                  </Text>
+                  {locationCountry ? <Text style={[s.locationCountry, { color: isDark ? '#8E8E93' : '#71717A' }]}>{locationCountry}</Text> : null}
+                </View>
+                <TouchableOpacity onPress={clearLocation}>
+                  <MaterialCommunityIcons name="close-circle" size={22} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View>
+                {/* GPS button */}
+                <TouchableOpacity
+                  style={[s.gpsButton, gettingLocation && { opacity: 0.7 }]}
+                  onPress={handleGetLocation}
+                  disabled={gettingLocation}
+                >
+                  <MaterialCommunityIcons name={gettingLocation ? 'loading' : 'crosshairs-gps'} size={22} color="white" />
+                  <Text style={s.gpsButtonText}>
                     {gettingLocation ? t('onboarding.gettingLocation') : t('onboarding.useMyLocation')}
                   </Text>
+                </TouchableOpacity>
+
+                {/* Manual search toggle */}
+                <TouchableOpacity
+                  style={s.manualToggle}
+                  onPress={() => setShowManualEntry(!showManualEntry)}
+                >
+                  <Text style={[s.manualToggleText, { color: '#A08AB7' }]}>
+                    {showManualEntry ? t('onboarding.locationStep.hideSearch') : t('onboarding.locationStep.searchForCity')}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Manual search input */}
+                {showManualEntry && (
+                  <View style={{ marginTop: 12 }}>
+                    <View style={[s.searchInput, {
+                      backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+                    }]}>
+                      <MaterialCommunityIcons name="magnify" size={20} color="#9CA3AF" />
+                      <TextInput
+                        style={[s.searchInputField, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}
+                        placeholder={t('onboarding.locationStep.searchPlaceholder')}
+                        placeholderTextColor="#9CA3AF"
+                        value={locationSearch}
+                        onChangeText={handleLocationSearch}
+                        autoCapitalize="words"
+                      />
+                    </View>
+
+                    {showSuggestions && locationSuggestions.length > 0 && (
+                      <View style={[s.suggestions, {
+                        backgroundColor: isDark ? '#1C1C2E' : '#FFFFFF',
+                      }]}>
+                        {locationSuggestions.map((sug, i) => (
+                          <TouchableOpacity
+                            key={`${sug.city}-${sug.state}-${i}`}
+                            style={s.suggestionRow}
+                            onPress={() => selectLocation(sug)}
+                          >
+                            <MaterialCommunityIcons name="map-marker" size={18} color="#A08AB7" />
+                            <View style={{ marginLeft: 8, flex: 1 }}>
+                              <Text style={{ color: isDark ? '#F5F5F7' : '#1A1A2E', fontWeight: '500' }}>
+                                {sug.city}{sug.state ? `, ${sug.state}` : ''}
+                              </Text>
+                              <Text style={{ color: isDark ? '#6B7280' : '#9CA3AF', fontSize: 12 }}>{sug.country}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        );
+
+      // ── Hometown ──────────────────────────────────────────────────────────
+      case 'hometown':
+        return (
+          <View>
+            <View style={[s.searchInput, {
+              backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+            }]}>
+              <MaterialCommunityIcons name="magnify" size={20} color="#9CA3AF" />
+              <TextInput
+                style={[s.searchInputField, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}
+                placeholder={t('onboarding.basicInfoSteps.hometownPlaceholder')}
+                placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+                value={hometown}
+                onChangeText={(text) => {
+                  setHometown(text);
+                  if (hometownSearchRef.current) clearTimeout(hometownSearchRef.current);
+                  if (text.trim().length < 2) {
+                    setHometownSuggestions([]);
+                    setShowHometownSuggestions(false);
+                    return;
+                  }
+                  hometownSearchRef.current = setTimeout(() => {
+                    try {
+                      const results = searchCities(text, 12);
+                      setHometownSuggestions(results);
+                      setShowHometownSuggestions(results.length > 0);
+                    } catch {
+                      setHometownSuggestions([]);
+                      setShowHometownSuggestions(false);
+                    }
+                  }, 150);
+                }}
+                maxLength={100}
+                autoFocus
+                autoCapitalize="words"
+              />
+              {hometown.length > 0 && (
+                <TouchableOpacity onPress={() => { setHometown(''); setShowHometownSuggestions(false); }}>
+                  <MaterialCommunityIcons name="close-circle" size={20} color="#9CA3AF" />
                 </TouchableOpacity>
               )}
             </View>
 
-            {/* Toggle between search and manual entry */}
-            <View className="flex-row mb-3 bg-gray-100 rounded-xl p-1">
-              <TouchableOpacity
-                className={`flex-1 py-2 rounded-lg ${!manualLocationMode ? 'bg-white shadow-sm' : ''}`}
-                onPress={() => setManualLocationMode(false)}
-              >
-                <Text className={`text-center font-medium ${!manualLocationMode ? 'text-lavender-600' : 'text-gray-500'}`}>
-                  Search
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className={`flex-1 py-2 rounded-lg ${manualLocationMode ? 'bg-white shadow-sm' : ''}`}
-                onPress={() => setManualLocationMode(true)}
-              >
-                <Text className={`text-center font-medium ${manualLocationMode ? 'text-lavender-600' : 'text-gray-500'}`}>
-                  Enter Manually
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {!manualLocationMode ? (
-              /* Location Search with Autocomplete */
-              <View className="mb-3">
-                <View className="relative">
-                  <TextInput
-                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900 pr-12"
-                    placeholder="Search for your city (e.g., Vancouver, BC)"
-                    value={locationSearch}
-                    onChangeText={handleLocationSearch}
-                    onFocus={async () => {
-                      // Scroll to make input visible above keyboard
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                      }, 300);
-
-                      // Request location permission early on Android
-                      if (Platform.OS === 'android') {
-                        await requestLocationPermissionForSearch();
-                      }
-
-                      if (locationSuggestions.length > 0) {
-                        setShowSuggestions(true);
-                      }
-                    }}
-                  />
-                  {searchingLocation && (
-                    <View className="absolute right-4 top-3">
-                      <MaterialCommunityIcons name="loading" size={24} color="#9CA3AF" />
-                    </View>
-                  )}
-                </View>
-
-                {/* Autocomplete Suggestions - Modal for better keyboard handling */}
-                <Modal
-                  visible={showSuggestions && locationSuggestions.length > 0}
-                  transparent
-                  animationType="fade"
-                  onRequestClose={() => setShowSuggestions(false)}
-                >
-                  <Pressable
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }}
-                    onPress={() => setShowSuggestions(false)}
-                  >
-                    <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
-                      {/* Stop propagation on the content container so taps inside don't close modal */}
-                      <Pressable onPress={(e) => e.stopPropagation()}>
-                        <View className="bg-white rounded-xl overflow-hidden shadow-lg" style={{ maxHeight: 300 }}>
-                          <View className="bg-lavender-500 px-4 py-3">
-                            <Text className="text-white font-bold text-lg">Select Your City</Text>
-                          </View>
-                          <ScrollView keyboardShouldPersistTaps="handled">
-                            {locationSuggestions.map((suggestion, index) => (
-                              <Pressable
-                                key={`${suggestion.latitude}-${suggestion.longitude}-${index}`}
-                                className="px-4 py-4 border-b border-gray-100 flex-row items-center"
-                                onPress={() => {
-                                  console.log('📍 Location tapped:', suggestion.city);
-                                  selectLocation(suggestion);
-                                }}
-                                android_ripple={{ color: 'rgba(160, 138, 183, 0.2)' }}
-                                style={({ pressed }) => [
-                                  { backgroundColor: pressed ? 'rgba(160, 138, 183, 0.1)' : 'transparent' }
-                                ]}
-                              >
-                                <MaterialCommunityIcons name="map-marker" size={24} color="#A08AB7" />
-                                <View className="ml-3 flex-1">
-                                  <Text className="text-gray-900 font-semibold text-base">
-                                    {suggestion.city}
-                                  </Text>
-                                  <Text className="text-gray-500 text-sm">
-                                    {suggestion.state}, {suggestion.country}
-                                  </Text>
-                                </View>
-                                <MaterialCommunityIcons name="chevron-right" size={20} color="#9CA3AF" />
-                              </Pressable>
-                            ))}
-                          </ScrollView>
-                          <Pressable
-                            className="bg-gray-100 px-4 py-3 items-center"
-                            onPress={() => setShowSuggestions(false)}
-                            android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
-                          >
-                            <Text className="text-gray-600 font-medium">Cancel</Text>
-                          </Pressable>
-                        </View>
-                      </Pressable>
-                    </View>
-                  </Pressable>
-                </Modal>
-
-                <Text className="text-xs text-gray-500 mt-1">
-                  Type your city name (e.g., "Tokyo", "Paris", "São Paulo")
-                </Text>
-
-                {/* More helpful hints for Android users */}
-                {Platform.OS === 'android' && (
-                  <View className="mt-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                    <Text className="text-xs text-blue-700">
-                      <Text className="font-semibold">Tip:</Text> If the search isn't working, tap on "Enter Manually" above to type your location directly.
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ) : (
-              /* Manual Location Entry */
-              <View className="mb-3">
-                <View className="mb-3">
-                  <Text className="text-xs text-gray-600 mb-1">City *</Text>
-                  <TextInput
-                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                    placeholder="e.g., Toronto"
-                    value={locationCity}
-                    onChangeText={setLocationCity}
-                    onFocus={() => {
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                      }, 300);
-                    }}
-                  />
-                </View>
-                <View className="mb-3">
-                  <Text className="text-xs text-gray-600 mb-1">State/Province *</Text>
-                  <TextInput
-                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                    placeholder="e.g., Ontario"
-                    value={locationState}
-                    onChangeText={setLocationState}
-                    onFocus={() => {
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                      }, 300);
-                    }}
-                  />
-                </View>
-                <View>
-                  <Text className="text-xs text-gray-600 mb-1">Country</Text>
-                  <TextInput
-                    className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-900"
-                    placeholder="e.g., Canada"
-                    value={locationCountry}
-                    onChangeText={setLocationCountry}
-                    onFocus={() => {
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                      }, 300);
-                    }}
-                  />
-                </View>
-                <View className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mt-3">
-                  <View className="flex-row items-start">
-                    <MaterialCommunityIcons name="information" size={18} color="#D97706" />
-                    <Text className="text-xs text-amber-700 ml-2 flex-1">
-                      Manual entry may result in less accurate distance calculations for matching. For best results, enable location services.
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* Selected Location Display */}
-            {!manualLocationMode && (locationCity || locationState || locationCountry) && (
-              <View className="bg-lavender-50 border border-lavender-200 rounded-xl px-4 py-3 mt-3">
-                <View className="flex-row items-center">
-                  <MaterialCommunityIcons name="map-marker-check" size={20} color="#A08AB7" />
-                  <View className="ml-3 flex-1">
-                    <Text className="text-gray-900 font-semibold">
-                      {locationCity}
-                      {locationState && `, ${locationState}`}
-                    </Text>
-                    <Text className="text-gray-600 text-sm">
-                      {locationCountry}
-                    </Text>
-                  </View>
+            {showHometownSuggestions && hometownSuggestions.length > 0 && (
+              <View style={[s.suggestions, {
+                backgroundColor: isDark ? '#1C1C2E' : '#FFFFFF',
+              }]}>
+                {hometownSuggestions.map((sug, i) => (
                   <TouchableOpacity
+                    key={`${sug.city}-${sug.state}-${sug.countryCode}-${i}`}
+                    style={s.suggestionRow}
                     onPress={() => {
-                      setLocationCity('');
-                      setLocationState('');
-                      setLocationCountry('');
-                      setLocationCoords(null);
-                      setLocationSearch('');
+                      const formatted = sug.state ? `${sug.city}, ${sug.state}` : `${sug.city}, ${sug.country}`;
+                      setHometown(formatted);
+                      setShowHometownSuggestions(false);
+                      setHometownSuggestions([]);
                     }}
-                    className="ml-2"
                   >
-                    <MaterialCommunityIcons name="close-circle" size={24} color="#A08AB7" />
+                    <MaterialCommunityIcons name="map-marker" size={18} color="#A08AB7" />
+                    <View style={{ marginLeft: 8, flex: 1 }}>
+                      <Text style={{ color: isDark ? '#F5F5F7' : '#1A1A2E', fontWeight: '500' }}>
+                        {sug.city}{sug.state ? `, ${sug.state}` : ''}
+                      </Text>
+                      <Text style={{ color: isDark ? '#6B7280' : '#9CA3AF', fontSize: 12 }}>{sug.country}</Text>
+                    </View>
                   </TouchableOpacity>
-                </View>
+                ))}
               </View>
             )}
+
+            <Text style={[s.hint, { color: isDark ? '#6B7280' : '#9CA3AF', marginTop: 12 }]}>
+              {t('onboarding.basicInfoSteps.hometownHint')}
+            </Text>
+            <VisibilityToggle
+              visible={fieldVisibility.hometown !== false}
+              onToggle={(v) => setFieldVisibility(prev => ({ ...prev, hometown: v }))}
+            />
           </View>
-        </View>
+        );
 
-        {/* Continue Button */}
-        <GradientButton
-          title={loading ? t('common.loading') : t('common.continue')}
-          onPress={handleContinue}
-          loading={loading}
-          className="mt-8"
-        />
+      // ── Occupation ─────────────────────────────────────────────────────────
+      case 'occupation':
+        return (
+          <View>
+            <TextInput
+              style={[s.textInput, {
+                backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+                color: isDark ? '#F5F5F7' : '#1A1A2E',
+              }]}
+              placeholder={t('onboarding.basicInfoSteps.occupationPlaceholder')}
+              placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+              value={occupation}
+              onChangeText={setOccupation}
+              maxLength={100}
+              autoFocus
+            />
+          </View>
+        );
 
-        {/* Privacy Note */}
-        <Text className="text-sm text-gray-600 text-center mt-6 px-4">
-          🔒 Your privacy is our priority. Only matched users can see your full profile.
-        </Text>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      // ── Education ──────────────────────────────────────────────────────────
+      case 'education':
+        return (
+          <View>
+            <TextInput
+              style={[s.textInput, {
+                backgroundColor: isDark ? '#1C1C2E' : '#F8F7FA',
+                color: isDark ? '#F5F5F7' : '#1A1A2E',
+              }]}
+              placeholder={t('onboarding.basicInfoSteps.educationPlaceholder')}
+              placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+              value={education}
+              onChangeText={setEducation}
+              maxLength={100}
+              autoFocus
+            />
+          </View>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
+  const step = SUB_STEPS[subStep];
+  const isOptional = step.key === 'ethnicity';
+  const stepTitles = getStepTitles(step.key);
+
+  return (
+    <OnboardingLayout
+      currentStep={getGlobalStep('basic-info', subStep)}
+      title={stepTitles.title}
+      subtitle={stepTitles.subtitle}
+      onBack={handleBack}
+      onContinue={handleContinue}
+      onSkip={undefined}
+      continueDisabled={!canContinue()}
+      continueLabel={subStep === SUB_STEPS.length - 1 && loading ? t('common.saving') : t('common.continue')}
+      hideBack={subStep === 0}
+    >
+      {renderContent()}
+    </OnboardingLayout>
   );
 }
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  textInput: {
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    fontSize: 18,
+    fontWeight: '500',
+  },
+  hint: {
+    fontSize: 13,
+    marginTop: 10,
+  },
+  dateButton: {
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateButtonText: {
+    fontSize: 17,
+    fontWeight: '500',
+  },
+  ageDisplay: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  certifyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 16,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#D5CDE2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  checkboxChecked: {
+    backgroundColor: '#A08AB7',
+    borderColor: '#A08AB7',
+  },
+  certifyText: {
+    fontSize: 15,
+    fontWeight: '500',
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  modalConfirm: {
+    backgroundColor: '#A08AB7',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  modalConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  privacyRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  privacyOption: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 14,
+    gap: 4,
+  },
+  privacyOptionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  privacyOptionDesc: {
+    fontSize: 12,
+  },
+  locationResult: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    padding: 16,
+    gap: 12,
+  },
+  locationResultText: {
+    flex: 1,
+  },
+  locationCity: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  locationCountry: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  gpsButton: {
+    backgroundColor: '#A08AB7',
+    borderRadius: 14,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  gpsButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  manualToggle: {
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  manualToggleText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  searchInput: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchInputField: {
+    flex: 1,
+    fontSize: 16,
+  },
+  suggestions: {
+    borderRadius: 14,
+    marginTop: 6,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+});

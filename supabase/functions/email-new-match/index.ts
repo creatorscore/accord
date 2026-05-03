@@ -71,7 +71,7 @@ function generateMatchEmail(recipientName: string, matchName: string): { html: s
 
               <!-- Header -->
               <tr>
-                <td style="background: linear-gradient(135deg, #9B87CE 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
+                <td style="background: linear-gradient(135deg, #A08AB7 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
                   <div style="font-size: 56px; line-height: 1;">💜</div>
                   <h1 style="color: white; margin: 15px 0 0 0; font-size: 28px; font-weight: 700; line-height: 1.2;">It's a Match!</h1>
                 </td>
@@ -86,26 +86,25 @@ function generateMatchEmail(recipientName: string, matchName: string): { html: s
                         <p style="font-size: 18px; margin: 0 0 20px 0; color: #333; line-height: 1.5;">Hi ${recipientName}!</p>
 
                         <p style="font-size: 16px; margin: 0 0 25px 0; color: #555; line-height: 1.6;">
-                          Great news! You and <strong style="color: #9B87CE;">${matchName}</strong> have matched on Accord.
+                          Great news! You and <strong style="color: #A08AB7;">${matchName}</strong> have matched on Accord.
                           This could be the beginning of something meaningful.
                         </p>
 
-                        <!-- CTA Box -->
+                        <!-- Match Info Box -->
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                           <tr>
                             <td style="background: linear-gradient(135deg, #F3E8FF 0%, #EDE9FE 100%); border-radius: 12px; padding: 25px; text-align: center;">
-                              <p style="font-size: 15px; color: #6B21A8; margin: 0 0 15px 0; font-weight: 500; line-height: 1.4;">
-                                Don't keep them waiting!
+                              <div style="background: white; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <p style="font-size: 20px; color: #6B21A8; margin: 0 0 5px 0; font-weight: 700;">
+                                  💜 ${matchName}
+                                </p>
+                                <p style="font-size: 14px; color: #666; margin: 0;">
+                                  matched with you!
+                                </p>
+                              </div>
+                              <p style="font-size: 15px; color: #6B21A8; margin: 0; font-weight: 500; line-height: 1.4;">
+                                Open the Accord app on your phone to start chatting!
                               </p>
-                              <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
-                                <tr>
-                                  <td style="border-radius: 50px; background: linear-gradient(135deg, #9B87CE 0%, #A08AB7 100%); box-shadow: 0 4px 15px rgba(155, 135, 206, 0.4);">
-                                    <a href="https://joinaccord.app/matches" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
-                                      Start a Conversation
-                                    </a>
-                                  </td>
-                                </tr>
-                              </table>
                             </td>
                           </tr>
                         </table>
@@ -131,12 +130,12 @@ function generateMatchEmail(recipientName: string, matchName: string): { html: s
                         <!-- Footer -->
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 0; line-height: 1.6;">
                           You're receiving this because you matched with someone on Accord.<br>
-                          <a href="https://joinaccord.app/settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
+                          To manage email preferences, open the Accord app and go to Settings &gt; Notifications
                         </p>
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
                           Accord - Safe Connections for Meaningful Partnerships<br>
-                          <a href="https://joinaccord.app" style="color: #9B87CE; text-decoration: none;">joinaccord.app</a>
+                          <a href="https://joinaccord.app" style="color: #A08AB7; text-decoration: none;">joinaccord.app</a>
                         </p>
                       </td>
                     </tr>
@@ -158,15 +157,15 @@ It's a Match! 💜
 
 Great news! You and ${matchName} have matched on Accord. This could be the beginning of something meaningful.
 
-Don't keep them waiting - start a conversation now!
+💜 ${matchName} matched with you!
 
-Open Accord: https://joinaccord.app/matches
+Open the Accord app on your phone to start chatting!
 
 Tip: The first message matters! Ask about something specific from their profile to show you're genuinely interested.
 
 ---
 You're receiving this because you matched with someone on Accord.
-Manage email preferences: https://joinaccord.app/settings/notifications
+To manage email preferences, open the Accord app and go to Settings > Notifications
 
 Accord - Safe Connections for Meaningful Partnerships
 joinaccord.app`;
@@ -214,21 +213,22 @@ serve(async (req) => {
     const profile1 = profiles.find(p => p.id === profile1_id)!;
     const profile2 = profiles.find(p => p.id === profile2_id)!;
 
-    // Get user emails from auth.users
-    const { data: users, error: usersError } = await supabase.auth.admin.listUsers();
+    // Get user emails by fetching only the specific users we need (not all 20k+ users)
+    const { data: user1Data, error: user1Error } = await supabase.auth.admin.getUserById(profile1.user_id);
+    const { data: user2Data, error: user2Error } = await supabase.auth.admin.getUserById(profile2.user_id);
 
-    if (usersError) {
-      console.error('Error fetching users:', usersError);
+    if (user1Error || user2Error) {
+      console.error('Error fetching users:', user1Error || user2Error);
       return new Response(
         JSON.stringify({ error: 'Failed to fetch user emails' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    const user1 = users.users.find(u => u.id === profile1.user_id);
-    const user2 = users.users.find(u => u.id === profile2.user_id);
+    const user1Email = user1Data?.user?.email;
+    const user2Email = user2Data?.user?.email;
 
-    if (!user1?.email || !user2?.email) {
+    if (!user1Email || !user2Email) {
       console.error('Missing email for one or both users');
       return new Response(
         JSON.stringify({ error: 'Missing user emails' }),
@@ -240,13 +240,13 @@ serve(async (req) => {
     const emailsToSend = [
       {
         userId: profile1.user_id,
-        email: user1.email,
+        email: user1Email,
         name: profile1.display_name || 'there',
         matchName: profile2.display_name || 'Someone special',
       },
       {
         userId: profile2.user_id,
-        email: user2.email,
+        email: user2Email,
         name: profile2.display_name || 'there',
         matchName: profile1.display_name || 'Someone special',
       },
