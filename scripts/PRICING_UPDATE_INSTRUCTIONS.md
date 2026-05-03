@@ -3,12 +3,13 @@
 ## Overview
 This guide helps you update subscription prices in App Store Connect to implement fair worldwide pricing based on income levels.
 
-## Your Subscription Products (5 subscriptions found)
-1. **3 Month Premium** - 3-month subscription
-2. **Accord Platinum Monthly** - Monthly platinum tier
-3. **Accord Platinum Yearly** - Annual platinum tier
-4. **Accord Premium Monthly** - Monthly premium tier
-5. **Accord Premium Yearly** - Annual premium tier
+## Your Subscription Products (6 subscriptions)
+1. **Accord Premium Weekly** - Weekly premium tier (`accord_premium_weekly`)
+2. **3 Month Premium** - 3-month subscription
+3. **Accord Platinum Monthly** - Monthly platinum tier
+4. **Accord Platinum Yearly** - Annual platinum tier
+5. **Accord Premium Monthly** - Monthly premium tier
+6. **Accord Premium Yearly** - Annual premium tier
 
 ## Step-by-Step Instructions
 
@@ -31,6 +32,7 @@ For each subscription product:
 
 | Subscription | USA Base Price |
 |--------------|----------------|
+| Premium Weekly | $5.99 |
 | Premium Monthly | $14.99 |
 | Premium 3-Month | $34.99 |
 | Premium Annual | $119.99 |
@@ -56,6 +58,34 @@ Set these countries to lower tiers:
 - Yemen, Rwanda, Uganda, Sierra Leone, Malawi, Chad, etc.
 
 ## Reference Price Tables
+
+### Weekly Subscription Target Prices
+
+Weekly is anchored at the same USD-equivalent ratio used for the launched
+US tier ($5.99 / $14.99 ≈ 40% of monthly). The full per-country list lives
+in `scripts/apple-regional-pricing.csv` (Weekly Price column) and is
+auto-applied by `update-ios-pricing-v2.js`.
+
+| Country | Currency | Local Price | USD Equiv |
+|---------|----------|-------------|-----------|
+| United States | USD | 5.99 | $5.99 |
+| India | INR | 159 | $1.92 |
+| Nigeria | NGN | 2,399 | $1.46 |
+| Pakistan | PKR | 399 | $1.45 |
+| Brazil | BRL | 12.99 | $2.20 |
+| Mexico | MXN | 59 | $2.93 |
+| Indonesia | IDR | 32,000 | $1.95 |
+| Vietnam | VND | 52,000 | $2.02 |
+| Egypt | EGP | 99 | $1.99 |
+| Türkiye | TRY | 119 | $3.40 |
+| South Africa | ZAR | 59 | $3.20 |
+| Philippines | PHP | 99 | $1.79 |
+| Germany | EUR | 5.99 | $6.39 |
+| United Kingdom | GBP | 4.99 | $6.45 |
+| Japan | JPY | 799 | $5.39 |
+| Australia | AUD | 9.99 | $6.59 |
+| Canada | CAD | 7.99 | $5.90 |
+| Yemen | USD | 0.99 | $0.99 |
 
 ### Monthly Subscription Target Prices
 
@@ -151,10 +181,31 @@ Australia, Austria, Bahamas, Bahrain, Belgium, Bermuda, Canada, Cyprus, Czech Re
 ## Full CSV Files
 
 For complete pricing data, see:
+- `scripts/asc-weekly-prices.csv`
 - `scripts/asc-monthly-prices.csv`
 - `scripts/asc-3month-prices.csv`
 - `scripts/asc-annual-prices.csv`
 - `scripts/asc-all-prices-reference.csv`
+
+Regenerate any of these by running:
+```
+node scripts/generate-asc-price-csv.js
+```
+
+To push prices live to App Store Connect for **all** Premium tiers
+(including Weekly):
+```
+# Preview first
+APP_STORE_KEY_ID=... APP_STORE_ISSUER_ID=... APP_STORE_PRIVATE_KEY=... APP_STORE_APP_ID=... \
+  node scripts/update-ios-pricing-v2.js --dry-run
+
+# Apply
+APP_STORE_KEY_ID=... APP_STORE_ISSUER_ID=... APP_STORE_PRIVATE_KEY=... APP_STORE_APP_ID=... \
+  node scripts/update-ios-pricing-v2.js --apply
+```
+The script auto-detects the Weekly product (matched by "weekly" in the
+subscription name) and applies localized prices alongside Monthly /
+3-Month / Annual.
 
 ## Notes
 

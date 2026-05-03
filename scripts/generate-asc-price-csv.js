@@ -22,8 +22,13 @@ const path = require('path');
 
 // Configuration
 const CONFIG = {
-  pricingCsvPath: path.join(__dirname, '..', 'complete-regional-pricing.csv'),
-  outputDir: __dirname
+  // Apple-specific CSV (with Weekly/Monthly/3-Mo/Annual + per-territory currency).
+  // The legacy `complete-regional-pricing.csv` is no longer used.
+  pricingCsvPath: path.join(__dirname, 'apple-regional-pricing.csv'),
+  outputDir: __dirname,
+  // Same anchor ratio used in add-weekly-pricing-column.js so generated USD
+  // equivalents stay consistent with the localized weekly column.
+  weeklyToMonthlyRatio: 5.99 / 14.99,
 };
 
 // Country name to App Store territory code mapping (ISO 3166-1 alpha-2)
@@ -270,26 +275,48 @@ function parseCSVLine(line) {
 }
 
 /**
- * Parse regional pricing CSV
+ * Parse the apple-regional-pricing.csv. Header order is resolved dynamically
+ * so adding/reordering columns won't break parsing. Weekly column is optional
+ * (legacy CSVs may lack it) — when missing, weekly is derived from monthly.
  */
 function parsePricingCsv(csvPath) {
   const content = fs.readFileSync(csvPath, 'utf-8');
   const lines = content.split('\n').filter(line => line.trim());
+  const header = parseCSVLine(lines[0]).map(h => h.trim());
+  const idx = (name) => header.indexOf(name);
+  const COUNTRY = idx('Country');
+  const CURRENCY = idx('Apple Currency');
+  const WEEKLY = idx('Weekly Price');
+  const MONTHLY = idx('Monthly Price');
+  const THREE_MONTH = idx('3-Month Price');
+  const ANNUAL = idx('Annual Price');
+  const USD = idx('Monthly USD Equiv');
+
+  if (COUNTRY === -1 || CURRENCY === -1 || MONTHLY === -1) {
+    throw new Error(`apple-regional-pricing.csv missing required columns. Header: ${header.join(', ')}`);
+  }
 
   const pricing = [];
-
   for (let i = 1; i < lines.length; i++) {
     const values = parseCSVLine(lines[i]);
-    if (values.length < 7) continue;
+    if (values.length <= MONTHLY) continue;
 
-    const country = values[0].trim();
-    const currencyCode = values[1].trim();
-    const monthlyPrice = parseFloat(values[2]) || 0;
-    const threeMonthPrice = parseFloat(values[3]) || 0;
-    const annualPrice = parseFloat(values[4]) || 0;
-    const monthlyUsdEquiv = parseFloat(values[5]) || 0;
-    const threeMonthMonthlyEquiv = parseFloat(values[6]) || 0;
-    const annualMonthlyEquiv = parseFloat(values[7]) || 0;
+    const country = values[COUNTRY].trim();
+    const currencyCode = values[CURRENCY].trim();
+    const monthlyPrice = parseFloat(values[MONTHLY]) || 0;
+    const threeMonthPrice = THREE_MONTH !== -1 ? (parseFloat(values[THREE_MONTH]) || 0) : 0;
+    const annualPrice = ANNUAL !== -1 ? (parseFloat(values[ANNUAL]) || 0) : 0;
+    const monthlyUsdEquiv = USD !== -1 ? (parseFloat(values[USD]) || 0) : 0;
+
+    const weeklyPrice = WEEKLY !== -1
+      ? (parseFloat(values[WEEKLY]) || 0)
+      : monthlyPrice * CONFIG.weeklyToMonthlyRatio;
+
+    // USD-equiv columns for non-monthly periods are derived from the monthly
+    // USD equiv via the same ratio that anchors the localized prices.
+    const weeklyUsdEquiv = monthlyUsdEquiv * CONFIG.weeklyToMonthlyRatio;
+    const threeMonthUsdEquiv = monthlyUsdEquiv * 3;
+    const annualUsdEquiv = monthlyUsdEquiv * 12;
 
     const territoryCode = COUNTRY_TO_TERRITORY_ALPHA2[country];
 
@@ -297,18 +324,10 @@ function parsePricingCsv(csvPath) {
       country,
       territoryCode,
       currency: currencyCode,
-      monthly: {
-        localPrice: monthlyPrice,
-        usdEquiv: monthlyUsdEquiv
-      },
-      threeMonth: {
-        localPrice: threeMonthPrice,
-        usdEquiv: threeMonthMonthlyEquiv * 3 // Convert monthly equiv to 3-month price
-      },
-      annual: {
-        localPrice: annualPrice,
-        usdEquiv: annualMonthlyEquiv * 12 // Convert monthly equiv to annual price
-      }
+      weekly:     { localPrice: weeklyPrice,     usdEquiv: weeklyUsdEquiv },
+      monthly:    { localPrice: monthlyPrice,    usdEquiv: monthlyUsdEquiv },
+      threeMonth: { localPrice: threeMonthPrice, usdEquiv: threeMonthUsdEquiv },
+      annual:     { localPrice: annualPrice,     usdEquiv: annualUsdEquiv },
     });
   }
 
@@ -375,6 +394,7 @@ function main() {
 
   // Generate CSV for each subscription type
   const subscriptionTypes = [
+    { key: 'weekly', name: 'Weekly', filename: 'asc-weekly-prices.csv' },
     { key: 'monthly', name: 'Monthly', filename: 'asc-monthly-prices.csv' },
     { key: 'threeMonth', name: '3-Month', filename: 'asc-3month-prices.csv' },
     { key: 'annual', name: 'Annual', filename: 'asc-annual-prices.csv' }
@@ -426,12 +446,17 @@ function main() {
   console.log('\nGenerating combined reference sheet...');
 
   const refRows = [
-    ['Country', 'Territory', 'Currency', 'Monthly Local', 'Monthly USD', 'Apple Tier', '3-Mo Local', '3-Mo USD', 'Apple Tier', 'Annual Local', 'Annual USD', 'Apple Tier']
+    ['Country', 'Territory', 'Currency',
+     'Weekly Local', 'Weekly USD', 'Apple Tier',
+     'Monthly Local', 'Monthly USD', 'Apple Tier',
+     '3-Mo Local', '3-Mo USD', 'Apple Tier',
+     'Annual Local', 'Annual USD', 'Apple Tier']
   ];
 
   for (const p of pricing) {
     if (!p.territoryCode) continue;
 
+    const weeklyTier = findClosestPriceTier(p.weekly.usdEquiv);
     const monthlyTier = findClosestPriceTier(p.monthly.usdEquiv);
     const threeMonthTier = findClosestPriceTier(p.threeMonth.usdEquiv);
     const annualTier = findClosestPriceTier(p.annual.usdEquiv);
@@ -440,6 +465,9 @@ function main() {
       p.country,
       p.territoryCode,
       p.currency,
+      p.weekly.localPrice.toFixed(2),
+      p.weekly.usdEquiv.toFixed(2),
+      weeklyTier.toFixed(2),
       p.monthly.localPrice.toFixed(2),
       p.monthly.usdEquiv.toFixed(2),
       monthlyTier.toFixed(2),

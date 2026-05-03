@@ -260,24 +260,42 @@ function parseCSVLine(line) {
 }
 
 /**
- * Parse the apple-regional-pricing.csv
- * Format: Country,Apple Currency,Monthly Price,3-Month Price,Annual Price,Monthly USD Equiv,Notes
+ * Parse the apple-regional-pricing.csv. Header order is resolved dynamically so
+ * the script keeps working if columns get reordered or new ones added.
+ *
+ * Expected columns (any order):
+ *   Country, Apple Currency, Weekly Price, Monthly Price, 3-Month Price,
+ *   Annual Price, Monthly USD Equiv, Notes
  */
 function parsePricingCsv(csvPath) {
   const content = fs.readFileSync(csvPath, 'utf-8');
   const lines = content.split('\n').filter(line => line.trim());
-  const pricing = {};
+  const header = parseCSVLine(lines[0]).map(h => h.trim());
+  const idx = (name) => header.indexOf(name);
+  const COUNTRY = idx('Country');
+  const CURRENCY = idx('Apple Currency');
+  const WEEKLY = idx('Weekly Price');     // -1 if absent (legacy CSVs)
+  const MONTHLY = idx('Monthly Price');
+  const THREE_MONTH = idx('3-Month Price');
+  const ANNUAL = idx('Annual Price');
+  const USD = idx('Monthly USD Equiv');
 
+  if (COUNTRY === -1 || CURRENCY === -1 || MONTHLY === -1) {
+    throw new Error(`apple-regional-pricing.csv missing required columns. Header: ${header.join(', ')}`);
+  }
+
+  const pricing = {};
   for (let i = 1; i < lines.length; i++) {
     const values = parseCSVLine(lines[i]);
-    if (values.length < 6) continue;
-    const country = values[0].trim();
+    if (values.length <= MONTHLY) continue;
+    const country = values[COUNTRY].trim();
     pricing[country] = {
-      currency: values[1].trim(),
-      monthly: parseFloat(values[2]) || 0,
-      threeMonth: parseFloat(values[3]) || 0,
-      annual: parseFloat(values[4]) || 0,
-      monthlyUsd: parseFloat(values[5]) || 0
+      currency: values[CURRENCY].trim(),
+      weekly: WEEKLY !== -1 ? (parseFloat(values[WEEKLY]) || 0) : 0,
+      monthly: parseFloat(values[MONTHLY]) || 0,
+      threeMonth: THREE_MONTH !== -1 ? (parseFloat(values[THREE_MONTH]) || 0) : 0,
+      annual: ANNUAL !== -1 ? (parseFloat(values[ANNUAL]) || 0) : 0,
+      monthlyUsd: USD !== -1 ? (parseFloat(values[USD]) || 0) : 0,
     };
   }
   return pricing;
@@ -285,6 +303,10 @@ function parsePricingCsv(csvPath) {
 
 function getSubscriptionType(name) {
   const n = name.toLowerCase();
+  // Order matters: "weekly" must be checked before "month" because product names
+  // like "Accord Premium Weekly" contain neither "month" nor "year" but the
+  // catch-all default would otherwise miscategorize a future name change.
+  if (n.includes('week')) return 'weekly';
   if (n.includes('3') || n.includes('three') || n.includes('quarter')) return 'threeMonth';
   if (n.includes('year') || n.includes('annual')) return 'annual';
   return 'monthly';
@@ -545,7 +567,9 @@ async function main() {
 
         // Get target price based on subscription type
         let targetPrice;
-        if (subType === 'monthly') {
+        if (subType === 'weekly') {
+          targetPrice = countryData.weekly;
+        } else if (subType === 'monthly') {
           targetPrice = countryData.monthly;
         } else if (subType === 'threeMonth') {
           targetPrice = countryData.threeMonth;
