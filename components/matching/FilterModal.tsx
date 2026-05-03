@@ -6,20 +6,53 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Switch,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  DISTANCE_MAX,
+  distanceToSlider,
+  sliderToDistance,
+  formatDistanceRangeLabel,
+} from '@/lib/distance-utils';
 
 export interface FilterOptions {
+  // Free filters
   ageMin: number;
   ageMax: number;
   maxDistance: number;
+  activeToday: boolean;
+  showBlurredPhotos: boolean;
+
+  // Premium filters (existing)
   religion: string[];
   politicalViews: string[];
   housingPreference: string[];
   financialArrangement: string[];
+
+  // Premium filters (new - Identity & Background)
+  genderPreference: string[];
+  ethnicity: string[];
+  sexualOrientation: string[];
+
+  // Premium filters (new - Physical & Zodiac)
+  heightMin: number;
+  heightMax: number;
+  zodiacSign: string[];
+  // Premium filters (new - Lifestyle)
+  languagesSpoken: string[];
+  smoking: string[];
+  drinking: string[];
+  pets: string[];
+
+  // Premium filters (new - Marriage Intentions)
+  primaryReason: string[];
+  relationshipType: string[];
+  wantsChildren: string | null;
 }
 
 interface FilterModalProps {
@@ -31,10 +64,98 @@ interface FilterModalProps {
   onUpgrade: () => void;
 }
 
-const RELIGIONS = ['Christian', 'Catholic', 'Muslim', 'Jewish', 'Hindu', 'Buddhist', 'Atheist', 'Agnostic', 'Spiritual', 'Other'];
-const POLITICAL_VIEWS = ['Liberal', 'Progressive', 'Moderate', 'Conservative', 'Libertarian', 'Other'];
-const HOUSING_PREFERENCES = ['Separate Homes', 'Separate Spaces', 'Roommates', 'Shared Bedroom', 'Flexible'];
-const FINANCIAL_ARRANGEMENTS = ['Separate', 'Shared Expenses', 'Joint', 'Prenup Required', 'Flexible'];
+// Chip option type: value is stored in filters, label is displayed
+type ChipOption = { value: string; label: string };
+
+// Simple options where label === value (DB stores the same string)
+const GENDERS: ChipOption[] = ['Man', 'Woman', 'Non-binary'].map(s => ({ value: s, label: s }));
+const ETHNICITIES: ChipOption[] = ['Asian', 'Black/African', 'Hispanic/Latinx', 'Indigenous/Native', 'Middle Eastern/North African', 'Pacific Islander', 'South Asian', 'White/Caucasian', 'Multiracial', 'Other'].map(s => ({ value: s, label: s }));
+const SEXUAL_ORIENTATIONS: ChipOption[] = ['Straight', 'Lesbian', 'Gay', 'Bisexual', 'Queer', 'Asexual', 'Pansexual', 'Other'].map(s => ({ value: s, label: s }));
+const ZODIAC_SIGNS: ChipOption[] = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'].map(s => ({ value: s, label: s }));
+const LANGUAGES: ChipOption[] = ['English', 'Spanish', 'French', 'Mandarin', 'Cantonese', 'Japanese', 'Korean', 'Vietnamese', 'Tagalog', 'Hindi', 'Arabic', 'Portuguese', 'German', 'Italian', 'Russian', 'Other'].map(s => ({ value: s, label: s }));
+
+// Options where DB value differs from display label - must match onboarding/settings values exactly
+const RELIGIONS: ChipOption[] = [
+  { value: 'Christian', label: 'Christian' },
+  { value: 'Catholic', label: 'Catholic' },
+  { value: 'Protestant', label: 'Protestant' },
+  { value: 'Muslim', label: 'Muslim' },
+  { value: 'Jewish', label: 'Jewish' },
+  { value: 'Hindu', label: 'Hindu' },
+  { value: 'Buddhist', label: 'Buddhist' },
+  { value: 'Sikh', label: 'Sikh' },
+  { value: 'Atheist', label: 'Atheist' },
+  { value: 'Agnostic', label: 'Agnostic' },
+  { value: 'Spiritual but not religious', label: 'Spiritual' },
+  { value: 'Other', label: 'Other' },
+  { value: 'Prefer not to say', label: 'Prefer not to say' },
+];
+const POLITICAL_VIEWS: ChipOption[] = [
+  { value: 'Liberal', label: 'Liberal' },
+  { value: 'Progressive', label: 'Progressive' },
+  { value: 'Moderate', label: 'Moderate' },
+  { value: 'Conservative', label: 'Conservative' },
+  { value: 'Libertarian', label: 'Libertarian' },
+  { value: 'Socialist', label: 'Socialist' },
+  { value: 'Apolitical', label: 'Apolitical' },
+  { value: 'Other', label: 'Other' },
+  { value: 'Prefer not to say', label: 'Prefer not to say' },
+];
+const SMOKING_OPTIONS: ChipOption[] = [
+  { value: 'never', label: 'Never' },
+  { value: 'socially', label: 'Socially' },
+  { value: 'regularly', label: 'Regularly' },
+  { value: 'trying_to_quit', label: 'Trying to Quit' },
+];
+const DRINKING_OPTIONS: ChipOption[] = [
+  { value: 'never', label: 'Never' },
+  { value: 'rarely', label: 'Rarely' },
+  { value: 'socially', label: 'Socially' },
+  { value: 'regularly', label: 'Regularly' },
+];
+const PET_OPTIONS: ChipOption[] = [
+  { value: 'love_them', label: 'Love Them' },
+  { value: 'like_them', label: 'Like Them' },
+  { value: 'indifferent', label: 'Indifferent' },
+  { value: 'allergic', label: 'Allergic' },
+  { value: 'dont_like', label: "Don't Like" },
+];
+const HOUSING_PREFERENCES: ChipOption[] = [
+  { value: 'separate_spaces', label: 'Separate Spaces' },
+  { value: 'roommates', label: 'Roommates' },
+  { value: 'separate_homes', label: 'Separate Homes' },
+  { value: 'shared_bedroom', label: 'Shared Bedroom' },
+  { value: 'flexible', label: 'Flexible' },
+];
+const FINANCIAL_ARRANGEMENTS: ChipOption[] = [
+  { value: 'separate', label: 'Separate' },
+  { value: 'shared_expenses', label: 'Shared Expenses' },
+  { value: 'joint', label: 'Joint' },
+  { value: 'prenup_required', label: 'Prenup Required' },
+  { value: 'flexible', label: 'Flexible' },
+];
+const PRIMARY_REASONS: ChipOption[] = [
+  { value: 'financial', label: 'Financial' },
+  { value: 'immigration', label: 'Immigration' },
+  { value: 'family_pressure', label: 'Family Pressure' },
+  { value: 'legal_benefits', label: 'Legal Benefits' },
+  { value: 'companionship', label: 'Companionship' },
+  { value: 'safety', label: 'Safety' },
+  { value: 'other', label: 'Other' },
+];
+const RELATIONSHIP_TYPES: ChipOption[] = [
+  { value: 'platonic', label: 'Platonic' },
+  { value: 'romantic', label: 'Romantic' },
+  { value: 'open', label: 'Open' },
+];
+const WANTS_CHILDREN_OPTIONS = ['Yes', 'No', 'Maybe'];
+
+// Height conversion helpers
+const inchesToFeetDisplay = (inches: number): string => {
+  const feet = Math.floor(inches / 12);
+  const remainingInches = inches % 12;
+  return `${feet}'${remainingInches}"`;
+};
 
 export default function FilterModal({
   visible,
@@ -45,28 +166,75 @@ export default function FilterModal({
   onUpgrade,
 }: FilterModalProps) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [filters, setFilters] = useState<FilterOptions>(currentFilters);
+  // Local slider values to avoid re-render fighting with native gesture
+  const [localAgeMin, setLocalAgeMin] = useState(currentFilters.ageMin);
+  const [localAgeMax, setLocalAgeMax] = useState(currentFilters.ageMax);
+  const [localDistance, setLocalDistance] = useState(currentFilters.maxDistance);
+  const [localHeightMin, setLocalHeightMin] = useState(currentFilters.heightMin);
+  const [localHeightMax, setLocalHeightMax] = useState(currentFilters.heightMax);
+  const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
+    identity: false,
+    physical: false,
+    lifestyle: false,
+    marriage: false,
+  });
 
   useEffect(() => {
     setFilters(currentFilters);
+    setLocalAgeMin(currentFilters.ageMin);
+    setLocalAgeMax(currentFilters.ageMax);
+    setLocalDistance(currentFilters.maxDistance);
+    setLocalHeightMin(currentFilters.heightMin);
+    setLocalHeightMax(currentFilters.heightMax);
   }, [currentFilters, visible]);
 
   const handleApply = () => {
-    onApply(filters);
+    onApply({
+      ...filters,
+      ageMin: localAgeMin,
+      ageMax: localAgeMax,
+      maxDistance: localDistance,
+      heightMin: localHeightMin,
+      heightMax: localHeightMax,
+    });
     onClose();
   };
 
   const handleReset = () => {
     const defaultFilters: FilterOptions = {
+      // Free filters
       ageMin: 22,
       ageMax: 50,
       maxDistance: 100,
+      activeToday: false,
+      showBlurredPhotos: true,
+      // Premium filters
       religion: [],
       politicalViews: [],
       housingPreference: [],
       financialArrangement: [],
+      genderPreference: [],
+      ethnicity: [],
+      sexualOrientation: [],
+      heightMin: 48, // 4'0"
+      heightMax: 84, // 7'0"
+      zodiacSign: [],
+      languagesSpoken: [],
+      smoking: [],
+      drinking: [],
+      pets: [],
+      primaryReason: [],
+      relationshipType: [],
+      wantsChildren: null,
     };
     setFilters(defaultFilters);
+    setLocalAgeMin(defaultFilters.ageMin);
+    setLocalAgeMax(defaultFilters.ageMax);
+    setLocalDistance(defaultFilters.maxDistance);
+    setLocalHeightMin(defaultFilters.heightMin);
+    setLocalHeightMax(defaultFilters.heightMax);
   };
 
   const toggleArrayFilter = (array: string[], value: string) => {
@@ -76,6 +244,102 @@ export default function FilterModal({
       return [...array, value];
     }
   };
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
+
+  const getSelectedCount = (arrays: string[][]): number => {
+    return arrays.reduce((sum, arr) => sum + arr.length, 0);
+  };
+
+  const renderCollapsibleSection = (
+    key: string,
+    title: string,
+    icon: string,
+    selectedCount: number,
+    children: React.ReactNode
+  ) => {
+    const isExpanded = expandedSections[key];
+
+    return (
+      <View style={[styles.collapsibleSection, !isPremium && styles.disabledSection]}>
+        <TouchableOpacity
+          style={styles.sectionHeader}
+          onPress={() => isPremium && toggleSection(key)}
+          disabled={!isPremium}
+        >
+          <View style={styles.sectionHeaderLeft}>
+            <MaterialCommunityIcons name={icon as any} size={22} color={isPremium ? '#A08AB7' : '#9CA3AF'} />
+            <Text style={[styles.sectionHeaderTitle, !isPremium && styles.disabledText]}>{title}</Text>
+          </View>
+          <View style={styles.sectionHeaderRight}>
+            {selectedCount > 0 && (
+              <View style={styles.selectedBadge}>
+                <Text style={styles.selectedBadgeText}>{selectedCount}</Text>
+              </View>
+            )}
+            <MaterialCommunityIcons
+              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+              size={24}
+              color={isPremium ? '#6B7280' : '#9CA3AF'}
+            />
+          </View>
+        </TouchableOpacity>
+        {isExpanded && isPremium && (
+          <View style={styles.sectionContent}>
+            {children}
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderChips = (
+    options: ChipOption[],
+    selectedValues: string[],
+    filterKey: keyof FilterOptions,
+    disabled: boolean = false
+  ) => (
+    <View style={styles.chipContainer}>
+      {options.map((option) => (
+        <TouchableOpacity
+          key={option.value}
+          disabled={disabled}
+          style={[
+            styles.chip,
+            selectedValues.includes(option.value) && styles.chipSelected,
+            disabled && styles.chipDisabled,
+          ]}
+          onPress={() =>
+            setFilters({
+              ...filters,
+              [filterKey]: toggleArrayFilter(selectedValues, option.value),
+            })
+          }
+        >
+          <Text
+            style={[
+              styles.chipText,
+              selectedValues.includes(option.value) && styles.chipTextSelected,
+            ]}
+          >
+            {option.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  const renderSubsection = (title: string, children: React.ReactNode) => (
+    <View style={styles.subsection}>
+      <Text style={styles.subsectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
@@ -92,31 +356,38 @@ export default function FilterModal({
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* FREE FILTERS SECTION */}
+          <View style={styles.freeSectionHeader}>
+            <Text style={styles.freeSectionTitle}>{t('filters.basicFilters')}</Text>
+          </View>
+
           {/* Age Range */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('filters.ageRange')}</Text>
             <View style={styles.rangeValues}>
-              <Text style={styles.rangeText}>{filters.ageMin}</Text>
-              <Text style={styles.rangeText}>{filters.ageMax}</Text>
+              <Text style={styles.rangeText}>{localAgeMin}</Text>
+              <Text style={styles.rangeText}>{localAgeMax}</Text>
             </View>
             <View style={styles.sliderContainer}>
+              <Text style={styles.sliderLabel}>{t('filters.minimum')}</Text>
               <Slider
                 style={styles.slider}
                 minimumValue={18}
                 maximumValue={80}
                 step={1}
-                value={filters.ageMin}
-                onValueChange={(value) => setFilters({ ...filters, ageMin: value })}
+                value={localAgeMin}
+                onValueChange={(value) => setLocalAgeMin(Math.min(Math.round(value), localAgeMax - 1))}
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
+              <Text style={styles.sliderLabel}>{t('filters.maximum')}</Text>
               <Slider
                 style={styles.slider}
                 minimumValue={18}
                 maximumValue={80}
                 step={1}
-                value={filters.ageMax}
-                onValueChange={(value) => setFilters({ ...filters, ageMax: value })}
+                value={localAgeMax}
+                onValueChange={(value) => setLocalAgeMax(Math.max(Math.round(value), localAgeMin + 1))}
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
@@ -126,16 +397,60 @@ export default function FilterModal({
           {/* Distance */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('filters.maxDistance')}</Text>
-            <Text style={styles.rangeText}>{t('filters.miles', { count: filters.maxDistance })}</Text>
+            <Text style={styles.rangeText}>
+              {localDistance >= DISTANCE_MAX
+                ? formatDistanceRangeLabel(localDistance)
+                : t('filters.miles', { count: localDistance })}
+            </Text>
             <Slider
               style={styles.slider}
-              minimumValue={5}
-              maximumValue={500}
-              step={5}
-              value={filters.maxDistance}
-              onValueChange={(value) => setFilters({ ...filters, maxDistance: value })}
+              minimumValue={0}
+              maximumValue={1}
+              step={0.005}
+              value={distanceToSlider(localDistance)}
+              onValueChange={(position) => setLocalDistance(sliderToDistance(position))}
               minimumTrackTintColor="#A08AB7"
               maximumTrackTintColor="#E5E7EB"
+            />
+            <View style={styles.distanceMarkers}>
+              <Text style={styles.distanceMarkerText}>5 mi</Text>
+              <Text style={styles.distanceMarkerText}>25</Text>
+              <Text style={styles.distanceMarkerText}>100</Text>
+              <Text style={styles.distanceMarkerText}>500+</Text>
+            </View>
+          </View>
+
+          {/* Active Today Toggle */}
+          <View style={styles.toggleSection}>
+            <View style={styles.toggleContent}>
+              <MaterialCommunityIcons name="clock-outline" size={22} color="#A08AB7" />
+              <View style={styles.toggleTextContainer}>
+                <Text style={styles.toggleTitle}>{t('filters.activeToday')}</Text>
+                <Text style={styles.toggleDescription}>{t('filters.activeTodayDescription')}</Text>
+              </View>
+            </View>
+            <Switch
+              value={filters.activeToday}
+              onValueChange={(value) => setFilters({ ...filters, activeToday: value })}
+              trackColor={{ false: '#E5E7EB', true: '#A08AB7' }}
+              thumbColor="white"
+            />
+          </View>
+
+          {/* Show Blurred Photos Toggle */}
+          <View style={styles.toggleSection}>
+            <View style={styles.toggleContent}>
+              <MaterialCommunityIcons name="blur" size={22} color="#A08AB7" />
+              <View style={styles.toggleTextContainer}>
+                <Text style={styles.toggleTitle}>{t('filters.showBlurred')}</Text>
+                <Text style={styles.toggleDescription}>{t('filters.showBlurredDescription')}</Text>
+              </View>
+            </View>
+            <Switch
+              value={filters.showBlurredPhotos}
+              onValueChange={(value) => setFilters({ ...filters, showBlurredPhotos: value })}
+              trackColor={{ false: '#E5E7EB', true: '#A08AB7' }}
+              thumbColor="white"
             />
           </View>
 
@@ -169,7 +484,12 @@ export default function FilterModal({
             <MaterialCommunityIcons name="chevron-right" size={24} color="#A08AB7" />
           </TouchableOpacity>
 
-          {/* Premium Filters */}
+          {/* PREMIUM FILTERS SECTION */}
+          <View style={styles.premiumSectionHeader}>
+            <MaterialCommunityIcons name="crown" size={20} color="#FFD700" />
+            <Text style={styles.premiumSectionTitle}>{t('filters.advancedFilters')}</Text>
+          </View>
+
           {!isPremium && (
             <TouchableOpacity style={styles.premiumBanner} onPress={onUpgrade}>
               <View style={styles.premiumBannerContent}>
@@ -182,146 +502,127 @@ export default function FilterModal({
             </TouchableOpacity>
           )}
 
-          {/* Religion */}
-          <View style={[styles.section, !isPremium && styles.disabledSection]}>
-            <Text style={styles.sectionTitle}>{t('filters.religion')}</Text>
-            <View style={styles.chipContainer}>
-              {RELIGIONS.map((religion) => (
-                <TouchableOpacity
-                  key={religion}
-                  disabled={!isPremium}
-                  style={[
-                    styles.chip,
-                    filters.religion.includes(religion) && styles.chipSelected,
-                    !isPremium && styles.chipDisabled,
-                  ]}
-                  onPress={() =>
-                    setFilters({
-                      ...filters,
-                      religion: toggleArrayFilter(filters.religion, religion),
-                    })
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      filters.religion.includes(religion) && styles.chipTextSelected,
-                    ]}
-                  >
-                    {religion}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+          {/* Identity & Background Section */}
+          {renderCollapsibleSection(
+            'identity',
+            t('filters.identityBackground'),
+            'account-outline',
+            getSelectedCount([filters.genderPreference, filters.ethnicity, filters.sexualOrientation]),
+            <>
+              {renderSubsection(t('filters.gender'), renderChips(GENDERS, filters.genderPreference, 'genderPreference'))}
+              {renderSubsection(t('filters.ethnicity'), renderChips(ETHNICITIES, filters.ethnicity, 'ethnicity'))}
+              {renderSubsection(t('filters.sexualOrientation'), renderChips(SEXUAL_ORIENTATIONS, filters.sexualOrientation, 'sexualOrientation'))}
+            </>
+          )}
 
-          {/* Political Views */}
-          <View style={[styles.section, !isPremium && styles.disabledSection]}>
-            <Text style={styles.sectionTitle}>{t('filters.politicalViews')}</Text>
-            <View style={styles.chipContainer}>
-              {POLITICAL_VIEWS.map((view) => (
-                <TouchableOpacity
-                  key={view}
-                  disabled={!isPremium}
-                  style={[
-                    styles.chip,
-                    filters.politicalViews.includes(view) && styles.chipSelected,
-                    !isPremium && styles.chipDisabled,
-                  ]}
-                  onPress={() =>
-                    setFilters({
-                      ...filters,
-                      politicalViews: toggleArrayFilter(filters.politicalViews, view),
-                    })
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      filters.politicalViews.includes(view) && styles.chipTextSelected,
-                    ]}
-                  >
-                    {view}
-                  </Text>
-                </TouchableOpacity>
+          {/* Physical & Personality Section */}
+          {renderCollapsibleSection(
+            'physical',
+            t('filters.physicalPersonality'),
+            'account-heart-outline',
+            getSelectedCount([filters.zodiacSign]) +
+              (localHeightMin !== 48 || localHeightMax !== 84 ? 1 : 0),
+            <>
+              {renderSubsection(t('filters.heightRange'), (
+                <>
+                  <View style={styles.rangeValues}>
+                    <Text style={styles.rangeText}>{inchesToFeetDisplay(localHeightMin)}</Text>
+                    <Text style={styles.rangeText}>{inchesToFeetDisplay(localHeightMax)}</Text>
+                  </View>
+                  <View style={styles.sliderContainer}>
+                    <Text style={styles.sliderLabel}>{t('filters.minimum')}</Text>
+                    <Slider
+                      style={styles.slider}
+                      minimumValue={48}
+                      maximumValue={84}
+                      step={1}
+                      value={localHeightMin}
+                      onValueChange={(value) => setLocalHeightMin(Math.min(Math.round(value), localHeightMax - 1))}
+                      minimumTrackTintColor="#A08AB7"
+                      maximumTrackTintColor="#E5E7EB"
+                    />
+                    <Text style={styles.sliderLabel}>{t('filters.maximum')}</Text>
+                    <Slider
+                      style={styles.slider}
+                      minimumValue={48}
+                      maximumValue={84}
+                      step={1}
+                      value={localHeightMax}
+                      onValueChange={(value) => setLocalHeightMax(Math.max(Math.round(value), localHeightMin + 1))}
+                      minimumTrackTintColor="#A08AB7"
+                      maximumTrackTintColor="#E5E7EB"
+                    />
+                  </View>
+                </>
               ))}
-            </View>
-          </View>
+              {renderSubsection(t('filters.zodiacSign'), renderChips(ZODIAC_SIGNS, filters.zodiacSign, 'zodiacSign'))}
+            </>
+          )}
 
-          {/* Housing Preference */}
-          <View style={[styles.section, !isPremium && styles.disabledSection]}>
-            <Text style={styles.sectionTitle}>{t('filters.housingPreference')}</Text>
-            <View style={styles.chipContainer}>
-              {HOUSING_PREFERENCES.map((housing) => (
-                <TouchableOpacity
-                  key={housing}
-                  disabled={!isPremium}
-                  style={[
-                    styles.chip,
-                    filters.housingPreference.includes(housing) && styles.chipSelected,
-                    !isPremium && styles.chipDisabled,
-                  ]}
-                  onPress={() =>
-                    setFilters({
-                      ...filters,
-                      housingPreference: toggleArrayFilter(filters.housingPreference, housing),
-                    })
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      filters.housingPreference.includes(housing) && styles.chipTextSelected,
-                    ]}
-                  >
-                    {housing}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+          {/* Lifestyle Section */}
+          {renderCollapsibleSection(
+            'lifestyle',
+            t('filters.lifestyle'),
+            'heart-pulse',
+            getSelectedCount([filters.religion, filters.politicalViews, filters.languagesSpoken, filters.smoking, filters.drinking, filters.pets]),
+            <>
+              {renderSubsection(t('filters.religion'), renderChips(RELIGIONS, filters.religion, 'religion'))}
+              {renderSubsection(t('filters.politicalViews'), renderChips(POLITICAL_VIEWS, filters.politicalViews, 'politicalViews'))}
+              {renderSubsection(t('filters.languagesSpoken'), renderChips(LANGUAGES, filters.languagesSpoken, 'languagesSpoken'))}
+              {renderSubsection(t('filters.smoking'), renderChips(SMOKING_OPTIONS, filters.smoking, 'smoking'))}
+              {renderSubsection(t('filters.drinking'), renderChips(DRINKING_OPTIONS, filters.drinking, 'drinking'))}
+              {renderSubsection(t('filters.pets'), renderChips(PET_OPTIONS, filters.pets, 'pets'))}
+            </>
+          )}
 
-          {/* Financial Arrangement */}
-          <View style={[styles.section, !isPremium && styles.disabledSection]}>
-            <Text style={styles.sectionTitle}>{t('filters.financialArrangement')}</Text>
-            <View style={styles.chipContainer}>
-              {FINANCIAL_ARRANGEMENTS.map((arrangement) => (
-                <TouchableOpacity
-                  key={arrangement}
-                  disabled={!isPremium}
-                  style={[
-                    styles.chip,
-                    filters.financialArrangement.includes(arrangement) && styles.chipSelected,
-                    !isPremium && styles.chipDisabled,
-                  ]}
-                  onPress={() =>
-                    setFilters({
-                      ...filters,
-                      financialArrangement: toggleArrayFilter(
-                        filters.financialArrangement,
-                        arrangement
-                      ),
-                    })
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      filters.financialArrangement.includes(arrangement) && styles.chipTextSelected,
-                    ]}
-                  >
-                    {arrangement}
-                  </Text>
-                </TouchableOpacity>
+          {/* Marriage Intentions Section */}
+          {renderCollapsibleSection(
+            'marriage',
+            t('filters.marriageIntentions'),
+            'ring',
+            getSelectedCount([filters.housingPreference, filters.financialArrangement, filters.primaryReason, filters.relationshipType]) +
+              (filters.wantsChildren ? 1 : 0),
+            <>
+              {renderSubsection(t('filters.primaryReason'), renderChips(PRIMARY_REASONS, filters.primaryReason, 'primaryReason'))}
+              {renderSubsection(t('filters.relationshipType'), renderChips(RELATIONSHIP_TYPES, filters.relationshipType, 'relationshipType'))}
+              {renderSubsection(t('filters.wantsChildren'), (
+                <View style={styles.chipContainer}>
+                  {WANTS_CHILDREN_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.chip,
+                        filters.wantsChildren === option.toLowerCase() && styles.chipSelected,
+                      ]}
+                      onPress={() =>
+                        setFilters({
+                          ...filters,
+                          wantsChildren: filters.wantsChildren === option.toLowerCase() ? null : option.toLowerCase(),
+                        })
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          filters.wantsChildren === option.toLowerCase() && styles.chipTextSelected,
+                        ]}
+                      >
+                        {option}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               ))}
-            </View>
-          </View>
+              {renderSubsection(t('filters.housingPreference'), renderChips(HOUSING_PREFERENCES, filters.housingPreference, 'housingPreference'))}
+              {renderSubsection(t('filters.financialArrangement'), renderChips(FINANCIAL_ARRANGEMENTS, filters.financialArrangement, 'financialArrangement'))}
+            </>
+          )}
 
           <View style={{ height: 100 }} />
         </ScrollView>
 
         {/* Apply Button */}
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: Math.max(20, insets.bottom) }]}>
           <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
             <Text style={styles.applyButtonText}>{t('filters.applyFilters')}</Text>
           </TouchableOpacity>
@@ -361,11 +662,38 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
+  freeSectionHeader: {
+    marginBottom: 16,
+  },
+  freeSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  premiumSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  premiumSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#92400E',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   section: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   disabledSection: {
-    opacity: 0.5,
+    opacity: 0.6,
+  },
+  disabledText: {
+    color: '#9CA3AF',
   },
   sectionTitle: {
     fontSize: 18,
@@ -390,17 +718,126 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 40,
   },
+  sliderLabel: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  distanceMarkers: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: -4,
+  },
+  distanceMarkerText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  toggleSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  toggleContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  toggleTextContainer: {
+    flex: 1,
+  },
+  toggleTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  toggleDescription: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  collapsibleSection: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sectionHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  sectionHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectedBadge: {
+    backgroundColor: '#A08AB7',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  selectedBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'white',
+  },
+  sectionContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  subsection: {
+    marginTop: 16,
+  },
+  subsectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 12,
+  },
   chipContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: 'white',
-    borderWidth: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1.5,
     borderColor: '#E5E7EB',
   },
   chipSelected: {
@@ -409,11 +846,12 @@ const styles = StyleSheet.create({
   },
   chipDisabled: {
     backgroundColor: '#F3F4F6',
+    opacity: 0.5,
   },
   chipText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
-    color: '#6B7280',
+    color: '#4B5563',
   },
   chipTextSelected: {
     color: 'white',
@@ -425,12 +863,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3E8FF',
     padding: 16,
     borderRadius: 12,
-    marginBottom: 24,
+    marginBottom: 20,
+    marginTop: 8,
   },
   infoText: {
     flex: 1,
     fontSize: 14,
-    color: '#6B21A8',
+    color: '#A08AB7',
     lineHeight: 20,
   },
   editPreferencesButton: {
@@ -440,7 +879,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     padding: 16,
     borderRadius: 12,
-    marginHorizontal: 20,
     marginBottom: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -485,7 +923,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
     padding: 16,
     borderRadius: 12,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   premiumBannerContent: {
     flexDirection: 'row',

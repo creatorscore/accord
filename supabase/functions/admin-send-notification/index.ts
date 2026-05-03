@@ -64,7 +64,7 @@ serve(async (req) => {
     // Build query based on target audience
     let query = supabaseClient
       .from('profiles')
-      .select('id, push_token, push_enabled, display_name, is_premium, is_platinum, photo_verified')
+      .select('id')
       .eq('push_enabled', true);
 
     switch (payload.targetAudience) {
@@ -91,119 +91,55 @@ serve(async (req) => {
         break;
     }
 
-    const { data: recipients, error: recipientsError } = await query;
+    // Fetch ALL recipient profile IDs with pagination (Supabase defaults to 1000 row limit)
+    let recipientIds: string[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data: page, error: pageError } = await query.range(from, from + pageSize - 1);
+      if (pageError) throw pageError;
+      if (!page || page.length === 0) break;
+      recipientIds = recipientIds.concat(page.map((p: { id: string }) => p.id));
+      if (page.length < pageSize) break;
+      from += pageSize;
+    }
 
-    if (recipientsError) throw recipientsError;
-
-    if (!recipients || recipients.length === 0) {
+    if (recipientIds.length === 0) {
       return new Response(JSON.stringify({
         success: true,
         message: 'No recipients found matching criteria',
-        sent: 0,
-        failed: 0,
+        queued: 0,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       });
     }
 
-    // Get all device tokens for these users (multi-device support)
-    const profileIds = recipients.map(r => r.id);
-    const { data: deviceTokens, error: deviceTokensError } = await supabaseClient
-      .from('device_tokens')
-      .select('profile_id, push_token')
-      .in('profile_id', profileIds);
+    // Insert into notification_queue in batches (avoid payload size limits)
+    const insertBatchSize = 500;
+    let queuedCount = 0;
 
-    if (deviceTokensError) {
-      console.error('Error fetching device tokens:', deviceTokensError);
-      // Continue anyway - we'll fall back to profiles.push_token
-    }
+    for (let i = 0; i < recipientIds.length; i += insertBatchSize) {
+      const batch = recipientIds.slice(i, i + insertBatchSize);
+      const queueItems = batch.map(profileId => ({
+        recipient_profile_id: profileId,
+        notification_type: 'admin_notification',
+        title: payload.title,
+        body: payload.body,
+        data: payload.data || {},
+        status: 'pending',
+        attempts: 0,
+      }));
 
-    // Build complete list of tokens (from both device_tokens table AND profiles.push_token)
-    const tokenSet = new Set<string>();
-    const tokenToProfileMap = new Map<string, string>(); // Track which profile each token belongs to
+      const { error: insertError } = await supabaseClient
+        .from('notification_queue')
+        .insert(queueItems);
 
-    // Add tokens from device_tokens table (new multi-device system)
-    if (deviceTokens) {
-      deviceTokens.forEach(dt => {
-        if (dt.push_token) {
-          tokenSet.add(dt.push_token);
-          tokenToProfileMap.set(dt.push_token, dt.profile_id);
-        }
-      });
-    }
-
-    // Add tokens from profiles table (legacy system - for backward compatibility)
-    recipients.forEach(recipient => {
-      if (recipient.push_token) {
-        tokenSet.add(recipient.push_token);
-        tokenToProfileMap.set(recipient.push_token, recipient.id);
-      }
-    });
-
-    const allTokens = Array.from(tokenSet);
-
-    if (allTokens.length === 0) {
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'No push tokens found for recipients',
-        sent: 0,
-        failed: 0,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      });
-    }
-
-    // Prepare notification messages (one per token, supporting multi-device)
-    const messages = allTokens.map(token => ({
-      to: token,
-      sound: 'default',
-      title: payload.title,
-      body: payload.body,
-      data: payload.data || {},
-      priority: 'high' as const,
-      badge: 1,
-    }));
-
-    // Send notifications in batches (Expo allows up to 100 per request)
-    const batchSize = 100;
-    let sentCount = 0;
-    let failedCount = 0;
-    const failedTokens: string[] = [];
-
-    for (let i = 0; i < messages.length; i += batchSize) {
-      const batch = messages.slice(i, i + batchSize);
-
-      try {
-        const response = await fetch('https://exp.host/--/api/v2/push/send', {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Accept-Encoding': 'gzip, deflate',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(batch),
-        });
-
-        const result = await response.json();
-
-        // Check individual results
-        if (result.data) {
-          for (let j = 0; j < result.data.length; j++) {
-            const item = result.data[j];
-            if (item.status === 'ok') {
-              sentCount++;
-            } else {
-              failedCount++;
-              failedTokens.push(batch[j].to);
-              console.error('Failed to send notification:', item);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error sending batch:', error);
-        failedCount += batch.length;
+      if (insertError) {
+        console.error('Error inserting notification batch:', insertError);
+        // Continue with remaining batches even if one fails
+      } else {
+        queuedCount += batch.length;
       }
     }
 
@@ -213,25 +149,23 @@ serve(async (req) => {
       title: payload.title,
       body: payload.body,
       target_audience: payload.targetAudience,
-      recipients_count: recipients.length,
-      sent_count: sentCount,
-      failed_count: failedCount,
+      recipients_count: recipientIds.length,
+      sent_count: queuedCount, // queued count for backward compatibility
+      failed_count: recipientIds.length - queuedCount,
       data: payload.data,
     });
 
     return new Response(JSON.stringify({
       success: true,
-      message: `Notification sent to ${sentCount}/${allTokens.length} devices (${recipients.length} users)`,
-      sent: sentCount,
-      failed: failedCount,
-      totalTokens: allTokens.length,
-      totalUsers: recipients.length,
+      message: `Notification queued for ${queuedCount} users. Delivery within 1-2 minutes.`,
+      queued: queuedCount,
+      totalUsers: recipientIds.length,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
   } catch (error: any) {
-    console.error('Error sending notifications:', error);
+    console.error('Error queuing notifications:', error);
     return new Response(
       JSON.stringify({
         success: false,

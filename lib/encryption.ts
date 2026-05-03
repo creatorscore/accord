@@ -1,7 +1,13 @@
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import { Buffer } from 'buffer';
-import QuickCrypto from 'react-native-quick-crypto';
+let QuickCrypto: any;
+try {
+  QuickCrypto = require('react-native-quick-crypto').default || require('react-native-quick-crypto');
+} catch {
+  console.warn('[encryption] react-native-quick-crypto not available, encryption will use fallback');
+  QuickCrypto = null;
+}
 
 /**
  * E2E Encryption for Messages
@@ -158,6 +164,37 @@ export async function getPrivateKey(userId: string): Promise<string | null> {
 }
 
 /**
+ * Like getPrivateKey, but self-heals: if SecureStore lost the key (keychain
+ * wipe, reinstall, cold-start race with AuthContext.setupEncryption), we
+ * regenerate it deterministically from userId and re-store it. Safe because
+ * generateKeyPairForUser is pure (same userId -> same key on any device).
+ *
+ * Use this from code paths where a missing key would block the user (e.g.
+ * sending a message). Do NOT use from initializeEncryption itself — that
+ * path needs to see the actual stored value so it can migrate legacy
+ * random keys to the deterministic scheme.
+ */
+export async function ensurePrivateKey(userId: string): Promise<string> {
+  if (!userId) {
+    throw new Error('ensurePrivateKey called with empty userId');
+  }
+  const stored = await getPrivateKey(userId);
+  if (stored) return stored;
+
+  // Regenerate deterministically. Same userId always yields the same key,
+  // so old messages still decrypt and the recipient's cached public key for us
+  // still matches.
+  const { privateKey } = await generateKeyPairForUser(userId);
+  // Best-effort cache. Don't block send if SecureStore refuses the write.
+  try {
+    await storePrivateKey(userId, privateKey);
+  } catch (err) {
+    console.warn('[encryption] ensurePrivateKey failed to cache to SecureStore:', err);
+  }
+  return privateKey;
+}
+
+/**
  * Retrieve legacy private key from secure storage
  * This is the old random key that was used before deterministic keys
  * Used for backwards compatibility to decrypt old messages
@@ -241,6 +278,9 @@ export async function encryptMessage(
   senderPrivateKey: string,
   recipientPublicKey: string
 ): Promise<string> {
+  if (!QuickCrypto) {
+    throw new Error('Native crypto module not available — cannot encrypt');
+  }
   try {
     // CRITICAL FIX: Derive sender's public key from their private key
     // Then use BOTH PUBLIC KEYS for shared key derivation
@@ -297,17 +337,18 @@ export async function decryptMessage(
   recipientPrivateKey: string,
   senderPublicKey: string
 ): Promise<string> {
+  if (!QuickCrypto) {
+    // Can't decrypt without native crypto — return encrypted content as-is
+    return encryptedMessage;
+  }
   try {
     // Parse encrypted message format
     const parts = encryptedMessage.split(':');
 
     // If not in correct format, assume it's plain text (development/legacy)
     if (parts.length < 2) {
-      console.log('🔓 Message is plain text (no encryption format detected)');
       return encryptedMessage;
     }
-
-    console.log(`🔐 Attempting to decrypt message (${parts.length} parts)`);
 
     let ivBase64: string;
     let ciphertext: Buffer;
@@ -319,7 +360,6 @@ export async function decryptMessage(
       ivBase64 = iv;
       authTag = base64ToBuffer(authTagStr);
       ciphertext = base64ToBuffer(cipher);
-      console.log('📦 Parsed 3-part format (iv:authTag:ciphertext)');
     } else if (parts.length === 2) {
       // Alternative format: iv:ciphertext (auth tag at end of ciphertext)
       const [iv, ciphertextWithTag] = parts;
@@ -328,10 +368,8 @@ export async function decryptMessage(
       // Auth tag is last 16 bytes
       ciphertext = combined.slice(0, combined.length - 16);
       authTag = combined.slice(combined.length - 16);
-      console.log('📦 Parsed 2-part format (iv:ciphertext+tag)');
     } else {
       // Unknown format, return as plain text
-      console.log('⚠️ Unknown encryption format, treating as plain text');
       return encryptedMessage;
     }
 
@@ -341,16 +379,13 @@ export async function decryptMessage(
     // - Sender: deriveSharedKey(sender_PUBLIC, recipient_PUBLIC)
     // - Recipient: deriveSharedKey(recipient_PUBLIC, sender_PUBLIC)
     // After sorting, both get identical results!
-    console.log('🔑 Deriving shared key...');
     const recipientPublicKey = await derivePublicKeyFromPrivate(recipientPrivateKey);
     const sharedKeyBytes = await deriveSharedKey(recipientPublicKey, senderPublicKey);
-    console.log('✅ Shared key derived');
 
     // Convert IV from base64
     const iv = base64ToBuffer(ivBase64);
 
     // Create decipher using AES-256-GCM
-    console.log('🔓 Creating decipher...');
     const decipher = QuickCrypto.createDecipheriv(
       'aes-256-gcm',
       Buffer.from(sharedKeyBytes),
@@ -367,7 +402,6 @@ export async function decryptMessage(
     ]);
 
     const result = decrypted.toString('utf8');
-    console.log('✅ Message decrypted successfully');
     return result;
   } catch (error: any) {
     console.error('❌ Error decrypting message:', error?.message || error);
@@ -380,12 +414,10 @@ export async function decryptMessage(
       const firstPart = encryptedMessage.split(':')[0];
       const isBase64 = /^[A-Za-z0-9+/=]+$/.test(firstPart);
       if (isBase64) {
-        console.log('⚠️ Encrypted message but decryption failed');
         return '[Unable to decrypt message]';
       }
     }
     // Probably plain text from development
-    console.log('📝 Returning as plain text');
     return encryptedMessage;
   }
 }
@@ -418,7 +450,6 @@ export async function decryptMessageWithFallback(
         return decrypted;
       }
     } catch (error) {
-      console.log('🔄 Current key decryption failed, trying legacy key...');
     }
   }
 
@@ -426,21 +457,17 @@ export async function decryptMessageWithFallback(
   const legacyPrivateKey = await getLegacyPrivateKey(userId);
   if (legacyPrivateKey) {
     try {
-      console.log('🔑 Attempting decryption with legacy key...');
       const decrypted = await decryptMessage(encryptedMessage, legacyPrivateKey, senderPublicKey);
 
       // Check if decryption actually succeeded
       if (decrypted !== '[Unable to decrypt message]' && decrypted !== encryptedMessage) {
-        console.log('✅ Successfully decrypted with legacy key');
         return decrypted;
       }
     } catch (error) {
-      console.log('❌ Legacy key decryption also failed');
     }
   }
 
   // Both keys failed - return placeholder
-  console.log('⚠️ Unable to decrypt message with any available keys');
   return '[Unable to decrypt message]';
 }
 
@@ -475,7 +502,6 @@ export async function initializeEncryption(userId: string): Promise<string> {
       const existingLegacyKey = await getLegacyPrivateKey(userId);
       if (!existingLegacyKey) {
         // Save the old random key as legacy before overwriting
-        console.log('🔑 Saving old encryption key as legacy for backwards compatibility');
         await storeLegacyPrivateKey(userId, existingKey);
       }
     }
@@ -483,7 +509,6 @@ export async function initializeEncryption(userId: string): Promise<string> {
     // Store/update the deterministic private key on this device
     // This handles both new devices and migration from old random keys
     await storePrivateKey(userId, privateKey);
-    console.log('✅ Encryption keys initialized for cross-device messaging');
 
     // Return public key to be stored in database
     return publicKey;
@@ -515,7 +540,6 @@ export async function migrateEncryptionKeys(
   try {
     // Store the old private key
     await storePrivateKey(userId, oldPrivateKey);
-    console.log('Encryption keys migrated successfully');
   } catch (error) {
     console.error('Error migrating encryption keys:', error);
     throw new Error('Failed to migrate encryption keys');

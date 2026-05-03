@@ -1,30 +1,68 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Alert, Switch, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Image,
+  Switch,
+  InteractionManager,
+  ActivityIndicator,
+  StyleSheet,
+  useColorScheme,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
-import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash } from '@/lib/image-optimization';
-import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
+import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri, cleanupOptimizedImages } from '@/lib/image-optimization';
+import { signPhotoUrls } from '@/lib/signed-urls';
+import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
+import { getGlobalStep } from '@/lib/onboarding-steps';
+import { useTranslation } from 'react-i18next';
+import * as Haptics from 'expo-haptics';
+import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
 
 interface Photo {
   uri: string;
+  originalUri?: string; // Original source URI for re-optimization fallback
   id?: string;
   contentHash?: string;
+  blurDataUri?: string;
+  // True once this photo has been uploaded + moderated successfully. Used to
+  // skip re-uploading on retry after a partial failure (e.g. another photo
+  // was rejected mid-loop). The local URI stays as-is so the grid keeps
+  // rendering the same image without a flicker.
+  uploaded?: boolean;
 }
 
-export default function Photos() {
+interface PhotosProps {
+  embedded?: boolean;
+  onContinue?: () => void;
+  onBack?: () => void;
+}
+
+export default function Photos({ embedded, onContinue: parentContinue, onBack: parentBack }: PhotosProps = {}) {
   const router = useRouter();
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const { t } = useTranslation();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [photoBlurEnabled, setPhotoBlurEnabled] = useState(false);
+  const [processingImage, setProcessingImage] = useState(false);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
+  // Skeleton slots shown while existing photos load — prevents grid pop-in flicker.
+  // Start at 3 (the minimum required) so first paint never shows an empty grid.
+  const [skeletonCount, setSkeletonCount] = useState(3);
+  const [initialLoading, setInitialLoading] = useState(true);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -43,56 +81,73 @@ export default function Photos() {
         .single();
 
       if (error) throw error;
+      if (!isMounted.current) return;
       setProfileId(data.id);
 
-      // Set photo blur preference if it exists
       if (data.photo_blur_enabled !== null) {
         setPhotoBlurEnabled(data.photo_blur_enabled);
       }
 
-      // Load existing photos
       await loadExistingPhotos(data.id);
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to load profile');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
+    } finally {
+      if (isMounted.current) setInitialLoading(false);
     }
   };
 
   const loadExistingPhotos = async (profileId: string) => {
     try {
+      // Exclude rejected photos so the count the user sees matches what
+      // actually counts toward the 3-photo minimum. Otherwise a user with
+      // 2 approved + 1 rejected sees "3 photos", taps Continue, and is
+      // either rejected again or advances with an invisible-in-discovery
+      // photo. 'pending' is included so that in-flight moderations still
+      // appear during the brief window before the edge function returns.
       const { data: existingPhotos, error } = await supabase
         .from('photos')
-        .select('url, display_order, content_hash')
+        .select('url, storage_path, display_order, content_hash, moderation_status')
         .eq('profile_id', profileId)
+        .neq('moderation_status', 'rejected')
         .order('display_order', { ascending: true });
 
       if (error) {
         console.error('Error loading existing photos:', error);
+        setSkeletonCount(0);
         return;
       }
 
       if (existingPhotos && existingPhotos.length > 0) {
-        console.log('📸 Loaded existing photos:', existingPhotos.length);
-        const photoUris = existingPhotos.map(photo => ({
-          uri: photo.url,
-          contentHash: photo.content_hash // Include hash for deduplication
+        // Reserve skeleton slots immediately so the grid doesn't jump from 0 → N
+        setSkeletonCount(existingPhotos.length);
+        const signedPhotos = await signPhotoUrls(existingPhotos);
+        if (!isMounted.current) return;
+        const photoUris = signedPhotos.map(photo => ({
+          uri: photo.url!,
+          contentHash: photo.content_hash,
         }));
         setPhotos(photoUris);
+        setSkeletonCount(0);
+      } else {
+        setSkeletonCount(0);
       }
     } catch (error) {
       console.error('Failed to load existing photos:', error);
+      setSkeletonCount(0);
     }
   };
 
   const pickImage = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (photos.length >= 6) {
-      Alert.alert('Maximum Photos', 'You can upload up to 6 photos');
+      showToast({ type: 'info', title: t('toast.photoLimitTitle'), message: t('toast.photoLimitMessage') });
       return;
     }
 
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'We need permission to access your photos');
+        showToast({ type: 'error', title: t('toast.permissionDenied'), message: t('toast.needPhotoAccess') });
         return;
       }
 
@@ -104,76 +159,102 @@ export default function Photos() {
 
       if (!result.canceled && result.assets[0]) {
         const selectedUri = result.assets[0].uri;
+        setProcessingImage(true);
 
-        // Validate image before processing
-        const validation = await validateImage(selectedUri);
-        if (!validation.isValid) {
-          Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
-          return;
-        }
+        InteractionManager.runAfterInteractions(async () => {
+          try {
+            const validation = await validateImage(selectedUri);
+            if (!validation.isValid) {
+              setProcessingImage(false);
+              showToast({ type: 'error', title: t('toast.invalidImage'), message: validation.error || t('toast.invalidImage') });
+              return;
+            }
 
-        // Optimize image with better compression and memory management
-        const { optimized } = await optimizeImage(selectedUri, {
-          generateThumbnail: true, // Generate thumbnail for faster loading
-        });
+            // Hash the ORIGINAL picker URI before optimization — optimization output
+            // can vary run-to-run (metadata timestamps, JPEG quantization) which would
+            // produce different hashes for the same source image and let duplicates slip.
+            const contentHash = await generateImageHash(selectedUri);
 
-        console.log(`Optimized image: ${(optimized.size! / 1024).toFixed(0)}KB (${optimized.width}x${optimized.height})`);
+            const isDuplicateLocal = photos.some(p => p.contentHash === contentHash);
+            if (isDuplicateLocal) {
+              setProcessingImage(false);
+              showToast({ type: 'info', title: t('toast.photoAlreadyAdded'), message: t('toast.photoAlreadyAdded') });
+              return;
+            }
 
-        // Generate hash for duplicate detection
-        const contentHash = await generateImageHash(optimized.uri);
-        console.log(`Generated content hash: ${contentHash.substring(0, 16)}...`);
+            if (profileId) {
+              const { data: existingPhoto } = await supabase
+                .from('photos')
+                .select('id')
+                .eq('profile_id', profileId)
+                .eq('content_hash', contentHash)
+                .maybeSingle();
 
-        // Check for duplicate in current selection (local check)
-        const isDuplicateLocal = photos.some(p => p.contentHash === contentHash);
-        if (isDuplicateLocal) {
-          Alert.alert(
-            'Photo Already Added',
-            'This photo is already in your profile. Try selecting a different photo to show more sides of yourself!'
-          );
-          return;
-        }
+              if (existingPhoto) {
+                setProcessingImage(false);
+                showToast({ type: 'info', title: t('toast.photoAlreadyAdded'), message: t('toast.photoAlreadyAdded') });
+                return;
+              }
+            }
 
-        // Check for duplicate in database (already uploaded photos)
-        if (profileId) {
-          const { data: existingPhoto } = await supabase
-            .from('photos')
-            .select('id')
-            .eq('profile_id', profileId)
-            .eq('content_hash', contentHash)
-            .maybeSingle();
+            const { optimized } = await optimizeImage(selectedUri, {
+              generateThumbnail: true,
+            });
 
-          if (existingPhoto) {
-            Alert.alert(
-              'Photo Already Added',
-              'This photo is already in your profile. Try selecting a different photo to show more sides of yourself!'
-            );
-            return;
+            const blurDataUri = await generateBlurDataUri(optimized.uri).catch(() => undefined);
+
+            if (isMounted.current) {
+              setPhotos(prev => [...prev, { uri: optimized.uri, originalUri: selectedUri, contentHash, blurDataUri }]);
+              setProcessingImage(false);
+            }
+          } catch (error: any) {
+            console.error('Error processing image:', error);
+            setProcessingImage(false);
+            showToast({ type: 'error', title: t('common.error'), message: t('toast.photoProcessError') });
           }
-        }
-
-        // Update state if component is still mounted
-        if (isMounted.current) {
-          setPhotos(prev => [...prev, { uri: optimized.uri, contentHash }]);
-        }
+        });
       }
     } catch (error: any) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to select photo. Please try again.');
+      setProcessingImage(false);
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.selectPhotoError') });
     }
   }, [photos, profileId]);
 
   const removePhoto = (index: number) => {
     setPhotos(photos.filter((_, i) => i !== index));
+    setSelectedPhotoIndex(null);
+  };
+
+  const handlePhotoTap = (index: number) => {
+    if (selectedPhotoIndex === null) {
+      // First tap: select this photo for reorder
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setSelectedPhotoIndex(index);
+    } else if (selectedPhotoIndex === index) {
+      // Tap same photo: deselect
+      setSelectedPhotoIndex(null);
+    } else {
+      // Tap different photo: swap positions
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const newPhotos = [...photos];
+      const temp = newPhotos[selectedPhotoIndex];
+      newPhotos[selectedPhotoIndex] = newPhotos[index];
+      newPhotos[index] = temp;
+      setPhotos(newPhotos);
+      setSelectedPhotoIndex(null);
+    }
   };
 
   const handleContinue = async () => {
-    if (photos.length < 2) {
-      Alert.alert('More Photos Needed', 'Please add at least 2 photos to continue');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (photos.length < 3) {
+      showToast({ type: 'info', title: t('toast.morePhotosNeeded'), message: t('toast.morePhotosNeeded') });
       return;
     }
 
     if (!profileId) {
-      Alert.alert('Error', 'Profile not found. Please go back and complete Step 1.');
+      showToast({ type: 'error', title: t('common.error'), message: t('toast.profileNotFound') });
       return;
     }
 
@@ -181,16 +262,18 @@ export default function Photos() {
       setUploading(true);
       setUploadProgress(0);
 
-      // Filter out photos that are already uploaded (have http URLs)
-      const newPhotos = photos.filter(photo => !photo.uri.startsWith('http'));
+      // Photos that need uploading: not already a remote URL AND not already
+      // marked uploaded from a prior partial-failure retry.
+      const newPhotos = photos.filter(photo => !photo.uri.startsWith('http') && !photo.uploaded);
+      // Track which local photos have been successfully uploaded+moderated so
+      // a partial-failure retry doesn't try to re-upload them and trigger a
+      // duplicate constraint or a redundant moderation call. Keyed by
+      // contentHash because the local URI is the only stable per-photo id.
+      const uploadedHashes: Set<string> = new Set();
 
       if (newPhotos.length === 0) {
-        console.log('✅ All photos already uploaded, skipping upload step');
         setUploadProgress(100);
       } else {
-        console.log(`📤 Uploading ${newPhotos.length} new photos...`);
-
-        // Upload each new photo to Supabase Storage
         for (let i = 0; i < newPhotos.length; i++) {
           const photo = newPhotos[i];
           const timestamp = Date.now();
@@ -198,15 +281,13 @@ export default function Photos() {
           const fileName = `${profileId}/${timestamp}_${i}.${fileExt}`;
 
           try {
-            // Convert URI to ArrayBuffer using optimized utility
-            const arrayBuffer = await uriToArrayBuffer(photo.uri);
+            const arrayBuffer = await uriToArrayBuffer(photo.uri, photo.originalUri);
 
-            // Upload to Supabase Storage (use upsert to handle re-uploads gracefully)
             const { data: uploadData, error: uploadError } = await supabase.storage
               .from('profile-photos')
               .upload(fileName, arrayBuffer, {
                 contentType: 'image/jpeg',
-                upsert: true, // Allow re-upload if file exists (handles going back scenario)
+                upsert: true,
               });
 
             if (uploadError) {
@@ -214,37 +295,66 @@ export default function Photos() {
               throw new Error(`Failed to upload photo ${i + 1}: ${uploadError.message}`);
             }
 
-            // Get public URL for the photo
-            const { data: { publicUrl } } = supabase.storage
+            const { data: signedData } = await supabase.storage
               .from('profile-photos')
-              .getPublicUrl(fileName);
+              .createSignedUrl(fileName, 600);
+            const signedUrl = signedData?.signedUrl || '';
 
-            // Save to photos table with content hash for duplicate detection
-            // Use upsert-like behavior: check first, then insert, and handle constraint errors gracefully
-            const { error: dbError } = await supabase
+            const { data: photoData, error: dbError } = await supabase
               .from('photos')
               .insert({
                 profile_id: profileId,
                 storage_path: fileName,
-                url: publicUrl,
+                url: fileName,
                 display_order: photos.length - newPhotos.length + i,
                 is_primary: photos.length - newPhotos.length + i === 0,
                 content_hash: photo.contentHash,
-              });
+                blur_data_uri: photo.blurDataUri || null,
+                moderation_status: 'pending',
+              })
+              .select('id')
+              .single();
 
             if (dbError) {
-              // If it's a duplicate constraint error, just skip - photo already exists
               if (dbError.code === '23505' || dbError.message?.includes('duplicate') || dbError.message?.includes('unique constraint')) {
-                console.log(`📸 Photo ${i + 1} already exists in database, skipping`);
+                // Photo already exists, skip
               } else {
                 console.error(`Database error for photo ${i}:`, dbError);
                 throw new Error(`Failed to save photo ${i + 1}. Please try again.`);
               }
             } else {
-              console.log(`✅ Photo ${i + 1} saved to database`);
+              try {
+                const { data: moderationResult, error: moderationError } = await supabase.functions.invoke('moderate-photo', {
+                  body: {
+                    photo_url: signedUrl,
+                    photo_id: photoData?.id,
+                    profile_id: profileId,
+                  },
+                });
+
+                if (moderationError) {
+                  console.error('Moderation service error:', moderationError);
+                }
+
+                if (moderationResult?.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
+                  throw new Error(t('onboardingPhotos.inappropriateContent'));
+                }
+                if (moderationResult?.approved === false && moderationResult.reason === 'contact_info') {
+                  throw new Error(t('onboardingPhotos.contactInfoDetected'));
+                }
+              } catch (moderationError: any) {
+                if (moderationError.message?.includes('inappropriate content') || moderationError.message?.includes('contact info')) {
+                  throw moderationError;
+                }
+                console.error('Moderation check failed:', moderationError);
+              }
             }
 
-            // Update progress
+            // Mark this photo as uploaded — on a later retry (e.g. moderation
+            // rejected a different photo) we'll skip re-uploading it.
+            if (photo.contentHash) {
+              uploadedHashes.add(photo.contentHash);
+            }
             setUploadProgress(Math.round(((i + 1) / newPhotos.length) * 100));
           } catch (photoError: any) {
             console.error(`Error processing photo ${i}:`, photoError);
@@ -253,171 +363,480 @@ export default function Photos() {
         }
       }
 
-      // Update onboarding step and photo blur preference
-      console.log('💠 Photo blur setting:', photoBlurEnabled ? 'ENABLED' : 'DISABLED');
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          onboarding_step: 2,
-          photo_blur_enabled: photoBlurEnabled,
-        })
-        .eq('id', profileId);
+      if (!embedded) {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            onboarding_step: 3,
+            photo_blur_enabled: photoBlurEnabled,
+          })
+          .eq('id', profileId);
 
-      if (updateError) {
-        console.error('Error updating onboarding step:', updateError);
+        if (updateError) {
+          console.error('Error updating onboarding step:', updateError);
+        }
       } else {
-        console.log('✅ Photo blur preference saved:', photoBlurEnabled);
+        // In embedded mode, just save blur preference
+        await supabase
+          .from('profiles')
+          .update({ photo_blur_enabled: photoBlurEnabled })
+          .eq('id', profileId);
       }
 
-      // Reset upload state
+      // Mark uploaded photos in local state so a subsequent retry skips them
+      // (the filter at the top of this handler checks both `uri` and
+      // `uploaded`). Keeps the original local URI for rendering — no
+      // flicker on partial-failure retries.
+      if (uploadedHashes.size > 0 && isMounted.current) {
+        setPhotos(prev => prev.map(p =>
+          p.contentHash && uploadedHashes.has(p.contentHash) ? { ...p, uploaded: true } : p
+        ));
+      }
+
+      // Clean up persisted optimized images now that they're uploaded
+      cleanupOptimizedImages().catch(() => {});
+
       setUploading(false);
       setUploadProgress(0);
 
-      // Navigate to next step
-      router.push('/(onboarding)/about');
+      if (embedded && parentContinue) {
+        parentContinue();
+      } else {
+        router.push('/(onboarding)/onboarding');
+      }
     } catch (error: any) {
       console.error('Upload failed:', error);
       if (isMounted.current) {
-        Alert.alert('Upload Failed', error.message || 'Failed to upload photos. Please try again.');
+        showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.uploadFailed') });
         setUploading(false);
         setUploadProgress(0);
       }
     }
   };
 
-  return (
-    <ScrollView className="flex-1 bg-purple-50">
-      <View className="px-6" style={{ paddingTop: Platform.OS === 'android' ? 8 : 64, paddingBottom: insets.bottom + 16 }}>
-        {/* Progress */}
-        <View className="mb-8">
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-sm text-gray-600 font-medium">Step 2 of 8</Text>
-            <Text className="text-sm text-lavender-500 font-bold">25%</Text>
-          </View>
-          <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
-            <View
-              className="h-3 bg-lavender-500 rounded-full"
-              style={{ width: '25%' }}
-            />
-          </View>
-        </View>
+  const showSkeleton = initialLoading && photos.length === 0;
+  const hintText = selectedPhotoIndex !== null
+    ? 'Tap another photo to swap positions'
+    : photos.length < 3
+      ? `Add ${3 - photos.length} more — 3 required, up to 6. First photo is your primary.`
+      : 'Tap a photo to reorder. First photo is your primary.';
 
-        {/* Header */}
-        <View className="mb-8">
-          <Text className="text-4xl font-bold text-gray-900 mb-3">
-            Show yourself 📸
-          </Text>
-          <Text className="text-gray-600 text-lg">
-            Upload 2-6 photos. Your first photo will be your profile picture.
-          </Text>
-        </View>
+  const content = (
+    <>
+      {/* Single hint line (replaces counter + reorder tip + tips card) */}
+      <View style={styles.hintRow}>
+        <MaterialCommunityIcons
+          name={selectedPhotoIndex !== null ? 'swap-horizontal' : 'information-outline'}
+          size={14}
+          color={isDark ? '#D4C4E8' : '#8B72A8'}
+        />
+        <Text style={[styles.hintText, { color: isDark ? '#D4C4E8' : '#8B72A8' }]} numberOfLines={2}>
+          {hintText}
+        </Text>
+        {selectedPhotoIndex !== null && (
+          <TouchableOpacity onPress={() => setSelectedPhotoIndex(null)}>
+            <Text style={[styles.reorderCancel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>Cancel</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
-        {/* Photo Grid */}
-        <View className="flex-row flex-wrap gap-3 mb-8">
-          {photos.map((photo, index) => (
-            <View key={index} className="relative">
+      {/* Photo Grid — tap to select, tap another to swap */}
+      <View style={styles.photoGrid}>
+        {showSkeleton && Array.from({ length: skeletonCount }).map((_, i) => (
+          <View
+            key={`skeleton-${i}`}
+            style={[styles.photoImage, styles.photoSkeleton, { backgroundColor: isDark ? '#1F2937' : '#E5E7EB' }]}
+          />
+        ))}
+        {!showSkeleton && photos.map((photo, index) => {
+          const isSelected = selectedPhotoIndex === index;
+          const isSwapTarget = selectedPhotoIndex !== null && selectedPhotoIndex !== index;
+          return (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.photoWrapper,
+                isSelected && styles.photoSelected,
+                isSwapTarget && styles.photoSwapTarget,
+              ]}
+              onPress={() => handlePhotoTap(index)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`Photo ${index + 1}${index === 0 ? ', primary' : ''}${isSelected ? ', selected for reorder' : ''}`}
+              accessibilityHint={isSelected ? 'Tap another photo to swap' : 'Tap to select for reordering'}
+            >
               <Image
                 source={{ uri: photo.uri }}
-                className="w-28 h-36 rounded-2xl bg-gray-200"
+                style={[styles.photoImage, { backgroundColor: isDark ? '#374151' : '#E5E7EB' }]}
               />
               <TouchableOpacity
-                className="absolute top-2 right-2 bg-black/50 rounded-full p-1"
+                style={styles.removeButton}
                 onPress={() => removePhoto(index)}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove photo ${index + 1}`}
               >
-                <MaterialCommunityIcons name="close" size={16} color="white" />
+                <MaterialCommunityIcons name="close" size={14} color="white" />
               </TouchableOpacity>
               {index === 0 && (
-                <View className="absolute bottom-2 left-2 bg-lavender-500 px-2 py-1 rounded">
-                  <Text className="text-white text-xs font-semibold">Primary</Text>
+                <View style={styles.primaryBadge}>
+                  <Text style={styles.primaryBadgeText}>{t('onboardingPhotos.primary')}</Text>
                 </View>
               )}
-            </View>
-          ))}
-
-          {/* Add Photo Button */}
-          {photos.length < 6 && (
-            <TouchableOpacity
-              className="w-28 h-36 rounded-2xl border-2 border-dashed border-gray-300 items-center justify-center bg-gray-50"
-              onPress={pickImage}
-            >
-              <MaterialCommunityIcons name="plus" size={32} color="#9CA3AF" />
-              <Text className="text-gray-500 text-xs mt-1">Add Photo</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Tips */}
-        <View className="bg-blue-50 border-2 border-blue-200 rounded-3xl p-5 mb-6">
-          <View className="flex-row items-center mb-3">
-            <Text className="text-3xl mr-2">📷</Text>
-            <Text className="text-blue-900 font-bold text-lg">Photo Tips</Text>
-          </View>
-          <Text className="text-blue-800 text-sm mb-2">✨ Use clear, recent photos</Text>
-          <Text className="text-blue-800 text-sm mb-2">😊 Show your face clearly</Text>
-          <Text className="text-blue-800 text-sm mb-2">🎨 Include variety (close-up, full body, activity)</Text>
-          <Text className="text-blue-800 text-sm">👥 Avoid group photos as your first photo</Text>
-        </View>
-
-        {/* Privacy Option - Photo Blur */}
-        <View className="bg-purple-50 border-2 border-purple-200 rounded-3xl p-5 mb-8">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1 mr-4">
-              <View className="flex-row items-center mb-2">
-                <Text className="text-2xl mr-2">🔒</Text>
-                <Text className="text-purple-900 font-bold text-lg">Privacy Mode</Text>
+              {isSelected && (
+                <View style={styles.selectedOverlay}>
+                  <MaterialCommunityIcons name="swap-horizontal" size={24} color="#FFFFFF" />
+                </View>
+              )}
+              {/* Position indicator */}
+              <View style={styles.positionBadge}>
+                <Text style={styles.positionText}>{index + 1}</Text>
               </View>
-              <Text className="text-purple-800 text-sm">
-                Blur your photos until you match with someone. They'll only see clear photos after you both like each other.
-              </Text>
-            </View>
-            <Switch
-              value={photoBlurEnabled}
-              onValueChange={(value) => {
-                console.log('🔒 Photo blur toggled:', value ? 'ON' : 'OFF');
-                setPhotoBlurEnabled(value);
-              }}
-              trackColor={{ false: '#D1D5DB', true: '#A08AB7' }}
-              thumbColor={photoBlurEnabled ? '#ffffff' : '#f4f3f4'}
-            />
+            </TouchableOpacity>
+          );
+        })}
+
+        {!showSkeleton && photos.length < 6 && (
+          <TouchableOpacity
+            style={[
+              styles.addPhotoButton,
+              {
+                borderColor: isDark ? '#A08AB7' : '#D1D5DB',
+                backgroundColor: isDark ? 'rgba(160, 138, 183, 0.12)' : '#F9FAFB',
+              },
+            ]}
+            onPress={pickImage}
+            disabled={processingImage}
+            accessibilityRole="button"
+            accessibilityLabel={processingImage ? 'Processing photo' : `Add photo. ${photos.length} of 6 added`}
+            accessibilityState={{ disabled: processingImage }}
+          >
+            {processingImage ? (
+              <>
+                <ActivityIndicator size="large" color="#A08AB7" />
+                <Text style={[styles.addPhotoText, { color: isDark ? '#D4C4E8' : '#6B7280' }]}>{t('onboardingPhotos.processing')}</Text>
+              </>
+            ) : (
+              <>
+                <MaterialCommunityIcons name="plus" size={28} color={isDark ? '#A08AB7' : '#9CA3AF'} />
+                <Text style={[styles.addPhotoText, { color: isDark ? '#D4C4E8' : '#6B7280' }]}>{t('onboardingPhotos.addPhoto')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Upload Progress Bar */}
+      {uploading && (
+        <View style={styles.uploadProgressContainer}>
+          <View style={styles.uploadProgressRow}>
+            <ActivityIndicator size="small" color="#A08AB7" />
+            <Text style={styles.uploadProgressText}>
+              {t('onboardingPhotos.uploading', { progress: uploadProgress })}
+            </Text>
+          </View>
+          <View style={styles.uploadProgressBarBg}>
+            <View style={[styles.uploadProgressBarFill, { width: `${uploadProgress}%` }]} />
           </View>
         </View>
+      )}
 
-        {/* Buttons */}
-        <View className="flex-row gap-3">
+      {/* Privacy mode card — sits below the photo grid */}
+      <View
+        style={[
+          styles.privacyCard,
+          {
+            backgroundColor: isDark ? '#1A1A2D' : '#F9F8FB',
+            borderColor: isDark ? '#2C2C3E' : '#F0EDF4',
+          },
+        ]}
+      >
+        <View style={styles.privacyIconWell}>
+          <MaterialCommunityIcons name="eye-off-outline" size={20} color="#A08AB7" />
+        </View>
+        <View style={styles.privacyTextCompact}>
+          <Text style={[styles.privacyLabel, { color: isDark ? '#F5F5F7' : '#1F2937' }]} numberOfLines={1}>
+            {t('onboarding.photos.privacyMode')}
+          </Text>
+          <Text style={[styles.privacyDescCompact, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+            {t('onboarding.photos.privacyModeDesc')}
+          </Text>
+        </View>
+        <Switch
+          value={photoBlurEnabled}
+          onValueChange={async (value) => {
+            setPhotoBlurEnabled(value);
+            if (profileId) {
+              try {
+                await supabase.from('profiles').update({ photo_blur_enabled: value }).eq('id', profileId);
+              } catch (error) {
+                console.error('Error saving photo blur preference:', error);
+                setPhotoBlurEnabled(!value);
+              }
+            }
+          }}
+          trackColor={{ false: '#D1D5DB', true: '#A08AB7' }}
+          thumbColor={photoBlurEnabled ? '#ffffff' : '#f4f3f4'}
+        />
+      </View>
+    </>
+  );
+
+  if (embedded) {
+    const continueDisabled = uploading || photos.length < 3;
+    return (
+      <View style={{ flex: 1 }}>
+        {/* Embedded title */}
+        <Text style={[styles.embeddedTitle, { color: isDark ? '#F5F5F7' : '#1A1A2E' }]}>{t('onboarding.photos.title')}</Text>
+        <Text style={[styles.embeddedSubtitle, { color: isDark ? '#8E8E93' : '#71717A' }]}>{t('onboardingPhotos.subtitle')}</Text>
+        <View style={{ flex: 1 }}>
+          {content}
+        </View>
+        {/* Bottom bar matching OnboardingLayout */}
+        <View style={[
+          styles.embeddedBottomBar,
+          {
+            paddingBottom: Math.max(insets.bottom, 20) + 16,
+            borderTopColor: isDark ? '#1F2937' : '#F3F4F6',
+          },
+        ]}>
           <TouchableOpacity
-            className="flex-1 py-4 rounded-full border-2 border-gray-300 bg-white"
-            onPress={() => goToPreviousOnboardingStep('/(onboarding)/photos')}
-            disabled={uploading}
+            style={[styles.embeddedBackCircle, {
+              backgroundColor: isDark ? '#1F2937' : '#F5F3F8',
+              borderColor: isDark ? '#374151' : '#E8E3F0',
+            }]}
+            onPress={parentBack}
+            activeOpacity={0.8}
           >
-            <Text className="text-gray-700 text-center font-bold text-lg">Back</Text>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={isDark ? '#D1D5DB' : '#6B7280'} />
           </TouchableOpacity>
-
           <TouchableOpacity
-            className={`flex-1 py-4 rounded-full ${
-              uploading || photos.length < 2
-                ? 'bg-gray-400'
-                : 'bg-lavender-500'
-            }`}
-            style={{
-              borderRadius: 9999,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingVertical: 16,
-            }}
+            style={[styles.embeddedContinueCircle, continueDisabled && styles.embeddedButtonDisabled]}
             onPress={handleContinue}
-            disabled={uploading || photos.length < 2}
+            disabled={continueDisabled}
+            activeOpacity={0.8}
           >
-            <Text className="text-white text-center font-bold text-lg">
-              {uploading ? `Uploading... ${uploadProgress}%` : 'Continue'}
-            </Text>
+            <MaterialCommunityIcons name="arrow-right" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
-
-        {/* Photo Counter */}
-        <Text className="text-center text-gray-500 text-sm mt-4">
-          {photos.length} of 6 photos {photos.length < 2 && '(minimum 2)'}
-        </Text>
       </View>
-    </ScrollView>
+    );
+  }
+
+  return (
+    <OnboardingLayout
+      currentStep={getGlobalStep('photos', 0)}
+      title={t('onboarding.photos.title')}
+      subtitle={t('onboardingPhotos.subtitle')}
+      onBack={() => goToPreviousOnboardingStep('/(onboarding)/photos')}
+      onContinue={handleContinue}
+      continueDisabled={uploading || photos.length < 3}
+      continueLabel={uploading ? t('onboardingPhotos.uploading', { progress: uploadProgress }) : t('common.continue')}
+      noScroll
+    >
+      {content}
+    </OnboardingLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+    justifyContent: 'flex-start',
+  },
+  photoWrapper: {
+    position: 'relative',
+  },
+  photoImage: {
+    width: 98,
+    height: 126,
+    borderRadius: 14,
+  },
+  photoSkeleton: {
+    opacity: 0.6,
+  },
+  photoSelected: {
+    borderWidth: 3,
+    borderColor: '#A08AB7',
+    borderRadius: 17,
+  },
+  photoSwapTarget: {
+    opacity: 0.7,
+  },
+  selectedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(160, 138, 183, 0.4)',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  positionBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  positionText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  hintText: {
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 18,
+  },
+  reorderCancel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  removeButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 999,
+    padding: 4,
+  },
+  primaryBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: '#A08AB7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  primaryBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  addPhotoButton: {
+    width: 98,
+    height: 126,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPhotoText: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  privacyCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 16,
+  },
+  privacyIconWell: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(160, 138, 183, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  privacyTextCompact: {
+    flex: 1,
+  },
+  privacyLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  privacyDescCompact: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  uploadProgressContainer: {
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  uploadProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  uploadProgressText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#A08AB7',
+  },
+  uploadProgressBarBg: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  uploadProgressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: '#A08AB7',
+  },
+  embeddedTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    lineHeight: 32,
+    letterSpacing: -0.5,
+    color: '#1A1A2E',
+    marginBottom: 6,
+  },
+  embeddedSubtitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    color: '#71717A',
+    marginBottom: 20,
+  },
+  embeddedBottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    marginTop: 8,
+  },
+  embeddedBackCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#F5F3F8',
+    borderWidth: 1.5,
+    borderColor: '#E8E3F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  embeddedContinueCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#A08AB7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  embeddedButtonDisabled: {
+    opacity: 0.4,
+  },
+});

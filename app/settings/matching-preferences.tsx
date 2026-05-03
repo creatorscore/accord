@@ -11,6 +11,7 @@ import {
   TextInput,
   Keyboard,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,7 +20,17 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { formatDistanceSlider, DistanceUnit } from '@/lib/distance-utils';
+import {
+  formatDistanceSlider,
+  formatDistanceRangeLabel,
+  distanceToSlider,
+  sliderToDistance,
+  DISTANCE_MAX,
+  DistanceUnit,
+} from '@/lib/distance-utils';
+import { GENDER_PREF_OPTIONS, expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
+import * as Haptics from 'expo-haptics';
+import PremiumPaywall from '@/components/premium/PremiumPaywall';
 
 interface MatchingPreferences {
   gender_preference: string[];
@@ -39,53 +50,15 @@ interface MatchingPreferences {
   };
 }
 
-const GENDERS = [
-  'Man',
-  'Woman',
-  'Non-binary',
-  'Trans Man',
-  'Trans Woman',
-  'Genderfluid',
-  'Genderqueer',
-  'Agender',
-  'Bigender',
-  'Two-Spirit',
-  'Intersex',
-  'Demigender',
-  'Neutrois',
-  'Questioning',
-  'Prefer not to say',
-  'Other',
-];
-const RELATIONSHIP_TYPES = [
-  { value: 'platonic', label: 'Platonic' },
-  { value: 'romantic', label: 'Romantic' },
-  { value: 'open', label: 'Open' },
-];
-const CHILDREN_OPTIONS = [
-  { value: true, label: 'Yes', icon: 'human-male-child' },
-  { value: false, label: 'No', icon: 'cancel' },
-  { value: null, label: 'Maybe', icon: 'help-circle-outline' },
-];
-const SMOKING_OPTIONS = [
-  { value: 'never', label: 'Never' },
-  { value: 'socially', label: 'Socially' },
-  { value: 'regularly', label: 'Regularly' },
-  { value: 'trying_to_quit', label: 'Trying to Quit' },
-];
-const DRINKING_OPTIONS = [
-  { value: 'never', label: 'Never' },
-  { value: 'socially', label: 'Socially' },
-  { value: 'regularly', label: 'Regularly' },
-  { value: 'prefer_not_to_say', label: 'Prefer Not to Say' },
-];
-const PETS_OPTIONS = [
-  { value: 'love_them', label: 'Love Them' },
-  { value: 'like_them', label: 'Like Them' },
-  { value: 'indifferent', label: 'Indifferent' },
-  { value: 'allergic', label: 'Allergic' },
-  { value: 'dont_like', label: "Don't Like" },
-];
+const RELATIONSHIP_TYPE_VALUES = ['platonic', 'romantic', 'open'] as const;
+const CHILDREN_OPTION_VALUES = [
+  { value: true, icon: 'human-male-child' },
+  { value: false, icon: 'cancel' },
+  { value: null, icon: 'help-circle-outline' },
+] as const;
+const SMOKING_OPTION_VALUES = ['never', 'socially', 'regularly', 'trying_to_quit'] as const;
+const DRINKING_OPTION_VALUES = ['never', 'socially', 'regularly', 'prefer_not_to_say'] as const;
+const PETS_OPTION_VALUES = ['love_them', 'like_them', 'indifferent', 'allergic', 'dont_like'] as const;
 
 // Major cities worldwide for autocomplete
 const MAJOR_CITIES = [
@@ -143,12 +116,45 @@ const MAJOR_CITIES = [
 ].sort();
 
 export default function MatchingPreferences() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+
+  const RELATIONSHIP_TYPES: Record<string, string> = {
+    platonic: t('settings.matchingPreferences.platonic'),
+    romantic: t('settings.matchingPreferences.romantic'),
+    open: t('settings.matchingPreferences.open'),
+  };
+  const CHILDREN_LABELS: Record<string, string> = {
+    true: t('settings.matchingPreferences.childrenYes'),
+    false: t('settings.matchingPreferences.childrenNo'),
+    null: t('settings.matchingPreferences.childrenMaybe'),
+  };
+  const SMOKING_LABELS: Record<string, string> = {
+    never: t('settings.matchingPreferences.smokingNever'),
+    socially: t('settings.matchingPreferences.smokingSocially'),
+    regularly: t('settings.matchingPreferences.smokingRegularly'),
+    trying_to_quit: t('settings.matchingPreferences.smokingTryingToQuit'),
+  };
+  const DRINKING_LABELS: Record<string, string> = {
+    never: t('settings.matchingPreferences.drinkingNever'),
+    socially: t('settings.matchingPreferences.drinkingSocially'),
+    regularly: t('settings.matchingPreferences.drinkingRegularly'),
+    prefer_not_to_say: t('settings.matchingPreferences.drinkingPreferNotToSay'),
+  };
+  const PETS_LABELS: Record<string, string> = {
+    love_them: t('settings.matchingPreferences.petsLove'),
+    like_them: t('settings.matchingPreferences.petsLike'),
+    indifferent: t('settings.matchingPreferences.petsIndifferent'),
+    allergic: t('settings.matchingPreferences.petsAllergic'),
+    dont_like: t('settings.matchingPreferences.petsDontLike'),
+  };
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   const [newCity, setNewCity] = useState('');
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
@@ -156,8 +162,8 @@ export default function MatchingPreferences() {
     gender_preference: [],
     wants_children: null,
     relationship_type: 'platonic',
-    age_min: 22,
-    age_max: 50,
+    age_min: 18,
+    age_max: 65,
     max_distance_miles: 100,
     distance_unit: 'miles',
     willing_to_relocate: false,
@@ -197,11 +203,11 @@ export default function MatchingPreferences() {
 
       if (data) {
         setPreferences({
-          gender_preference: data.gender_preference || [],
+          gender_preference: collapseGenderPreference(data.gender_preference || []),
           wants_children: data.wants_children,
           relationship_type: data.relationship_type || 'platonic',
-          age_min: data.age_min || 22,
-          age_max: data.age_max || 50,
+          age_min: data.age_min || 18,
+          age_max: data.age_max || 65,
           max_distance_miles: data.max_distance_miles || 100,
           distance_unit: data.distance_unit || 'miles',
           willing_to_relocate: data.willing_to_relocate || false,
@@ -213,7 +219,7 @@ export default function MatchingPreferences() {
       // If no data, keep the default preferences already set in state
     } catch (error: any) {
       console.error('Error loading matching preferences:', error);
-      Alert.alert('Error', 'Failed to load matching preferences');
+      Alert.alert(t('common.error'), t('settings.matchingPreferences.loadError'));
     } finally {
       setLoading(false);
     }
@@ -221,32 +227,58 @@ export default function MatchingPreferences() {
 
   const savePreferences = async () => {
     if (!profileId) {
-      Alert.alert('Error', 'Profile not found');
+      Alert.alert(t('common.error'), t('settings.matchingPreferences.profileNotFound'));
+      return;
+    }
+
+    if (preferences.gender_preference.length === 0) {
+      Alert.alert(t('common.required'), t('onboarding.matchingPreferences.selectGenderPreference'));
       return;
     }
 
     setSaving(true);
     try {
+      // Force search_globally off for non-premium users
+      const basePrefs = isPremium ? preferences : { ...preferences, search_globally: false };
+      // Expand simplified gender prefs (Men/Women/Non-binary/Everyone) back to full identity values for DB
+      const prefsToSave = {
+        ...basePrefs,
+        gender_preference: expandGenderPreference(basePrefs.gender_preference),
+      };
+
+      // Use .update() instead of .upsert() to only modify fields managed by this page.
+      // .upsert() would reset unincluded fields (primary_reasons, financial_arrangement,
+      // housing_preference, children_arrangement, dealbreakers, must_haves, discovery_filters)
+      // to their defaults, destroying data set during onboarding or edit-profile.
       const { error } = await supabase
         .from('preferences')
-        .update(preferences)
+        .update({
+          ...prefsToSave,
+          updated_at: new Date().toISOString(),
+        })
         .eq('profile_id', profileId);
 
       if (error) throw error;
 
       Alert.alert(
-        'Success',
-        'Your matching preferences have been updated! Your discover feed will refresh.',
+        t('common.success'),
+        t('settings.matchingPreferences.saveSuccess'),
         [
           {
-            text: 'OK',
+            text: t('common.ok'),
             onPress: () => router.back(),
           },
         ]
       );
     } catch (error: any) {
-      console.error('Error saving matching preferences:', error);
-      Alert.alert('Error', 'Failed to save preferences. Please try again.');
+      console.error('❌ Error saving matching preferences:', error);
+      // Prefer the actual DB/Supabase message over the generic i18n fallback
+      // so a user can read an actionable hint (missing field, RLS, etc.) if
+      // it comes back. The i18n key is the fallback when error has no body.
+      Alert.alert(
+        t('common.error'),
+        error?.message || t('settings.matchingPreferences.saveError')
+      );
     } finally {
       setSaving(false);
     }
@@ -254,9 +286,16 @@ export default function MatchingPreferences() {
 
   const toggleGender = (gender: string) => {
     setPreferences((prev) => {
-      const updated = prev.gender_preference.includes(gender)
-        ? prev.gender_preference.filter((g) => g !== gender)
-        : [...prev.gender_preference, gender];
+      if (gender === 'Everyone') {
+        // Everyone is mutually exclusive — toggle it alone
+        const isSelected = prev.gender_preference.includes('Everyone');
+        return { ...prev, gender_preference: isSelected ? [] : ['Everyone'] };
+      }
+      // Selecting a specific option clears "Everyone"
+      const withoutEveryone = prev.gender_preference.filter((g) => g !== 'Everyone');
+      const updated = withoutEveryone.includes(gender)
+        ? withoutEveryone.filter((g) => g !== gender)
+        : [...withoutEveryone, gender];
       return { ...prev, gender_preference: updated };
     });
   };
@@ -279,6 +318,13 @@ export default function MatchingPreferences() {
   };
 
   const selectCity = (city: string) => {
+    if (preferences.preferred_cities.length >= 2) {
+      Alert.alert(t('settings.matchingPreferences.limitReached'), t('settings.matchingPreferences.cityLimit'));
+      setNewCity('');
+      setCitySuggestions([]);
+      setShowCitySuggestions(false);
+      return;
+    }
     if (!preferences.preferred_cities.includes(city)) {
       setPreferences((prev) => ({
         ...prev,
@@ -291,6 +337,10 @@ export default function MatchingPreferences() {
   };
 
   const addCity = () => {
+    if (preferences.preferred_cities.length >= 2) {
+      Alert.alert(t('settings.matchingPreferences.limitReached'), t('settings.matchingPreferences.cityLimit'));
+      return;
+    }
     if (newCity.trim() && !preferences.preferred_cities.includes(newCity.trim())) {
       Keyboard.dismiss(); // Dismiss keyboard when city is added
       setPreferences((prev) => ({
@@ -316,12 +366,12 @@ export default function MatchingPreferences() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Matching Preferences</Text>
+          <Text style={styles.headerTitle}>{t('settings.matchingPreferences.title')}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#A08AB7" />
-          <Text style={styles.loadingText}>Loading preferences...</Text>
+          <Text style={styles.loadingText}>{t('settings.matchingPreferences.loading')}</Text>
         </View>
       </View>
     );
@@ -334,7 +384,7 @@ export default function MatchingPreferences() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Matching Preferences</Text>
+        <Text style={styles.headerTitle}>{t('settings.matchingPreferences.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -352,9 +402,9 @@ export default function MatchingPreferences() {
           >
             <MaterialCommunityIcons name="heart-multiple" size={24} color="#A08AB7" />
             <View style={styles.infoBannerContent}>
-              <Text style={styles.infoBannerTitle}>Core Dealbreakers</Text>
+              <Text style={styles.infoBannerTitle}>{t('settings.matchingPreferences.coreDealbreakers')}</Text>
               <Text style={styles.infoBannerText}>
-                These preferences automatically filter your matches to find the most compatible partners.
+                {t('settings.matchingPreferences.coreDealbreakerDesc')}
               </Text>
             </View>
           </LinearGradient>
@@ -362,19 +412,19 @@ export default function MatchingPreferences() {
 
         {/* Gender Preference */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Seeking</Text>
+          <Text style={styles.sectionTitle}>{t('settings.matchingPreferences.seeking')}</Text>
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
                 <MaterialCommunityIcons name="gender-male-female" size={24} color="#A08AB7" />
               </View>
               <View style={styles.cardHeaderText}>
-                <Text style={styles.cardTitle}>Gender Preference</Text>
-                <Text style={styles.cardDescription}>Who you're interested in matching with</Text>
+                <Text style={styles.cardTitle}>{t('settings.matchingPreferences.genderPreference')}</Text>
+                <Text style={styles.cardDescription}>{t('settings.matchingPreferences.genderPreferenceDesc')}</Text>
               </View>
             </View>
             <View style={styles.chipContainer}>
-              {GENDERS.map((gender) => (
+              {GENDER_PREF_OPTIONS.map((gender) => (
                 <TouchableOpacity
                   key={gender}
                   style={[
@@ -399,19 +449,19 @@ export default function MatchingPreferences() {
 
         {/* Children Preference */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Children</Text>
+          <Text style={styles.sectionTitle}>{t('settings.matchingPreferences.children')}</Text>
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
                 <MaterialCommunityIcons name="human-male-child" size={24} color="#A08AB7" />
               </View>
               <View style={styles.cardHeaderText}>
-                <Text style={styles.cardTitle}>Do you want children?</Text>
-                <Text style={styles.cardDescription}>Filter out incompatible matches</Text>
+                <Text style={styles.cardTitle}>{t('settings.matchingPreferences.wantChildren')}</Text>
+                <Text style={styles.cardDescription}>{t('settings.matchingPreferences.childrenDesc')}</Text>
               </View>
             </View>
             <View style={styles.optionButtonsContainer}>
-              {CHILDREN_OPTIONS.map((option) => (
+              {CHILDREN_OPTION_VALUES.map((option) => (
                 <TouchableOpacity
                   key={String(option.value)}
                   style={[
@@ -436,7 +486,7 @@ export default function MatchingPreferences() {
                         styles.optionButtonTextSelected,
                     ]}
                   >
-                    {option.label}
+                    {CHILDREN_LABELS[String(option.value)]}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -446,37 +496,37 @@ export default function MatchingPreferences() {
 
         {/* Relationship Type */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Relationship Type</Text>
+          <Text style={styles.sectionTitle}>{t('settings.matchingPreferences.relationshipType')}</Text>
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
                 <MaterialCommunityIcons name="heart-outline" size={24} color="#A08AB7" />
               </View>
               <View style={styles.cardHeaderText}>
-                <Text style={styles.cardTitle}>What type of relationship?</Text>
-                <Text style={styles.cardDescription}>Your preferred arrangement</Text>
+                <Text style={styles.cardTitle}>{t('settings.matchingPreferences.whatRelationship')}</Text>
+                <Text style={styles.cardDescription}>{t('settings.matchingPreferences.preferredArrangement')}</Text>
               </View>
             </View>
             <View style={styles.optionButtonsContainer}>
-              {RELATIONSHIP_TYPES.map((option) => (
+              {RELATIONSHIP_TYPE_VALUES.map((value) => (
                 <TouchableOpacity
-                  key={option.value}
+                  key={value}
                   style={[
                     styles.optionButton,
-                    preferences.relationship_type === option.value && styles.optionButtonSelected,
+                    preferences.relationship_type === value && styles.optionButtonSelected,
                   ]}
                   onPress={() =>
-                    setPreferences((prev) => ({ ...prev, relationship_type: option.value }))
+                    setPreferences((prev) => ({ ...prev, relationship_type: value }))
                   }
                 >
                   <Text
                     style={[
                       styles.optionButtonText,
-                      preferences.relationship_type === option.value &&
+                      preferences.relationship_type === value &&
                         styles.optionButtonTextSelected,
                     ]}
                   >
-                    {option.label}
+                    {RELATIONSHIP_TYPES[value]}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -486,7 +536,7 @@ export default function MatchingPreferences() {
 
         {/* Age Range */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Age Range</Text>
+          <Text style={styles.sectionTitle}>{t('settings.matchingPreferences.ageRange')}</Text>
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
@@ -494,13 +544,13 @@ export default function MatchingPreferences() {
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>
-                  {preferences.age_min} - {preferences.age_max} years old
+                  {t('settings.matchingPreferences.yearsOld', { min: preferences.age_min, max: preferences.age_max })}
                 </Text>
-                <Text style={styles.cardDescription}>Show matches in this age range</Text>
+                <Text style={styles.cardDescription}>{t('settings.matchingPreferences.ageRangeDesc')}</Text>
               </View>
             </View>
             <View style={styles.sliderContainer}>
-              <Text style={styles.sliderLabel}>Minimum Age: {preferences.age_min}</Text>
+              <Text style={styles.sliderLabel}>{t('settings.matchingPreferences.minAge', { age: preferences.age_min })}</Text>
               <Slider
                 style={styles.slider}
                 minimumValue={18}
@@ -513,7 +563,7 @@ export default function MatchingPreferences() {
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
-              <Text style={styles.sliderLabel}>Maximum Age: {preferences.age_max}</Text>
+              <Text style={styles.sliderLabel}>{t('settings.matchingPreferences.maxAge', { age: preferences.age_max })}</Text>
               <Slider
                 style={styles.slider}
                 minimumValue={18}
@@ -532,7 +582,7 @@ export default function MatchingPreferences() {
 
         {/* Distance */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Distance</Text>
+          <Text style={styles.sectionTitle}>{t('settings.matchingPreferences.distance')}</Text>
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
@@ -540,9 +590,11 @@ export default function MatchingPreferences() {
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={styles.cardTitle}>
-                  Within {formatDistanceSlider(preferences.max_distance_miles, preferences.distance_unit)}
+                  {preferences.max_distance_miles >= DISTANCE_MAX
+                    ? formatDistanceRangeLabel(preferences.max_distance_miles, preferences.distance_unit)
+                    : `Within ${formatDistanceSlider(preferences.max_distance_miles, preferences.distance_unit)}`}
                 </Text>
-                <Text style={styles.cardDescription}>Maximum distance for matches</Text>
+                <Text style={styles.cardDescription}>{t('settings.matchingPreferences.maxDistanceDesc')}</Text>
               </View>
             </View>
 
@@ -561,7 +613,7 @@ export default function MatchingPreferences() {
                     preferences.distance_unit === 'miles' && styles.unitToggleTextSelected,
                   ]}
                 >
-                  Miles
+                  {t('settings.matchingPreferences.miles')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -577,7 +629,7 @@ export default function MatchingPreferences() {
                     preferences.distance_unit === 'km' && styles.unitToggleTextSelected,
                   ]}
                 >
-                  Kilometers
+                  {t('settings.matchingPreferences.kilometers')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -585,30 +637,37 @@ export default function MatchingPreferences() {
             <View style={styles.sliderContainer}>
               <Slider
                 style={styles.slider}
-                minimumValue={10}
-                maximumValue={500}
-                step={10}
-                value={preferences.max_distance_miles}
-                onValueChange={(value) =>
-                  setPreferences((prev) => ({ ...prev, max_distance_miles: value }))
+                minimumValue={0}
+                maximumValue={1}
+                step={0.005}
+                value={distanceToSlider(preferences.max_distance_miles)}
+                onValueChange={(position) =>
+                  setPreferences((prev) => ({ ...prev, max_distance_miles: sliderToDistance(position) }))
                 }
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
+              <View style={styles.distanceMarkers}>
+                <Text style={styles.distanceMarkerText}>5 mi</Text>
+                <Text style={styles.distanceMarkerText}>25</Text>
+                <Text style={styles.distanceMarkerText}>100</Text>
+                <Text style={styles.distanceMarkerText}>500+</Text>
+              </View>
             </View>
 
             <View style={styles.switchRow}>
               <View style={styles.switchContent}>
-                <Text style={styles.switchTitle}>Willing to relocate</Text>
+                <Text style={styles.switchTitle}>{t('settings.matchingPreferences.willingToRelocate')}</Text>
                 <Text style={styles.switchDescription}>
-                  Consider matches outside your max distance
+                  {t('settings.matchingPreferences.relocateDesc')}
                 </Text>
               </View>
               <Switch
                 value={preferences.willing_to_relocate}
-                onValueChange={(value) =>
-                  setPreferences((prev) => ({ ...prev, willing_to_relocate: value }))
-                }
+                onValueChange={(value) => {
+                  Haptics.selectionAsync();
+                  setPreferences((prev) => ({ ...prev, willing_to_relocate: value }));
+                }}
                 trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
                 thumbColor={preferences.willing_to_relocate ? '#A08AB7' : '#F3F4F6'}
               />
@@ -619,37 +678,49 @@ export default function MatchingPreferences() {
                 <MaterialCommunityIcons name="earth" size={20} color="#A08AB7" style={{ marginRight: 8 }} />
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={styles.switchTitle}>Search globally</Text>
+                    <Text style={styles.switchTitle}>{t('settings.matchingPreferences.searchGlobally')}</Text>
+                    {!isPremium && (
+                      <View style={{ backgroundColor: '#A08AB7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{t('common.premium').toUpperCase()}</Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.switchDescription}>
-                    Match with people anywhere in the world
+                    {t('settings.matchingPreferences.searchGloballyDesc')}
                   </Text>
                 </View>
               </View>
-              <Switch
-                value={preferences.search_globally}
-                onValueChange={(value) =>
-                  setPreferences((prev) => ({ ...prev, search_globally: value }))
-                }
-                trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
-                thumbColor={preferences.search_globally ? '#A08AB7' : '#F3F4F6'}
-              />
+              {isPremium ? (
+                <Switch
+                  value={preferences.search_globally}
+                  onValueChange={(value) => {
+                    Haptics.selectionAsync();
+                    setPreferences((prev) => ({ ...prev, search_globally: value }));
+                  }}
+                  trackColor={{ false: '#D1D5DB', true: '#CDC2E5' }}
+                  thumbColor={preferences.search_globally ? '#A08AB7' : '#F3F4F6'}
+                />
+              ) : (
+                <TouchableOpacity onPress={() => setShowPaywall(true)}>
+                  <MaterialCommunityIcons name="lock" size={24} color="#A08AB7" />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
 
         {/* Preferred Cities - Now free for all users */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Location Preferences</Text>
+          <Text style={styles.sectionTitle}>{t('settings.matchingPreferences.locationPreferences')}</Text>
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.iconContainer}>
                 <MaterialCommunityIcons name="city-variant" size={24} color="#A08AB7" />
               </View>
               <View style={styles.cardHeaderText}>
-                <Text style={styles.cardTitle}>Preferred Cities</Text>
+                <Text style={styles.cardTitle}>{t('settings.matchingPreferences.preferredCities')}</Text>
                 <Text style={styles.cardDescription}>
-                  Add cities you're interested in (e.g., studying abroad but want to return home)
+                  {t('settings.matchingPreferences.preferredCitiesDesc')}
                 </Text>
               </View>
             </View>
@@ -659,7 +730,7 @@ export default function MatchingPreferences() {
               <View style={styles.cityInputContainer}>
                 <TextInput
                   style={styles.cityInput}
-                  placeholder="Search cities (e.g., Tokyo, Mumbai, NYC)"
+                  placeholder={t('settings.matchingPreferences.searchCitiesPlaceholder')}
                   value={newCity}
                   onChangeText={handleCitySearch}
                   onSubmitEditing={addCity}
@@ -668,13 +739,16 @@ export default function MatchingPreferences() {
                   autoCorrect={false}
                 />
                 <TouchableOpacity
-                  style={[styles.addCityButton, !newCity.trim() && styles.addCityButtonDisabled]}
+                  style={[styles.addCityButton, (!newCity.trim() || preferences.preferred_cities.length >= 2) && styles.addCityButtonDisabled]}
                   onPress={addCity}
-                  disabled={!newCity.trim()}
+                  disabled={!newCity.trim() || preferences.preferred_cities.length >= 2}
                 >
-                  <MaterialCommunityIcons name="plus" size={20} color={newCity.trim() ? '#fff' : '#9CA3AF'} />
+                  <MaterialCommunityIcons name="plus" size={20} color={newCity.trim() && preferences.preferred_cities.length < 2 ? '#fff' : '#9CA3AF'} />
                 </TouchableOpacity>
               </View>
+              <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>
+                {t('settings.matchingPreferences.citiesAdded', { count: preferences.preferred_cities.length })}
+              </Text>
 
               {/* Autocomplete Suggestions */}
               {showCitySuggestions && citySuggestions.length > 0 && (
@@ -715,7 +789,7 @@ export default function MatchingPreferences() {
               <View style={styles.emptyState}>
                 <MaterialCommunityIcons name="map-marker-outline" size={32} color="#D1D5DB" />
                 <Text style={styles.emptyStateText}>
-                  No preferred cities yet. Add cities where you'd like to find matches!
+                  {t('settings.matchingPreferences.noCitiesEmpty')}
                 </Text>
               </View>
             )}
@@ -724,7 +798,7 @@ export default function MatchingPreferences() {
 
         {/* Lifestyle Preferences */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Lifestyle Preferences</Text>
+          <Text style={styles.sectionTitle}>{t('settings.matchingPreferences.lifestylePreferences')}</Text>
 
           {/* Smoking */}
           <View style={styles.card}>
@@ -733,38 +807,38 @@ export default function MatchingPreferences() {
                 <MaterialCommunityIcons name="smoking" size={24} color="#A08AB7" />
               </View>
               <View style={styles.cardHeaderText}>
-                <Text style={styles.cardTitle}>Smoking</Text>
+                <Text style={styles.cardTitle}>{t('settings.matchingPreferences.smoking')}</Text>
               </View>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-              {SMOKING_OPTIONS.map((option) => (
+              {SMOKING_OPTION_VALUES.map((value) => (
                 <TouchableOpacity
-                  key={option.value}
+                  key={value}
                   style={{
                     paddingHorizontal: 16,
                     paddingVertical: 10,
                     borderRadius: 20,
                     borderWidth: 1,
-                    borderColor: preferences.lifestyle_preferences?.smoking === option.value ? '#A08AB7' : '#D1D5DB',
-                    backgroundColor: preferences.lifestyle_preferences?.smoking === option.value ? '#F3E8FF' : '#fff',
+                    borderColor: preferences.lifestyle_preferences?.smoking === value ? '#A08AB7' : '#D1D5DB',
+                    backgroundColor: preferences.lifestyle_preferences?.smoking === value ? '#F3E8FF' : '#fff',
                   }}
                   onPress={() =>
                     setPreferences({
                       ...preferences,
                       lifestyle_preferences: {
                         ...preferences.lifestyle_preferences,
-                        smoking: option.value,
+                        smoking: value,
                       },
                     })
                   }
                 >
                   <Text
                     style={{
-                      color: preferences.lifestyle_preferences?.smoking === option.value ? '#A08AB7' : '#6B7280',
-                      fontWeight: preferences.lifestyle_preferences?.smoking === option.value ? '600' : '400',
+                      color: preferences.lifestyle_preferences?.smoking === value ? '#A08AB7' : '#6B7280',
+                      fontWeight: preferences.lifestyle_preferences?.smoking === value ? '600' : '400',
                     }}
                   >
-                    {option.label}
+                    {SMOKING_LABELS[value]}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -778,38 +852,38 @@ export default function MatchingPreferences() {
                 <MaterialCommunityIcons name="glass-cocktail" size={24} color="#A08AB7" />
               </View>
               <View style={styles.cardHeaderText}>
-                <Text style={styles.cardTitle}>Drinking</Text>
+                <Text style={styles.cardTitle}>{t('settings.matchingPreferences.drinking')}</Text>
               </View>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-              {DRINKING_OPTIONS.map((option) => (
+              {DRINKING_OPTION_VALUES.map((value) => (
                 <TouchableOpacity
-                  key={option.value}
+                  key={value}
                   style={{
                     paddingHorizontal: 16,
                     paddingVertical: 10,
                     borderRadius: 20,
                     borderWidth: 1,
-                    borderColor: preferences.lifestyle_preferences?.drinking === option.value ? '#A08AB7' : '#D1D5DB',
-                    backgroundColor: preferences.lifestyle_preferences?.drinking === option.value ? '#F3E8FF' : '#fff',
+                    borderColor: preferences.lifestyle_preferences?.drinking === value ? '#A08AB7' : '#D1D5DB',
+                    backgroundColor: preferences.lifestyle_preferences?.drinking === value ? '#F3E8FF' : '#fff',
                   }}
                   onPress={() =>
                     setPreferences({
                       ...preferences,
                       lifestyle_preferences: {
                         ...preferences.lifestyle_preferences,
-                        drinking: option.value,
+                        drinking: value,
                       },
                     })
                   }
                 >
                   <Text
                     style={{
-                      color: preferences.lifestyle_preferences?.drinking === option.value ? '#A08AB7' : '#6B7280',
-                      fontWeight: preferences.lifestyle_preferences?.drinking === option.value ? '600' : '400',
+                      color: preferences.lifestyle_preferences?.drinking === value ? '#A08AB7' : '#6B7280',
+                      fontWeight: preferences.lifestyle_preferences?.drinking === value ? '600' : '400',
                     }}
                   >
-                    {option.label}
+                    {DRINKING_LABELS[value]}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -823,38 +897,38 @@ export default function MatchingPreferences() {
                 <MaterialCommunityIcons name="paw" size={24} color="#A08AB7" />
               </View>
               <View style={styles.cardHeaderText}>
-                <Text style={styles.cardTitle}>Pets</Text>
+                <Text style={styles.cardTitle}>{t('settings.matchingPreferences.pets')}</Text>
               </View>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-              {PETS_OPTIONS.map((option) => (
+              {PETS_OPTION_VALUES.map((value) => (
                 <TouchableOpacity
-                  key={option.value}
+                  key={value}
                   style={{
                     paddingHorizontal: 16,
                     paddingVertical: 10,
                     borderRadius: 20,
                     borderWidth: 1,
-                    borderColor: preferences.lifestyle_preferences?.pets === option.value ? '#A08AB7' : '#D1D5DB',
-                    backgroundColor: preferences.lifestyle_preferences?.pets === option.value ? '#F3E8FF' : '#fff',
+                    borderColor: preferences.lifestyle_preferences?.pets === value ? '#A08AB7' : '#D1D5DB',
+                    backgroundColor: preferences.lifestyle_preferences?.pets === value ? '#F3E8FF' : '#fff',
                   }}
                   onPress={() =>
                     setPreferences({
                       ...preferences,
                       lifestyle_preferences: {
                         ...preferences.lifestyle_preferences,
-                        pets: option.value,
+                        pets: value,
                       },
                     })
                   }
                 >
                   <Text
                     style={{
-                      color: preferences.lifestyle_preferences?.pets === option.value ? '#A08AB7' : '#6B7280',
-                      fontWeight: preferences.lifestyle_preferences?.pets === option.value ? '600' : '400',
+                      color: preferences.lifestyle_preferences?.pets === value ? '#A08AB7' : '#6B7280',
+                      fontWeight: preferences.lifestyle_preferences?.pets === value ? '600' : '400',
                     }}
                   >
-                    {option.label}
+                    {PETS_LABELS[value]}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -877,11 +951,20 @@ export default function MatchingPreferences() {
           ) : (
             <>
               <MaterialCommunityIcons name="check" size={20} color="#fff" />
-              <Text style={styles.saveButtonText}>Save Preferences</Text>
+              <Text style={styles.saveButtonText}>{t('settings.matchingPreferences.save')}</Text>
             </>
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Premium Paywall Modal */}
+      {showPaywall && (
+        <PremiumPaywall
+          visible={showPaywall}
+          onClose={() => setShowPaywall(false)}
+          feature="search_globally"
+        />
+      )}
     </View>
   );
 }
@@ -951,12 +1034,12 @@ const styles = StyleSheet.create({
   infoBannerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6B21A8',
+    color: '#A08AB7',
     marginBottom: 4,
   },
   infoBannerText: {
     fontSize: 14,
-    color: '#6B21A8',
+    color: '#A08AB7',
     lineHeight: 20,
   },
   section: {
@@ -1076,6 +1159,17 @@ const styles = StyleSheet.create({
   slider: {
     width: '100%',
     height: 40,
+  },
+  distanceMarkers: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: -4,
+  },
+  distanceMarkerText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
   switchRow: {
     flexDirection: 'row',
@@ -1206,7 +1300,7 @@ const styles = StyleSheet.create({
   cityChipText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B21A8',
+    color: '#A08AB7',
   },
   removeCityButton: {
     padding: 2,

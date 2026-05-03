@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, Dimensions } from 'react-native';
-import { Image } from '@/components/shared/ConditionalImage';
+import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -172,10 +172,10 @@ export default function MatchModal({
                   backgroundColor: 'rgba(255,255,255,0.1)',
                 }}>
                   {currentUserPhoto ? (
-                    <Image
+                    <SafeBlurImage
                       source={{ uri: currentUserPhoto }}
                       style={{ width: '100%', height: '100%' }}
-                      contentFit="cover"
+                      resizeMode="cover"
                     />
                   ) : (
                     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -216,10 +216,10 @@ export default function MatchModal({
                   backgroundColor: 'rgba(255,255,255,0.1)',
                 }}>
                   {matchedProfile.photo_url ? (
-                    <Image
+                    <SafeBlurImage
                       source={{ uri: matchedProfile.photo_url }}
                       style={{ width: '100%', height: '100%' }}
-                      contentFit="cover"
+                      resizeMode="cover"
                     />
                   ) : (
                     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -241,24 +241,7 @@ export default function MatchModal({
               {matchedProfile.display_name}
             </Text>
 
-            {/* Compatibility - eye-catching pill */}
-            {matchedProfile.compatibility_score !== undefined && matchedProfile.compatibility_score !== null && (
-              <View style={{
-                backgroundColor: 'rgba(255,255,255,0.2)',
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 20,
-                marginBottom: 48,
-              }}>
-                <Text style={{
-                  fontSize: 15,
-                  fontWeight: '600',
-                  color: 'white',
-                }}>
-                  {matchedProfile.compatibility_score}% your type
-                </Text>
-              </View>
-            )}
+            <View style={{ marginBottom: 48 }} />
 
             {/* Primary action - one clear choice */}
             <TouchableOpacity

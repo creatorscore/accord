@@ -1,26 +1,26 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, StatusBar, StyleSheet } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import PremiumPaywall from '@/components/premium/PremiumPaywall';
+import { signPhotoUrls, getSignedUrl } from '@/lib/signed-urls';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { calculateCompatibilityScore, getCompatibilityBreakdown } from '@/lib/matching-algorithm';
+import { getCompatibilityBreakdown } from '@/lib/matching-algorithm';
+import { calculateDistance } from '@/lib/geolocation';
 import { formatHeight, HeightUnit } from '@/lib/height-utils';
-import ProfilePhotoCarousel from '@/components/profile/ProfilePhotoCarousel';
-import ProfileStoryCard from '@/components/profile/ProfileStoryCard';
-import ProfileInteractiveSection from '@/components/profile/ProfileInteractiveSection';
-import ProfileQuickFacts from '@/components/profile/ProfileQuickFacts';
-import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
+import { translateProfileValue, translateProfileArray } from '@/lib/translate-profile-values';
+import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
+import MatchModal from '@/components/matching/MatchModal';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
-import ProfileReviewDisplay from '@/components/reviews/ProfileReviewDisplay';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
-import { useColorScheme } from '@/lib/useColorScheme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { ProfileSkeleton } from '@/components/shared/SkeletonScreens';
 
 interface Photo {
   url: string;
@@ -44,9 +44,6 @@ interface Profile {
   sexual_orientation?: string | string[]; // Multi-select support
   location_city?: string;
   location_state?: string;
-  bio?: string;
-  occupation?: string;
-  education?: string;
   is_verified?: boolean;
   photo_verified?: boolean;
   photos?: Photo[];
@@ -57,20 +54,15 @@ interface Profile {
   height_inches?: number;
   languages?: string[];
   zodiac_sign?: string;
-  personality_type?: string;
-  love_language?: string | string[]; // Multi-select support
-  hobbies?: string[];
-  interests?: {
-    movies?: string[];
-    music?: string[];
-    books?: string[];
-    tv_shows?: string[];
-  };
   voice_intro_url?: string;
   voice_intro_duration?: number;
   religion?: string;
   political_views?: string;
+  hometown?: string;
+  occupation?: string;
+  education?: string;
   photo_blur_enabled?: boolean;
+  field_visibility?: Record<string, boolean>;
 }
 
 interface Preferences {
@@ -132,7 +124,7 @@ const formatArrayOrString = (value?: string | string[]): string => {
         if (Array.isArray(parsed)) {
           return parsed.join(', ');
         }
-      } catch (e) {
+      } catch {
         // Not valid JSON, just return as-is
       }
     }
@@ -158,8 +150,8 @@ const arraysEqual = (a?: string | string[], b?: string | string[]): boolean => {
   return sortedA.every((val, idx) => val === sortedB[idx]);
 };
 
-// Compatibility Bar Component
-const CompatibilityBar = ({ label, score, icon, color }: { label: string; score: number; icon: string; color: string }) => {
+// Compatibility Bar Component (used in compatibility breakdown)
+const _CompatibilityBar = ({ label, score, icon, color }: { label: string; score: number; icon: string; color: string }) => {
   const percentage = Math.round(score);
 
   return (
@@ -187,11 +179,43 @@ const CompatibilityBar = ({ label, score, icon, color }: { label: string; score:
   );
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Matches discover.tsx — keep in sync
+const DAILY_LIKE_LIMIT = 5;
+
+// Returns true if the current AsyncStorage counter says the user has already used today's 5
+// for the current local day. Server-side trigger is the authoritative gate — this is a
+// pre-check so we can show the paywall before hitting the DB.
+const hasHitDailyLikeLimitLocally = async (): Promise<boolean> => {
+  try {
+    const stored = await AsyncStorage.getItem('like_data');
+    if (!stored) return false;
+    const { date, count } = JSON.parse(stored);
+    const today = new Date().toDateString();
+    if (date !== today) return false;
+    return typeof count === 'number' && count >= DAILY_LIKE_LIMIT;
+  } catch {
+    return false;
+  }
+};
+
+const bumpDailyLikeCounter = async () => {
+  try {
+    const stored = await AsyncStorage.getItem('like_data');
+    const today = new Date().toDateString();
+    const current = stored ? JSON.parse(stored) : null;
+    const count = current?.date === today ? (current.count || 0) + 1 : 1;
+    await AsyncStorage.setItem('like_data', JSON.stringify({ date: today, count }));
+  } catch {}
+};
+
 export default function ProfileView() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const isValidUUID = id ? UUID_REGEX.test(id) : false;
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
-  const { colors, isDarkColorScheme } = useColorScheme();
   const insets = useSafeAreaInsets();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [currentProfile, setCurrentProfile] = useState<any>(null);
@@ -202,66 +226,84 @@ export default function ProfileView() {
   const [loading, setLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [isSuperLiked, setIsSuperLiked] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   const [isMatched, setIsMatched] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false); // Admin can view any profile
   const [matchId, setMatchId] = useState<string | null>(null);
   const [hasRevealedPhotos, setHasRevealedPhotos] = useState(false); // Current user revealed to profile
   const [otherUserRevealed, setOtherUserRevealed] = useState(false); // Profile revealed to current user
   const [revealLoading, setRevealLoading] = useState(false);
+  const [currentUserPhoto, setCurrentUserPhoto] = useState<string | null>(null);
+  const [showMatchModal, setShowMatchModal] = useState(false);
+  const [matchModalMatchId, setMatchModalMatchId] = useState<string | null>(null);
 
   // Enable screenshot protection for this profile view
   useScreenCaptureProtection(true);
 
   useEffect(() => {
     loadCurrentProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    if (id && !isValidUUID) {
+      Alert.alert(t('profileView.invalidProfile'), t('profileView.invalidProfileMsg'), [
+        { text: t('common.goBack'), onPress: () => router.back() },
+      ]);
+      return;
+    }
     if (id && currentProfileId) {
       loadProfile();
       checkIfMatched();
+      // Record profile view (non-blocking, skip own profile)
+      if (id !== currentProfileId) {
+        Promise.resolve(supabase.rpc('record_profile_view', { p_viewer_id: currentProfileId, p_viewed_id: id })).catch(() => {});
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, currentProfileId, currentPreferences]);
 
-  // Refetch profile data when screen comes back into focus (e.g., after editing)
-  useFocusEffect(
-    useCallback(() => {
-      if (id && currentProfileId) {
-        loadProfile();
-        checkIfMatched();
-      }
-    }, [id, currentProfileId, currentPreferences])
-  );
+  // Skip redundant refetch on focus — the useEffect above already loads on id/currentProfileId change.
+  // Only refetch if the profile ID changed (e.g., navigating from one profile to another).
 
   const loadCurrentProfile = async () => {
     try {
-      // Load current user's full profile
+      // PERFORMANCE: Fetch profile+photos first, then preferences in parallel
+      // NOTE: Cannot use JOIN for preferences — the admin RLS policy on preferences
+      // causes statement timeouts when evaluated per-row inside a JOIN.
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          *,
+          photos (
+            url,
+            storage_path,
+            is_primary
+          )
+        `)
         .eq('user_id', user?.id)
         .single();
 
       if (profileError) throw profileError;
 
+      // Sign photos + fetch preferences in parallel (saves ~400ms vs sequential)
+      const [signedPhotos, prefsResult] = await Promise.all([
+        profileData.photos?.length ? signPhotoUrls(profileData.photos) : Promise.resolve(profileData.photos),
+        supabase
+          .from('preferences')
+          .select('*')
+          .eq('profile_id', profileData.id)
+          .maybeSingle(),
+      ]);
+
+      if (signedPhotos) profileData.photos = signedPhotos;
+
       setCurrentProfileId(profileData.id);
       setCurrentProfile(profileData);
-      setIsAdmin(profileData.is_admin === true); // Set admin status
-
-      // Load current user's preferences for compatibility calculation
-      const { data: prefsData, error: prefsError } = await supabase
-        .from('preferences')
-        .select('*')
-        .eq('profile_id', profileData.id)
-        .single();
-
-      if (prefsError) {
-        console.error('Error loading current user preferences:', prefsError);
-      } else {
-        console.log('✅ Current user preferences loaded:', prefsData);
-      }
-
-      setCurrentPreferences(prefsData);
+      setIsAdmin(profileData.is_admin === true);
+      const primaryPhoto = profileData.photos?.find((p: any) => p.is_primary)?.url || profileData.photos?.[0]?.url;
+      setCurrentUserPhoto(primaryPhoto || null);
+      setCurrentPreferences(prefsResult.data || null);
     } catch (error: any) {
       console.error('Error loading current profile:', error);
     }
@@ -281,7 +323,6 @@ export default function ProfileView() {
       const isAdminUser = adminCheck?.is_admin === true;
       if (isAdminUser) {
         setIsAdmin(true);
-        console.log('👑 Admin user detected');
       }
 
       // Check if there's an active match between current user and viewed profile
@@ -290,31 +331,21 @@ export default function ProfileView() {
         .select('id')
         .eq('status', 'active')
         .or(`and(profile1_id.eq.${currentProfileId},profile2_id.eq.${id}),and(profile1_id.eq.${id},profile2_id.eq.${currentProfileId})`)
-        .single();
+        .maybeSingle();
 
       if (match) {
-        console.log('✅ Found active match - showing matched UI');
         setIsMatched(true);
         setMatchId(match.id);
         checkPhotoRevealStatus();
       } else {
-        console.log(`🔍 No match found. Premium: ${isPremium}, Platinum: ${isPlatinum}, Admin: ${isAdminUser}`);
-
         // Check if the viewed profile has liked the current user
-        const { data: theirLike } = await supabase
-          .from('likes')
-          .select('id')
-          .eq('liker_profile_id', id)
-          .eq('liked_profile_id', currentProfileId)
-          .maybeSingle();
-
-        console.log(`🔍 Like check: theirLike exists = ${!!theirLike}`);
+        const { data: theirLikeId } = await supabase
+          .rpc('check_mutual_like', { p_target_profile_id: id });
 
         // Allow viewing with like buttons if:
         // 1. Premium/Platinum user viewing someone who liked them
         // 2. Admin viewing someone who liked them (for testing)
-        if ((isPremium || isPlatinum || isAdminUser) && theirLike) {
-          console.log('✅ Showing LIKE BUTTONS (premium/admin viewing profile from likes tab)');
+        if ((isPremium || isPlatinum || isAdminUser) && theirLikeId) {
           setIsMatched(false); // Not matched yet, will show like/pass buttons
           setMatchId(null);
           return;
@@ -331,11 +362,9 @@ export default function ProfileView() {
             .maybeSingle();
 
           if (adminMatch) {
-            console.log('👑 Admin has existing match with this profile');
             setIsMatched(true);
             setMatchId(adminMatch.id);
           } else {
-            console.log('👑 Admin viewing profile without match - showing as viewable only');
             setIsMatched(true); // Show as "matched" to allow viewing full profile
             setMatchId(null); // But no chat available
           }
@@ -343,28 +372,28 @@ export default function ProfileView() {
         }
 
         // Not matched and no permission to view - redirect back
-        console.log('❌ No permission to view this profile - showing alert');
         setIsMatched(false);
         setMatchId(null);
-        Alert.alert('Not Matched', 'You can only view full profiles of your matches.', [
-          { text: 'OK', onPress: () => router.back() }
+        Alert.alert(t('profileView.notMatched'), t('profileView.notMatchedMsg'), [
+          { text: t('common.ok'), onPress: () => router.back() }
         ]);
       }
-    } catch (error: any) {
+    } catch {
+      // Admin can always view profiles — don't redirect back on error
+      if (isAdmin) {
+        setIsMatched(true);
+        setMatchId(null);
+        return;
+      }
+
       // Check if premium user viewing someone who liked them
       if (isPremium || isPlatinum) {
         try {
-          const { data: theirLike } = await supabase
-            .from('likes')
-            .select('id')
-            .eq('liker_profile_id', id)
-            .eq('liked_profile_id', currentProfileId)
-            .maybeSingle();
+          const { data: theirLikeId } = await supabase
+            .rpc('check_mutual_like', { p_target_profile_id: id });
 
-          if (theirLike) {
-            // Premium user viewing someone who liked them - allow it
-            console.log('✅ Premium user viewing profile from likes tab');
-            setIsMatched(false); // Not matched yet, will show like/pass buttons
+          if (theirLikeId) {
+            setIsMatched(false);
             setMatchId(null);
             return;
           }
@@ -376,8 +405,8 @@ export default function ProfileView() {
       // No match found and no permission - redirect back
       setIsMatched(false);
       setMatchId(null);
-      Alert.alert('Not Matched', 'You can only view full profiles of your matches.', [
-        { text: 'OK', onPress: () => router.back() }
+      Alert.alert(t('profileView.notMatched'), t('profileView.notMatchedMsg'), [
+        { text: t('common.ok'), onPress: () => router.back() }
       ]);
     }
   };
@@ -386,25 +415,24 @@ export default function ProfileView() {
     if (!currentProfileId || !id) return;
 
     try {
-      // Check if current user has revealed photos to this profile
-      const { data: myReveal } = await supabase
-        .from('photo_reveals')
-        .select('id')
-        .eq('revealer_profile_id', currentProfileId)
-        .eq('revealed_to_profile_id', id)
-        .maybeSingle();
+      // PERFORMANCE: Check both reveal directions in parallel
+      const [myRevealResult, theirRevealResult] = await Promise.all([
+        supabase
+          .from('photo_reveals')
+          .select('id')
+          .eq('revealer_profile_id', currentProfileId)
+          .eq('revealed_to_profile_id', id)
+          .maybeSingle(),
+        supabase
+          .from('photo_reveals')
+          .select('id')
+          .eq('revealer_profile_id', id)
+          .eq('revealed_to_profile_id', currentProfileId)
+          .maybeSingle(),
+      ]);
 
-      setHasRevealedPhotos(!!myReveal);
-
-      // Check if other user has revealed photos to current user
-      const { data: theirReveal } = await supabase
-        .from('photo_reveals')
-        .select('id')
-        .eq('revealer_profile_id', id)
-        .eq('revealed_to_profile_id', currentProfileId)
-        .maybeSingle();
-
-      setOtherUserRevealed(!!theirReveal);
+      setHasRevealedPhotos(!!myRevealResult.data);
+      setOtherUserRevealed(!!theirRevealResult.data);
     } catch (error: any) {
       console.error('Error checking photo reveal status:', error);
     }
@@ -412,7 +440,7 @@ export default function ProfileView() {
 
   const togglePhotoReveal = async () => {
     if (!currentProfileId || !id || !matchId) {
-      Alert.alert('Error', 'You must be matched with this user to reveal photos');
+      Alert.alert(t('common.error'), t('profileView.mustBeMatched'));
       return;
     }
 
@@ -430,7 +458,7 @@ export default function ProfileView() {
         if (error) throw error;
 
         setHasRevealedPhotos(false);
-        Alert.alert('Photos Blurred', 'Your photos are now blurred for this match');
+        Alert.alert(t('profileView.photosBlurred'), t('profileView.photosBlurredMsg'));
       } else {
         // Reveal: Insert new reveal
         const { error } = await supabase
@@ -444,11 +472,11 @@ export default function ProfileView() {
         if (error) throw error;
 
         setHasRevealedPhotos(true);
-        Alert.alert('Photos Revealed', `Your photos are now visible to ${profile?.display_name}`);
+        Alert.alert(t('profileView.photosRevealed'), t('profileView.photosRevealedMsg', { name: profile?.display_name }));
       }
     } catch (error: any) {
       console.error('Error toggling photo reveal:', error);
-      Alert.alert('Error', 'Failed to update photo visibility. Please try again.');
+      Alert.alert(t('common.error'), t('profileView.photoVisibilityError'));
     } finally {
       setRevealLoading(false);
     }
@@ -458,75 +486,89 @@ export default function ProfileView() {
     try {
       setLoading(true);
 
-      // CRITICAL SAFETY: Check if user is banned
-      const { data: banData } = await supabase
-        .from('bans')
-        .select('id')
-        .eq('banned_profile_id', id)
-        .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
-        .maybeSingle();
+      // PERFORMANCE: Run ban check + profile+prefs fetch in parallel (saves 1-2 round trips)
+      const [banResult, profileResult, prefsResult] = await Promise.all([
+        // Ban check
+        supabase
+          .from('bans')
+          .select('id')
+          .eq('banned_profile_id', id)
+          .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
+          .maybeSingle(),
 
-      if (banData) {
-        // User is banned - don't show their profile
+        // Profile + photos (no preferences JOIN — admin RLS causes timeout in JOINs)
+        supabase
+          .from('profiles')
+          .select(`
+            id,
+            display_name,
+            age,
+            gender,
+            pronouns,
+            ethnicity,
+            sexual_orientation,
+            location_city,
+            location_state,
+            latitude,
+            longitude,
+            is_verified,
+            photo_verified,
+            prompt_answers,
+            voice_intro_url,
+            voice_intro_duration,
+            height_inches,
+            zodiac_sign,
+            languages_spoken,
+            hometown,
+            occupation,
+            education,
+            religion,
+            political_views,
+            field_visibility,
+            photo_blur_enabled,
+            photos (
+              url,
+              storage_path,
+              is_primary,
+              display_order,
+              blur_data_uri
+            )
+          `)
+          .eq('id', id)
+          .single(),
+
+        // Preferences as separate query (avoids RLS timeout in JOINs)
+        supabase
+          .from('preferences')
+          .select('*')
+          .eq('profile_id', id)
+          .maybeSingle(),
+      ]);
+
+      // Handle ban check
+      if (banResult.data) {
         Alert.alert(
-          'Error',
-          'This profile is no longer available.',
-          [{ text: 'OK', onPress: () => router.back() }]
+          t('common.error'),
+          t('profileView.profileUnavailable'),
+          [{ text: t('common.ok'), onPress: () => router.back() }]
         );
         setLoading(false);
         return;
       }
 
-      // Load profile with photos
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          display_name,
-          age,
-          gender,
-          pronouns,
-          ethnicity,
-          sexual_orientation,
-          location_city,
-          location_state,
-          latitude,
-          longitude,
-          bio,
-          occupation,
-          education,
-          is_verified,
-          photo_verified,
-          prompt_answers,
-          interests,
-          hobbies,
-          voice_intro_url,
-          voice_intro_duration,
-          height_inches,
-          zodiac_sign,
-          personality_type,
-          love_language,
-          languages_spoken,
-          religion,
-          political_views,
-          photo_blur_enabled,
-          photos (
-            url,
-            is_primary,
-            display_order
-          )
-        `)
-        .eq('id', id)
-        .single();
-
+      const { data: profileData, error: profileError } = profileResult;
       if (profileError) throw profileError;
 
-      // Load preferences
-      const { data: prefsData } = await supabase
-        .from('preferences')
-        .select('*')
-        .eq('profile_id', id)
-        .single();
+      const prefsData = prefsResult.data || null;
+
+      // PERFORMANCE: Sign photos + voice intro in parallel
+      const [signedPhotos, signedVoiceUrl] = await Promise.all([
+        profileData.photos?.length ? signPhotoUrls(profileData.photos) : Promise.resolve(profileData.photos),
+        profileData.voice_intro_url ? getSignedUrl('voice-intros', profileData.voice_intro_url) : Promise.resolve(null),
+      ]);
+
+      if (signedPhotos) profileData.photos = signedPhotos;
+      if (signedVoiceUrl) profileData.voice_intro_url = signedVoiceUrl;
 
       // Transform profile data
       const transformedProfile: Profile = {
@@ -535,14 +577,17 @@ export default function ProfileView() {
           (a.display_order || 0) - (b.display_order || 0)
         ),
         compatibility_score: 0, // Will be calculated below
-        distance: Math.floor(Math.random() * 50) + 1,
+        distance: calculateDistance(
+          currentProfile?.latitude ?? null,
+          currentProfile?.longitude ?? null,
+          profileData.latitude ?? null,
+          profileData.longitude ?? null
+        ),
         // Use real data from database (no more mocking)
         height_inches: profileData.height_inches,
         height_cm: profileData.height_inches ? profileData.height_inches * 2.54 : undefined,
         languages: profileData.languages_spoken || [],
         zodiac_sign: profileData.zodiac_sign,
-        personality_type: profileData.personality_type,
-        love_language: profileData.love_language,
       };
 
       // Calculate real compatibility score if we have both profiles and preferences
@@ -563,22 +608,15 @@ export default function ProfileView() {
             demographics: breakdown.demographics,
           });
 
-          console.log('Compatibility breakdown calculated:', breakdown);
         } catch (error) {
           console.error('Error calculating compatibility:', error);
         }
-      } else {
-        console.log('Missing data for compatibility calculation:', {
-          hasCurrentProfile: !!currentProfile,
-          hasCurrentPreferences: !!currentPreferences,
-          hasPrefsData: !!prefsData,
-        });
       }
 
       setProfile(transformedProfile);
       setPreferences(prefsData);
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to load profile');
+    } catch {
+      Alert.alert(t('common.error'), t('profileView.loadError'));
       router.back();
     } finally {
       setLoading(false);
@@ -588,49 +626,122 @@ export default function ProfileView() {
   const handleLike = async () => {
     if (!currentProfileId || !id) return;
 
+    // Free users: pre-check daily limit so we can show the paywall before hitting the DB.
+    // Server-side enforce_like_limits trigger is still the authoritative gate (see P0001 catch below).
+    if (!isPremium && !isPlatinum && await hasHitDailyLikeLimitLocally()) {
+      setShowPaywall(true);
+      return;
+    }
+
     setIsLiked(true);
 
     try {
-      // Insert like
-      await supabase.from('likes').insert({
+      // Try to insert like (may fail if already exists)
+      const { error: likeInsertError } = await supabase.from('likes').insert({
         liker_profile_id: currentProfileId,
         liked_profile_id: id,
       });
 
-      // Check for mutual match
-      const { data: mutualLike } = await supabase
-        .from('likes')
-        .select('id')
-        .eq('liker_profile_id', id)
-        .eq('liked_profile_id', currentProfileId)
-        .single();
+      if (likeInsertError) {
+        // Ignore duplicate key errors - the like already exists
+        if (likeInsertError.message?.includes('duplicate')) {
+          // fall through
+        } else if (likeInsertError.code === 'P0001' && likeInsertError.message?.includes('Daily like limit')) {
+          setIsLiked(false);
+          setShowPaywall(true);
+          return;
+        } else {
+          throw likeInsertError;
+        }
+      } else if (!isPremium && !isPlatinum) {
+        // Successful free-tier like — keep local counter in sync with server trigger
+        await bumpDailyLikeCounter();
+      }
 
-      if (mutualLike) {
-        // It's a match!
+      // Check for mutual match
+      const { data: mutualLikeId } = await supabase
+        .rpc('check_mutual_like', { p_target_profile_id: id });
+
+      if (mutualLikeId) {
+        // Check if match already exists
         const profile1Id = currentProfileId < id ? currentProfileId : id;
         const profile2Id = currentProfileId < id ? id : currentProfileId;
 
-        const { data: newMatch, error: matchError } = await supabase.from('matches').insert({
-          profile1_id: profile1Id,
-          profile2_id: profile2Id,
-          initiated_by: currentProfileId,
-          compatibility_score: profile?.compatibility_score || null,
-          status: 'active',
-        }).select('id').single();
+        const { data: existingMatch } = await supabase
+          .from('matches')
+          .select('id, status')
+          .eq('profile1_id', profile1Id)
+          .eq('profile2_id', profile2Id)
+          .maybeSingle();
 
-        if (matchError) throw matchError;
-
-        setTimeout(() => {
-          Alert.alert('🎉 It\'s a Match!', `You matched with ${profile?.display_name}!`, [
-            { text: 'Send Message', onPress: () => router.push(`/chat/${newMatch.id}`) },
-            { text: 'Keep Swiping', onPress: () => router.back() }
+        if (existingMatch?.status === 'active') {
+          // Already matched
+          Alert.alert(t('profileView.alreadyMatched'), t('profileView.alreadyMatchedMsg', { name: profile?.display_name }), [
+            { text: t('profileView.actions.sendMessage'), onPress: () => router.push(`/chat/${existingMatch.id}`) },
+            { text: t('common.ok'), onPress: () => router.back() }
           ]);
-        }, 500);
+          return;
+        }
+
+        // Either no match or unmatched - create/recreate
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
+
+        if (existingMatch && existingMatch.status === 'unmatched') {
+          // Reactivate the unmatched record
+          const { data: reactivatedMatch, error: updateError } = await supabase
+            .from('matches')
+            .update({
+              status: 'active',
+              matched_at: new Date().toISOString(),
+              expires_at: expiresAt.toISOString(),
+              unmatched_by: null,
+              unmatched_at: null,
+              unmatch_reason: null,
+              first_message_sent_at: null,
+            })
+            .eq('id', existingMatch.id)
+            .select('id')
+            .single();
+
+          if (updateError) throw updateError;
+
+          setMatchModalMatchId(reactivatedMatch.id);
+          setTimeout(() => setShowMatchModal(true), 500);
+        } else {
+          // Create new match
+          const { data: newMatch, error: matchError } = await supabase.from('matches').insert({
+            profile1_id: profile1Id,
+            profile2_id: profile2Id,
+            initiated_by: currentProfileId,
+            compatibility_score: profile?.compatibility_score || null,
+            status: 'active',
+            expires_at: expiresAt.toISOString(),
+          }).select('id').single();
+
+          if (matchError) {
+            if (matchError.message?.includes('MATCH_LIMIT_REACHED')) {
+              Alert.alert(
+                t('likes.matchLimitTitle'),
+                t('likes.matchLimitMessage'),
+                [{ text: t('common.ok') }]
+              );
+              setIsLiked(false);
+              return;
+            }
+            throw matchError;
+          }
+
+          setMatchModalMatchId(newMatch.id);
+          setTimeout(() => setShowMatchModal(true), 500);
+        }
       } else {
+        // No mutual like yet
         setTimeout(() => router.back(), 800);
       }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to like profile');
+      console.error('Error liking profile:', error);
+      Alert.alert(t('common.error'), t('profileView.likeError'));
       setIsLiked(false);
     }
   };
@@ -645,35 +756,58 @@ export default function ProfileView() {
       });
 
       router.back();
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to pass profile');
+    } catch {
+      Alert.alert(t('common.error'), t('profileView.passError'));
     }
   };
 
   const handleObsessed = async () => {
     if (!currentProfileId || !id) return;
 
+    // Super likes are premium-only. Pre-check client-side so we can show paywall
+    // instead of a generic error toast when the server trigger rejects.
+    if (!isPremium && !isPlatinum) {
+      setShowPaywall(true);
+      return;
+    }
+
     setIsSuperLiked(true);
 
     try {
-      // Insert super like
-      await supabase.from('likes').insert({
+      // Insert super like (explicit like_type so the server trigger routes to the
+      // super-like branch and applies the weekly budget check)
+      const { error: superLikeError } = await supabase.from('likes').insert({
         liker_profile_id: currentProfileId,
         liked_profile_id: id,
+        like_type: 'super_like',
       });
 
-      // Check for mutual match
-      const { data: mutualLike } = await supabase
-        .from('likes')
-        .select('id')
-        .eq('liker_profile_id', id)
-        .eq('liked_profile_id', currentProfileId)
-        .single();
+      if (superLikeError) {
+        if (superLikeError.code === 'P0001') {
+          setIsSuperLiked(false);
+          if (superLikeError.message?.includes('Premium subscription required')) {
+            setShowPaywall(true);
+          } else if (superLikeError.message?.includes('Weekly super like limit')) {
+            Alert.alert(t('discover.superLikeLimitTitle', { defaultValue: 'Super Like limit reached' }), t('discover.superLikeLimitMsg', { defaultValue: 'You have used all your super likes for this week. They reset every 7 days.' }));
+          } else {
+            Alert.alert(t('common.error'), superLikeError.message);
+          }
+          return;
+        }
+        throw superLikeError;
+      }
 
-      if (mutualLike) {
+      // Check for mutual match
+      const { data: mutualLikeId } = await supabase
+        .rpc('check_mutual_like', { p_target_profile_id: id });
+
+      if (mutualLikeId) {
         // It's a match!
         const profile1Id = currentProfileId < id ? currentProfileId : id;
         const profile2Id = currentProfileId < id ? id : currentProfileId;
+
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
 
         const { data: newMatch, error: matchError } = await supabase.from('matches').insert({
           profile1_id: profile1Id,
@@ -681,78 +815,75 @@ export default function ProfileView() {
           initiated_by: currentProfileId,
           compatibility_score: profile?.compatibility_score || null,
           status: 'active',
+          expires_at: expiresAt.toISOString(),
         }).select('id').single();
 
         if (matchError) throw matchError;
 
-        setTimeout(() => {
-          Alert.alert('🎉 It\'s a Match!', `You matched with ${profile?.display_name}!`, [
-            { text: 'Send Message', onPress: () => router.push(`/chat/${newMatch.id}`) },
-            { text: 'Keep Swiping', onPress: () => router.back() }
-          ]);
-        }, 500);
+        setMatchModalMatchId(newMatch.id);
+        setTimeout(() => setShowMatchModal(true), 500);
       } else {
         setTimeout(() => {
-          Alert.alert('💜 Obsessed!', `${profile?.display_name} will be notified that you're interested!`, [
-            { text: 'OK', onPress: () => router.back() }
+          Alert.alert(t('profileView.obsessed'), t('profileView.obsessedMsg', { name: profile?.display_name }), [
+            { text: t('common.ok'), onPress: () => router.back() }
           ]);
         }, 500);
       }
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to send super like');
+    } catch {
+      Alert.alert(t('common.error'), t('profileView.superLikeError'));
       setIsSuperLiked(false);
     }
   };
 
-  // Value-to-label mappings for preferences
-  const PREFERENCE_LABELS: { [key: string]: string } = {
+  // Value-to-label mappings for preferences (using i18n)
+  const getPreferenceLabels = (): { [key: string]: string } => ({
     // Financial arrangements
-    'separate': 'Keep Finances Separate',
-    'shared_expenses': 'Share Living Expenses',
-    'joint': 'Fully Joint Finances',
-    'prenup_required': 'Prenup Required',
-    'flexible': 'Flexible/Open to Discussion',
+    'separate': t('profileCard.preferences.financial.separate'),
+    'shared_expenses': t('profileCard.preferences.financial.sharedExpenses'),
+    'joint': t('profileCard.preferences.financial.joint'),
+    'prenup_required': t('profileCard.preferences.financial.prenupRequired'),
+    'flexible': t('profileCard.preferences.financial.flexible'),
 
     // Housing preferences
-    'separate_spaces': 'Separate Bedrooms/Spaces',
-    'roommates': 'Roommate-Style Arrangement',
-    'separate_homes': 'Separate Homes Nearby',
-    'shared_bedroom': 'Shared Bedroom',
+    'separate_spaces': t('profileCard.preferences.housing.separateSpaces'),
+    'roommates': t('profileCard.preferences.housing.roommates'),
+    'separate_homes': t('profileCard.preferences.housing.separateHomes'),
+    'shared_bedroom': t('profileCard.preferences.housing.sharedBedroom'),
 
     // Children arrangements
-    'biological': 'Biological Children',
-    'adoption': 'Adoption',
-    'co_parenting': 'Co-Parenting Agreement',
-    'surrogacy': 'Surrogacy',
-    'ivf': 'IVF',
-    'already_have': 'Already Have Children',
-    'open_discussion': 'Open to Discussion',
+    'biological': t('profileCard.preferences.children.biological'),
+    'adoption': t('profileCard.preferences.children.adoption'),
+    'co_parenting': t('profileCard.preferences.children.coParenting'),
+    'surrogacy': t('profileCard.preferences.children.surrogacy'),
+    'ivf': t('profileCard.preferences.children.ivf'),
+    'already_have': t('profileCard.preferences.children.alreadyHave'),
+    'open_discussion': t('profileCard.preferences.children.openDiscussion'),
 
     // Primary reasons
-    'financial': 'Financial Stability',
-    'immigration': 'Immigration/Visa',
-    'family_pressure': 'Family Pressure',
-    'legal_benefits': 'Legal Benefits',
-    'companionship': 'Companionship',
-    'safety': 'Safety & Protection',
+    'financial': t('profileCard.preferences.reasons.financial'),
+    'immigration': t('profileCard.preferences.reasons.immigration'),
+    'family_pressure': t('profileCard.preferences.reasons.familyPressure'),
+    'legal_benefits': t('profileCard.preferences.reasons.legalBenefits'),
+    'companionship': t('profileCard.preferences.reasons.companionship'),
+    'safety': t('profileCard.preferences.reasons.safety'),
 
     // Relationship types
-    'platonic': 'Platonic Only',
-    'romantic': 'Romantic Partnership',
-    'open': 'Open Arrangement',
-  };
+    'platonic': t('profileCard.preferences.relationship.platonic'),
+    'romantic': t('profileCard.preferences.relationship.romantic'),
+    'open': t('profileCard.preferences.relationship.open'),
+  });
 
-  const formatLabel = (value: string) => {
-    // First try to get from mapping
-    if (PREFERENCE_LABELS[value]) {
-      return PREFERENCE_LABELS[value];
+  const formatLabel = (value: any): string => {
+    try {
+      if (!value) return '';
+      if (Array.isArray(value)) return value.filter(Boolean).map(formatLabel).join(', ');
+      if (typeof value !== 'string') return String(value);
+      const labels = getPreferenceLabels();
+      if (labels[value]) return labels[value];
+      return value.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    } catch {
+      return typeof value === 'string' ? value : '';
     }
-
-    // Fallback to Title Case conversion for unmapped values
-    return value
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
   };
 
   // Helper to format array fields and apply formatLabel to each item
@@ -779,7 +910,7 @@ export default function ProfileView() {
           } else {
             items = [value];
           }
-        } catch (e) {
+        } catch {
           items = [value];
         }
       } else {
@@ -787,82 +918,80 @@ export default function ProfileView() {
       }
     }
 
-    return items.map(formatLabel).join(', ');
+    // Filter out empty/null/undefined items before mapping to prevent errors
+    return items.filter(item => item && typeof item === 'string').map(formatLabel).join(', ');
   };
 
   if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#A08AB7" />
-      </View>
-    );
+    return <ProfileSkeleton />;
   }
 
   if (!profile) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: colors.mutedForeground }}>Profile not found</Text>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: '#6B7280' }}>{t('profileView.notFound')}</Text>
       </View>
     );
   }
-
-  const photos = profile.photos || [];
 
   // Prepare quick facts
   // Use viewer's height unit preference to display height
   const viewerHeightUnit: HeightUnit = currentProfile?.height_unit || 'imperial';
   const quickFacts = [];
-  if (profile.height_inches) {
+  if (profile.height_inches && profile.field_visibility?.height !== false) {
     quickFacts.push({
       emoji: '📏',
-      label: 'Height',
+      label: t('profileCard.vitals.height'),
       value: formatHeight(profile.height_inches, viewerHeightUnit),
     });
   }
   if (profile.zodiac_sign) {
     quickFacts.push({
       emoji: '✨',
-      label: 'Zodiac',
-      value: profile.zodiac_sign,
-    });
-  }
-  if (profile.personality_type) {
-    quickFacts.push({
-      emoji: '🧠',
-      label: 'Personality',
-      value: profile.personality_type,
-    });
-  }
-  if (profile.love_language) {
-    quickFacts.push({
-      emoji: '💖',
-      label: 'Love Language',
-      value: formatArrayOrString(profile.love_language),
+      label: t('profileCard.vitals.zodiac'),
+      value: translateProfileValue(t, 'zodiac_sign', profile.zodiac_sign),
     });
   }
   if (profile.languages?.length) {
     quickFacts.push({
       emoji: '🌍',
-      label: 'Languages',
-      value: profile.languages.join(', '),
+      label: t('profileCard.vitals.languages'),
+      value: translateProfileArray(t, 'languages_spoken', profile.languages),
     });
   }
 
+  const handleMatchModalSendMessage = () => {
+    setShowMatchModal(false);
+    if (matchModalMatchId) {
+      router.push(`/chat/${matchModalMatchId}`);
+    }
+  };
+
+  const handleMatchModalClose = () => {
+    setShowMatchModal(false);
+    router.back();
+  };
+
+  // Transform profile for DiscoveryProfileView
+  const transformedProfile = {
+    ...profile,
+    languages_spoken: profile.languages || [],
+  };
+
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar barStyle={isDarkColorScheme ? "light-content" : "dark-content"} />
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+      <StatusBar barStyle="dark-content" />
 
       {/* Back Button */}
       <TouchableOpacity
-        style={{ backgroundColor: isDarkColorScheme ? 'rgba(30,30,32,0.9)' : 'rgba(255,255,255,0.9)' }}
-        className="absolute top-12 left-4 z-10 rounded-full p-2 shadow-lg"
+        style={[styles.floatingButton, { top: insets.top + 8, left: 16, backgroundColor: 'rgba(255,255,255,0.9)' }]}
         onPress={() => router.back()}
       >
-        <MaterialCommunityIcons name="arrow-left" size={24} color={colors.foreground} />
+        <MaterialCommunityIcons name="arrow-left" size={24} color={'#000000'} />
       </TouchableOpacity>
 
       {/* Report/Block Menu */}
-      <View style={{ backgroundColor: isDarkColorScheme ? 'rgba(30,30,32,0.9)' : 'rgba(255,255,255,0.9)' }} className="absolute top-12 right-4 z-10 rounded-full shadow-lg">
+      <View style={[styles.floatingButton, { top: insets.top + 8, right: 16, backgroundColor: 'rgba(255,255,255,0.9)' }]}>
         <ModerationMenu
           profileId={id}
           profileName={profile.display_name}
@@ -873,802 +1002,20 @@ export default function ProfileView() {
         />
       </View>
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {/* Enhanced Photo Carousel */}
-        <ProfilePhotoCarousel
-          profileId={id}
-          photos={photos}
-          name={profile.display_name}
-          age={profile.age}
-          isVerified={profile.is_verified}
-          photoVerified={profile.photo_verified}
-          distance={profile.distance}
-          compatibilityScore={profile.compatibility_score}
-          photoBlurEnabled={profile.photo_blur_enabled}
-          isRevealed={otherUserRevealed}
-          isAdmin={isAdmin}
-        />
-
-        {/* Location Intent Badges */}
-        {preferences && (preferences.search_globally || (preferences.preferred_cities && preferences.preferred_cities.length > 0)) && (
-          <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
-            <MotiView
-              from={{ opacity: 0, translateY: 20 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'spring', delay: 100 }}
-            >
-              {preferences.search_globally && (
-                <View style={{
-                  backgroundColor: '#EDE9FE',
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 16,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  marginBottom: 8,
-                  borderWidth: 1,
-                  borderColor: '#C4B5FD',
-                }}>
-                  <MaterialCommunityIcons name="earth" size={20} color="#A08AB7" />
-                  <Text style={{
-                    color: '#A08AB7',
-                    fontWeight: '600',
-                    fontSize: 14,
-                  }}>Open to matching anywhere</Text>
-                </View>
-              )}
-
-              {preferences.preferred_cities && preferences.preferred_cities.length > 0 && (
-                <View style={{
-                  backgroundColor: '#DBEAFE',
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 16,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  borderWidth: 1,
-                  borderColor: '#BFDBFE',
-                }}>
-                  <MaterialCommunityIcons name="map-marker-multiple" size={20} color="#2563EB" />
-                  <Text style={{
-                    color: '#2563EB',
-                    fontWeight: '600',
-                    fontSize: 14,
-                    flex: 1,
-                  }}>Looking in: {preferences.preferred_cities.join(', ')}</Text>
-                </View>
-              )}
-            </MotiView>
-          </View>
-        )}
-
-        {/* Quick Facts Carousel */}
-        {quickFacts.length > 0 && (
-          <ProfileQuickFacts facts={quickFacts} />
-        )}
-
-        {/* Voice Introduction */}
-        {profile.voice_intro_url && (
-          <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
-            <ProfileVoiceNote
-              voiceUrl={profile.voice_intro_url}
-              duration={profile.voice_intro_duration}
-              profileName={profile.display_name}
-            />
-          </View>
-        )}
-
-        {/* Profile Content */}
-        <View className="px-5 pb-32">
-          {/* Story Introduction */}
-          {profile.bio && (
-            <ProfileStoryCard
-              title="My Story"
-              icon="book-open-variant"
-              content={profile.bio}
-              gradient={['#A08AB7', '#CDC2E5']}
-              delay={100}
-            />
-          )}
-
-          {/* About Section - Comprehensive */}
-          <ProfileInteractiveSection
-            title="About Me"
-            expandable={false}
-            items={[
-              ...(profile.occupation ? [{
-                icon: 'briefcase',
-                label: 'Career',
-                value: profile.occupation,
-                detail: 'Building my future'
-              }] : []),
-              ...(profile.education ? [{
-                icon: 'school',
-                label: 'Education',
-                value: profile.education,
-              }] : []),
-              ...(profile.location_city ? [{
-                icon: 'map-marker',
-                label: 'Location',
-                value: `${profile.location_city}${profile.location_state ? `, ${profile.location_state}` : ''}`,
-              }] : []),
-              ...(profile.gender ? [{
-                icon: 'gender-transgender',
-                label: 'Gender',
-                value: formatArrayOrString(profile.gender),
-              }] : []),
-              ...(profile.sexual_orientation ? [{
-                icon: 'heart',
-                label: 'Orientation',
-                value: formatArrayOrString(profile.sexual_orientation),
-              }] : []),
-              ...(profile.ethnicity ? [{
-                icon: 'account-group',
-                label: 'Ethnicity',
-                value: formatArrayOrString(profile.ethnicity),
-              }] : []),
-              ...(profile.languages?.length ? [{
-                icon: 'translate',
-                label: 'Languages',
-                value: profile.languages.join(', '),
-              }] : []),
-              ...(profile.religion ? [{
-                icon: 'hands-pray',
-                label: 'Religion',
-                value: profile.religion,
-              }] : []),
-              ...(profile.political_views ? [{
-                icon: 'vote',
-                label: 'Political Views',
-                value: profile.political_views,
-              }] : []),
-            ]}
-          />
-
-          {/* Prompt Answers as Story Cards */}
-          {profile.prompt_answers && profile.prompt_answers.length > 0 && (
-            <View>
-              {profile.prompt_answers.map((pa, index) => (
-                <ProfileStoryCard
-                  key={index}
-                  title={pa.prompt}
-                  icon="comment-quote"
-                  content={pa.answer}
-                  gradient={
-                    index % 3 === 0 ? ['#10B981', '#34D399'] :
-                    index % 3 === 1 ? ['#F59E0B', '#FBBF24'] :
-                    ['#3B82F6', '#60A5FA']
-                  }
-                  delay={200 + index * 100}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* Marriage Goals - Interactive Section */}
-          {preferences && (
-            <ProfileInteractiveSection
-              title="Partnership Vision"
-              items={[
-                ...((preferences.primary_reasons?.length || preferences.primary_reason) ? [{
-                  emoji: '🎯',
-                  label: preferences.primary_reasons && preferences.primary_reasons.length > 1 ? 'Primary Goals' : 'Primary Goal',
-                  value: preferences.primary_reasons && preferences.primary_reasons.length > 0
-                    ? preferences.primary_reasons.map(r => formatLabel(r)).join(', ')
-                    : formatLabel(preferences.primary_reason || ''),
-                  detail: 'What brings us together'
-                }] : []),
-                ...(preferences.relationship_type ? [{
-                  emoji: '💑',
-                  label: 'Relationship Style',
-                  value: formatLabel(preferences.relationship_type),
-                }] : []),
-                ...(preferences.wants_children !== undefined ? [{
-                  emoji: '👶',
-                  label: 'Children',
-                  value: preferences.wants_children === true ? 'Yes, definitely' :
-                         preferences.wants_children === false ? 'No children' : 'Open to discussion',
-                  detail: preferences.children_arrangement ? formatArrayWithLabels(preferences.children_arrangement) : undefined
-                }] : []),
-                ...(preferences.housing_preference ? [{
-                  emoji: '🏠',
-                  label: 'Living Arrangement',
-                  value: formatArrayWithLabels(preferences.housing_preference),
-                }] : []),
-                ...(preferences.financial_arrangement ? [{
-                  emoji: '💰',
-                  label: 'Finances',
-                  value: formatArrayWithLabels(preferences.financial_arrangement),
-                }] : []),
-                ...(preferences.willing_to_relocate ? [{
-                  emoji: '✈️',
-                  label: 'Relocation',
-                  value: 'Open to relocating',
-                }] : []),
-                ...(preferences.public_relationship ? [{
-                  emoji: '👨‍👩‍👧',
-                  label: 'Public Appearance',
-                  value: 'Comfortable appearing as a couple',
-                }] : []),
-              ]}
-            />
-          )}
-
-          {/* Must-Haves */}
-          {preferences?.must_haves && preferences.must_haves.length > 0 && (
-            <View style={{ marginBottom: 20, backgroundColor: '#F0FDF4', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#86EFAC' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontSize: 24, marginRight: 8 }}>✅</Text>
-                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#166534' }}>Must-Haves</Text>
-              </View>
-              <Text style={{ fontSize: 14, color: '#16A34A', marginBottom: 12, fontStyle: 'italic' }}>
-                Important qualities they're looking for
-              </Text>
-              {preferences.must_haves.map((item, index) => (
-                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <Text style={{ fontSize: 16, color: '#15803D', marginRight: 8 }}>•</Text>
-                  <Text style={{ fontSize: 15, color: '#15803D', flex: 1, lineHeight: 22 }}>{item}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Dealbreakers */}
-          {preferences?.dealbreakers && preferences.dealbreakers.length > 0 && (
-            <View style={{ marginBottom: 20, backgroundColor: '#FEF2F2', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#FCA5A5' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontSize: 24, marginRight: 8 }}>🚫</Text>
-                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#991B1B' }}>Dealbreakers</Text>
-              </View>
-              <Text style={{ fontSize: 14, color: '#DC2626', marginBottom: 12, fontStyle: 'italic' }}>
-                Important boundaries to be aware of
-              </Text>
-              {preferences.dealbreakers.map((item, index) => (
-                <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <Text style={{ fontSize: 16, color: '#B91C1C', marginRight: 8 }}>•</Text>
-                  <Text style={{ fontSize: 15, color: '#B91C1C', flex: 1, lineHeight: 22 }}>{item}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Hobbies Section */}
-          {profile.hobbies && profile.hobbies.length > 0 && (
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{
-                fontSize: 20,
-                fontWeight: 'bold',
-                color: '#111827',
-                marginBottom: 12,
-                paddingHorizontal: 4
-              }}>Hobbies</Text>
-              <View style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                gap: 8,
-              }}>
-                {profile.hobbies.map((hobby, index) => (
-                  <MotiView
-                    key={index}
-                    from={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ type: 'spring', delay: index * 50 }}
-                    style={{
-                      backgroundColor: index % 3 === 0 ? '#DCFCE7' :
-                                       index % 3 === 1 ? '#FFEDD5' : '#E0E7FF',
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 20,
-                    }}
-                  >
-                    <Text style={{
-                      color: index % 3 === 0 ? '#16A34A' :
-                             index % 3 === 1 ? '#EA580C' : '#6366F1',
-                      fontWeight: '600',
-                      fontSize: 14,
-                    }}>{hobby}</Text>
-                  </MotiView>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Interests Section - Movies, Music, Books, TV Shows */}
-          {profile.interests && typeof profile.interests === 'object' && (
-            <>
-              {/* Movies */}
-              {profile.interests.movies && profile.interests.movies.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>🎬 Favorite Movies</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                  }}>
-                    {profile.interests.movies.map((movie, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#EDE9FE',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                        }}
-                      >
-                        <Text style={{
-                          color: '#A08AB7',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>{movie}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Music */}
-              {profile.interests.music && profile.interests.music.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>🎵 Favorite Music</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                  }}>
-                    {profile.interests.music.map((music, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#FEF3C7',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                        }}
-                      >
-                        <Text style={{
-                          color: '#F59E0B',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>{music}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Books */}
-              {profile.interests.books && profile.interests.books.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>📚 Favorite Books</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                  }}>
-                    {profile.interests.books.map((book, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#DBEAFE',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                        }}
-                      >
-                        <Text style={{
-                          color: '#3B82F6',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>{book}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* TV Shows */}
-              {profile.interests.tv_shows && profile.interests.tv_shows.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>📺 Favorite TV Shows</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                  }}>
-                    {profile.interests.tv_shows.map((show, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#D1FAE5',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                        }}
-                      >
-                        <Text style={{
-                          color: '#059669',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>{show}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </View>
-              )}
-            </>
-          )}
-
-          {/* Lifestyle - Interactive Section */}
-          {preferences?.lifestyle_preferences && (
-            preferences.lifestyle_preferences.smoking ||
-            preferences.lifestyle_preferences.drinking ||
-            preferences.lifestyle_preferences.pets
-          ) && (
-            <ProfileInteractiveSection
-              title="Lifestyle & Values"
-              items={[
-                ...(preferences.lifestyle_preferences.smoking ? [{
-                  emoji: '🚬',
-                  label: 'Smoking',
-                  value: formatLabel(preferences.lifestyle_preferences.smoking),
-                }] : []),
-                ...(preferences.lifestyle_preferences.drinking ? [{
-                  emoji: '🍷',
-                  label: 'Drinking',
-                  value: formatLabel(preferences.lifestyle_preferences.drinking),
-                }] : []),
-                ...(preferences.lifestyle_preferences.pets ? [{
-                  emoji: '🐾',
-                  label: 'Pets',
-                  value: formatLabel(preferences.lifestyle_preferences.pets),
-                }] : []),
-              ]}
-            />
-          )}
-
-          {/* Matching Preferences Section */}
-          {preferences && (
-            <ProfileInteractiveSection
-              title="Looking For"
-              items={[
-                ...(preferences.age_min && preferences.age_max ? [{
-                  emoji: '🎯',
-                  label: 'Age Range',
-                  value: `${preferences.age_min}-${preferences.age_max} years old`,
-                }] : []),
-                ...(preferences.gender_preference && preferences.gender_preference.length > 0 ? [{
-                  emoji: '💜',
-                  label: 'Gender Preference',
-                  value: preferences.gender_preference.join(', '),
-                }] : []),
-                ...(preferences.max_distance_miles ? [{
-                  emoji: '📍',
-                  label: 'Distance',
-                  value: `Within ${preferences.max_distance_miles} miles`,
-                }] : []),
-              ]}
-            />
-          )}
-
-          {/* Dealbreakers & Must-Haves */}
-          {preferences && ((preferences.dealbreakers?.length ?? 0) > 0 || (preferences.must_haves?.length ?? 0) > 0) && (
-            <View style={{ marginBottom: 16 }}>
-              {preferences.dealbreakers && preferences.dealbreakers.length > 0 && (
-                <>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>Dealbreakers</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                    marginBottom: 16,
-                  }}>
-                    {preferences.dealbreakers.map((dealbreaker, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#FEE2E2',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                          borderWidth: 1,
-                          borderColor: '#FCA5A5',
-                        }}
-                      >
-                        <Text style={{
-                          color: '#DC2626',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>❌ {dealbreaker}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </>
-              )}
-
-              {preferences.must_haves && preferences.must_haves.length > 0 && (
-                <>
-                  <Text style={{
-                    fontSize: 20,
-                    fontWeight: 'bold',
-                    color: '#111827',
-                    marginBottom: 12,
-                    paddingHorizontal: 4
-                  }}>Must-Haves</Text>
-                  <View style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                  }}>
-                    {preferences.must_haves.map((mustHave, index) => (
-                      <MotiView
-                        key={index}
-                        from={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: 'spring', delay: index * 50 }}
-                        style={{
-                          backgroundColor: '#D1FAE5',
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                          borderWidth: 1,
-                          borderColor: '#6EE7B7',
-                        }}
-                      >
-                        <Text style={{
-                          color: '#059669',
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>✓ {mustHave}</Text>
-                      </MotiView>
-                    ))}
-                  </View>
-                </>
-              )}
-            </View>
-          )}
-
-          {/* Compatibility Breakdown */}
-          {compatibilityBreakdown && compatibilityBreakdown.overall >= 0 && (
-            <MotiView
-              from={{ opacity: 0, translateY: 20 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'timing', duration: 500 }}
-              style={{
-                backgroundColor: colors.card,
-                borderRadius: 20,
-                padding: 20,
-                marginBottom: 16,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.08,
-                shadowRadius: 8,
-                elevation: 3,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                <MaterialCommunityIcons name="heart-multiple" size={24} color="#A08AB7" />
-                <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.foreground, marginLeft: 12 }}>
-                  Why We Match
-                </Text>
-              </View>
-
-              {/* Overall Score */}
-              <View style={{ alignItems: 'center', marginBottom: 20, paddingVertical: 16, backgroundColor: '#F3E8FF', borderRadius: 12 }}>
-                <Text style={{ fontSize: 48, fontWeight: 'bold', color: '#A08AB7' }}>
-                  {Math.round(compatibilityBreakdown.overall)}%
-                </Text>
-                <Text style={{ fontSize: 16, color: '#6B7280', marginTop: 4 }}>
-                  Overall Compatibility
-                </Text>
-              </View>
-
-              {/* Breakdown Bars */}
-              <View style={{ gap: 16 }}>
-                <CompatibilityBar
-                  label="Location & Distance"
-                  score={compatibilityBreakdown.location}
-                  icon="map-marker"
-                  color="#10B981"
-                />
-                <CompatibilityBar
-                  label="Marriage Goals & Vision"
-                  score={compatibilityBreakdown.goals}
-                  icon="target"
-                  color="#3B82F6"
-                />
-                <CompatibilityBar
-                  label="Lifestyle & Values"
-                  score={compatibilityBreakdown.lifestyle}
-                  icon="coffee"
-                  color="#F59E0B"
-                />
-                <CompatibilityBar
-                  label="Personality & Interests"
-                  score={compatibilityBreakdown.personality}
-                  icon="heart"
-                  color="#A08AB7"
-                />
-                <CompatibilityBar
-                  label="Demographics & Background"
-                  score={compatibilityBreakdown.demographics}
-                  icon="account-group"
-                  color="#EC4899"
-                />
-              </View>
-
-              {/* Detailed Text Breakdown */}
-              <View style={{ marginTop: 24, paddingTop: 24, borderTopWidth: 1, borderTopColor: '#E5E7EB' }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 16 }}>
-                  What Makes You Compatible
-                </Text>
-
-                {/* Location Analysis */}
-                <View style={{ marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="map-marker" size={20} color="#10B981" />
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                      Location & Distance
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#10B981', marginLeft: 'auto' }}>
-                      {Math.round(compatibilityBreakdown.location)}%
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-                    {compatibilityBreakdown.location >= 80
-                      ? `You're both ${profile.distance ? `only ${profile.distance} miles apart` : 'in the same area'}, making it easy to meet up and build a connection. ${preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate ? 'Plus, you\'re both open to relocating if needed.' : ''}`
-                      : compatibilityBreakdown.location >= 60
-                      ? `You're ${profile.distance ? `${profile.distance} miles apart` : 'at a moderate distance'}. ${preferences?.willing_to_relocate && currentPreferences?.willing_to_relocate ? 'Fortunately, you\'re both willing to relocate, which opens up possibilities.' : preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate ? 'One of you is open to relocating, which could work well.' : 'The distance is manageable with some planning.'}`
-                      : preferences?.search_globally || currentPreferences?.search_globally || preferences?.willing_to_relocate || currentPreferences?.willing_to_relocate
-                      ? `While you're ${profile.distance ? `${profile.distance} miles apart` : 'at a distance'}, you're both open to ${preferences?.search_globally || currentPreferences?.search_globally ? 'matching globally' : 'relocating'}, showing flexibility in making a connection work.`
-                      : `You're ${profile.distance ? `${profile.distance} miles apart` : 'at a distance'}. Consider discussing how distance might work for your arrangement.`}
-                  </Text>
-                </View>
-
-                {/* Goals Analysis */}
-                <View style={{ marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="target" size={20} color="#3B82F6" />
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                      Marriage Goals & Vision
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#3B82F6', marginLeft: 'auto' }}>
-                      {Math.round(compatibilityBreakdown.goals)}%
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-                    {compatibilityBreakdown.goals >= 80
-                      ? `You're highly aligned on marriage goals! ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both seek this arrangement primarily for ${formatLabel(preferences?.primary_reason || '')}.` : ''} ${preferences?.relationship_type === currentPreferences?.relationship_type ? `You both envision a ${formatLabel(preferences?.relationship_type || '')} partnership.` : ''} ${preferences?.wants_children === currentPreferences?.wants_children ? (preferences?.wants_children ? 'You both want children' : 'You both prefer not to have children') + ', making family planning straightforward.' : ''}`
-                      : compatibilityBreakdown.goals >= 60
-                      ? `You share common ground on key goals. ${preferences?.primary_reason === currentPreferences?.primary_reason ? `You both primarily seek ${formatLabel(preferences?.primary_reason || '')}.` : 'Your primary reasons differ but may complement each other.'} ${preferences?.relationship_type && currentPreferences?.relationship_type ? `Your relationship style preferences (${formatLabel(preferences?.relationship_type)} vs ${formatLabel(currentPreferences?.relationship_type)}) could work with open communication.` : ''}`
-                      : `Your marriage goals differ in some areas. ${preferences?.wants_children !== currentPreferences?.wants_children ? 'You have different views on children, which is important to discuss.' : ''} ${preferences?.relationship_type !== currentPreferences?.relationship_type ? `You envision different relationship styles (${formatLabel(preferences?.relationship_type || '')} vs ${formatLabel(currentPreferences?.relationship_type || '')}), but compromise may be possible.` : ''} Open and honest conversation about expectations will be key.`}
-                  </Text>
-                </View>
-
-                {/* Lifestyle Analysis */}
-                <View style={{ marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="coffee" size={20} color="#F59E0B" />
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                      Lifestyle & Values
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#F59E0B', marginLeft: 'auto' }}>
-                      {Math.round(compatibilityBreakdown.lifestyle)}%
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-                    {compatibilityBreakdown.lifestyle >= 80
-                      ? `Your day-to-day lifestyles are very compatible! ${preferences?.lifestyle_preferences?.smoking === currentPreferences?.lifestyle_preferences?.smoking ? 'You share the same views on smoking.' : ''} ${preferences?.lifestyle_preferences?.drinking === currentPreferences?.lifestyle_preferences?.drinking ? 'You have aligned drinking preferences.' : ''} ${preferences?.lifestyle_preferences?.pets === currentPreferences?.lifestyle_preferences?.pets ? 'You feel the same way about pets.' : ''} ${arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? `You both prefer ${formatArrayWithLabels(preferences?.housing_preference)} living arrangements.` : ''}`
-                      : compatibilityBreakdown.lifestyle >= 60
-                      ? `Your lifestyles are moderately compatible. ${preferences?.lifestyle_preferences?.smoking !== currentPreferences?.lifestyle_preferences?.smoking ? 'You differ on smoking preferences, which may need discussion.' : ''} ${!arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? 'Your ideal living arrangements differ but could potentially be negotiated.' : ''} ${preferences?.financial_arrangement || currentPreferences?.financial_arrangement ? 'Discussing financial expectations will help align your lifestyles.' : ''}`
-                      : `Your lifestyle preferences show some differences. ${preferences?.lifestyle_preferences?.pets !== currentPreferences?.lifestyle_preferences?.pets && (preferences?.lifestyle_preferences?.pets === 'allergic' || currentPreferences?.lifestyle_preferences?.pets === 'allergic') ? 'Pet allergies may be a challenge to work around.' : ''} ${!arraysEqual(preferences?.housing_preference, currentPreferences?.housing_preference) ? `You have different housing preferences (${formatArrayWithLabels(preferences?.housing_preference)} vs ${formatArrayWithLabels(currentPreferences?.housing_preference)}).` : ''} These differences are worth exploring in depth.`}
-                  </Text>
-                </View>
-
-                {/* Personality Analysis */}
-                <View style={{ marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="heart" size={20} color="#A08AB7" />
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                      Personality & Interests
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#A08AB7', marginLeft: 'auto' }}>
-                      {Math.round(compatibilityBreakdown.personality)}%
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-                    {compatibilityBreakdown.personality >= 75
-                      ? `You share great chemistry! ${profile.personality_type === currentProfile?.personality_type ? `You're both ${profile.personality_type} personalities.` : profile.personality_type && currentProfile?.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} personalities complement each other well.` : ''} ${profile.love_language && currentProfile?.love_language ? `${formatArrayOrString(profile.love_language) === formatArrayOrString(currentProfile.love_language) ? `You both value ${formatArrayOrString(profile.love_language)}.` : 'Your different love languages can create balance.'}` : ''} You likely have engaging conversations and shared interests.`
-                      : compatibilityBreakdown.personality >= 60
-                      ? `You have some personality compatibility. ${profile.hobbies && currentProfile?.hobbies ? 'You share some hobbies and interests.' : ''} ${profile.personality_type && currentProfile?.personality_type && profile.personality_type !== currentProfile.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} types can balance each other out.` : ''} Getting to know each other's communication styles will strengthen your connection.`
-                      : `Your personalities are quite different, which isn't necessarily bad! ${profile.personality_type && currentProfile?.personality_type ? `Your ${profile.personality_type} and ${currentProfile.personality_type} types approach things differently.` : ''} Opposites can complement each other well if you appreciate each other's unique traits and communication styles.`}
-                  </Text>
-                </View>
-
-                {/* Demographics Analysis */}
-                <View style={{ marginBottom: 0 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <MaterialCommunityIcons name="account-group" size={20} color="#EC4899" />
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                      Background & Values
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#EC4899', marginLeft: 'auto' }}>
-                      {Math.round(compatibilityBreakdown.demographics)}%
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-                    {compatibilityBreakdown.demographics >= 75
-                      ? `You share similar backgrounds and values. ${profile.religion === currentProfile?.religion ? `You both identify as ${profile.religion}.` : ''} ${profile.political_views === currentProfile?.political_views ? `You align politically as ${profile.political_views}.` : ''} ${profile.education === currentProfile?.education ? 'You have similar educational backgrounds.' : ''} This common ground provides a strong foundation for understanding each other's perspectives.`
-                      : compatibilityBreakdown.demographics >= 60
-                      ? `You have some shared background elements. ${profile.religion !== currentProfile?.religion ? 'You have different religious backgrounds, which can bring diverse perspectives.' : ''} ${profile.political_views !== currentProfile?.political_views ? 'Your political views differ, but mutual respect is what matters most.' : ''} Your differences can be enriching if approached with open minds.`
-                      : `You come from different backgrounds, which can offer valuable perspectives. ${profile.religion && currentProfile?.religion && profile.religion !== currentProfile.religion ? `Your ${profile.religion} and ${currentProfile.religion} backgrounds may require extra communication about values.` : ''} ${profile.political_views && currentProfile?.political_views && profile.political_views !== currentProfile.political_views ? 'Your differing political views are worth discussing to ensure mutual respect.' : ''} Diversity can strengthen a partnership when handled thoughtfully.`}
-                  </Text>
-                </View>
-              </View>
-            </MotiView>
-          )}
-
-          {/* Reviews Section */}
-          <ProfileReviewDisplay
-            profileId={id}
-            isMatched={isMatched}
-            compact={false}
-          />
-        </View>
-      </ScrollView>
+      <DiscoveryProfileView
+        profile={transformedProfile as any}
+        preferences={preferences || undefined}
+        heightUnit={(currentProfile?.height_unit as 'imperial' | 'metric') || 'imperial'}
+        hideActions={true}
+        hideCompatibilityScore={false}
+        isAdmin={isAdmin}
+        isPhotoRevealed={otherUserRevealed}
+      />
 
       {/* Fixed Action Buttons with Animations */}
       {!isMatched ? (
         <LinearGradient
-          colors={isDarkColorScheme
-            ? ['transparent', 'rgba(10,10,11,0.9)', colors.background]
-            : ['transparent', 'rgba(255,255,255,0.9)', colors.background]}
+          colors={['transparent', 'rgba(255,255,255,0.9)', '#FFFFFF']}
           className="absolute bottom-0 left-0 right-0 pt-8"
           style={{ paddingBottom: Math.max(insets.bottom, 32) }}
         >
@@ -1680,7 +1027,7 @@ export default function ProfileView() {
               transition={{ type: 'spring', delay: 100 }}
             >
               <TouchableOpacity
-                style={{ backgroundColor: colors.card, borderColor: colors.border }}
+                style={{ backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' }}
                 className="rounded-full w-14 h-14 items-center justify-center shadow-xl border"
                 onPress={handlePass}
                 disabled={isLiked || isSuperLiked}
@@ -1720,7 +1067,7 @@ export default function ProfileView() {
               transition={{ type: 'spring', delay: 300 }}
             >
               <TouchableOpacity
-                style={isLiked ? { backgroundColor: '#22C55E' } : { backgroundColor: colors.card, borderColor: colors.border }}
+                style={isLiked ? { backgroundColor: '#22C55E' } : { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' }}
                 className="rounded-full w-14 h-14 items-center justify-center shadow-xl border"
                 onPress={handleLike}
                 disabled={isLiked || isSuperLiked}
@@ -1736,16 +1083,14 @@ export default function ProfileView() {
 
           {/* Action Labels */}
           <View className="flex-row justify-center items-center gap-8 mt-2 px-6">
-            <Text className="text-xs text-gray-500 font-medium">Pass</Text>
-            <Text className="text-xs text-purple-600 font-bold">Obsessed</Text>
-            <Text className="text-xs text-gray-500 font-medium">Like</Text>
+            <Text className="text-xs text-gray-500 font-medium">{t('profileView.actions.pass')}</Text>
+            <Text className="text-xs text-purple-600 font-bold">{t('profileView.actions.obsessed')}</Text>
+            <Text className="text-xs text-gray-500 font-medium">{t('profileView.actions.like')}</Text>
           </View>
         </LinearGradient>
       ) : (
         <LinearGradient
-          colors={isDarkColorScheme
-            ? ['transparent', 'rgba(10,10,11,0.9)', colors.background]
-            : ['transparent', 'rgba(255,255,255,0.9)', colors.background]}
+          colors={['transparent', 'rgba(255,255,255,0.9)', '#FFFFFF']}
           className="absolute bottom-0 left-0 right-0 pt-8"
           style={{ paddingBottom: Math.max(insets.bottom, 32) }}
         >
@@ -1755,7 +1100,7 @@ export default function ProfileView() {
               <TouchableOpacity
                 onPress={togglePhotoReveal}
                 disabled={revealLoading}
-                style={hasRevealedPhotos ? { backgroundColor: colors.card, borderColor: '#9333EA' } : { backgroundColor: isDarkColorScheme ? '#3B2A4D' : '#F3E8FF', borderColor: '#D8B4FE' }}
+                style={hasRevealedPhotos ? { backgroundColor: '#FFFFFF', borderColor: '#A08AB7' } : { backgroundColor: '#F3E8FF', borderColor: '#D8B4FE' }}
                 className="rounded-full py-3 shadow-lg border-2"
               >
                 <View className="flex-row items-center justify-center gap-2">
@@ -1769,7 +1114,7 @@ export default function ProfileView() {
                         color="#A08AB7"
                       />
                       <Text className="text-purple-600 text-base font-semibold">
-                        {hasRevealedPhotos ? 'Blur My Photos' : 'Reveal My Photos'}
+                        {hasRevealedPhotos ? t('profileView.actions.blurPhotos') : t('profileView.actions.revealPhotos')}
                       </Text>
                     </>
                   )}
@@ -1783,12 +1128,12 @@ export default function ProfileView() {
                 <MaterialCommunityIcons
                   name={otherUserRevealed ? "lock-open" : "lock"}
                   size={16}
-                  color={otherUserRevealed ? "#10B981" : colors.mutedForeground}
+                  color={otherUserRevealed ? "#10B981" : '#6B7280'}
                 />
-                <Text style={{ color: colors.mutedForeground }} className="text-xs">
+                <Text style={{ color: '#6B7280' }} className="text-xs">
                   {otherUserRevealed
-                    ? `${profile.display_name} revealed their photos to you`
-                    : `${profile.display_name}'s photos are blurred`}
+                    ? t('profileView.revealedPhotos', { name: profile.display_name })
+                    : t('profileView.blurredPhotos', { name: profile.display_name })}
                 </Text>
               </View>
             )}
@@ -1797,24 +1142,63 @@ export default function ProfileView() {
             {matchId ? (
               <TouchableOpacity
                 onPress={() => router.push(`/chat/${matchId}`)}
-                className="bg-purple-600 rounded-full py-4 shadow-xl"
+                style={{ backgroundColor: '#1A1A1E' }}
+                className="rounded-full py-4 mb-4"
               >
                 <View className="flex-row items-center justify-center gap-2">
                   <MaterialCommunityIcons name="message-text" size={24} color="white" />
-                  <Text className="text-white text-lg font-bold">Send Message</Text>
+                  <Text className="text-white text-lg font-bold">{t('profileView.actions.sendMessage')}</Text>
                 </View>
               </TouchableOpacity>
             ) : (
-              <View style={{ backgroundColor: isDarkColorScheme ? '#2D2D30' : '#E5E7EB' }} className="rounded-full py-4">
+              <View style={{ backgroundColor: '#E5E7EB' }} className="rounded-full py-4">
                 <View className="flex-row items-center justify-center gap-2">
-                  <MaterialCommunityIcons name="eye" size={24} color={colors.mutedForeground} />
-                  <Text style={{ color: colors.mutedForeground }} className="text-lg font-semibold">Viewing Profile</Text>
+                  <MaterialCommunityIcons name="eye" size={24} color={'#6B7280'} />
+                  <Text style={{ color: '#6B7280' }} className="text-lg font-semibold">{t('profileView.viewingProfile')}</Text>
                 </View>
               </View>
             )}
           </View>
         </LinearGradient>
       )}
+
+      {/* Match Modal */}
+      {profile && (
+        <MatchModal
+          visible={showMatchModal}
+          onClose={handleMatchModalClose}
+          onSendMessage={handleMatchModalSendMessage}
+          matchedProfile={{
+            display_name: profile.display_name,
+            photo_url: profile.photos?.find(p => p.is_primary)?.url || profile.photos?.[0]?.url,
+            compatibility_score: profile.compatibility_score,
+          }}
+          currentUserPhoto={currentUserPhoto || undefined}
+        />
+      )}
+
+      <PremiumPaywall
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        feature="daily_like_limit"
+      />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  floatingButton: {
+    position: 'absolute',
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+});

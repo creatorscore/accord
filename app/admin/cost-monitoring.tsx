@@ -154,7 +154,7 @@ export default function CostMonitoring() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#8B5CF6" />
+        <ActivityIndicator size="large" color="#A08AB7" />
       </View>
     );
   }
@@ -171,7 +171,7 @@ export default function CostMonitoring() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Cost Monitoring</Text>
         <TouchableOpacity onPress={checkThresholds}>
-          <MaterialCommunityIcons name="refresh" size={24} color="#8B5CF6" />
+          <MaterialCommunityIcons name="refresh" size={24} color="#A08AB7" />
         </TouchableOpacity>
       </View>
 
@@ -249,7 +249,7 @@ export default function CostMonitoring() {
           style={styles.actionButton}
           onPress={() => runCleanup('cleanup_old_messages')}
         >
-          <MaterialCommunityIcons name="message-minus" size={24} color="#8B5CF6" />
+          <MaterialCommunityIcons name="message-minus" size={24} color="#A08AB7" />
           <View style={styles.actionInfo}>
             <Text style={styles.actionTitle}>Delete Old Messages</Text>
             <Text style={styles.actionDesc}>Remove messages older than 90 days</Text>
@@ -260,7 +260,7 @@ export default function CostMonitoring() {
           style={styles.actionButton}
           onPress={() => runCleanup('cleanup_orphaned_photos')}
         >
-          <MaterialCommunityIcons name="image-broken" size={24} color="#8B5CF6" />
+          <MaterialCommunityIcons name="image-broken" size={24} color="#A08AB7" />
           <View style={styles.actionInfo}>
             <Text style={styles.actionTitle}>Delete Orphaned Photos</Text>
             <Text style={styles.actionDesc}>Remove photos without profiles</Text>
@@ -271,7 +271,7 @@ export default function CostMonitoring() {
           style={styles.actionButton}
           onPress={() => runCleanup('cleanup_inactive_matches')}
         >
-          <MaterialCommunityIcons name="account-cancel" size={24} color="#8B5CF6" />
+          <MaterialCommunityIcons name="account-cancel" size={24} color="#A08AB7" />
           <View style={styles.actionInfo}>
             <Text style={styles.actionTitle}>Delete Inactive Matches</Text>
             <Text style={styles.actionDesc}>Remove matches with no activity (6 months)</Text>
@@ -282,7 +282,7 @@ export default function CostMonitoring() {
           style={styles.actionButton}
           onPress={() => runCleanup('cleanup_old_bans')}
         >
-          <MaterialCommunityIcons name="shield-remove" size={24} color="#8B5CF6" />
+          <MaterialCommunityIcons name="shield-remove" size={24} color="#A08AB7" />
           <View style={styles.actionInfo}>
             <Text style={styles.actionTitle}>Delete Old Bans</Text>
             <Text style={styles.actionDesc}>Hard delete banned users (1 year old)</Text>
@@ -293,7 +293,7 @@ export default function CostMonitoring() {
           style={[styles.actionButton, { backgroundColor: '#EEF2FF' }]}
           onPress={checkThresholds}
         >
-          <MaterialCommunityIcons name="alert-circle" size={24} color="#8B5CF6" />
+          <MaterialCommunityIcons name="alert-circle" size={24} color="#A08AB7" />
           <View style={styles.actionInfo}>
             <Text style={styles.actionTitle}>Check Thresholds</Text>
             <Text style={styles.actionDesc}>Manually check for cost alerts</Text>
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#8B5CF6',
+    color: '#A08AB7',
     marginBottom: 4,
   },
   statSubtext: {
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
   rankText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#8B5CF6',
+    color: '#A08AB7',
   },
   tableInfo: {
     flex: 1,

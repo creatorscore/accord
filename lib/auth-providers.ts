@@ -19,9 +19,7 @@ try {
   isErrorWithCode = googleSignInModule.isErrorWithCode;
   statusCodes = googleSignInModule.statusCodes;
   nativeGoogleAvailable = true;
-  console.log('✅ Native Google Sign-In module loaded');
 } catch (error) {
-  console.log('⚠️ Native Google Sign-In not available, using browser fallback');
   nativeGoogleAvailable = false;
 }
 
@@ -52,7 +50,6 @@ export const configureGoogleSignIn = () => {
       offlineAccess: true,
     });
     isGoogleConfigured = true;
-    console.log('✅ Google Sign-In configured successfully');
   } catch (error) {
     console.error('❌ Failed to configure Google Sign-In:', error);
   }
@@ -73,7 +70,6 @@ function extractParamsFromUrl(url: string) {
 // Browser-based OAuth fallback (for Expo Go or when native isn't available)
 const signInWithGoogleBrowser = async () => {
   const redirectUrl = 'accord://google-auth';
-  console.log('Using browser OAuth fallback with redirect:', redirectUrl);
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -141,9 +137,18 @@ const signInWithGoogleNative = async () => {
   // Note: nonce parameter in GoogleSignin.signIn() is only available in the PAID version
   // of react-native-google-signin. For the free version, we skip nonce validation.
   // See: https://github.com/react-native-google-signin/docs/blob/main/docs/api/index.mdx
-  const response = await GoogleSignin.signIn();
-
-  console.log('Google Sign-In response:', response);
+  let response;
+  try {
+    response = await GoogleSignin.signIn();
+  } catch (e: any) {
+    // On Android, if the user backgrounds the app during Google Sign-In,
+    // a "Can not perform this action after onSaveInstanceState" error is thrown.
+    // This is a known Android fragment lifecycle issue — treat it as a cancellation.
+    if (e?.message?.includes?.('onSaveInstanceState')) {
+      return null;
+    }
+    throw e;
+  }
 
   if (isSuccessResponse(response)) {
     const { idToken } = response.data;
@@ -160,10 +165,8 @@ const signInWithGoogleNative = async () => {
 
     if (error) throw error;
 
-    console.log('✅ Google Sign-In successful');
     return data;
   } else {
-    console.log('Google Sign-In was cancelled or failed');
     return null;
   }
 };
@@ -190,7 +193,6 @@ export const signInWithGoogle = async () => {
     // The free version of react-native-google-signin doesn't support nonce properly,
     // which causes "passed nonce and nonce in id_token should either both exist or not" errors
     if (Platform.OS === 'ios') {
-      console.log('iOS: Using browser OAuth (native has nonce compatibility issues)');
       return await signInWithGoogleBrowser();
     }
 
@@ -198,7 +200,6 @@ export const signInWithGoogle = async () => {
     if (nativeGoogleAvailable) {
       return await signInWithGoogleNative();
     } else {
-      console.log('Using browser OAuth fallback (native module not available)');
       return await signInWithGoogleBrowser();
     }
   } catch (error: any) {
@@ -206,13 +207,10 @@ export const signInWithGoogle = async () => {
     if (nativeGoogleAvailable && isErrorWithCode && isErrorWithCode(error)) {
       switch (error.code) {
         case statusCodes.SIGN_IN_CANCELLED:
-          console.log('User cancelled Google Sign-In');
           throw new Error('User cancelled');
         case statusCodes.IN_PROGRESS:
-          console.log('Sign-In already in progress');
           throw new Error('Sign in already in progress');
         case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
-          console.log('Play Services not available');
           throw new Error('Google Play Services not available');
         default:
           console.error('Google Sign-In error:', error);

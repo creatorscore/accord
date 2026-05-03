@@ -16,6 +16,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DynamicWatermark } from '@/components/security/DynamicWatermark';
 import { useWatermark } from '@/hooks/useWatermark';
+import { useSafeBlur } from '@/hooks/useSafeBlur';
+import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PHOTO_HEIGHT = SCREEN_WIDTH * 1.3;
@@ -25,6 +27,7 @@ interface Photo {
   caption?: string;
   is_primary?: boolean;
   display_order?: number;
+  blur_data_uri?: string | null;
 }
 
 interface ProfilePhotoCarouselProps {
@@ -59,6 +62,20 @@ export default function ProfilePhotoCarousel({
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
 
+  const shouldBlur = photoBlurEnabled && !isRevealed && !isAdmin;
+
+  // Safe blur hook - fallback for photos without blur_data_uri
+  const { blurRadius, onImageLoad, onImageError } = useSafeBlur({
+    shouldBlur,
+    blurIntensity: 30,
+  });
+
+  // Helper: use server blur data URI when available
+  const getPhotoUri = (photo: Photo) =>
+    shouldBlur && photo.blur_data_uri ? photo.blur_data_uri : photo.url;
+  const getBlurRadius = (photo: Photo) =>
+    shouldBlur && photo.blur_data_uri ? 0 : blurRadius;
+
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     setCurrentIndex(newIndex);
@@ -80,11 +97,13 @@ export default function ProfilePhotoCarousel({
       >
         {photos.map((photo, index) => (
           <View key={index} style={styles.photoContainer}>
-            <Image
-              source={{ uri: photo.url }}
+            <SafeBlurImage
+              source={{ uri: getPhotoUri(photo) }}
               style={styles.photo}
               resizeMode="cover"
-              blurRadius={photoBlurEnabled && !isRevealed && !isAdmin ? 30 : 0}
+              blurRadius={getBlurRadius(photo)}
+              onLoad={onImageLoad}
+              onError={onImageError}
             />
 
             {/* Dynamic Watermark over photo */}

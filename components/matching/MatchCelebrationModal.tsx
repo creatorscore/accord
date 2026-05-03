@@ -6,8 +6,9 @@ import {
   Modal,
   TouchableOpacity,
   Dimensions,
-  Image,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -20,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import { SafeBlurView } from '@/components/shared/SafeBlurView';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,19 +31,24 @@ interface MatchCelebrationModalProps {
     id: string;
     displayName: string;
     photoUrl?: string;
+    photoBlurEnabled?: boolean;
   } | null;
   currentUserPhoto?: string;
+  isAdmin?: boolean;
   onSendMessage: () => void;
-  onKeepSwiping: () => void;
+  onKeepSwiping: () => void; // kept for backwards compatibility
 }
 
 export default function MatchCelebrationModal({
   visible,
   matchedUser,
   currentUserPhoto,
+  isAdmin = false,
   onSendMessage,
   onKeepSwiping,
 }: MatchCelebrationModalProps) {
+  const { t } = useTranslation();
+  const shouldBlurMatched = (matchedUser?.photoBlurEnabled || false) && !isAdmin;
   const scale = useSharedValue(0);
   const heartScale = useSharedValue(0);
   const leftPhotoX = useSharedValue(-width);
@@ -106,17 +112,17 @@ export default function MatchCelebrationModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <BlurView intensity={30} style={styles.container}>
+      <SafeBlurView intensity={30} style={styles.container}>
         <LinearGradient
           colors={['rgba(160, 138, 183, 0.95)', 'rgba(128, 100, 162, 0.95)']}
           style={styles.gradient}
         >
           {/* Title */}
           <Animated.View style={[styles.titleContainer, titleStyle]}>
-            <Text style={styles.itsA}>It's a</Text>
-            <Text style={styles.match}>Match!</Text>
+            <Text style={styles.itsA}>{t('discover.match.itsA')}</Text>
+            <Text style={styles.match}>{t('discover.match.exclamation')}</Text>
             <Text style={styles.subtitle}>
-              You and {matchedUser.displayName} liked each other
+              {t('discover.match.bothLiked', { name: matchedUser.displayName })}
             </Text>
           </Animated.View>
 
@@ -124,7 +130,7 @@ export default function MatchCelebrationModal({
           <View style={styles.photosContainer}>
             <Animated.View style={[styles.photoWrapper, styles.leftPhoto, leftPhotoStyle]}>
               {currentUserPhoto ? (
-                <Image source={{ uri: currentUserPhoto }} style={styles.photo} />
+                <SafeBlurImage source={{ uri: currentUserPhoto }} style={styles.photo} resizeMode="cover" />
               ) : (
                 <View style={[styles.photo, styles.placeholderPhoto]}>
                   <MaterialCommunityIcons name="account" size={50} color="#fff" />
@@ -140,7 +146,12 @@ export default function MatchCelebrationModal({
 
             <Animated.View style={[styles.photoWrapper, styles.rightPhoto, rightPhotoStyle]}>
               {matchedUser.photoUrl ? (
-                <Image source={{ uri: matchedUser.photoUrl }} style={styles.photo} />
+                <SafeBlurImage
+                  source={{ uri: matchedUser.photoUrl }}
+                  style={styles.photo}
+                  resizeMode="cover"
+                  blurRadius={shouldBlurMatched ? 20 : 0}
+                />
               ) : (
                 <View style={[styles.photo, styles.placeholderPhoto]}>
                   <MaterialCommunityIcons name="account" size={50} color="#fff" />
@@ -153,15 +164,15 @@ export default function MatchCelebrationModal({
           <Animated.View style={[styles.buttonsContainer, buttonsStyle]}>
             <TouchableOpacity style={styles.messageButton} onPress={onSendMessage}>
               <MaterialCommunityIcons name="message-text" size={22} color="#A08AB7" />
-              <Text style={styles.messageButtonText}>Send a Message</Text>
+              <Text style={styles.messageButtonText}>{t('discover.match.sendMessage')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.keepSwipingButton} onPress={onKeepSwiping}>
-              <Text style={styles.keepSwipingText}>Keep Swiping</Text>
+              <Text style={styles.keepSwipingText}>{t('discover.match.keepBrowsing')}</Text>
             </TouchableOpacity>
           </Animated.View>
         </LinearGradient>
-      </BlurView>
+      </SafeBlurView>
     </Modal>
   );
 }

@@ -65,16 +65,17 @@ export default function AdminReports() {
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
-    checkAdminStatus();
+    // PERFORMANCE: Combine admin check + initial load into one flow (saves a render cycle + round trip)
+    initAdmin();
   }, []);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (isAdmin && filter) {
       loadReports();
     }
-  }, [isAdmin, filter]);
+  }, [filter]);
 
-  const checkAdminStatus = async () => {
+  const initAdmin = async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -91,6 +92,7 @@ export default function AdminReports() {
       }
 
       setIsAdmin(true);
+      loadReports(); // Call immediately — don't wait for state update + re-render
     } catch (error: any) {
       console.error('Error checking admin status:', error);
       Alert.alert('Error', 'Failed to verify admin access.');
@@ -214,9 +216,6 @@ export default function AdminReports() {
         ? BAN_DURATIONS.find(d => d.hours === selectedDuration)?.label || `${selectedDuration}h`
         : 'Permanent';
 
-      console.log('🔍 Calling admin-ban-user Edge Function...');
-      console.log('🔍 Ban duration:', durationLabel);
-
       const { data: banResponse, error: banError } = await supabase.functions.invoke('admin-ban-user', {
         body: {
           banned_profile_id: banningReport.reported_profile_id,
@@ -240,8 +239,6 @@ export default function AdminReports() {
         throw new Error(`Ban operation failed: ${JSON.stringify(banResponse)}`);
       }
 
-      console.log('✅ User banned successfully:', banResponse);
-
       // Mark ALL pending reports for this profile as resolved
       await supabase
         .from('reports')
@@ -254,9 +251,13 @@ export default function AdminReports() {
 
       // Send notifications
       try {
+        // Get email from ban response (Edge Function returns it)
+        const userEmail = banResponse?.banned_email || undefined;
+
         await sendBanNotification(
           banningReport.reported_profile_id,
-          `${banningReport.reason}: ${banningReport.details || 'No additional details'}`
+          `${banningReport.reason}: ${banningReport.details || 'No additional details'}`,
+          userEmail // Pass email for email notification
         );
         await sendReportActionNotification(banningReport.reporter_profile_id, 'banned');
       } catch (notifyError) {
@@ -360,8 +361,6 @@ export default function AdminReports() {
         throw new Error(result.error || 'Failed to flag profile');
       }
 
-      console.log('✅ Photo review action result:', result);
-
       // Send push notification to the user
       try {
         await sendPhotoReviewNotification(
@@ -440,8 +439,6 @@ export default function AdminReports() {
       if (!response.ok) {
         throw new Error(result.error || 'Failed to require verification');
       }
-
-      console.log('✅ Verify identity action result:', result);
 
       // Send push notification to the user
       try {
@@ -573,14 +570,14 @@ export default function AdminReports() {
       case 'dismissed':
         return '#6B7280';
       default:
-        return '#9B87CE';
+        return '#A08AB7';
     }
   };
 
   if (loading && !refreshing) {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+        <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
           </TouchableOpacity>
@@ -589,7 +586,7 @@ export default function AdminReports() {
         </LinearGradient>
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9B87CE" />
+          <ActivityIndicator size="large" color="#A08AB7" />
         </View>
       </View>
     );
@@ -601,7 +598,7 @@ export default function AdminReports() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={['#9B87CE', '#B8A9DD']} style={styles.header}>
+      <LinearGradient colors={['#A08AB7', '#B8A9DD']} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
@@ -647,7 +644,7 @@ export default function AdminReports() {
       <ScrollView
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#9B87CE" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#A08AB7" />
         }
       >
         {reports.length === 0 ? (
@@ -703,7 +700,7 @@ export default function AdminReports() {
                   </ScrollView>
                   {report.reason === 'blackmail' && (
                     <View style={styles.watermarkHint}>
-                      <MaterialCommunityIcons name="water" size={14} color="#9B87CE" />
+                      <MaterialCommunityIcons name="water" size={14} color="#A08AB7" />
                       <Text style={styles.watermarkHintText}>
                         Look for watermarks in corners showing user ID + timestamp
                       </Text>
@@ -729,7 +726,7 @@ export default function AdminReports() {
                     onPress={() => viewProfile(report.reporter_profile_id)}
                   >
                     <Text style={styles.profileName}>{report.reporter_name}</Text>
-                    <MaterialCommunityIcons name="chevron-right" size={16} color="#9B87CE" />
+                    <MaterialCommunityIcons name="chevron-right" size={16} color="#A08AB7" />
                   </TouchableOpacity>
                 </View>
                 <View style={styles.profileRow}>
@@ -779,7 +776,7 @@ export default function AdminReports() {
                       style={[styles.actionButton, styles.verifyButton]}
                       onPress={() => handleVerifyIdentity(report.id)}
                     >
-                      <MaterialCommunityIcons name="account-check" size={18} color="#8B5CF6" />
+                      <MaterialCommunityIcons name="account-check" size={18} color="#A08AB7" />
                       <Text style={styles.verifyButtonText}>Verify ID</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -971,7 +968,7 @@ export default function AdminReports() {
             <ScrollView style={styles.historyModalContent} showsVerticalScrollIndicator={false}>
               {loadingHistory ? (
                 <View style={styles.historyLoadingContainer}>
-                  <ActivityIndicator size="large" color="#9B87CE" />
+                  <ActivityIndicator size="large" color="#A08AB7" />
                 </View>
               ) : pastReports.length === 0 ? (
                 <View style={styles.historyEmptyState}>
@@ -1091,7 +1088,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterTabActive: {
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
   },
   filterTabText: {
     fontSize: 14,
@@ -1196,7 +1193,7 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   actionsContainer: {
     flexDirection: 'row',
@@ -1381,7 +1378,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   durationOptionSelected: {
-    borderColor: '#9B87CE',
+    borderColor: '#A08AB7',
     backgroundColor: '#F3F0F7',
   },
   durationOptionPermanent: {
@@ -1394,14 +1391,14 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
   durationLabelSelected: {
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   durationDesc: {
     fontSize: 12,
     color: '#9CA3AF',
   },
   durationDescSelected: {
-    color: '#9B87CE',
+    color: '#A08AB7',
   },
   messageInput: {
     borderWidth: 1,
@@ -1484,7 +1481,7 @@ const styles = StyleSheet.create({
   verifyButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#8B5CF6',
+    color: '#A08AB7',
   },
   // History Button
   historyButton: {
@@ -1628,7 +1625,7 @@ const styles = StyleSheet.create({
   historyModalCloseButton: {
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#9B87CE',
+    backgroundColor: '#A08AB7',
     alignItems: 'center',
   },
   historyModalCloseButtonText: {

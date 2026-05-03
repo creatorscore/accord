@@ -67,7 +67,7 @@ function generateUnreadMessagesEmail(
 
               <!-- Header -->
               <tr>
-                <td style="background: linear-gradient(135deg, #9B87CE 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
+                <td style="background: linear-gradient(135deg, #A08AB7 0%, #B8A9DD 100%); padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
                   <div style="font-size: 56px; line-height: 1;">💬</div>
                   <h1 style="color: white; margin: 15px 0 0 0; font-size: 28px; font-weight: 700; line-height: 1.2;">You Have Unread Messages!</h1>
                 </td>
@@ -82,26 +82,34 @@ function generateUnreadMessagesEmail(
                         <p style="font-size: 18px; margin: 0 0 20px 0; color: #333; line-height: 1.5;">Hi ${recipientName}!</p>
 
                         <p style="font-size: 16px; margin: 0 0 25px 0; color: #555; line-height: 1.6;">
-                          You have <strong style="color: #9B87CE;">${unreadCount} unread message${unreadCount > 1 ? 's' : ''}</strong>
-                          waiting for you from ${senderList}${andMore}.
+                          You have <strong style="color: #A08AB7;">${unreadCount} unread message${unreadCount > 1 ? 's' : ''}</strong>
+                          waiting for you from:
                         </p>
 
-                        <!-- CTA Box -->
+                        <!-- Message Preview Box -->
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                           <tr>
-                            <td style="background: linear-gradient(135deg, #F3E8FF 0%, #EDE9FE 100%); border-radius: 12px; padding: 25px; text-align: center;">
-                              <p style="font-size: 15px; color: #6B21A8; margin: 0 0 15px 0; font-weight: 500; line-height: 1.4;">
-                                Don't leave them hanging!
+                            <td style="background: linear-gradient(135deg, #F3E8FF 0%, #EDE9FE 100%); border-radius: 12px; padding: 25px;">
+                              ${senderNames.map(name => `
+                                <div style="background: white; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                  <p style="font-size: 15px; color: #6B21A8; margin: 0; font-weight: 600;">
+                                    💬 ${name}
+                                  </p>
+                                  <p style="font-size: 13px; color: #666; margin: 5px 0 0 0;">
+                                    sent you a message
+                                  </p>
+                                </div>
+                              `).join('')}
+                              ${senderNames.length > 3 ? `
+                                <div style="text-align: center; padding: 10px;">
+                                  <p style="font-size: 14px; color: #6B21A8; margin: 0; font-weight: 500;">
+                                    and ${senderNames.length - 3} more...
+                                  </p>
+                                </div>
+                              ` : ''}
+                              <p style="font-size: 15px; color: #6B21A8; margin: 15px 0 0 0; font-weight: 500; text-align: center; line-height: 1.4;">
+                                Open the Accord app on your phone to reply!
                               </p>
-                              <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
-                                <tr>
-                                  <td style="border-radius: 50px; background: linear-gradient(135deg, #9B87CE 0%, #A08AB7 100%); box-shadow: 0 4px 15px rgba(155, 135, 206, 0.4);">
-                                    <a href="https://joinaccord.app/messages" target="_blank" style="display: inline-block; padding: 16px 40px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; min-width: 200px; text-align: center;">
-                                      Read Your Messages
-                                    </a>
-                                  </td>
-                                </tr>
-                              </table>
                             </td>
                           </tr>
                         </table>
@@ -127,12 +135,12 @@ function generateUnreadMessagesEmail(
                         <!-- Footer -->
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 0; line-height: 1.6;">
                           You're receiving this because you have unread messages on Accord.<br>
-                          <a href="https://joinaccord.app/settings/notifications" style="color: #9B87CE; text-decoration: none;">Manage email preferences</a>
+                          To manage email preferences, open the Accord app and go to Settings &gt; Notifications
                         </p>
 
                         <p style="font-size: 13px; color: #888; text-align: center; margin: 15px 0 0 0; line-height: 1.6;">
                           Accord - Safe Connections for Meaningful Partnerships<br>
-                          <a href="https://joinaccord.app" style="color: #9B87CE; text-decoration: none;">joinaccord.app</a>
+                          <a href="https://joinaccord.app" style="color: #A08AB7; text-decoration: none;">joinaccord.app</a>
                         </p>
                       </td>
                     </tr>
@@ -152,16 +160,17 @@ function generateUnreadMessagesEmail(
 
 You Have Unread Messages! 💬
 
-You have ${unreadCount} unread message${unreadCount > 1 ? 's' : ''} waiting for you from ${senderList}${andMore}.
+You have ${unreadCount} unread message${unreadCount > 1 ? 's' : ''} waiting for you from:
 
-Don't leave them hanging! Open Accord to read your messages:
-https://joinaccord.app/messages
+${senderNames.slice(0, 5).map(name => `💬 ${name} sent you a message`).join('\n')}${senderNames.length > 5 ? `\n...and ${senderNames.length - 5} more` : ''}
+
+Open the Accord app on your phone to reply!
 
 Did you know? Responding within 24 hours increases your chances of building a meaningful connection by 3x!
 
 ---
 You're receiving this because you have unread messages on Accord.
-Manage email preferences: https://joinaccord.app/settings/notifications
+To manage email preferences, open the Accord app and go to Settings > Notifications
 
 Accord - Safe Connections for Meaningful Partnerships
 joinaccord.app`;
@@ -185,26 +194,36 @@ serve(async (req) => {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
-    // Get unread messages grouped by receiver
-    const { data: unreadMessages, error: messagesError } = await supabase
-      .from('messages')
-      .select(`
-        receiver_profile_id,
-        sender_profile_id,
-        created_at,
-        sender:profiles!messages_sender_profile_id_fkey(display_name)
-      `)
-      .is('read_at', null)
-      .lt('created_at', twoHoursAgo)
-      .gt('created_at', fortyEightHoursAgo)
-      .order('created_at', { ascending: false });
+    // Get unread messages grouped by receiver (paginated to handle >1000 rows)
+    let unreadMessages: any[] = [];
+    let msgFrom = 0;
+    const msgPageSize = 1000;
+    while (true) {
+      const { data: page, error: pageError } = await supabase
+        .from('messages')
+        .select(`
+          receiver_profile_id,
+          sender_profile_id,
+          created_at,
+          sender:profiles!messages_sender_profile_id_fkey(display_name)
+        `)
+        .is('read_at', null)
+        .lt('created_at', twoHoursAgo)
+        .gt('created_at', fortyEightHoursAgo)
+        .order('created_at', { ascending: false })
+        .range(msgFrom, msgFrom + msgPageSize - 1);
 
-    if (messagesError) {
-      console.error('Error fetching unread messages:', messagesError);
-      throw messagesError;
+      if (pageError) {
+        console.error('Error fetching unread messages:', pageError);
+        throw pageError;
+      }
+      if (!page || page.length === 0) break;
+      unreadMessages = unreadMessages.concat(page);
+      if (page.length < msgPageSize) break;
+      msgFrom += msgPageSize;
     }
 
-    if (!unreadMessages || unreadMessages.length === 0) {
+    if (unreadMessages.length === 0) {
       console.log('No unread messages to notify about');
       return new Response(
         JSON.stringify({ success: true, message: 'No unread messages' }),
@@ -231,23 +250,44 @@ serve(async (req) => {
     // Get profile and user info for each receiver
     const receiverIds = Array.from(messagesByReceiver.keys());
 
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, user_id, display_name')
-      .in('id', receiverIds);
+    // Batch the .in() calls to avoid URL length limits
+    let profiles: any[] = [];
+    const inBatchSize = 500;
+    for (let i = 0; i < receiverIds.length; i += inBatchSize) {
+      const batch = receiverIds.slice(i, i + inBatchSize);
+      const { data: batchProfiles, error: batchError } = await supabase
+        .from('profiles')
+        .select('id, user_id, display_name')
+        .in('id', batch);
 
-    if (profilesError) {
-      console.error('Error fetching profiles:', profilesError);
-      throw profilesError;
+      if (batchError) {
+        console.error('Error fetching profiles batch:', batchError);
+        continue;
+      }
+      if (batchProfiles) profiles = profiles.concat(batchProfiles);
     }
 
-    // Get user emails
-    const { data: users, error: usersError } = await supabase.auth.admin.listUsers();
+    // Get user emails by fetching only the specific users we need (not all 20k+ users)
+    const userIds = profiles.map(p => p.user_id).filter(Boolean);
 
-    if (usersError) {
-      console.error('Error fetching users:', usersError);
-      throw usersError;
+    // Fetch user emails in batches from auth.users
+    const userEmailMap = new Map<string, string>();
+    for (let i = 0; i < userIds.length; i += inBatchSize) {
+      const batch = userIds.slice(i, i + inBatchSize);
+      // Use admin API to get specific users by ID
+      for (const userId of batch) {
+        try {
+          const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+          if (!userError && userData?.user?.email) {
+            userEmailMap.set(userId, userData.user.email);
+          }
+        } catch (e) {
+          console.error(`Error fetching user ${userId}:`, e);
+        }
+      }
     }
+
+    console.log(`Found ${userEmailMap.size} user emails for ${profiles.length} profiles`);
 
     const results = [];
 
@@ -256,8 +296,8 @@ serve(async (req) => {
       const userData = messagesByReceiver.get(profile.id);
       if (!userData) continue;
 
-      const user = users.users.find(u => u.id === profile.user_id);
-      if (!user?.email) {
+      const email = userEmailMap.get(profile.user_id);
+      if (!email) {
         console.log(`No email for user ${profile.user_id}`);
         continue;
       }
@@ -280,7 +320,7 @@ serve(async (req) => {
           body: JSON.stringify({
             userId: profile.user_id,
             emailType: 'unread_messages',
-            recipientEmail: user.email,
+            recipientEmail: email,
             recipientName: profile.display_name || 'there',
             subject: `💬 You have ${userData.count} unread message${userData.count > 1 ? 's' : ''} on Accord`,
             htmlContent: html,
@@ -290,8 +330,8 @@ serve(async (req) => {
       );
 
       const result = await response.json();
-      results.push({ email: user.email, count: userData.count, result });
-      console.log(`Unread messages email to ${user.email}:`, result);
+      results.push({ email, count: userData.count, result });
+      console.log(`Unread messages email to ${email}:`, result);
     }
 
     return new Response(

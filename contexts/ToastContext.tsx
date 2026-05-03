@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import Toast, { ToastType } from '@/components/shared/Toast';
 
 interface ToastData {
@@ -14,6 +15,7 @@ interface ToastContextType {
   showToast: (toast: Omit<ToastData, 'id'>) => void;
   showMessageToast: (senderName: string, preview: string, matchId: string) => void;
   showLikeToast: (likerName: string, isPremium: boolean) => void;
+  showReactionToast: (reactorName: string, emoji: string, matchId: string) => void;
   hideToast: () => void;
 }
 
@@ -21,6 +23,7 @@ const ToastContext = createContext<ToastContextType>({
   showToast: () => {},
   showMessageToast: () => {},
   showLikeToast: () => {},
+  showReactionToast: () => {},
   hideToast: () => {},
 });
 
@@ -29,6 +32,7 @@ export function useToast() {
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const [currentToast, setCurrentToast] = useState<ToastData | null>(null);
   const [visible, setVisible] = useState(false);
 
@@ -41,24 +45,35 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const showMessageToast = useCallback((senderName: string, preview: string, matchId: string) => {
     showToast({
       type: 'message',
-      title: `New message from ${senderName}`,
+      title: t('toast.newMessageFrom', { name: senderName }),
       message: preview.length > 50 ? preview.substring(0, 50) + '...' : preview,
       onPress: () => {
         router.push(`/chat/${matchId}`);
       },
     });
-  }, [showToast]);
+  }, [showToast, t]);
 
   const showLikeToast = useCallback((likerName: string, isPremium: boolean) => {
     showToast({
       type: 'like',
-      title: isPremium ? `${likerName} likes you!` : 'Someone likes you!',
-      message: isPremium ? 'Tap to see their profile' : 'Upgrade to Premium to see who',
+      title: isPremium ? t('toast.userLikesYou', { name: likerName }) : t('toast.someoneLikesYou'),
+      message: isPremium ? t('toast.tapToSeeProfile') : t('toast.upgradeToSeePremium'),
       onPress: () => {
         router.push('/(tabs)/likes');
       },
     });
-  }, [showToast]);
+  }, [showToast, t]);
+
+  const showReactionToast = useCallback((reactorName: string, emoji: string, matchId: string) => {
+    showToast({
+      type: 'reaction',
+      title: t('toast.reactedWith', { name: reactorName, emoji }),
+      message: t('toast.tapToViewConversation'),
+      onPress: () => {
+        router.push(`/chat/${matchId}`);
+      },
+    });
+  }, [showToast, t]);
 
   const hideToast = useCallback(() => {
     setVisible(false);
@@ -67,7 +82,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ToastContext.Provider value={{ showToast, showMessageToast, showLikeToast, hideToast }}>
+    <ToastContext.Provider value={{ showToast, showMessageToast, showLikeToast, showReactionToast, hideToast }}>
       {children}
       {currentToast && (
         <Toast

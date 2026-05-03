@@ -1,10 +1,14 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import { AppState, AppStateStatus, InteractionManager } from 'react-native';
 import { router } from 'expo-router';
+import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
-import { initializeEncryption } from '@/lib/encryption';
-// import { setUser as setSentryUser } from '@/lib/sentry'; // Temporarily disabled
+import { initializeEncryption, deleteEncryptionKeys } from '@/lib/encryption';
+import { setUser as setSentryUser } from '@/lib/sentry';
 import { identifyUser, resetUser, trackUserAction } from '@/lib/analytics';
+import { removePushToken } from '@/lib/notifications';
+import { clearSignedUrlCache } from '@/lib/signed-urls';
 
 interface AuthContextType {
   user: User | null;
@@ -36,6 +40,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const appState = useRef<AppStateStatus>(AppState.currentState);
+  const lastLocationUpdate = useRef<number>(0);
 
   useEffect(() => {
     // Get initial session
@@ -54,12 +60,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       // Update user identity in PostHog
       if (session?.user) {
-        // setSentryUser({ id: session.user.id }); // Temporarily disabled
-        identifyUser(session.user.id, {
-          email: session.user.email,
-        });
+        setSentryUser({ id: session.user.id });
+        identifyUser(session.user.id);
       } else {
-        // setSentryUser(null); // Temporarily disabled
+        setSentryUser(null);
         resetUser();
       }
     });
@@ -67,31 +71,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => subscription.unsubscribe();
   }, []);
 
-  // CRITICAL SAFETY: Check if user is banned
+  // CRITICAL SAFETY: Check if user is banned.
+  // One-shot per session — token-refresh events change the user reference
+  // and would otherwise re-fire this. index.tsx already runs the primary
+  // ban check (rpc/is_banned) on cold start; this is the secondary safeguard
+  // for users banned mid-session.
+  const banCheckedFor = useRef<string | null>(null);
   useEffect(() => {
+    if (!user) {
+      banCheckedFor.current = null;
+      return;
+    }
+    if (banCheckedFor.current === user.id) return;
+
     const checkBanStatus = async () => {
-      if (!user) return;
-
       try {
-        // Get user's profile ID (use maybeSingle - user might not have a profile yet)
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (!profile) return;
-
-        // Check if banned by user_id or profile_id
+        // Query bans directly by banned_user_id — avoids the redundant
+        // profile.id lookup that ProfileDataContext is already doing in
+        // parallel. We don't need to also check banned_profile_id here:
+        // a profile-level ban always sets banned_user_id too (see
+        // admin-ban-user edge function), so user_id alone catches both
+        // cases. Removing the profile fetch removes one launch-time GET
+        // that was contributing to the saveCheckpoint queue stall.
         const { data: banData } = await supabase
           .from('bans')
           .select('id, ban_reason')
-          .or(`banned_user_id.eq.${user.id},banned_profile_id.eq.${profile.id}`)
+          .eq('banned_user_id', user.id)
           .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
           .maybeSingle();
 
         if (banData) {
-          console.log('🚨 USER IS BANNED - redirecting to banned screen');
           // Sign out the banned user
           await supabase.auth.signOut();
           // Redirect to banned screen with user info
@@ -99,30 +108,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             pathname: '/(auth)/banned',
             params: { userId: user.id }
           });
+          return;
         }
+        banCheckedFor.current = user.id;
       } catch (error) {
         console.error('Error checking ban status:', error);
       }
     };
 
+    // Run ban check immediately — security takes priority over startup performance.
     checkBanStatus();
   }, [user]);
 
   // Initialize encryption keys for authenticated users
   // Uses deterministic key derivation so the same user gets identical keys on iOS/Android
   // CRITICAL: This ensures cross-platform messaging works correctly
+  // PERFORMANCE: Deferred to avoid blocking cold start.
+  // One-shot per session — once we've verified/synced the encryption key for
+  // this user.id, don't run again. Token refresh events change the user
+  // object reference and would otherwise re-fire this effect, contributing to
+  // the launch-time GET+PATCH flood that was stalling saveCheckpoint.
+  const encryptionSyncedFor = useRef<string | null>(null);
   useEffect(() => {
+    if (!user) {
+      encryptionSyncedFor.current = null;
+      return;
+    }
+    if (encryptionSyncedFor.current === user.id) return;
+
     const setupEncryption = async () => {
-      if (!user) return;
-
       try {
-        // Always initialize encryption - this uses deterministic keys based on userId
-        // So the same user gets the same keys on any device (iOS/Android)
-        console.log('🔐 Initializing deterministic encryption keys...');
         const publicKey = await initializeEncryption(user.id);
-        console.log('🔑 Derived public key:', publicKey.substring(0, 16) + '...');
 
-        // Store public key in user's profile (use maybeSingle - profile might not exist yet)
         const { data: profile } = await supabase
           .from('profiles')
           .select('id, encryption_public_key')
@@ -130,36 +147,152 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           .maybeSingle();
 
         if (profile) {
-          // CRITICAL FIX: ALWAYS force update the encryption key in the database
-          // This fixes users who had old random keys that don't match deterministic derivation
-          // Without this, iOS/Android users can't read each other's messages
-          const currentDbKey = profile.encryption_public_key;
-          const keysMatch = currentDbKey === publicKey;
+          if (profile.encryption_public_key !== publicKey) {
+            const { error: updateError } = await supabase
+              .from('profiles')
+              .update({ encryption_public_key: publicKey })
+              .eq('id', profile.id);
 
-          if (!keysMatch) {
-            console.log('⚠️ Database key mismatch detected!');
-            console.log('   DB key:', currentDbKey ? currentDbKey.substring(0, 16) + '...' : 'NULL');
-            console.log('   Correct key:', publicKey.substring(0, 16) + '...');
+            if (updateError) {
+              console.error('❌ Failed to update encryption key:', updateError);
+              return; // don't mark as synced if the write failed
+            }
           }
-
-          // Always update to ensure consistency across platforms
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ encryption_public_key: publicKey })
-            .eq('id', profile.id);
-
-          if (updateError) {
-            console.error('❌ Failed to update encryption key:', updateError);
-          } else {
-            console.log('✅ Encryption public key synced to database');
-          }
+          encryptionSyncedFor.current = user.id;
         }
       } catch (error) {
         console.error('Error setting up encryption:', error);
       }
     };
 
-    setupEncryption();
+    InteractionManager.runAfterInteractions(() => {
+      setupEncryption();
+    });
+  }, [user]);
+
+  // Automatic location refresh when app comes to foreground
+  // This ensures users always show their true/live GPS location
+  // PERFORMANCE: Deferred to avoid blocking cold start on low-RAM devices
+  useEffect(() => {
+    const refreshLocation = async () => {
+      if (!user) return;
+
+      // Throttle updates: only refresh if 5+ minutes have passed since last update
+      const now = Date.now();
+      const minInterval = 5 * 60 * 1000; // 5 minutes
+      if (now - lastLocationUpdate.current < minInterval) {
+        return;
+      }
+
+      try {
+        // Check if we have permission
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          return;
+        }
+
+        // PERFORMANCE: Use Balanced accuracy instead of High for faster GPS lock
+        // High accuracy can take 5-10+ seconds on poor signal; Balanced is usually <2s
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+        // Validate accuracy - reject if too inaccurate (> 500 meters for balanced)
+        if (location.coords.accuracy && location.coords.accuracy > 500) {
+          return;
+        }
+
+        // Reverse geocode to get city/state
+        const reverseGeocode = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        const addressInfo = reverseGeocode[0];
+        if (!addressInfo) {
+          return;
+        }
+
+        const city = addressInfo.city || addressInfo.subregion || addressInfo.district || '';
+        const state = addressInfo.region || '';
+        const country = addressInfo.country || addressInfo.isoCountryCode || '';
+
+        // Get profile ID
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, latitude, longitude')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!profile) {
+          return;
+        }
+
+        // Check if location has changed significantly (> 500 meters for balanced accuracy)
+        if (profile.latitude && profile.longitude) {
+          const latDiff = Math.abs(profile.latitude - location.coords.latitude);
+          const lonDiff = Math.abs(profile.longitude - location.coords.longitude);
+          // Roughly 0.005 degrees = ~500 meters
+          if (latDiff < 0.005 && lonDiff < 0.005) {
+            lastLocationUpdate.current = now;
+            return;
+          }
+        }
+
+        // Update profile with new location
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            location_city: city,
+            location_state: state,
+            location_country: country,
+            last_active_at: new Date().toISOString(),
+          })
+          .eq('id', profile.id);
+
+        if (updateError) {
+          console.error('❌ Failed to update location:', updateError);
+        } else {
+          lastLocationUpdate.current = now;
+        }
+      } catch (error) {
+        console.error('Error refreshing location:', error);
+      }
+    };
+
+    // Listen for app state changes
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      // When app goes to background, clear signed URL cache
+      if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
+        clearSignedUrlCache();
+      }
+
+      // When app comes to foreground, refresh location
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // Fix: Don't await - let it run in background to prevent ANR
+        // GPS calls can take 5-10 seconds and will block Activity launch if awaited
+        refreshLocation().catch(err => console.error('Background location refresh failed:', err));
+      }
+      appState.current = nextAppState;
+    });
+
+    // PERFORMANCE: Defer initial location refresh until AFTER first render
+    // This prevents GPS calls from blocking cold start on low-RAM devices
+    // GPS can take 5-10 seconds and was causing 87% slow cold-start rate
+    if (user) {
+      InteractionManager.runAfterInteractions(() => {
+        // Additional delay to ensure UI is fully rendered first
+        setTimeout(() => {
+          refreshLocation().catch(err => console.error('Initial location refresh failed:', err));
+        }, 3000); // 3 second delay after interactions complete
+      });
+    }
+
+    return () => {
+      subscription.remove();
+    };
   }, [user]);
 
   const signIn = async (email: string, password: string) => {
@@ -191,11 +324,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const signOut = async () => {
+    // Capture user ID before clearing state for cleanup
+    const userId = user?.id;
+
+    // Clear state immediately so components stop making authenticated requests
+    // before the server-side token revocation completes (prevents 401 race condition)
+    setUser(null);
+    setSession(null);
+
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
 
     // Track sign out
     trackUserAction.signOut();
+
+    // Non-blocking cleanup: remove push token, encryption keys, signed URL cache
+    if (userId) {
+      Promise.allSettled([
+        removePushToken(userId),
+        deleteEncryptionKeys(userId),
+        Promise.resolve(clearSignedUrlCache()),
+      ]).catch(() => {});
+    }
+
+    // Clear persisted onboarding draft so the next user on this device doesn't
+    // inherit the previous user's in-progress answers.
+    try {
+      const { useOnboardingStore } = await import('@/stores/onboardingStore');
+      useOnboardingStore.getState().reset();
+    } catch {}
   };
 
   const sendPasswordResetEmail = async (email: string) => {

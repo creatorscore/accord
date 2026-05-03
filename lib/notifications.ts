@@ -1,5 +1,27 @@
 import { Platform, LogBox } from 'react-native';
 import { supabase } from './supabase';
+import Constants from 'expo-constants';
+/**
+ * Obfuscate a UUID for push notification payloads.
+ * Push payloads can be intercepted on the device; base64-encoding IDs
+ * prevents casual inspection from revealing raw Supabase UUIDs.
+ */
+export function obfuscateId(id: string): string {
+  // btoa is available in React Native (Hermes)
+  return btoa(id);
+}
+
+/**
+ * Deobfuscate an ID received from a push notification payload.
+ */
+export function deobfuscateId(encoded: string): string {
+  try {
+    return atob(encoded);
+  } catch {
+    // If decoding fails, return as-is (backward compat with old payloads)
+    return encoded;
+  }
+}
 
 // Suppress Expo Go notification warning (notifications work fine in dev/production builds)
 LogBox.ignoreLogs([
@@ -16,14 +38,15 @@ try {
   Device = require('expo-device');
 
   // Configure how notifications are handled when app is in foreground
+  // Set shouldShowAlert to FALSE so push banners don't appear - we show in-app toasts instead
   if (Notifications) {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
+        shouldShowAlert: false,  // Don't show system push banner (we use in-app toasts)
+        shouldPlaySound: false,  // Don't play sound (in-app toast handles this)
+        shouldSetBadge: true,    // Still update badge count
+        shouldShowBanner: false, // No system banner
+        shouldShowList: false,   // Don't add to notification center when in foreground
       }),
     });
   }
@@ -70,39 +93,62 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 export async function registerForPushNotifications(): Promise<string | null> {
   try {
     // Check if notifications are available
-    if (!Notifications || !Device) {
+    if (!Notifications) {
       return null;
     }
 
-    // Only works on physical devices
-    if (!Device.isDevice) {
+    // Check if running on a physical device
+    if (!Device?.isDevice) {
       return null;
     }
 
-    // Request permissions first
-    const hasPermission = await requestNotificationPermissions();
-    if (!hasPermission) {
-      return null;
-    }
-
-    // Configure notification channel for Android FIRST
+    // Configure notification channel for Android FIRST (required for Android 13+)
+    // This MUST be done before requesting permissions or getting token
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Default',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#9B87CE',
+        lightColor: '#A08AB7',
+        sound: 'notification_sound.wav',
+        enableVibrate: true,
       });
     }
 
-    // Get the push token (FCM will be used automatically if google-services.json exists)
+    // Request permissions
+    const hasPermission = await requestNotificationPermissions();
+    if (!hasPermission) {
+      return null;
+    }
+
+    // Get project ID from Constants (recommended by Expo)
+    const projectId =
+      Constants?.expoConfig?.extra?.eas?.projectId ??
+      Constants?.easConfig?.projectId ??
+      '71ca414e-ff65-488b-97f6-9150455475a0'; // Fallback to hardcoded
+
+    // First try to get the device push token (raw FCM/APNs token) for debugging
+    try {
+      const deviceToken = await Notifications.getDevicePushTokenAsync();
+    } catch (deviceTokenError: any) {
+      console.error('[Push] Failed to get device token:', deviceTokenError?.message);
+      // Continue anyway - Expo token might still work
+    }
+
+    // Get the Expo push token
     const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: '71ca414e-ff65-488b-97f6-9150455475a0',
+      projectId,
     });
+
+    if (!tokenData?.data) {
+      console.error('[Push] Token data is empty');
+      return null;
+    }
 
     return tokenData.data;
   } catch (error: any) {
-    console.error('Push notifications setup failed:', error?.message);
+    console.error('[Push] Setup failed:', error?.message);
+    console.error('[Push] Error details:', JSON.stringify(error, null, 2));
     return null;
   }
 }
@@ -203,7 +249,7 @@ export async function ensurePushTokenSaved(userId: string, token: string): Promi
       .select('id')
       .eq('profile_id', profile.id)
       .eq('push_token', token)
-      .single();
+      .maybeSingle();
 
     // Token is already saved in new system
     if (deviceToken) {
@@ -282,12 +328,13 @@ export async function sendPushNotification(
   try {
     const message = {
       to: pushToken,
-      sound: 'default',
+      sound: 'notification_sound.wav',
       title,
       body,
       data,
       priority: 'high' as const,
       badge: 1,
+      channelId: 'default',
     };
 
     // Add timeout to prevent hanging
@@ -366,15 +413,19 @@ export async function sendMatchNotification(
       return;
     }
 
-    // Send notification to all devices
+    // Lock-screen safe: generic text that doesn't reveal names or relationship context
+    const title = 'You have a new connection!';
+    const body = 'Open Accord to see who it is.';
+
+    // Send notification to all devices (obfuscate IDs in payload)
     const notificationPromises = Array.from(tokens).map(token =>
       sendPushNotification(
         token,
-        "It's a Match! 💜",
-        `You matched with ${matcherName}! Start chatting now.`,
+        title,
+        body,
         {
           type: 'new_match',
-          matchId,
+          matchId: obfuscateId(matchId),
           screen: 'matches',
         }
       )
@@ -383,13 +434,14 @@ export async function sendMatchNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: logError } = await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_match',
-      title: "It's a Match! 💜",
-      body: `You matched with ${matcherName}! Start chatting now.`,
+      title,
+      body,
       data: { matchId, type: 'new_match' },
     });
+    if (logError) console.error('Failed to log new_match notification:', logError);
   } catch (error) {
     console.error('Error sending match notification:', error);
   }
@@ -426,7 +478,6 @@ export async function sendMessageNotification(
       const secondsSinceActive = (now.getTime() - lastActive.getTime()) / 1000;
 
       if (secondsSinceActive < 60) {
-        console.log(`Skipping push notification for ${recipientProfileId} - user active ${Math.round(secondsSinceActive)}s ago`);
         return;
       }
     }
@@ -450,20 +501,19 @@ export async function sendMessageNotification(
       return;
     }
 
-    // Truncate message preview
-    const preview = messagePreview.length > 50
-      ? messagePreview.substring(0, 50) + '...'
-      : messagePreview;
+    // Lock-screen safe: no names or message content visible on lock screen
+    const title = 'You have a new message';
+    const body = 'Open Accord to read it.';
 
-    // Send notification to all devices
+    // Send notification to all devices (obfuscate IDs in payload)
     const notificationPromises = Array.from(tokens).map(token =>
       sendPushNotification(
         token,
-        `New message from ${senderName}`,
-        preview,
+        title,
+        body,
         {
           type: 'new_message',
-          matchId,
+          matchId: obfuscateId(matchId),
           screen: 'chat',
         }
       )
@@ -472,15 +522,104 @@ export async function sendMessageNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: msgLogError } = await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_message',
-      title: `New message from ${senderName}`,
-      body: preview,
+      title,
+      body,
       data: { matchId, type: 'new_message' },
     });
+    if (msgLogError) console.error('Failed to log new_message notification:', msgLogError);
   } catch (error) {
     console.error('Error sending message notification:', error);
+  }
+}
+
+/**
+ * Send notification when someone reacts to your message with an emoji
+ * Sends to ALL devices for the user (multi-device support)
+ * Skips push notification if user was recently active (likely already in-app)
+ */
+export async function sendReactionNotification(
+  recipientProfileId: string,
+  reactorName: string,
+  emoji: string,
+  matchId: string
+): Promise<void> {
+  try {
+    // Get recipient's push settings and last active time
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('push_token, push_enabled, last_active_at')
+      .eq('id', recipientProfileId)
+      .single();
+
+    if (error || !profile?.push_enabled) {
+      return;
+    }
+
+    // Skip push notification if user was active within the last minute
+    // They're likely in the app and will see the in-app notification
+    if (profile.last_active_at) {
+      const lastActive = new Date(profile.last_active_at);
+      const now = new Date();
+      const secondsSinceActive = (now.getTime() - lastActive.getTime()) / 1000;
+
+      if (secondsSinceActive < 60) {
+        return;
+      }
+    }
+
+    // Get all device tokens for this user (new multi-device system)
+    const { data: deviceTokens } = await supabase
+      .from('device_tokens')
+      .select('push_token')
+      .eq('profile_id', recipientProfileId);
+
+    // Collect all tokens (from both device_tokens and profiles.push_token)
+    const tokens = new Set<string>();
+    if (deviceTokens) {
+      deviceTokens.forEach(dt => tokens.add(dt.push_token));
+    }
+    if (profile.push_token) {
+      tokens.add(profile.push_token);
+    }
+
+    if (tokens.size === 0) {
+      return;
+    }
+
+    // Lock-screen safe: no names visible
+    const title = 'New reaction';
+    const body = 'Someone reacted to your message.';
+
+    // Send notification to all devices (obfuscate IDs in payload)
+    const notificationPromises = Array.from(tokens).map(token =>
+      sendPushNotification(
+        token,
+        title,
+        body,
+        {
+          type: 'message_reaction',
+          matchId: obfuscateId(matchId),
+          screen: 'chat',
+        }
+      )
+    );
+
+    await Promise.allSettled(notificationPromises);
+
+    // Log notification (once per user, not per device)
+    const { error: rxnLogError } = await supabase.from('push_notifications').insert({
+      profile_id: recipientProfileId,
+      notification_type: 'message_reaction',
+      title,
+      body,
+      data: { matchId, type: 'message_reaction', emoji },
+    });
+    if (rxnLogError) console.error('Failed to log message_reaction notification:', rxnLogError);
+  } catch (error) {
+    console.error('Error sending reaction notification:', error);
   }
 }
 
@@ -528,24 +667,23 @@ export async function sendLikeNotification(
 
     const isPremium = profile.is_premium || profile.is_platinum;
 
-    // Different messaging based on subscription status
+    // Lock-screen safe: no names visible regardless of subscription tier
+    // Names are shown in-app only, not on lock screen where others might see
     let title: string;
     let body: string;
     let screen: string;
 
     if (isPremium) {
-      // Premium users: Show who liked them
-      title = `${likerName} likes you! 💜`;
-      body = 'See who liked you and match instantly.';
+      title = 'Someone is interested in you!';
+      body = 'Open Accord to see who likes you.';
       screen = 'likes';
     } else {
-      // Free users: FOMO message to drive upgrades
-      title = 'Someone likes you! 💜';
-      body = 'Upgrade to Premium to see who liked you and match instantly.';
+      title = 'Someone is interested in you!';
+      body = 'Open Accord to find out more.';
       screen = 'likes'; // Will show paywall when they tap
     }
 
-    // Send notification to all devices
+    // Send notification to all devices (obfuscate IDs in payload)
     const notificationPromises = Array.from(tokens).map(token =>
       sendPushNotification(
         token,
@@ -553,7 +691,7 @@ export async function sendLikeNotification(
         body,
         {
           type: 'new_like',
-          likerProfileId: isPremium ? likerProfileId : undefined, // Only send ID to premium users
+          likerProfileId: isPremium ? obfuscateId(likerProfileId) : undefined, // Only send ID to premium users
           screen,
           isPremium,
         }
@@ -563,7 +701,7 @@ export async function sendLikeNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: likeLogError } = await supabase.from('push_notifications').insert({
       profile_id: recipientProfileId,
       notification_type: 'new_like',
       title,
@@ -574,6 +712,7 @@ export async function sendLikeNotification(
         isPremium,
       },
     });
+    if (likeLogError) console.error('Failed to log new_like notification:', likeLogError);
   } catch (error) {
     console.error('Error sending like notification:', error);
   }
@@ -593,6 +732,48 @@ export function setupNotificationListener(
   return Notifications.addNotificationResponseReceivedListener((response: any) => {
     const data = response.notification.request.content.data;
     onNotificationTap(data);
+  });
+}
+
+/**
+ * Listen for push token changes at runtime
+ * CRITICAL: FCM can rotate tokens silently while the app is running.
+ * When this happens, the old token becomes invalid (DeviceNotRegistered error).
+ * This listener ensures we always have the latest valid token in the database.
+ *
+ * From Expo docs: "In rare situations, a push token may be changed by the push
+ * notification service while the app is running. When a token is rolled, the old
+ * one becomes invalid and sending notifications to it will fail."
+ */
+export function addPushTokenChangeListener(
+  onTokenChange: (token: string) => void
+): any {
+  if (!Notifications) {
+    return { remove: () => {} }; // Return mock subscription
+  }
+
+  return Notifications.addPushTokenListener((tokenData: any) => {
+
+    if (tokenData?.data) {
+      // The listener gives us the raw FCM/APNs token, but we need Expo token
+      // We'll re-fetch the Expo push token to ensure consistency
+      (async () => {
+        try {
+          const projectId =
+            Constants?.expoConfig?.extra?.eas?.projectId ??
+            Constants?.easConfig?.projectId ??
+            '71ca414e-ff65-488b-97f6-9150455475a0';
+
+          const expoPushToken = await Notifications.getExpoPushTokenAsync({ projectId });
+
+          if (expoPushToken?.data) {
+            onTokenChange(expoPushToken.data);
+          }
+        } catch (error) {
+          console.error('[Push] Error getting Expo token after device token change:', error);
+        }
+      })();
+    }
   });
 }
 
@@ -663,13 +844,14 @@ export async function sendReportActionNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: reportLogError } = await supabase.from('push_notifications').insert({
       profile_id: reporterProfileId,
       notification_type: 'report_action',
       title,
       body,
       data: { type: 'report_action', action },
     });
+    if (reportLogError) console.error('Failed to log report_action notification:', reportLogError);
   } catch (error) {
     console.error('Error sending report action notification:', error);
   }
@@ -681,18 +863,51 @@ export async function sendReportActionNotification(
  */
 export async function sendBanNotification(
   bannedProfileId: string,
-  banReason: string
+  banReason: string,
+  userEmail?: string, // Optional email parameter
+  prefetchedProfile?: { push_token: string | null; push_enabled: boolean; display_name: string } | null,
 ): Promise<void> {
   try {
-    // Get banned user's push settings
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('push_token, push_enabled, display_name')
-      .eq('id', bannedProfileId)
-      .single();
+    // Use pre-fetched profile data if available (avoids RLS issue after ban deactivates the profile)
+    let profile = prefetchedProfile ?? null;
+    if (!profile) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('push_token, push_enabled, display_name')
+        .eq('id', bannedProfileId)
+        .maybeSingle();
 
-    if (error || !profile?.push_enabled) {
+      if (error) {
+        console.error('Error fetching profile for ban notification:', error);
+        return;
+      }
+      profile = data;
+    }
+
+    if (!profile) {
+      console.warn('Profile not found for ban notification — may already be deactivated');
       return;
+    }
+
+    // Send ban email notification if email provided
+    if (userEmail) {
+      try {
+        await supabase.functions.invoke('send-ban-email', {
+          body: {
+            email: userEmail,
+            displayName: profile.display_name,
+            banReason: banReason,
+          },
+        });
+      } catch (emailError) {
+        console.warn('Failed to send ban email (non-critical):', emailError);
+        // Continue with push notification even if email fails
+      }
+    }
+
+    // Send push notifications (if enabled)
+    if (!profile?.push_enabled) {
+      return; // Email sent, but no push notifications
     }
 
     // Get all device tokens for this user (new multi-device system)
@@ -731,13 +946,14 @@ export async function sendBanNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: banLogError } = await supabase.from('push_notifications').insert({
       profile_id: bannedProfileId,
       notification_type: 'account_banned',
       title: 'Account Restricted',
       body: 'Your Accord account has been restricted. If you believe this is an error, please contact support at hello@joinaccord.app.',
       data: { type: 'account_banned', banReason },
     });
+    if (banLogError) console.error('Failed to log account_banned notification:', banLogError);
   } catch (error) {
     console.error('Error sending ban notification:', error);
   }
@@ -850,13 +1066,14 @@ export async function sendPhotoReviewNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: photoLogError } = await supabase.from('push_notifications').insert({
       profile_id: profileId,
       notification_type: 'photo_review_required',
       title,
       body,
       data: { type: 'photo_review_required', reason },
     });
+    if (photoLogError) console.error('Failed to log photo_review_required notification:', photoLogError);
   } catch (error) {
     console.error('Error sending photo review notification:', error);
   }
@@ -922,13 +1139,14 @@ export async function sendIdentityVerificationNotification(
     await Promise.allSettled(notificationPromises);
 
     // Log notification (once per user, not per device)
-    await supabase.from('push_notifications').insert({
+    const { error: verifyLogError } = await supabase.from('push_notifications').insert({
       profile_id: profileId,
       notification_type: 'identity_verification_required',
       title,
       body,
       data: { type: 'identity_verification_required', reason },
     });
+    if (verifyLogError) console.error('Failed to log identity_verification_required notification:', verifyLogError);
   } catch (error) {
     console.error('Error sending identity verification notification:', error);
   }

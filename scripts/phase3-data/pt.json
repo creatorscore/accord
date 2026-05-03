@@ -1,0 +1,165 @@
+{
+  "genders": {
+    "man": "Homem",
+    "woman": "Mulher",
+    "non_binary": "Não-binárie"
+  },
+  "pronouns": {
+    "she_her": "ela",
+    "he_him": "ele",
+    "they_them": "elu",
+    "she_they": "ela/elu",
+    "he_they": "ele/elu",
+    "any_pronouns": "qualquer pronome",
+    "ask_me": "me pergunte",
+    "prefer_not_to_say": "prefiro não dizer"
+  },
+  "orientations": {
+    "lesbian": "Lésbica",
+    "gay": "Gay",
+    "bisexual": "Bissexual",
+    "straight": "Hétero",
+    "queer": "Queer",
+    "asexual": "Assexual",
+    "pansexual": "Pansexual",
+    "demisexual": "Demissexual",
+    "questioning": "Em descoberta",
+    "omnisexual": "Omnissexual",
+    "polysexual": "Polissexual",
+    "androsexual": "Androssexual",
+    "gynesexual": "Ginessexual",
+    "sapiosexual": "Sapiossexual",
+    "heteroflexible": "Heteroflexível",
+    "homoflexible": "Homoflexível",
+    "prefer_not_to_say": "Prefiro não dizer",
+    "other": "Outro"
+  },
+  "genderPrefs": {
+    "men": "Homens",
+    "women": "Mulheres",
+    "non_binary": "Pessoas não-bináries",
+    "everyone": "Todes"
+  },
+  "ethnicities": {
+    "asian": "Asiática",
+    "black_african": "Negra/Africana",
+    "hispanic_latinx": "Hispânica/Latine",
+    "indigenous_native": "Indígena",
+    "middle_eastern_north_african": "Oriente Médio/Norte da África",
+    "pacific_islander": "Ilhas do Pacífico",
+    "south_asian": "Sul-asiática",
+    "white_caucasian": "Branca/Caucasiana",
+    "multiracial": "Multirracial",
+    "other": "Outra",
+    "prefer_not_to_say": "Prefiro não dizer"
+  },
+  "religions": {
+    "christian": "Cristã",
+    "catholic": "Católica",
+    "protestant": "Protestante",
+    "muslim": "Muçulmana",
+    "jewish": "Judia",
+    "hindu": "Hindu",
+    "buddhist": "Budista",
+    "sikh": "Sikh",
+    "atheist": "Ateia",
+    "agnostic": "Agnóstica",
+    "spiritual_but_not_religious": "Espiritualizada, não religiosa",
+    "other": "Outra",
+    "prefer_not_to_say": "Prefiro não dizer"
+  },
+  "politicalViews": {
+    "liberal": "Liberal",
+    "progressive": "Progressista",
+    "moderate": "Moderada",
+    "conservative": "Conservadora",
+    "libertarian": "Libertária",
+    "socialist": "Socialista",
+    "apolitical": "Apolítica",
+    "other": "Outra",
+    "prefer_not_to_say": "Prefiro não dizer"
+  },
+  "relationshipTypes": {
+    "platonic": "Só platônica",
+    "romantic": "Possivelmente romântica",
+    "open": "Arranjo aberto"
+  },
+  "primaryReasons": {
+    "financial": "Estabilidade financeira",
+    "immigration": "Imigração/Visto",
+    "family_pressure": "Pressão familiar",
+    "legal_benefits": "Benefícios legais",
+    "companionship": "Companhia",
+    "safety": "Segurança e proteção",
+    "other": "Outro"
+  },
+  "childrenOptions": {
+    "yes": "Sim",
+    "no": "Não",
+    "maybe": "Talvez / Aberto"
+  },
+  "familyPlans": {
+    "biological": "Filhos biológicos",
+    "adoption": "Adoção",
+    "surrogacy": "Barriga de aluguel",
+    "ivf": "FIV/Tratamentos de fertilidade",
+    "co_parenting": "Coparentalidade",
+    "fostering": "Acolhimento familiar",
+    "already_have": "Já tenho filhos",
+    "open_discussion": "Aberto a conversar",
+    "other": "Outro"
+  },
+  "petsOptions": {
+    "love_them": "Amo",
+    "like_them": "Gosto",
+    "indifferent": "Indiferente",
+    "allergic": "Alérgique",
+    "dont_like": "Não gosto"
+  },
+  "housingPrefs": {
+    "separate_spaces": "Quartos/espaços separados",
+    "roommates": "Como colegas de casa",
+    "separate_homes": "Casas separadas por perto",
+    "shared_bedroom": "Quarto compartilhado",
+    "flexible": "Flexível/negociável"
+  },
+  "financialArr": {
+    "separate": "Finanças separadas",
+    "shared_expenses": "Dividir despesas",
+    "joint": "Finanças conjuntas",
+    "prenup_required": "Pacto antenupcial exigido",
+    "flexible": "Flexível/negociável"
+  },
+  "educationLevels": {
+    "high_school": "Ensino médio",
+    "associates": "Curso técnico",
+    "bachelors": "Graduação",
+    "masters": "Mestrado",
+    "doctorate": "Doutorado",
+    "trade_school": "Escola profissionalizante",
+    "self_taught": "Autodidata",
+    "other": "Outro"
+  },
+  "drinkingOptions": {
+    "never": "Nunca",
+    "socially": "Socialmente",
+    "regularly": "Regularmente",
+    "prefer_not_to_say": "Prefiro não dizer"
+  },
+  "smokingOptions": {
+    "never": "Nunca",
+    "socially": "Socialmente",
+    "regularly": "Regularmente",
+    "trying_to_quit": "Tentando parar"
+  },
+  "weedOptions": {
+    "never": "Nunca",
+    "socially": "Socialmente",
+    "regularly": "Regularmente"
+  },
+  "drugOptions": {
+    "never": "Nunca",
+    "socially": "Socialmente",
+    "regularly": "Regularmente"
+  }
+}

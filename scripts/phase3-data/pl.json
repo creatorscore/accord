@@ -1,0 +1,165 @@
+{
+  "genders": {
+    "man": "Mężczyzna",
+    "woman": "Kobieta",
+    "non_binary": "Osoba niebinarna"
+  },
+  "pronouns": {
+    "she_her": "ona/jej",
+    "he_him": "on/jego",
+    "they_them": "onu/jenu",
+    "she_they": "ona/onu",
+    "he_they": "on/onu",
+    "any_pronouns": "dowolne zaimki",
+    "ask_me": "zapytaj mnie",
+    "prefer_not_to_say": "wolę nie mówić"
+  },
+  "orientations": {
+    "lesbian": "Lesbijka",
+    "gay": "Gej",
+    "bisexual": "Osoba biseksualna",
+    "straight": "Hetero",
+    "queer": "Queer",
+    "asexual": "Osoba aseksualna",
+    "pansexual": "Osoba panseksualna",
+    "demisexual": "Osoba demiseksualna",
+    "questioning": "W trakcie odkrywania",
+    "omnisexual": "Osoba omniseksualna",
+    "polysexual": "Osoba poliseksualna",
+    "androsexual": "Osoba androseksualna",
+    "gynesexual": "Osoba gyneseksualna",
+    "sapiosexual": "Osoba sapioseksualna",
+    "heteroflexible": "Heteroelastyczność",
+    "homoflexible": "Homoelastyczność",
+    "prefer_not_to_say": "Wolę nie mówić",
+    "other": "Inna"
+  },
+  "genderPrefs": {
+    "men": "Mężczyźni",
+    "women": "Kobiety",
+    "non_binary": "Osoby niebinarne",
+    "everyone": "Wszyscy"
+  },
+  "ethnicities": {
+    "asian": "Azjatyckie",
+    "black_african": "Czarne/Afrykańskie",
+    "hispanic_latinx": "Latynoskie",
+    "indigenous_native": "Rdzenne",
+    "middle_eastern_north_african": "Bliski Wschód/Afryka Płn.",
+    "pacific_islander": "Wysp Pacyfiku",
+    "south_asian": "Południowoazjatyckie",
+    "white_caucasian": "Białe/Kaukaskie",
+    "multiracial": "Wieloetniczne",
+    "other": "Inne",
+    "prefer_not_to_say": "Wolę nie mówić"
+  },
+  "religions": {
+    "christian": "Chrześcijaństwo",
+    "catholic": "Katolicyzm",
+    "protestant": "Protestantyzm",
+    "muslim": "Islam",
+    "jewish": "Judaizm",
+    "hindu": "Hinduizm",
+    "buddhist": "Buddyzm",
+    "sikh": "Sikhizm",
+    "atheist": "Ateizm",
+    "agnostic": "Agnostycyzm",
+    "spiritual_but_not_religious": "Duchowość bez religii",
+    "other": "Inna",
+    "prefer_not_to_say": "Wolę nie mówić"
+  },
+  "politicalViews": {
+    "liberal": "Liberalne",
+    "progressive": "Progresywne",
+    "moderate": "Umiarkowane",
+    "conservative": "Konserwatywne",
+    "libertarian": "Libertariańskie",
+    "socialist": "Socjalistyczne",
+    "apolitical": "Apolityczne",
+    "other": "Inne",
+    "prefer_not_to_say": "Wolę nie mówić"
+  },
+  "relationshipTypes": {
+    "platonic": "Tylko platonicznie",
+    "romantic": "Możliwy romans",
+    "open": "Otwarty układ"
+  },
+  "primaryReasons": {
+    "financial": "Stabilność finansowa",
+    "immigration": "Imigracja/wiza",
+    "family_pressure": "Presja rodziny",
+    "legal_benefits": "Korzyści prawne",
+    "companionship": "Towarzystwo",
+    "safety": "Bezpieczeństwo i ochrona",
+    "other": "Inne"
+  },
+  "childrenOptions": {
+    "yes": "Tak",
+    "no": "Nie",
+    "maybe": "Może / Otwarcie"
+  },
+  "familyPlans": {
+    "biological": "Dzieci biologiczne",
+    "adoption": "Adopcja",
+    "surrogacy": "Surogacja",
+    "ivf": "In vitro/leczenie płodności",
+    "co_parenting": "Wspólne rodzicielstwo",
+    "fostering": "Piecza zastępcza",
+    "already_have": "Mam już dzieci",
+    "open_discussion": "Otwarte na rozmowę",
+    "other": "Inne"
+  },
+  "petsOptions": {
+    "love_them": "Uwielbiam",
+    "like_them": "Lubię",
+    "indifferent": "Obojętne",
+    "allergic": "Alergia",
+    "dont_like": "Nie lubię"
+  },
+  "housingPrefs": {
+    "separate_spaces": "Osobne pokoje/przestrzenie",
+    "roommates": "Jak współlokatorzy",
+    "separate_homes": "Osobne domy w pobliżu",
+    "shared_bedroom": "Wspólna sypialnia",
+    "flexible": "Elastycznie/do ustalenia"
+  },
+  "financialArr": {
+    "separate": "Osobne finanse",
+    "shared_expenses": "Wspólne rachunki/wydatki",
+    "joint": "Wspólne finanse",
+    "prenup_required": "Intercyza wymagana",
+    "flexible": "Elastycznie/do ustalenia"
+  },
+  "educationLevels": {
+    "high_school": "Liceum",
+    "associates": "Studium pomaturalne",
+    "bachelors": "Licencjat",
+    "masters": "Magister",
+    "doctorate": "Doktorat",
+    "trade_school": "Szkoła zawodowa",
+    "self_taught": "Samouk",
+    "other": "Inne"
+  },
+  "drinkingOptions": {
+    "never": "Nigdy",
+    "socially": "Towarzysko",
+    "regularly": "Regularnie",
+    "prefer_not_to_say": "Wolę nie mówić"
+  },
+  "smokingOptions": {
+    "never": "Nigdy",
+    "socially": "Towarzysko",
+    "regularly": "Regularnie",
+    "trying_to_quit": "Rzucam"
+  },
+  "weedOptions": {
+    "never": "Nigdy",
+    "socially": "Towarzysko",
+    "regularly": "Regularnie"
+  },
+  "drugOptions": {
+    "never": "Nigdy",
+    "socially": "Towarzysko",
+    "regularly": "Regularnie"
+  }
+}

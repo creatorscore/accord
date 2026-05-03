@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,6 +9,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 export default function PhotoVerificationCard() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -42,15 +44,15 @@ export default function PhotoVerificationCard() {
   const takeSelfie = async () => {
     // Check if already verified
     if (isVerified) {
-      Alert.alert('Already Verified', 'Your photos are already verified!');
+      Alert.alert(t('verification.alreadyVerified'), t('verification.alreadyVerifiedMessage'));
       return;
     }
 
     // Check attempts
     if (attempts >= 5) {
       Alert.alert(
-        'Too Many Attempts',
-        'You have exceeded the maximum number of verification attempts (5). Please contact support at hello@joinaccord.app.'
+        t('verification.tooManyAttempts'),
+        t('verification.tooManyAttemptsMessage')
       );
       return;
     }
@@ -61,8 +63,8 @@ export default function PhotoVerificationCard() {
 
       if (!permissionResult.granted) {
         Alert.alert(
-          'Camera Permission Required',
-          'Please allow camera access to take a verification selfie.'
+          t('verification.cameraPermission'),
+          t('verification.cameraPermissionMessage')
         );
         return;
       }
@@ -70,7 +72,8 @@ export default function PhotoVerificationCard() {
       // Launch camera
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        // Disable cropping on Android — native canhub/cropper crashes on low-end devices
+        allowsEditing: Platform.OS === 'ios',
         aspect: [1, 1],
         quality: 0.8,
         base64: false, // We'll read the file directly
@@ -87,37 +90,52 @@ export default function PhotoVerificationCard() {
 
     } catch (error: any) {
       console.error('Error taking selfie:', error);
-      // TEMPORARY: Show actual error for debugging
-      Alert.alert('Selfie Error', `Stage: Camera/Image\n\nError: ${error?.message || error?.toString() || 'Unknown error'}`);
+      Alert.alert(t('verification.selfieError'), t('verification.selfieErrorMessage'));
     }
   };
 
   const verifySelfie = async (imageUri: string) => {
     setVerifying(true);
     try {
-      // Resize and compress image to reduce payload size
-      // AWS Rekognition works well with 800x800 images
-      console.log('📷 Resizing image for verification...');
-      const manipulated = await ImageManipulator.manipulateAsync(
-        imageUri,
-        [{ resize: { width: 800, height: 800 } }],
-        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-      );
+      // Step 1: Resize and compress image to reduce payload size
+      console.log('[Verification] Step 1: Resizing image...', imageUri);
+      let manipulated;
+      try {
+        manipulated = await ImageManipulator.manipulateAsync(
+          imageUri,
+          [{ resize: { width: 800, height: 800 } }],
+          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        console.log('[Verification] Resized OK:', manipulated.uri);
+      } catch (manipError: any) {
+        console.error('[Verification] ImageManipulator failed:', manipError);
+        throw new Error(`Image resize failed: ${manipError.message}`);
+      }
 
-      // Read resized image as base64
-      const base64 = await FileSystem.readAsStringAsync(manipulated.uri, {
-        encoding: 'base64',
-      });
+      // Step 2: Read resized image as base64
+      console.log('[Verification] Step 2: Reading as base64...');
+      let base64;
+      try {
+        base64 = await FileSystem.readAsStringAsync(manipulated.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        console.log('[Verification] Base64 length:', base64?.length || 0);
+      } catch (readError: any) {
+        console.error('[Verification] FileSystem read failed:', readError);
+        throw new Error(`File read failed: ${readError.message}`);
+      }
 
-      // Call Edge Function
-      console.log('📤 Calling photo-verification-start edge function...');
-      console.log('📷 Base64 length:', base64.length, '(~' + Math.round(base64.length / 1024) + ' KB)');
+      if (!base64 || base64.length === 0) {
+        throw new Error('Empty base64 image data');
+      }
 
+      // Step 3: Call Edge Function
+      console.log('[Verification] Step 3: Calling edge function...');
       const { data, error } = await supabase.functions.invoke('photo-verification-start', {
         body: { selfie_base64: base64 },
       });
 
-      console.log('📥 Edge function response:', { data, error });
+      console.log('[Verification] Response:', { data: data ? 'received' : 'null', error: error?.message || 'none' });
 
       if (error) {
         // Attach any additional data from the response to the error
@@ -140,17 +158,17 @@ export default function PhotoVerificationCard() {
       // Show result
       if (data.verified) {
         Alert.alert(
-          'Photos Verified! ✓',
-          `Your photos have been verified!\n\nMatch confidence: ${data.similarity}%\n\nYour profile now shows a verified badge.`,
-          [{ text: 'Awesome!' }]
+          t('verification.success'),
+          t('verification.successMessage', { similarity: data.similarity }),
+          [{ text: t('verification.awesome') }]
         );
       } else {
         Alert.alert(
-          'Verification Unsuccessful',
-          `${data.message}\n\nTo improve your chances:\n\n• Take your selfie in bright, natural daylight\n• Make sure your primary profile photo is recent\n• Face the camera directly\n• Remove sunglasses, hats, or masks\n• Avoid shadows on your face`,
+          t('verification.unsuccessful'),
+          t('verification.unsuccessfulMessage', { message: data.message }),
           [
-            { text: 'Try Again', onPress: takeSelfie },
-            { text: 'Cancel', style: 'cancel' }
+            { text: t('verification.tryAgain'), onPress: takeSelfie },
+            { text: t('common.cancel'), style: 'cancel' }
           ]
         );
       }
@@ -167,26 +185,28 @@ export default function PhotoVerificationCard() {
       // Handle specific errors
       if (errorMessage?.includes('No photos to compare')) {
         Alert.alert(
-          'No Profile Photos',
-          'Please upload profile photos before verifying.',
-          [{ text: 'OK' }]
+          t('verification.noPhotos'),
+          t('verification.noPhotosMessage'),
+          [{ text: t('common.ok') }]
         );
       } else if (errorMessage?.includes('Already verified')) {
-        Alert.alert('Already Verified', 'Your photos are already verified!');
+        Alert.alert(t('verification.alreadyVerified'), t('verification.alreadyVerifiedMessage'));
         await loadProfile();
       } else if (errorMessage?.includes('Too many attempts')) {
         Alert.alert(
-          'Too Many Attempts',
-          'You have exceeded the maximum number of verification attempts. Please contact support.'
+          t('verification.tooManyAttempts'),
+          t('verification.tooManyAttemptsMessageShort')
         );
       } else if (errorMessage?.includes('Profile not found')) {
-        Alert.alert('Error', 'Profile not found. Please try again.');
+        Alert.alert(t('verification.error'), t('verification.profileNotFound'));
+      } else if (errorMessage?.includes('Image resize failed') || errorMessage?.includes('File read failed')) {
+        Alert.alert(
+          t('verification.error'),
+          'There was an issue processing your photo. Please try again — make sure you take a new selfie (not from gallery) and that the app has camera permission.',
+          [{ text: t('verification.tryAgain'), onPress: takeSelfie }, { text: t('common.cancel'), style: 'cancel' }]
+        );
       } else {
-        // TEMPORARY: Show actual error in production for debugging
-        // TODO: Revert this after fixing photo verification
-        const debugInfo = error?.debug ? `\n\nDebug: ${JSON.stringify(error.debug)}` : '';
-        const displayMessage = `Error: ${errorMessage}${errorDetails ? `\n\nDetails: ${errorDetails}` : ''}${debugInfo}`;
-        Alert.alert('Verification Error', displayMessage);
+        Alert.alert(t('verification.error'), t('verification.errorMessage'));
       }
     } finally {
       setVerifying(false);
@@ -198,7 +218,7 @@ export default function PhotoVerificationCard() {
       return (
         <View className="flex-row items-center bg-green-100 px-3 py-1 rounded-full">
           <MaterialCommunityIcons name="check-circle" size={16} color="#22c55e" />
-          <Text className="text-green-600 font-semibold ml-1">Verified</Text>
+          <Text className="text-green-600 font-semibold ml-1">{t('verification.statusVerified')}</Text>
         </View>
       );
     }
@@ -207,7 +227,7 @@ export default function PhotoVerificationCard() {
       return (
         <View className="flex-row items-center bg-amber-100 px-3 py-1 rounded-full">
           <MaterialCommunityIcons name="clock-outline" size={16} color="#f59e0b" />
-          <Text className="text-amber-600 font-semibold ml-1">Processing...</Text>
+          <Text className="text-amber-600 font-semibold ml-1">{t('verification.statusProcessing')}</Text>
         </View>
       );
     }
@@ -216,7 +236,7 @@ export default function PhotoVerificationCard() {
       return (
         <View className="flex-row items-center bg-red-100 px-3 py-1 rounded-full">
           <MaterialCommunityIcons name="alert-circle" size={16} color="#ef4444" />
-          <Text className="text-red-600 font-semibold ml-1">Failed</Text>
+          <Text className="text-red-600 font-semibold ml-1">{t('verification.statusFailed')}</Text>
         </View>
       );
     }
@@ -224,7 +244,7 @@ export default function PhotoVerificationCard() {
     return (
       <View className="flex-row items-center bg-gray-100 px-3 py-1 rounded-full">
         <MaterialCommunityIcons name="shield-alert-outline" size={16} color="#6b7280" />
-        <Text className="text-gray-600 font-semibold ml-1">Not Verified</Text>
+        <Text className="text-gray-600 font-semibold ml-1">{t('verification.statusNotVerified')}</Text>
       </View>
     );
   };
@@ -244,7 +264,7 @@ export default function PhotoVerificationCard() {
         <View className="flex-1">
           <View className="flex-row items-center mb-2">
             <MaterialCommunityIcons name="camera-account" size={24} color="#A08AB7" />
-            <Text className="text-xl font-bold text-charcoal ml-2">Photo Verification</Text>
+            <Text className="text-xl font-bold text-charcoal ml-2">{t('verification.title')}</Text>
           </View>
           {renderStatusBadge()}
         </View>
@@ -253,8 +273,8 @@ export default function PhotoVerificationCard() {
       {/* Description */}
       <Text className="text-gray-600 mb-4 leading-5">
         {isVerified
-          ? 'Your photos are verified! This shows other users that your profile pictures accurately represent you.'
-          : 'Verify your photos by taking a selfie. We\'ll compare it to your profile photos using face recognition.'}
+          ? t('verification.verifiedDescription')
+          : t('verification.unverifiedDescription')}
       </Text>
 
       {/* Important notice for non-verified users */}
@@ -262,10 +282,10 @@ export default function PhotoVerificationCard() {
         <View className="bg-amber-50 rounded-lg p-4 mb-4 border border-amber-200">
           <View className="flex-row items-center mb-2">
             <MaterialCommunityIcons name="lightbulb-outline" size={20} color="#d97706" />
-            <Text className="text-amber-800 font-bold ml-2">Before You Start</Text>
+            <Text className="text-amber-800 font-bold ml-2">{t('verification.beforeYouStart')}</Text>
           </View>
           <Text className="text-amber-700 text-sm leading-5">
-            Make sure your <Text className="font-bold">primary profile photo</Text> (first photo) is a recent, clear photo of your face. The selfie you take will be compared against your profile photos.
+            {t('verification.beforeYouStartDescription')}
           </Text>
         </View>
       )}
@@ -274,7 +294,7 @@ export default function PhotoVerificationCard() {
       {attempts > 0 && !isVerified && (
         <View className="bg-gray-50 rounded-lg p-3 mb-4">
           <Text className="text-gray-600 text-sm">
-            Attempts used: {attempts} / 5
+            {t('verification.attemptsUsed', { count: attempts })}
           </Text>
         </View>
       )}
@@ -282,9 +302,9 @@ export default function PhotoVerificationCard() {
       {/* Failed state message */}
       {isFailed && (
         <View className="bg-red-50 rounded-lg p-4 mb-4 border border-red-200">
-          <Text className="text-red-800 font-medium mb-1">Verification Unsuccessful</Text>
+          <Text className="text-red-800 font-medium mb-1">{t('verification.unsuccessfulBanner')}</Text>
           <Text className="text-red-700 text-sm leading-5">
-            The selfie didn't match your profile photos well enough. For best results, take your selfie in bright natural daylight and make sure your primary profile photo is a recent, clear photo of your face.
+            {t('verification.unsuccessfulBannerMessage')}
           </Text>
         </View>
       )}
@@ -301,13 +321,13 @@ export default function PhotoVerificationCard() {
           {verifying ? (
             <View className="flex-row items-center">
               <ActivityIndicator color="#fff" size="small" />
-              <Text className="text-white font-bold text-base ml-2">Verifying...</Text>
+              <Text className="text-white font-bold text-base ml-2">{t('verification.verifying')}</Text>
             </View>
           ) : (
             <View className="flex-row items-center">
               <MaterialCommunityIcons name="camera" size={20} color="#fff" />
               <Text className="text-white font-bold text-base ml-2">
-                {isFailed ? 'Try Again' : 'Take Verification Selfie'}
+                {isFailed ? t('verification.tryAgain') : t('verification.takeVerificationSelfie')}
               </Text>
             </View>
           )}
@@ -317,20 +337,20 @@ export default function PhotoVerificationCard() {
       {/* Benefits or tips */}
       {!isVerified ? (
         <View className="mt-4 space-y-2">
-          <Text className="text-gray-700 text-sm font-bold mb-3">For best results:</Text>
+          <Text className="text-gray-700 text-sm font-bold mb-3">{t('verification.forBestResults')}</Text>
           {[
-            { icon: 'white-balance-sunny', text: 'Take your selfie in bright, natural daylight', highlight: true },
-            { icon: 'face-recognition', text: 'Face the camera directly with a neutral expression' },
-            { icon: 'image-check', text: 'Ensure your primary profile photo is recent and shows your face clearly' },
-            { icon: 'glasses', text: 'Remove sunglasses, hats, and face coverings' },
-            { icon: 'lightbulb-on', text: 'Avoid harsh shadows or backlit environments' },
-            { icon: 'account-check', text: 'Your selfie must match the person in your profile photos' },
+            { icon: 'white-balance-sunny', text: t('verification.tips.daylight'), highlight: true },
+            { icon: 'face-recognition', text: t('verification.tips.faceCamera') },
+            { icon: 'image-check', text: t('verification.tips.recentPhoto') },
+            { icon: 'glasses', text: t('verification.tips.removeCoverings') },
+            { icon: 'lightbulb-on', text: t('verification.tips.avoidShadows') },
+            { icon: 'account-check', text: t('verification.tips.mustMatch') },
           ].map((tip, index) => (
             <View key={index} className={`flex-row items-start ${tip.highlight ? 'bg-lavender-50 p-2 rounded-lg -mx-2' : ''}`}>
               <MaterialCommunityIcons
                 name={tip.icon as any}
                 size={18}
-                color={tip.highlight ? '#8B5CF6' : '#A08AB7'}
+                color={tip.highlight ? '#A08AB7' : '#A08AB7'}
                 style={{ marginTop: 1, marginRight: 10 }}
               />
               <Text className={`text-sm flex-1 ${tip.highlight ? 'text-lavender-700 font-medium' : 'text-gray-600'}`}>{tip.text}</Text>
@@ -341,10 +361,10 @@ export default function PhotoVerificationCard() {
         <View className="mt-4 bg-green-50 rounded-lg p-4 border border-green-200">
           <View className="flex-row items-center mb-2">
             <MaterialCommunityIcons name="shield-check" size={24} color="#22c55e" />
-            <Text className="text-green-800 font-bold ml-2">Photos Verified!</Text>
+            <Text className="text-green-800 font-bold ml-2">{t('verification.photosVerified')}</Text>
           </View>
           <Text className="text-green-700 text-sm">
-            Your verified badge is now showing on your profile. This helps build trust with potential matches.
+            {t('verification.verifiedBadgeMessage')}
           </Text>
         </View>
       )}
@@ -352,7 +372,7 @@ export default function PhotoVerificationCard() {
       {/* Free feature badge */}
       <View className="mt-4 flex-row items-center justify-center">
         <MaterialCommunityIcons name="check-decagram" size={16} color="#10b981" />
-        <Text className="text-gray-500 text-xs ml-1">Free for all users</Text>
+        <Text className="text-gray-500 text-xs ml-1">{t('verification.freeForAll')}</Text>
       </View>
     </View>
   );

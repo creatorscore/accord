@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet, Keyboard } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet, Keyboard, Linking } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
@@ -7,11 +7,13 @@ import { supabase } from '@/lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { trackUserAction, identifyUser } from '@/lib/analytics';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useColorScheme } from '@/lib/useColorScheme';
 
 export default function SignUp() {
-  const { t } = useTranslation();
+  const translationHook = useTranslation();
+  const t = translationHook?.t || ((key: string) => key); // Fallback if i18n not ready
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,10 +21,30 @@ export default function SignUp() {
   const [loading, setLoading] = useState(false);
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const { signUp, signIn } = useAuth();
+  const { isDarkColorScheme } = useColorScheme();
+
+  // Dynamic theme colors
+  const themeColors = {
+    background: isDarkColorScheme ? '#0F0F1A' : '#FFFFFF',
+    text: isDarkColorScheme ? '#F5F5F7' : '#1F2937',
+    mutedText: isDarkColorScheme ? '#9CA3AF' : '#71717A',
+    inputBg: isDarkColorScheme ? '#1C1C2E' : '#FFFFFF',
+    inputBorder: isDarkColorScheme ? '#2C2C3E' : '#E4E4E7',
+    dividerLine: isDarkColorScheme ? '#2C2C3E' : '#E4E4E7',
+    socialBtnBg: isDarkColorScheme ? '#1C1C2E' : '#FFFFFF',
+    socialBtnBorder: isDarkColorScheme ? '#2C2C3E' : '#E4E4E7',
+    socialBtnText: isDarkColorScheme ? '#F5F5F7' : '#1F2937',
+    iconContainerBg: isDarkColorScheme ? '#2C2C3E' : '#F5F2F7',
+    checkboxUnchecked: isDarkColorScheme ? '#9CA3AF' : '#6B7280',
+  };
+
+  // Ref to prevent multiple simultaneous sign-in attempts (synchronous check for slow devices)
+  const isSigningIn = useRef(false);
 
   useEffect(() => {
     checkAppleAuth();
@@ -34,8 +56,10 @@ export default function SignUp() {
   };
 
   const handleSignUp = async () => {
-    console.log('Sign up button clicked');
-    console.log('Email:', email, 'Password length:', password.length);
+    if (!termsAccepted) {
+      Alert.alert(t('auth.signUp.termsRequired'), t('auth.signUp.termsRequiredMessage'));
+      return;
+    }
 
     if (!email || !password || !confirmPassword) {
       if (Platform.OS === 'web') {
@@ -80,6 +104,32 @@ export default function SignUp() {
         } else if (provider === 'apple') {
           errorMessage = t('auth.signUp.errorAccountExistsApple');
         } else if (provider === 'email') {
+          // Check if email is unconfirmed — offer to resend verification
+          const isUnconfirmed = emailCheck[0].email_confirmed === false;
+          if (isUnconfirmed) {
+            Alert.alert(
+              t('auth.signUp.emailNotVerified'),
+              t('auth.signUp.emailNotVerifiedMessage'),
+              [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                  text: t('auth.signUp.resendCode'),
+                  onPress: async () => {
+                    try {
+                      await supabase.auth.resend({
+                        type: 'signup',
+                        email: email.toLowerCase().trim(),
+                      });
+                    } catch (_) {}
+                    setUserEmail(email.toLowerCase().trim());
+                    setShowVerificationMessage(true);
+                  }
+                }
+              ]
+            );
+            setLoading(false);
+            return;
+          }
           errorMessage = t('auth.signUp.errorAccountExistsEmail');
         }
 
@@ -108,22 +158,19 @@ export default function SignUp() {
 
       if (banCheck === true) {
         Alert.alert(
-          'Account Restricted',
-          'This account has been restricted from using Accord. If you believe this is an error, please contact support at hello@joinaccord.app.',
-          [{ text: 'OK' }]
+          t('auth.signUp.accountRestricted'),
+          t('auth.signUp.accountRestrictedMessage'),
+          [{ text: t('common.ok') }]
         );
         setLoading(false);
         return;
       }
 
-      console.log('Calling signUp with:', email);
       const result = await signUp(email, password);
-      console.log('Sign up result:', result);
 
       // Check if email confirmation is required
       if (result.user && !result.session) {
         // Email verification required - show success message
-        console.log('Email confirmation required for:', email);
         // Track sign-up (even though not yet verified)
         trackUserAction.signUp('email');
         identifyUser(result.user.id, { email: email.toLowerCase() });
@@ -131,7 +178,6 @@ export default function SignUp() {
         setShowVerificationMessage(true);
       } else if (result.session) {
         // Direct sign in successful (email confirmation disabled)
-        console.log('Direct sign in successful');
         // Track successful sign-up
         trackUserAction.signUp('email');
         identifyUser(result.user!.id, { email: email.toLowerCase() });
@@ -141,7 +187,6 @@ export default function SignUp() {
         }, 500);
       } else if (result.user) {
         // User created but no session - try to sign in
-        console.log('User created, attempting sign in...');
         try {
           await signIn(email, password);
           Keyboard.dismiss();
@@ -154,7 +199,7 @@ export default function SignUp() {
       }
     } catch (error: any) {
       console.error('Sign up error:', error);
-      const errorMessage = error.message || 'Failed to sign up';
+      const errorMessage = error.message || t('auth.signUp.failedSignUp');
 
       // Check if user already exists (signed up with OAuth)
       if (errorMessage.includes('User already registered') || errorMessage.includes('already been registered')) {
@@ -181,6 +226,15 @@ export default function SignUp() {
   };
 
   const handleGoogleSignUp = async () => {
+    if (!termsAccepted) {
+      Alert.alert(t('auth.signUp.termsRequired'), t('auth.signUp.termsRequiredMessage'));
+      return;
+    }
+    // Synchronous check to prevent ANR from multiple rapid taps on slow devices
+    if (isSigningIn.current) {
+      return;
+    }
+    isSigningIn.current = true;
     setLoading(true);
     try {
       const result = await signInWithGoogle();
@@ -196,20 +250,29 @@ export default function SignUp() {
         setTimeout(() => {
           router.replace('/');
         }, 500);
-      } else {
-        Alert.alert(t('common.error'), 'Google sign-in was cancelled or failed');
       }
+      // null result means user cancelled or backgrounded — silently do nothing
     } catch (error: any) {
       if (error.message !== 'User cancelled') {
-        Alert.alert(t('common.error'), error.message || 'Failed to sign up with Google');
+        Alert.alert(t('common.error'), error.message || t('auth.signUp.failedSignUpGoogle'));
       }
       console.error('Google sign-up error:', error);
     } finally {
+      isSigningIn.current = false;
       setLoading(false);
     }
   };
 
   const handleAppleSignUp = async () => {
+    if (!termsAccepted) {
+      Alert.alert(t('auth.signUp.termsRequired'), t('auth.signUp.termsRequiredMessage'));
+      return;
+    }
+    // Synchronous check to prevent ANR from multiple rapid taps on slow devices
+    if (isSigningIn.current) {
+      return;
+    }
+    isSigningIn.current = true;
     setLoading(true);
     try {
       const result = await signInWithApple();
@@ -226,8 +289,9 @@ export default function SignUp() {
         }, 500);
       }
     } catch (error: any) {
-      Alert.alert(t('common.error'), error.message || 'Failed to sign up with Apple');
+      Alert.alert(t('common.error'), error.message || t('auth.signUp.failedSignUpApple'));
     } finally {
+      isSigningIn.current = false;
       setLoading(false);
     }
   };
@@ -281,24 +345,24 @@ export default function SignUp() {
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+        style={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16, backgroundColor: themeColors.background }]}
       >
         <ScrollView
           contentContainerStyle={styles.verificationContainer}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.iconContainer}>
+          <View style={[styles.iconContainer, { backgroundColor: themeColors.iconContainerBg }]}>
             <Ionicons name="mail-outline" size={40} color="#A08AB7" />
           </View>
-          <Text style={styles.verificationTitle}>{t('auth.signUp.verificationTitle')}</Text>
-          <Text style={styles.verificationMessage}>{t('auth.signUp.verificationMessageOtp', 'We sent a 6-digit verification code to')}</Text>
+          <Text style={[styles.verificationTitle, { color: themeColors.text }]}>{t('auth.signUp.verificationTitle')}</Text>
+          <Text style={[styles.verificationMessage, { color: themeColors.mutedText }]}>{t('auth.signUp.verificationMessageOtp', 'We sent a 6-digit verification code to')}</Text>
           <Text style={styles.verificationEmail}>{userEmail}</Text>
 
           {/* OTP Input */}
           <View style={styles.otpContainer}>
-            <Text style={styles.otpLabel}>{t('auth.signUp.enterCode', 'Enter verification code')}</Text>
+            <Text style={[styles.otpLabel, { color: themeColors.text }]}>{t('auth.signUp.enterCode', 'Enter verification code')}</Text>
             <TextInput
-              style={styles.otpInput}
+              style={[styles.otpInput, { backgroundColor: themeColors.inputBg, color: themeColors.text }]}
               placeholder="000000"
               placeholderTextColor="#A1A1AA"
               value={otpCode}
@@ -320,7 +384,7 @@ export default function SignUp() {
             </Text>
           </TouchableOpacity>
 
-          <Text style={styles.verificationInstructions}>
+          <Text style={[styles.verificationInstructions, { color: themeColors.mutedText }]}>
             {t('auth.signUp.otpInstructions', "Check your email inbox (and spam folder) for the verification code. It may take a few minutes to arrive.")}
           </Text>
 
@@ -352,7 +416,7 @@ export default function SignUp() {
             }}
             disabled={loading}
           >
-            <Text style={styles.tertiaryLinkText}>
+            <Text style={[styles.tertiaryLinkText, { color: themeColors.mutedText }]}>
               {loading ? t('auth.signUp.sendingCode', 'Sending...') : t('auth.signUp.resendCode', 'Resend verification code')}
             </Text>
           </TouchableOpacity>
@@ -364,7 +428,7 @@ export default function SignUp() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[styles.container, { paddingTop: insets.top }]}
+      style={[styles.container, { paddingTop: insets.top, backgroundColor: themeColors.background }]}
     >
       <ScrollView
         style={styles.scrollView}
@@ -382,20 +446,20 @@ export default function SignUp() {
           style={styles.backButton}
         >
           <Ionicons name="chevron-back" size={24} color="#A08AB7" />
-          <Text style={styles.backButtonText}>Back</Text>
+          <Text style={styles.backButtonText}>{t('auth.signUp.back')}</Text>
         </TouchableOpacity>
 
         {/* Header */}
-        <Text style={styles.title}>{t('auth.signUp.title')}</Text>
-        <Text style={styles.subtitle}>{t('auth.signUp.subtitle')}</Text>
+        <Text style={[styles.title, { color: themeColors.text }]}>{t('auth.signUp.title')}</Text>
+        <Text style={[styles.subtitle, { color: themeColors.mutedText }]}>{t('auth.signUp.subtitle')}</Text>
 
         {/* Form */}
         <View style={styles.form}>
           {/* Email Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>{t('auth.signUp.email')}</Text>
+            <Text style={[styles.label, { color: themeColors.text }]}>{t('auth.signUp.email')}</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: themeColors.inputBg, borderColor: themeColors.inputBorder, color: themeColors.text }]}
               placeholder={t('auth.signUp.emailPlaceholder')}
               placeholderTextColor="#A1A1AA"
               value={email}
@@ -408,23 +472,23 @@ export default function SignUp() {
 
           {/* Password Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>{t('auth.signUp.password')}</Text>
+            <Text style={[styles.label, { color: themeColors.text }]}>{t('auth.signUp.password')}</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: themeColors.inputBg, borderColor: themeColors.inputBorder, color: themeColors.text }]}
               placeholder={t('auth.signUp.passwordPlaceholder')}
               placeholderTextColor="#A1A1AA"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
             />
-            <Text style={styles.hint}>{t('auth.signUp.passwordHint')}</Text>
+            <Text style={[styles.hint, { color: themeColors.mutedText }]}>{t('auth.signUp.passwordHint')}</Text>
           </View>
 
           {/* Confirm Password Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>{t('auth.signUp.confirmPassword')}</Text>
+            <Text style={[styles.label, { color: themeColors.text }]}>{t('auth.signUp.confirmPassword')}</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: themeColors.inputBg, borderColor: themeColors.inputBorder, color: themeColors.text }]}
               placeholder={t('auth.signUp.passwordPlaceholder')}
               placeholderTextColor="#A1A1AA"
               value={confirmPassword}
@@ -444,31 +508,47 @@ export default function SignUp() {
             </Text>
           </TouchableOpacity>
 
-          {/* Terms */}
-          <Text style={styles.terms}>
-            {t('auth.signUp.termsAgree')}
-            <Text style={styles.termsLink}>{t('auth.signUp.termsOfService')}</Text>
-            {t('auth.signUp.and')}
-            <Text style={styles.termsLink}>{t('auth.signUp.privacyPolicy')}</Text>
-          </Text>
+          {/* Terms Checkbox */}
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 16, gap: 10 }}
+            onPress={() => setTermsAccepted(!termsAccepted)}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons
+              name={termsAccepted ? 'checkbox-marked' : 'checkbox-blank-outline'}
+              size={24}
+              color={termsAccepted ? '#A08AB7' : themeColors.checkboxUnchecked}
+              style={{ marginTop: 1 }}
+            />
+            <Text style={[styles.terms, { flex: 1, color: themeColors.mutedText }]}>
+              {t('auth.signUp.iAgreeToThe')}{' '}
+              <Text style={styles.termsLink} onPress={() => Linking.openURL('https://joinaccord.app/terms')}>
+                {t('auth.signUp.termsOfServiceLink')}
+              </Text>
+              {' '}{t('auth.signUp.andWord')}{' '}
+              <Text style={styles.termsLink} onPress={() => Linking.openURL('https://joinaccord.app/privacy')}>
+                {t('auth.signUp.privacyPolicyLink')}
+              </Text>
+            </Text>
+          </TouchableOpacity>
 
           {/* Divider */}
           <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>{t('auth.signUp.orSignUpWith')}</Text>
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: themeColors.dividerLine }]} />
+            <Text style={[styles.dividerText, { color: themeColors.mutedText }]}>{t('auth.signUp.orSignUpWith')}</Text>
+            <View style={[styles.dividerLine, { backgroundColor: themeColors.dividerLine }]} />
           </View>
 
           {/* Social Sign-Up Buttons */}
           <View style={styles.socialButtons}>
             {/* Google Button */}
             <TouchableOpacity
-              style={styles.socialButton}
+              style={[styles.socialButton, { backgroundColor: themeColors.socialBtnBg, borderColor: themeColors.socialBtnBorder }]}
               onPress={handleGoogleSignUp}
               disabled={loading}
             >
               <Ionicons name="logo-google" size={20} color="#4285F4" />
-              <Text style={styles.socialButtonText}>{t('auth.signUp.continueWithGoogle')}</Text>
+              <Text style={[styles.socialButtonText, { color: themeColors.socialBtnText }]}>{t('auth.signUp.continueWithGoogle')}</Text>
             </TouchableOpacity>
 
             {/* Apple Button */}
@@ -486,7 +566,7 @@ export default function SignUp() {
 
           {/* Sign In Link */}
           <View style={styles.signInContainer}>
-            <Text style={styles.signInText}>{t('auth.signUp.haveAccount')}</Text>
+            <Text style={[styles.signInText, { color: themeColors.mutedText }]}>{t('auth.signUp.haveAccount')}</Text>
             <TouchableOpacity onPress={() => {
               Keyboard.dismiss();
               router.push('/(auth)/sign-in');

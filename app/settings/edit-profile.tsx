@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,29 +13,38 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
-  Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import { updateUserLocation } from '@/lib/geolocation';
 import { MotiView } from 'moti';
 import { Audio } from 'expo-av';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
+import { captureException } from '@/lib/sentry';
+import { signPhotoUrls, getSignedUrl, extractStoragePath } from '@/lib/signed-urls';
 import { useAuth } from '@/contexts/AuthContext';
-import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash } from '@/lib/image-optimization';
+import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri, cleanupOptimizedImages } from '@/lib/image-optimization';
 import { HeightUnit, cmToInches, inchesToCm } from '@/lib/height-utils';
+import { openAppSettings } from '@/lib/open-settings';
+import { validateContent } from '@/lib/content-moderation';
+import { useTranslation } from 'react-i18next';
+import { useColorScheme } from '@/lib/useColorScheme';
+import { PROMPT_KEYS } from '@/lib/prompt-options';
 
 interface Photo {
   id?: string;
   url: string;
+  originalUri?: string; // Original source URI for re-optimization fallback
   storage_path?: string;
   is_primary: boolean;
   display_order: number;
   is_new?: boolean;
   to_delete?: boolean;
   contentHash?: string;
+  blurDataUri?: string;
 }
 
 interface PromptAnswer {
@@ -43,30 +52,13 @@ interface PromptAnswer {
   answer: string;
 }
 
-const GENDERS = [
-  'Man',
-  'Woman',
-  'Non-binary',
-  'Trans Man',
-  'Trans Woman',
-  'Genderfluid',
-  'Genderqueer',
-  'Agender',
-  'Bigender',
-  'Two-Spirit',
-  'Intersex',
-  'Demigender',
-  'Neutrois',
-  'Questioning',
-  'Prefer not to say',
-  'Other',
-];
+const GENDERS = ['Man', 'Woman', 'Non-binary'];
 
 const ORIENTATIONS = [
   'Lesbian',
   'Gay',
   'Bisexual',
-  'Straight',
+  'Straight', // Note: Hidden for men-only users (filtered in getAvailableOrientations)
   'Queer',
   'Asexual',
   'Pansexual',
@@ -82,6 +74,21 @@ const ORIENTATIONS = [
   'Prefer not to say',
   'Other',
 ];
+
+// Genders that are considered "men only" - straight men are not allowed on the platform
+const MEN_ONLY_GENDERS = ['Man'];
+
+// Helper function to get available orientations based on gender
+// Straight men are not allowed - only show "Straight" if user is NOT exclusively male-identifying
+function getAvailableOrientations(selectedGenders: string[]): string[] {
+  const isExclusivelyMale = selectedGenders.length > 0 &&
+    selectedGenders.every(g => MEN_ONLY_GENDERS.includes(g));
+
+  if (isExclusivelyMale) {
+    return ORIENTATIONS.filter(o => o !== 'Straight');
+  }
+  return ORIENTATIONS;
+}
 
 const PRONOUNS = [
   'she/her',
@@ -106,24 +113,6 @@ const ETHNICITIES = [
   'Multiracial',
   'Other',
   'Prefer not to say',
-];
-
-const PERSONALITY_TYPES = [
-  'INTJ', 'INTP', 'ENTJ', 'ENTP',
-  'INFJ', 'INFP', 'ENFJ', 'ENFP',
-  'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ',
-  'ISTP', 'ISFP', 'ESTP', 'ESFP',
-  'Not sure',
-  'Prefer not to say',
-];
-
-const LOVE_LANGUAGES = [
-  'Words of Affirmation',
-  'Quality Time',
-  'Receiving Gifts',
-  'Acts of Service',
-  'Physical Touch',
-  'Not sure',
 ];
 
 const RELIGIONS = [
@@ -178,28 +167,7 @@ const COMMON_LANGUAGES = [
   'Other',
 ];
 
-const HOBBY_OPTIONS = [
-  '🎨 Art & Design',
-  '📚 Reading',
-  '✈️ Travel',
-  '🎵 Music',
-  '🏃 Fitness',
-  '🎮 Gaming',
-  '🍳 Cooking',
-  '📸 Photography',
-  '🧘 Yoga',
-  '🎭 Theater',
-  '🌱 Gardening',
-  '🎬 Film',
-  '💻 Tech',
-  '✍️ Writing',
-  '🐕 Pets',
-  '🎪 Live Events',
-  '🏕️ Outdoors',
-  '🎨 Crafts',
-  '🍷 Wine Tasting',
-  '☕ Coffee',
-];
+// Hobby options imported from shared config
 
 const PRIMARY_REASONS = [
   { value: 'financial', label: 'Financial Stability' },
@@ -265,28 +233,7 @@ const PETS_OPTIONS = [
   { value: 'dont_like', label: "Don't Like" },
 ];
 
-const PROMPT_OPTIONS = [
-  "My ideal lavender marriage looks like...",
-  "I'm looking for someone who...",
-  "The best partnership includes...",
-  "A perfect Sunday with my partner would be...",
-  "Together we could...",
-  "I need a partner who understands...",
-  "My ideal living situation is...",
-  "Financial goals I want us to share...",
-  "The most important thing in our arrangement...",
-  "I can offer my partner...",
-  "Deal breakers for me are...",
-  "My vision for our future includes...",
-  "What makes me a great partner is...",
-  "I'm passionate about...",
-  "Green flags I'm looking for...",
-  "A fun fact about me...",
-  "My love language is...",
-  "I'm secretly really good at...",
-  "The key to my heart is...",
-  "My guilty pleasure is...",
-];
+// PROMPT_OPTIONS is now derived from i18n keys inside the component via useMemo
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -329,6 +276,11 @@ function calculateZodiac(birthDate: Date): string {
 
 export default function EditProfile() {
   const { user } = useAuth();
+  const { t } = useTranslation();
+  const { isDarkColorScheme } = useColorScheme();
+  const styles = useMemo(() => createStyles(isDarkColorScheme), [isDarkColorScheme]);
+  const PROMPT_OPTIONS = useMemo(() => PROMPT_KEYS.map(key => t(`prompts.${key}`)), [t]);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -344,11 +296,14 @@ export default function EditProfile() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   const [age, setAge] = useState('');
-  const [bio, setBio] = useState('');
-  const [occupation, setOccupation] = useState('');
-  const [education, setEducation] = useState('');
   const [locationCity, setLocationCity] = useState('');
   const [locationState, setLocationState] = useState('');
+  const [refreshingLocation, setRefreshingLocation] = useState(false);
+  const [hometown, setHometown] = useState('');
+  const [occupation, setOccupation] = useState('');
+  const [education, setEducation] = useState('');
+  const [educationLevel, setEducationLevel] = useState('');
+
   const [gender, setGender] = useState<string[]>([]);
   const [pronouns, setPronouns] = useState('');
   const [ethnicity, setEthnicity] = useState<string[]>([]);
@@ -358,7 +313,6 @@ export default function EditProfile() {
   const [heightCm, setHeightCm] = useState('');
   const [heightUnit, setHeightUnit] = useState<HeightUnit>('imperial');
   const [zodiac, setZodiac] = useState('');
-  const [personality, setPersonality] = useState('');
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [promptAnswers, setPromptAnswers] = useState<PromptAnswer[]>([
     { prompt: '', answer: '' },
@@ -367,17 +321,11 @@ export default function EditProfile() {
   ]);
   const [showCustomPromptInput, setShowCustomPromptInput] = useState<number | null>(null);
   const [customPromptText, setCustomPromptText] = useState('');
-  const [favoriteMovies, setFavoriteMovies] = useState('');
-  const [favoriteMusic, setFavoriteMusic] = useState('');
-  const [favoriteBooks, setFavoriteBooks] = useState('');
-  const [favoriteTvShows, setFavoriteTvShows] = useState('');
-  const [hobbies, setHobbies] = useState<string[]>([]);
-  const [newHobby, setNewHobby] = useState('');
-  const [loveLanguage, setLoveLanguage] = useState('');
   const [languagesSpoken, setLanguagesSpoken] = useState<string[]>([]);
   const [religion, setReligion] = useState('');
   const [politicalViews, setPoliticalViews] = useState('');
   const [voiceIntroUrl, setVoiceIntroUrl] = useState<string | null>(null);
+  const [voiceIntroStoragePath, setVoiceIntroStoragePath] = useState<string | null>(null);
   const [voiceIntroPrompt, setVoiceIntroPrompt] = useState<string>('');
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -393,6 +341,8 @@ export default function EditProfile() {
   const [housingPreference, setHousingPreference] = useState<string[]>([]);
   const [smoking, setSmoking] = useState('');
   const [drinking, setDrinking] = useState('');
+  const [smokesWeed, setSmokesWeed] = useState('');
+  const [doesDrugs, setDoesDrugs] = useState('');
   const [pets, setPets] = useState('');
   const [ageMin, setAgeMin] = useState('25');
   const [ageMax, setAgeMax] = useState('45');
@@ -418,9 +368,6 @@ export default function EditProfile() {
           display_name,
           birth_date,
           age,
-          bio,
-          occupation,
-          education,
           location_city,
           location_state,
           gender,
@@ -430,14 +377,14 @@ export default function EditProfile() {
           height_inches,
           height_unit,
           zodiac_sign,
-          personality_type,
           prompt_answers,
-          interests,
-          hobbies,
-          love_language,
           languages_spoken,
           religion,
           political_views,
+          hometown,
+          occupation,
+          education,
+          education_level,
           voice_intro_url,
           voice_intro_duration,
           voice_intro_prompt
@@ -462,11 +409,12 @@ export default function EditProfile() {
           setSelectedYear(date.getFullYear());
         }
         setAge(profileData.age?.toString() || '');
-        setBio(profileData.bio || '');
-        setOccupation(profileData.occupation || '');
-        setEducation(profileData.education || '');
         setLocationCity(profileData.location_city || '');
         setLocationState(profileData.location_state || '');
+        setHometown(profileData.hometown || '');
+        setOccupation(profileData.occupation || '');
+        setEducation(profileData.education || '');
+        setEducationLevel(profileData.education_level || '');
 
         setGender(profileData.gender || []);
         setPronouns(profileData.pronouns || '');
@@ -492,18 +440,18 @@ export default function EditProfile() {
         }
 
         setZodiac(profileData.zodiac_sign || '');
-        setPersonality(profileData.personality_type || '');
 
         // Load photos separately to avoid relation issues
         try {
           const { data: photosData } = await supabase
             .from('photos')
-            .select('id, url, storage_path, is_primary, display_order')
+            .select('id, url, storage_path, is_primary, display_order, blur_data_uri')
             .eq('profile_id', profileData.id)
             .order('display_order', { ascending: true });
 
           if (photosData) {
-            setPhotos(photosData);
+            const signedPhotos = await signPhotoUrls(photosData);
+            setPhotos(signedPhotos);
           }
         } catch (photoError) {
           console.warn('Error loading photos:', photoError);
@@ -517,24 +465,7 @@ export default function EditProfile() {
           ].slice(0, 3));
         }
 
-        // Parse interests JSONB object {movies: [], music: [], books: [], tv_shows: []}
-        if (profileData.interests && typeof profileData.interests === 'object') {
-          const interests = profileData.interests as any;
-          setFavoriteMovies(Array.isArray(interests.movies) ? interests.movies.join(', ') : '');
-          setFavoriteMusic(Array.isArray(interests.music) ? interests.music.join(', ') : '');
-          setFavoriteBooks(Array.isArray(interests.books) ? interests.books.join(', ') : '');
-          setFavoriteTvShows(Array.isArray(interests.tv_shows) ? interests.tv_shows.join(', ') : '');
-        }
 
-        if (profileData.hobbies && Array.isArray(profileData.hobbies)) {
-          setHobbies(profileData.hobbies);
-        } else {
-          setHobbies([]);
-        }
-
-        // love_language is now a TEXT[] array, take first element if present
-        const loveLanguageArray = profileData.love_language || [];
-        setLoveLanguage(Array.isArray(loveLanguageArray) && loveLanguageArray.length > 0 ? loveLanguageArray[0] : '');
 
         if (profileData.languages_spoken && Array.isArray(profileData.languages_spoken)) {
           setLanguagesSpoken(profileData.languages_spoken);
@@ -546,7 +477,10 @@ export default function EditProfile() {
         setPoliticalViews(profileData.political_views || '');
 
         if (profileData.voice_intro_url) {
-          setVoiceIntroUrl(profileData.voice_intro_url);
+          // Keep the raw storage path for saving back to DB
+          setVoiceIntroStoragePath(extractStoragePath(profileData.voice_intro_url, 'voice-intros'));
+          const signedVoice = await getSignedUrl('voice-intros', profileData.voice_intro_url);
+          setVoiceIntroUrl(signedVoice || profileData.voice_intro_url);
           setVoiceDuration(profileData.voice_intro_duration || 0);
         }
         setVoiceIntroPrompt(profileData.voice_intro_prompt || '');
@@ -583,6 +517,8 @@ export default function EditProfile() {
             if (prefsData.lifestyle_preferences) {
               setSmoking(prefsData.lifestyle_preferences.smoking || '');
               setDrinking(prefsData.lifestyle_preferences.drinking || '');
+              setSmokesWeed(prefsData.lifestyle_preferences.smokes_weed || '');
+              setDoesDrugs(prefsData.lifestyle_preferences.does_drugs || '');
               setPets(prefsData.lifestyle_preferences.pets || '');
             }
 
@@ -627,76 +563,88 @@ export default function EditProfile() {
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [3, 4],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      const selectedUri = result.assets[0].uri;
-
-      // Validate image before processing
-      const validation = await validateImage(selectedUri);
-      if (!validation.isValid) {
-        Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
-        return;
-      }
-
-      // Optimize image with compression
-      const { optimized } = await optimizeImage(selectedUri, {
-        generateThumbnail: true,
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        // Disable cropping on Android — native canhub/cropper crashes on low-end devices
+        allowsEditing: Platform.OS === 'ios',
+        aspect: [3, 4],
+        quality: 0.8,
       });
 
-      console.log(`Optimized profile image: ${(optimized.size! / 1024).toFixed(0)}KB`);
+      if (!result.canceled && result.assets[0]) {
+        const selectedUri = result.assets[0].uri;
 
-      // Generate hash for duplicate detection
-      const contentHash = await generateImageHash(optimized.uri);
-      console.log(`Generated content hash: ${contentHash.substring(0, 16)}...`);
+        try {
+          // Validate image before processing
+          const validation = await validateImage(selectedUri);
+          if (!validation.isValid) {
+            Alert.alert('Invalid Image', validation.error || 'Please select a different photo');
+            return;
+          }
 
-      // Check for duplicate in current selection (local check)
-      const isDuplicateLocal = photos.some(p => !p.to_delete && p.contentHash === contentHash);
-      if (isDuplicateLocal) {
-        Alert.alert('Duplicate Photo', 'You have already selected this photo. Please choose a different one.');
-        return;
-      }
+          // Hash the ORIGINAL picker URI before optimization — optimization output
+          // can vary run-to-run (metadata timestamps, JPEG quantization) which would
+          // produce different hashes for the same source image and let duplicates slip.
+          const contentHash = await generateImageHash(selectedUri);
 
-      // Check for duplicate in database (already uploaded photos)
-      if (profileId) {
-        const { data: existingPhoto } = await supabase
-          .from('photos')
-          .select('id')
-          .eq('profile_id', profileId)
-          .eq('content_hash', contentHash)
-          .maybeSingle();
+          // Check for duplicate in current selection (local check)
+          const isDuplicateLocal = photos.some(p => !p.to_delete && p.contentHash === contentHash);
+          if (isDuplicateLocal) {
+            Alert.alert('Duplicate Photo', 'You have already selected this photo. Please choose a different one.');
+            return;
+          }
 
-        if (existingPhoto) {
-          Alert.alert('Duplicate Photo', 'You have already uploaded this photo. Please choose a different one.');
-          return;
+          // Check for duplicate in database (already uploaded photos)
+          if (profileId) {
+            const { data: existingPhoto } = await supabase
+              .from('photos')
+              .select('id')
+              .eq('profile_id', profileId)
+              .eq('content_hash', contentHash)
+              .maybeSingle();
+
+            if (existingPhoto) {
+              Alert.alert('Duplicate Photo', 'You have already uploaded this photo. Please choose a different one.');
+              return;
+            }
+          }
+
+          // Optimize image with compression now that dedup cleared
+          const { optimized } = await optimizeImage(selectedUri, {
+            generateThumbnail: true,
+          });
+          const blurDataUri = await generateBlurDataUri(optimized.uri).catch(() => undefined);
+
+          const newPhoto: Photo = {
+            url: optimized.uri,
+            originalUri: selectedUri,
+            is_primary: activePhotos.length === 0,
+            display_order: activePhotos.length,
+            is_new: true,
+            contentHash,
+            blurDataUri,
+          };
+          setPhotos([...photos, newPhoto]);
+        } catch (error) {
+          console.error('Error processing image:', error);
+          Alert.alert('Error', 'Failed to process the selected photo. Please try again.');
         }
       }
-
-      const newPhoto: Photo = {
-        url: optimized.uri,
-        is_primary: activePhotos.length === 0,
-        display_order: activePhotos.length,
-        is_new: true,
-        contentHash,
-      };
-      setPhotos([...photos, newPhoto]);
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to open photo library. Please try again.');
     }
   };
 
   const removePhoto = (index: number) => {
     // Count current active photos (not marked for deletion)
     const currentActivePhotos = photos.filter(p => !p.to_delete);
-    if (currentActivePhotos.length <= 2) {
-      Alert.alert('Minimum Photos Required', 'Your profile must have at least 2 photos. Add another photo before removing this one.');
+    if (currentActivePhotos.length <= 3) {
+      Alert.alert('Minimum Photos Required', 'Your profile must have at least 3 photos. Add another photo before removing this one.');
       return;
     }
 
-    console.log('🗑️ Before removing photo:', photos.length, photos.map(p => p.url.substring(0, 30)));
     const updatedPhotos = [...photos];
     const photoToRemove = updatedPhotos[index];
 
@@ -720,7 +668,6 @@ export default function EditProfile() {
     });
 
     setPhotos(updatedPhotos);
-    console.log('✅ After removing photo:', updatedPhotos.filter(p => !p.to_delete).length);
   };
 
   const movePhoto = (index: number, direction: 'up' | 'down') => {
@@ -759,29 +706,6 @@ export default function EditProfile() {
     setShowCustomPromptInput(null);
   };
 
-
-  const toggleHobby = (hobby: string) => {
-    if (hobbies.includes(hobby)) {
-      setHobbies(hobbies.filter((h) => h !== hobby));
-    } else {
-      if (hobbies.length >= 10) {
-        Alert.alert('Maximum Hobbies', 'You can select up to 10 hobbies');
-        return;
-      }
-      setHobbies([...hobbies, hobby]);
-    }
-  };
-
-  const addHobby = () => {
-    if (newHobby.trim() && hobbies.length < 10) {
-      setHobbies([...hobbies, newHobby.trim()]);
-      setNewHobby('');
-    }
-  };
-
-  const removeHobby = (index: number) => {
-    setHobbies(hobbies.filter((_, i) => i !== index));
-  };
 
   const addLanguage = (language: string) => {
     if (language && !languagesSpoken.includes(language) && languagesSpoken.length < 5) {
@@ -836,13 +760,7 @@ export default function EditProfile() {
               { text: 'Cancel', style: 'cancel' },
               {
                 text: 'Open Settings',
-                onPress: () => {
-                  if (Platform.OS === 'ios') {
-                    Linking.openURL('app-settings:');
-                  } else {
-                    Linking.openSettings();
-                  }
-                },
+                onPress: () => openAppSettings(),
               },
             ]
           );
@@ -892,6 +810,71 @@ export default function EditProfile() {
     }
   };
 
+  // Refresh location using GPS (no manual entry allowed)
+  const refreshLocation = async () => {
+    setRefreshingLocation(true);
+    try {
+      const location = await updateUserLocation();
+      if (!location) {
+        Alert.alert(
+          'Location Permission Required',
+          'Please enable location access in your device settings to update your location.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => openAppSettings() },
+          ]
+        );
+        return;
+      }
+
+      // Reject locations with low accuracy (prevents iOS approximate location)
+      if (location.error === 'approximate_location') {
+        Alert.alert(
+          'Precise Location Required',
+          `Location accuracy is too low (${Math.round(location.accuracy || 0)} meters). Please enable "Precise Location" for Accord in your device Settings.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => openAppSettings() },
+          ]
+        );
+        return;
+      }
+
+      const city = location.city || '';
+      const state = location.state || '';
+
+      // Update local state
+      setLocationCity(city);
+      setLocationState(state);
+
+      // Save to database
+      const updateData: Record<string, any> = {
+        latitude: location.latitude,
+        longitude: location.longitude,
+      };
+      if (location.city) updateData.location_city = location.city;
+      if (location.state) updateData.location_state = location.state;
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('user_id', user?.id);
+
+      if (updateError) {
+        console.error('Error updating location:', updateError);
+        Alert.alert('Error', 'Failed to save location. Please try again.');
+        return;
+      }
+
+      Alert.alert('Location Updated', `Your location has been updated to ${city}${state ? `, ${state}` : ''}`);
+    } catch (error) {
+      console.error('Error refreshing location:', error);
+      Alert.alert('Error', 'Failed to update location. Please try again.');
+    } finally {
+      setRefreshingLocation(false);
+    }
+  };
+
   const saveProfile = async (skipAlert = false) => {
     if (!displayName) {
       Alert.alert('Required Fields', 'Please fill in your name');
@@ -905,8 +888,8 @@ export default function EditProfile() {
 
     // Count active photos (not marked for deletion)
     const activePhotos = photos.filter(p => !p.to_delete);
-    if (activePhotos.length < 2) {
-      Alert.alert('More Photos Needed', 'Your profile must have at least 2 photos');
+    if (activePhotos.length < 3) {
+      Alert.alert('More Photos Needed', 'Your profile must have at least 3 photos');
       return false;
     }
 
@@ -931,6 +914,39 @@ export default function EditProfile() {
       // Filter out empty prompt answers
       const validPromptAnswers = promptAnswers.filter(pa => pa.prompt && pa.answer);
 
+      // Validate prompt answers for gibberish and profanity
+      for (const pa of validPromptAnswers) {
+        // Validate the prompt text (if custom)
+        const promptValidation = validateContent(pa.prompt, {
+          checkProfanity: true,
+          checkGibberish: true,
+          fieldName: 'prompt',
+        });
+        if (!promptValidation.isValid) {
+          setSaving(false);
+          Alert.alert(
+            promptValidation.moderationResult?.isGibberish ? 'Invalid Prompt' : 'Inappropriate Content',
+            promptValidation.error
+          );
+          return false;
+        }
+
+        // Validate the answer
+        const answerValidation = validateContent(pa.answer, {
+          checkProfanity: true,
+          checkGibberish: true,
+          fieldName: 'prompt answer',
+        });
+        if (!answerValidation.isValid) {
+          setSaving(false);
+          Alert.alert(
+            answerValidation.moderationResult?.isGibberish ? 'Invalid Response' : 'Inappropriate Content',
+            answerValidation.error
+          );
+          return false;
+        }
+      }
+
       // Update or create profile
       const profilePayload = {
         user_id: user?.id,
@@ -938,36 +954,27 @@ export default function EditProfile() {
         birth_date: birthDate.toISOString().split('T')[0], // Store as YYYY-MM-DD
         age: calculatedAge,
         zodiac_sign: calculatedZodiac,
-        bio,
-        occupation,
-        education,
-        location_city: locationCity,
-        location_state: locationState,
+        // NOTE: location_city and location_state are NOT included here
+        // Location can only be updated via GPS refresh button (no manual editing)
         gender: gender.length > 0 ? gender : null,
         pronouns,
         ethnicity: ethnicity.length > 0 ? ethnicity : null,
         sexual_orientation: sexualOrientation.length > 0 ? sexualOrientation : null,
         height_inches: totalHeightInches,
         height_unit: heightUnit,
-        personality_type: personality,
         prompt_answers: validPromptAnswers.length > 0 ? validPromptAnswers : null,
-        interests: {
-          movies: favoriteMovies.split(',').map(s => s.trim()).filter(Boolean),
-          music: favoriteMusic.split(',').map(s => s.trim()).filter(Boolean),
-          books: favoriteBooks.split(',').map(s => s.trim()).filter(Boolean),
-          tv_shows: favoriteTvShows.split(',').map(s => s.trim()).filter(Boolean),
-        },
-        hobbies: hobbies.length > 0 ? hobbies : null,
-        love_language: loveLanguage ? [loveLanguage] : null,
         languages_spoken: languagesSpoken.length > 0 ? languagesSpoken : null,
+        hometown: hometown || null,
+        occupation: occupation || null,
+        education: education || null,
+        education_level: educationLevel || null,
         religion: religion || null,
         political_views: politicalViews || null,
-        voice_intro_url: voiceIntroUrl,
+        voice_intro_url: voiceIntroStoragePath || voiceIntroUrl,
         voice_intro_prompt: voiceIntroPrompt || null,
-        // Clear photo review flag when user saves their profile (they likely uploaded new photos)
-        photo_review_required: false,
-        photo_review_reason: null,
-        photo_review_requested_at: null,
+        // NOTE: photo_review_required is NOT cleared here - only admins can clear it
+        // after reviewing the user's updated photos. This prevents users from bypassing
+        // the photo review process by simply saving their profile.
       };
 
       let finalProfileId = profileId;
@@ -980,6 +987,33 @@ export default function EditProfile() {
           .eq('id', profileId);
 
         if (error) throw error;
+
+        // Check if user was policy_restricted as straight man and has now updated their profile
+        // to no longer be a straight man - if so, clear the restriction
+        const isStillStraightMan = (() => {
+          const genderArr = gender.length > 0 ? gender : [];
+          const orientationArr = sexualOrientation.length > 0 ? sexualOrientation : [];
+          const menOnlyGenders = ['Man'];
+          const isExclusivelyMale = genderArr.length > 0 &&
+            genderArr.every(g => menOnlyGenders.includes(g));
+          return isExclusivelyMale && orientationArr.includes('Straight');
+        })();
+
+        if (!isStillStraightMan) {
+          // Clear policy restriction if they're no longer a straight man
+          const { error: policyError } = await supabase
+            .from('profiles')
+            .update({
+              policy_restricted: false,
+              policy_restricted_reason: null,
+              policy_restricted_at: null,
+              policy_restriction_notified_at: null,
+              policy_restriction_reminder_sent: false,
+            })
+            .eq('id', profileId)
+            .eq('policy_restricted', true); // Only update if they were restricted
+          if (policyError) console.error('Failed to clear policy restriction:', policyError);
+        }
       } else {
         // Create new profile
         const { data, error } = await supabase
@@ -998,36 +1032,36 @@ export default function EditProfile() {
       const photosToUpload = photos.filter(p => p.is_new && !p.to_delete);
       const photosToUpdate = photos.filter(p => !p.is_new && !p.to_delete && p.id);
 
-      // Delete photos from storage and database
-      for (const photo of photosToDelete) {
-        if (photo.storage_path && !photo.storage_path.startsWith('file://')) {
-          // Only delete from storage if it's a valid storage path
-          const { error: storageError } = await supabase.storage
-            .from('profile-photos')
-            .remove([photo.storage_path]);
+      // Delete photos from storage and database in parallel
+      if (photosToDelete.length > 0) {
+        // Batch storage deletions
+        const storagePaths = photosToDelete
+          .filter(p => p.storage_path && !p.storage_path.startsWith('file://'))
+          .map(p => p.storage_path!);
+        const storageDeletePromise = storagePaths.length > 0
+          ? supabase.storage.from('profile-photos').remove(storagePaths)
+          : Promise.resolve({ error: null });
 
-          if (storageError) console.error('Error deleting from storage:', storageError);
-        }
-
-        const { error: dbError } = await supabase
+        // Batch DB deletions
+        const photoIds = photosToDelete.map(p => p.id!);
+        const dbDeletePromise = supabase
           .from('photos')
           .delete()
-          .eq('id', photo.id);
+          .in('id', photoIds);
 
-        if (dbError) console.error('Error deleting photo from database:', dbError);
+        const [storageResult, dbResult] = await Promise.all([storageDeletePromise, dbDeletePromise]);
+        if (storageResult.error) console.error('Error deleting from storage:', storageResult.error);
+        if (dbResult.error) console.error('Error deleting photos from database:', dbResult.error);
       }
 
-      // Upload new photos to Supabase Storage
-      for (const photo of photosToUpload) {
+      // Upload new photos in parallel (each photo: convert -> upload -> sign -> insert -> moderate)
+      await Promise.all(photosToUpload.map(async (photo, idx) => {
         try {
-          // Get file extension
-          const fileExt = 'jpg'; // Always use jpg since we optimized as JPEG
-          const fileName = `${finalProfileId}/${Date.now()}_${photo.display_order}.${fileExt}`;
+          const fileExt = 'jpg';
+          const fileName = `${finalProfileId}/${Date.now()}_${idx}_${photo.display_order}.${fileExt}`;
 
-          // Convert optimized image to ArrayBuffer
-          const arrayBuffer = await uriToArrayBuffer(photo.url);
+          const arrayBuffer = await uriToArrayBuffer(photo.url, photo.originalUri);
 
-          // Upload to Supabase Storage
           const { error: uploadError } = await supabase.storage
             .from('profile-photos')
             .upload(fileName, arrayBuffer, {
@@ -1037,34 +1071,69 @@ export default function EditProfile() {
 
           if (uploadError) {
             console.error('Upload error:', uploadError);
-            continue;
+            return;
           }
 
-          // Get public URL
-          const { data: { publicUrl } } = supabase.storage
-            .from('profile-photos')
-            .getPublicUrl(fileName);
+          // Generate signed URL for moderation + insert DB record in parallel
+          const [{ data: signedData }, { data: photoData, error: insertError }] = await Promise.all([
+            supabase.storage.from('profile-photos').createSignedUrl(fileName, 600),
+            supabase
+              .from('photos')
+              .insert({
+                profile_id: finalProfileId,
+                url: fileName,
+                storage_path: fileName,
+                is_primary: photo.is_primary,
+                display_order: photo.display_order,
+                content_hash: photo.contentHash,
+                blur_data_uri: photo.blurDataUri || null,
+                moderation_status: 'pending',
+              })
+              .select('id')
+              .single(),
+          ]);
 
-          // Insert photo record into database with content hash for duplicate detection
-          const { error: insertError } = await supabase
-            .from('photos')
-            .insert({
-              profile_id: finalProfileId,
-              url: publicUrl,
-              storage_path: fileName,
-              is_primary: photo.is_primary,
-              display_order: photo.display_order,
-              content_hash: photo.contentHash,
+          if (insertError) {
+            console.error('Error inserting photo record:', insertError);
+            return;
+          }
+
+          // Run NSFW moderation check
+          const signedUrl = signedData?.signedUrl || '';
+          try {
+            const { data: moderationResult, error: moderationError } = await supabase.functions.invoke('moderate-photo', {
+              body: {
+                photo_url: signedUrl,
+                photo_id: photoData?.id,
+                profile_id: finalProfileId,
+              },
             });
 
-          if (insertError) console.error('Error inserting photo record:', insertError);
+            if (moderationError) {
+              console.error('Moderation service error:', moderationError);
+            }
+
+            if (moderationResult?.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
+              Alert.alert(
+                'Photo Rejected',
+                'This photo contains inappropriate content and cannot be uploaded. Please choose a different photo.'
+              );
+            } else if (moderationResult?.approved === false && moderationResult.reason === 'contact_info') {
+              Alert.alert(
+                'Photo Rejected',
+                "Photos showing phone numbers, website links, emails, or social handles aren't allowed. Please upload a different photo."
+              );
+            }
+          } catch (moderationError: any) {
+            console.error('Moderation check failed:', moderationError);
+          }
         } catch (error) {
           console.error('Error uploading photo:', error);
         }
-      }
+      }));
 
-      // Update existing photo order and primary status
-      for (const photo of photosToUpdate) {
+      // Update existing photo order and primary status in parallel
+      await Promise.all(photosToUpdate.map(async (photo) => {
         const { error } = await supabase
           .from('photos')
           .update({
@@ -1074,7 +1143,7 @@ export default function EditProfile() {
           .eq('id', photo.id);
 
         if (error) console.error('Error updating photo:', error);
-      }
+      }));
 
       // Upload voice intro if it's a new local file
       let finalVoiceIntroUrl = voiceIntroUrl;
@@ -1098,21 +1167,19 @@ export default function EditProfile() {
           if (uploadError) {
             console.error('Voice upload error:', uploadError);
           } else {
-            // Get public URL
-            const { data: { publicUrl } } = supabase.storage
-              .from('voice-intros')
-              .getPublicUrl(fileName);
+            // Store the path within the bucket (buckets are private, URLs are signed on demand)
+            const voiceStoragePath = fileName;
+            finalVoiceIntroUrl = voiceStoragePath;
 
-            finalVoiceIntroUrl = publicUrl;
-
-            // Update the profile with the public URL and duration
-            await supabase
+            // Update the profile with the storage path and duration
+            const { error: voiceUpdateError } = await supabase
               .from('profiles')
               .update({
-                voice_intro_url: publicUrl,
+                voice_intro_url: voiceStoragePath,
                 voice_intro_duration: finalVoiceDuration
               })
               .eq('id', finalProfileId);
+            if (voiceUpdateError) console.error('Failed to save voice intro:', voiceUpdateError);
           }
         } catch (error) {
           console.error('Error uploading voice intro:', error);
@@ -1125,10 +1192,11 @@ export default function EditProfile() {
         const lifestylePreferences: any = {};
         if (smoking) lifestylePreferences.smoking = smoking;
         if (drinking) lifestylePreferences.drinking = drinking;
+        if (smokesWeed) lifestylePreferences.smokes_weed = smokesWeed;
+        if (doesDrugs) lifestylePreferences.does_drugs = doesDrugs;
         if (pets) lifestylePreferences.pets = pets;
 
         const preferencesPayload = {
-          profile_id: finalProfileId,
           primary_reasons: primaryReason.length > 0 ? primaryReason : null,
           primary_reason: primaryReason.length > 0 ? primaryReason[0] : null, // Keep legacy column for backward compat
           relationship_type: relationshipType || null,
@@ -1141,20 +1209,36 @@ export default function EditProfile() {
           age_max: parseInt(ageMax) || 45,
           max_distance_miles: parseInt(maxDistance) || 50,
           willing_to_relocate: willingToRelocate,
-          gender_preference: genderPreference.length > 0 ? genderPreference : null,
+          gender_preference: genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary'],
           dealbreakers: dealbreakers.length > 0 ? dealbreakers : null,
           must_haves: mustHaves.length > 0 ? mustHaves : null,
         };
 
+        // Use .update() instead of .upsert() to only modify fields managed by this page.
+        // .upsert() would reset unincluded fields (search_globally, preferred_cities,
+        // distance_unit, discovery_filters) to their defaults, destroying user data.
         const { error: prefsError } = await supabase
           .from('preferences')
-          .upsert(preferencesPayload, { onConflict: 'profile_id' });
+          .update(preferencesPayload)
+          .eq('profile_id', finalProfileId);
 
         if (prefsError) {
           console.error('Error saving preferences:', prefsError);
-          // Don't fail the whole save if preferences fail
+          captureException(prefsError instanceof Error ? prefsError : new Error((prefsError as any)?.message || 'Preferences save failed'), { context: 'edit_profile_preferences' });
+          // Don't fail the whole save — profile columns may have saved — but
+          // tell the user so they don't assume their preference changes stuck.
+          // Previously this was swallowed silently and the success alert below
+          // claimed everything saved, which was the wrong story when only
+          // part of the payload landed.
+          Alert.alert(
+            'Partial save',
+            'Your profile saved, but some preferences could not be updated. Please retry from the Matching Preferences screen.'
+          );
         }
       }
+
+      // Clean up persisted optimized images
+      cleanupOptimizedImages().catch(() => {});
 
       if (!skipAlert) {
         Alert.alert(
@@ -1168,6 +1252,7 @@ export default function EditProfile() {
       return true;
     } catch (error: any) {
       console.error('Error saving profile:', error);
+      captureException(error instanceof Error ? error : new Error(error?.message || 'Profile save failed'), { context: 'edit_profile' });
       Alert.alert('Error', error.message || 'Failed to save profile');
       return false;
     } finally {
@@ -1300,7 +1385,7 @@ export default function EditProfile() {
               style={styles.input}
               onPress={() => setShowDatePicker(true)}
             >
-              <Text style={birthDate ? { color: '#111827' } : { color: '#9CA3AF' }}>
+              <Text style={birthDate ? { color: isDarkColorScheme ? '#F5F5F7' : '#111827' } : { color: '#9CA3AF' }}>
                 {birthDate ? birthDate.toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
@@ -1309,7 +1394,7 @@ export default function EditProfile() {
               </Text>
             </TouchableOpacity>
             {birthDate && (
-              <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+              <Text style={{ fontSize: 12, color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', marginTop: 4 }}>
                 Age: {calculateAge(birthDate)} • {calculateZodiac(birthDate)}
               </Text>
             )}
@@ -1323,12 +1408,12 @@ export default function EditProfile() {
             onRequestClose={() => setShowDatePicker(false)}
           >
             <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' }}>
-              <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 32 }}>
+              <View style={{ backgroundColor: isDarkColorScheme ? '#1C1C2E' : 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 32 }}>
                 {/* Header */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                  <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#111827' }}>Select Birth Date</Text>
+                  <Text style={{ fontSize: 24, fontWeight: 'bold', color: isDarkColorScheme ? '#F5F5F7' : '#111827' }}>Select Birth Date</Text>
                   <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                    <MaterialCommunityIcons name="close" size={28} color="#6B7280" />
+                    <MaterialCommunityIcons name="close" size={28} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
                   </TouchableOpacity>
                 </View>
 
@@ -1336,8 +1421,8 @@ export default function EditProfile() {
                 <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
                   {/* Month */}
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#6B7280', marginBottom: 8 }}>Month</Text>
-                    <ScrollView style={{ maxHeight: 192, backgroundColor: '#F9FAFB', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', marginBottom: 8 }}>Month</Text>
+                    <ScrollView style={{ maxHeight: 192, backgroundColor: isDarkColorScheme ? '#0F0F1A' : '#F9FAFB', borderRadius: 12, borderWidth: 1, borderColor: isDarkColorScheme ? '#2C2C3E' : '#E5E7EB' }}>
                       {MONTHS.map((month, index) => (
                         <TouchableOpacity
                           key={month}
@@ -1345,13 +1430,13 @@ export default function EditProfile() {
                             paddingHorizontal: 16,
                             paddingVertical: 12,
                             borderBottomWidth: 1,
-                            borderBottomColor: '#F3F4F6',
-                            backgroundColor: selectedMonth === index ? '#F3E8FF' : 'transparent'
+                            borderBottomColor: isDarkColorScheme ? '#2C2C3E' : '#F3F4F6',
+                            backgroundColor: selectedMonth === index ? (isDarkColorScheme ? '#2D2640' : '#F3E8FF') : 'transparent'
                           }}
                           onPress={() => setSelectedMonth(index)}
                         >
                           <Text style={{
-                            color: selectedMonth === index ? '#A08AB7' : '#374151',
+                            color: selectedMonth === index ? '#A08AB7' : (isDarkColorScheme ? '#F5F5F7' : '#374151'),
                             fontWeight: selectedMonth === index ? 'bold' : 'normal'
                           }}>
                             {month}
@@ -1363,8 +1448,8 @@ export default function EditProfile() {
 
                   {/* Day */}
                   <View style={{ width: 80 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#6B7280', marginBottom: 8 }}>Day</Text>
-                    <ScrollView style={{ maxHeight: 192, backgroundColor: '#F9FAFB', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', marginBottom: 8 }}>Day</Text>
+                    <ScrollView style={{ maxHeight: 192, backgroundColor: isDarkColorScheme ? '#0F0F1A' : '#F9FAFB', borderRadius: 12, borderWidth: 1, borderColor: isDarkColorScheme ? '#2C2C3E' : '#E5E7EB' }}>
                       {DAYS.map((day) => (
                         <TouchableOpacity
                           key={day}
@@ -1372,14 +1457,14 @@ export default function EditProfile() {
                             paddingHorizontal: 16,
                             paddingVertical: 12,
                             borderBottomWidth: 1,
-                            borderBottomColor: '#F3F4F6',
+                            borderBottomColor: isDarkColorScheme ? '#2C2C3E' : '#F3F4F6',
                             alignItems: 'center',
-                            backgroundColor: selectedDay === day ? '#F3E8FF' : 'transparent'
+                            backgroundColor: selectedDay === day ? (isDarkColorScheme ? '#2D2640' : '#F3E8FF') : 'transparent'
                           }}
                           onPress={() => setSelectedDay(day)}
                         >
                           <Text style={{
-                            color: selectedDay === day ? '#A08AB7' : '#374151',
+                            color: selectedDay === day ? '#A08AB7' : (isDarkColorScheme ? '#F5F5F7' : '#374151'),
                             fontWeight: selectedDay === day ? 'bold' : 'normal'
                           }}>
                             {day}
@@ -1391,8 +1476,8 @@ export default function EditProfile() {
 
                   {/* Year */}
                   <View style={{ width: 96 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#6B7280', marginBottom: 8 }}>Year</Text>
-                    <ScrollView style={{ maxHeight: 192, backgroundColor: '#F9FAFB', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', marginBottom: 8 }}>Year</Text>
+                    <ScrollView style={{ maxHeight: 192, backgroundColor: isDarkColorScheme ? '#0F0F1A' : '#F9FAFB', borderRadius: 12, borderWidth: 1, borderColor: isDarkColorScheme ? '#2C2C3E' : '#E5E7EB' }}>
                       {YEARS.map((year) => (
                         <TouchableOpacity
                           key={year}
@@ -1400,14 +1485,14 @@ export default function EditProfile() {
                             paddingHorizontal: 16,
                             paddingVertical: 12,
                             borderBottomWidth: 1,
-                            borderBottomColor: '#F3F4F6',
+                            borderBottomColor: isDarkColorScheme ? '#2C2C3E' : '#F3F4F6',
                             alignItems: 'center',
-                            backgroundColor: selectedYear === year ? '#F3E8FF' : 'transparent'
+                            backgroundColor: selectedYear === year ? (isDarkColorScheme ? '#2D2640' : '#F3E8FF') : 'transparent'
                           }}
                           onPress={() => setSelectedYear(year)}
                         >
                           <Text style={{
-                            color: selectedYear === year ? '#A08AB7' : '#374151',
+                            color: selectedYear === year ? '#A08AB7' : (isDarkColorScheme ? '#F5F5F7' : '#374151'),
                             fontWeight: selectedYear === year ? 'bold' : 'normal'
                           }}>
                             {year}
@@ -1424,7 +1509,7 @@ export default function EditProfile() {
                     borderRadius: 16,
                     paddingVertical: 16,
                     alignItems: 'center',
-                    backgroundColor: (selectedMonth !== null && selectedDay !== null && selectedYear !== null) ? '#A08AB7' : '#D1D5DB'
+                    backgroundColor: (selectedMonth !== null && selectedDay !== null && selectedYear !== null) ? '#A08AB7' : (isDarkColorScheme ? '#2C2C3E' : '#D1D5DB')
                   }}
                   onPress={handleDateConfirm}
                   disabled={selectedMonth === null || selectedDay === null || selectedYear === null}
@@ -1436,11 +1521,63 @@ export default function EditProfile() {
           </Modal>
 
           <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Hometown</Text>
+            <TextInput
+              style={styles.input}
+              value={hometown}
+              onChangeText={setHometown}
+              placeholder="Where are you from?"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Occupation</Text>
+            <TextInput
+              style={styles.input}
+              value={occupation}
+              onChangeText={setOccupation}
+              placeholder="What do you do?"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Education</Text>
+            <TextInput
+              style={styles.input}
+              value={education}
+              onChangeText={setEducation}
+              placeholder="Where did you study?"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Education Level</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {['High School', "Associate's Degree", "Bachelor's Degree", "Master's Degree", 'Doctorate / PhD', 'Trade School', 'Self-Taught', 'Other'].map((level) => {
+                const value = level.toLowerCase().replace(/['\s\/]+/g, '_').replace(/_degree/g, 's');
+                const isSelected = educationLevel === value || educationLevel === level;
+                return (
+                  <TouchableOpacity
+                    key={level}
+                    style={[
+                      styles.interestChip,
+                      isSelected && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
+                    ]}
+                    onPress={() => setEducationLevel(isSelected ? '' : value)}
+                  >
+                    <Text style={[{ fontSize: 14, color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }, isSelected && { color: '#FFFFFF' }]}>{level}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Gender</Text>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
+            <Text style={{ fontSize: 12, color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', marginBottom: 8 }}>Select one</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {GENDERS.map((g) => (
                 <TouchableOpacity
@@ -1450,10 +1587,12 @@ export default function EditProfile() {
                     gender.includes(g) && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                   ]}
                   onPress={() => {
-                    if (gender.includes(g)) {
-                      setGender(gender.filter(item => item !== g));
-                    } else {
-                      setGender([...gender, g]);
+                    const newGenders = gender.includes(g) ? [] : [g];
+                    setGender(newGenders);
+
+                    // If user selects a male-identifying gender, clear "Straight" orientation
+                    if (newGenders.length > 0 && MEN_ONLY_GENDERS.includes(newGenders[0]) && sexualOrientation.includes('Straight')) {
+                      setSexualOrientation([]);
                     }
                   }}
                 >
@@ -1466,7 +1605,7 @@ export default function EditProfile() {
             </View>
             {gender.length > 0 && (
               <Text style={{ fontSize: 12, color: '#A08AB7', marginTop: 8 }}>
-                Selected: {gender.join(', ')}
+                Selected: {gender[0]}
               </Text>
             )}
           </View>
@@ -1494,7 +1633,7 @@ export default function EditProfile() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Ethnicity (Optional)</Text>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply. This helps find cultural connections.</Text>
+            <Text style={{ fontSize: 12, color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', marginBottom: 8 }}>Select all that apply. This helps find cultural connections.</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {ETHNICITIES.map((e) => (
                 <TouchableOpacity
@@ -1527,9 +1666,9 @@ export default function EditProfile() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Sexual Orientation</Text>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
+            <Text style={{ fontSize: 12, color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', marginBottom: 8 }}>Select one</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {ORIENTATIONS.map((o) => (
+              {getAvailableOrientations(gender).map((o) => (
                 <TouchableOpacity
                   key={o}
                   style={[
@@ -1538,9 +1677,9 @@ export default function EditProfile() {
                   ]}
                   onPress={() => {
                     if (sexualOrientation.includes(o)) {
-                      setSexualOrientation(sexualOrientation.filter(item => item !== o));
+                      setSexualOrientation([]);
                     } else {
-                      setSexualOrientation([...sexualOrientation, o]);
+                      setSexualOrientation([o]);
                     }
                   }}
                 >
@@ -1553,7 +1692,7 @@ export default function EditProfile() {
             </View>
             {sexualOrientation.length > 0 && (
               <Text style={{ fontSize: 12, color: '#A08AB7', marginTop: 8 }}>
-                Selected: {sexualOrientation.join(', ')}
+                Selected: {sexualOrientation[0]}
               </Text>
             )}
           </View>
@@ -1603,7 +1742,7 @@ export default function EditProfile() {
                     maxLength={1}
                   />
                 </View>
-                <Text style={{ fontWeight: 'bold', color: '#6B7280' }}>ft</Text>
+                <Text style={{ fontWeight: 'bold', color: isDarkColorScheme ? '#9CA3AF' : '#6B7280' }}>ft</Text>
                 <View style={{ flex: 1 }}>
                   <TextInput
                     style={styles.input}
@@ -1615,7 +1754,7 @@ export default function EditProfile() {
                     maxLength={2}
                   />
                 </View>
-                <Text style={{ fontWeight: 'bold', color: '#6B7280' }}>in</Text>
+                <Text style={{ fontWeight: 'bold', color: isDarkColorScheme ? '#9CA3AF' : '#6B7280' }}>in</Text>
               </View>
             ) : (
               /* Height Input - Metric (cm) */
@@ -1631,93 +1770,16 @@ export default function EditProfile() {
                     maxLength={3}
                   />
                 </View>
-                <Text style={{ fontWeight: 'bold', color: '#6B7280' }}>cm</Text>
+                <Text style={{ fontWeight: 'bold', color: isDarkColorScheme ? '#9CA3AF' : '#6B7280' }}>cm</Text>
               </View>
             )}
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Personality Type</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {PERSONALITY_TYPES.map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.interestChip,
-                    personality === type && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
-                  ]}
-                  onPress={() => setPersonality(type)}
-                >
-                  <Text style={[
-                    styles.interestText,
-                    personality === type && { color: '#FFFFFF' }
-                  ]}>{type}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
         </View>
 
-        {/* Bio Section */}
+        {/* About You Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>About You</Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Bio</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={bio}
-              onChangeText={setBio}
-              placeholder="Tell your story..."
-              placeholderTextColor="#9CA3AF"
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Occupation</Text>
-            <TextInput
-              style={styles.input}
-              value={occupation}
-              onChangeText={setOccupation}
-              placeholder="What do you do?"
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Education</Text>
-            <TextInput
-              style={styles.input}
-              value={education}
-              onChangeText={setEducation}
-              placeholder="Your education"
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Love Language</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {LOVE_LANGUAGES.map((lang) => (
-                <TouchableOpacity
-                  key={lang}
-                  style={[
-                    styles.interestChip,
-                    loveLanguage === lang && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
-                  ]}
-                  onPress={() => setLoveLanguage(lang)}
-                >
-                  <Text style={[
-                    styles.interestText,
-                    loveLanguage === lang && { color: '#FFFFFF' }
-                  ]}>{lang}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Religion</Text>
@@ -1762,162 +1824,49 @@ export default function EditProfile() {
           </View>
         </View>
 
-        {/* Location Section */}
+        {/* Location Section - GPS Only (no manual editing) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Location</Text>
+          <Text style={styles.sectionSubtitle}>
+            Your location is automatically detected via GPS
+          </Text>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>City</Text>
-            <TextInput
-              style={styles.input}
-              value={locationCity}
-              onChangeText={setLocationCity}
-              placeholder="City"
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>State</Text>
-            <TextInput
-              style={styles.input}
-              value={locationState}
-              onChangeText={setLocationState}
-              placeholder="State"
-              placeholderTextColor="#9CA3AF"
-              maxLength={2}
-              autoCapitalize="characters"
-            />
-          </View>
-        </View>
-
-        {/* Hobbies Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Hobbies</Text>
-          <Text style={styles.sectionSubtitle}>Select from options or add your own (up to 10)</Text>
-
-          {/* Predefined Hobby Options */}
-          <View style={styles.interestsContainer}>
-            {HOBBY_OPTIONS.map((hobby) => (
-              <TouchableOpacity
-                key={hobby}
-                style={[
-                  styles.optionChip,
-                  hobbies.includes(hobby) && styles.optionChipSelected,
-                ]}
-                onPress={() => toggleHobby(hobby)}
-              >
-                <Text
-                  style={[
-                    styles.optionChipText,
-                    hobbies.includes(hobby) && styles.optionChipTextSelected,
-                  ]}
-                >
-                  {hobby}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Selected/Custom Hobbies */}
-          {hobbies.some(h => !HOBBY_OPTIONS.includes(h)) && (
-            <>
-              <Text style={[styles.sectionSubtitle, { marginTop: 16, marginBottom: 8 }]}>Custom Hobbies</Text>
-              <View style={styles.interestsContainer}>
-                {hobbies
-                  .filter(h => !HOBBY_OPTIONS.includes(h))
-                  .map((hobby, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.interestChip}
-                      onPress={() => setHobbies(hobbies.filter((h) => h !== hobby))}
-                    >
-                      <Text style={styles.interestText}>{hobby}</Text>
-                      <MaterialCommunityIcons name="close" size={16} color="#A08AB7" />
-                    </TouchableOpacity>
-                  ))}
-              </View>
-            </>
-          )}
-
-          {/* Add Custom Hobby */}
-          {hobbies.length < 10 && (
-            <View style={styles.addInterestContainer}>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={newHobby}
-                onChangeText={setNewHobby}
-                placeholder="Add a custom hobby..."
-                placeholderTextColor="#9CA3AF"
-                onSubmitEditing={addHobby}
-              />
-              <TouchableOpacity style={styles.addButton} onPress={addHobby}>
-                <MaterialCommunityIcons name="plus" size={24} color="#A08AB7" />
-              </TouchableOpacity>
+          {/* Current Location Display */}
+          <View style={styles.locationDisplayContainer}>
+            <View style={styles.locationIconContainer}>
+              <MaterialCommunityIcons name="map-marker" size={24} color="#A08AB7" />
             </View>
-          )}
-        </View>
-
-        {/* Favorites Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Favorites</Text>
-          <Text style={styles.sectionSubtitle}>Share what you love (optional)</Text>
-
-          {/* Movies */}
-          <View style={{ marginBottom: 16 }}>
-            <Text style={styles.fieldLabel}>🎬 Favorite Movies</Text>
-            <TextInput
-              style={styles.input}
-              value={favoriteMovies}
-              onChangeText={setFavoriteMovies}
-              placeholder="e.g., Moonlight, Carol, The Half of It"
-              placeholderTextColor="#9CA3AF"
-              multiline
-            />
-            <Text style={styles.helperText}>Separate with commas</Text>
+            <View style={styles.locationTextContainer}>
+              <Text style={styles.locationDisplayText}>
+                {locationCity && locationState
+                  ? `${locationCity}, ${locationState}`
+                  : locationCity || locationState || 'Location not set'}
+              </Text>
+              <Text style={styles.locationHelpText}>
+                Tap refresh to update your location
+              </Text>
+            </View>
           </View>
 
-          {/* Music */}
-          <View style={{ marginBottom: 16 }}>
-            <Text style={styles.fieldLabel}>🎵 Favorite Music Artists</Text>
-            <TextInput
-              style={styles.input}
-              value={favoriteMusic}
-              onChangeText={setFavoriteMusic}
-              placeholder="e.g., Hayley Kiyoko, Troye Sivan, Chappell Roan"
-              placeholderTextColor="#9CA3AF"
-              multiline
-            />
-            <Text style={styles.helperText}>Separate with commas</Text>
-          </View>
+          {/* Refresh Location Button */}
+          <TouchableOpacity
+            style={styles.refreshLocationButton}
+            onPress={refreshLocation}
+            disabled={refreshingLocation}
+          >
+            {refreshingLocation ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#FFFFFF" />
+                <Text style={styles.refreshLocationButtonText}>Refresh My Location</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
-          {/* Books */}
-          <View style={{ marginBottom: 16 }}>
-            <Text style={styles.fieldLabel}>📚 Favorite Books</Text>
-            <TextInput
-              style={styles.input}
-              value={favoriteBooks}
-              onChangeText={setFavoriteBooks}
-              placeholder="e.g., Red White & Royal Blue, Stone Butch Blues"
-              placeholderTextColor="#9CA3AF"
-              multiline
-            />
-            <Text style={styles.helperText}>Separate with commas</Text>
-          </View>
-
-          {/* TV Shows */}
-          <View>
-            <Text style={styles.fieldLabel}>📺 Favorite TV Shows</Text>
-            <TextInput
-              style={styles.input}
-              value={favoriteTvShows}
-              onChangeText={setFavoriteTvShows}
-              placeholder="e.g., Heartstopper, The L Word, Pose"
-              placeholderTextColor="#9CA3AF"
-              multiline
-            />
-            <Text style={styles.helperText}>Separate with commas</Text>
-          </View>
+          <Text style={styles.locationNote}>
+            Your location is used to show you relevant matches nearby. You cannot manually change your location.
+          </Text>
         </View>
 
         {/* Languages Section */}
@@ -1955,7 +1904,7 @@ export default function EditProfile() {
                 );
               }}
             >
-              <Text style={{ color: '#9CA3AF', fontSize: 16 }}>Add a language...</Text>
+              <Text style={{ color: isDarkColorScheme ? '#6B7280' : '#9CA3AF', fontSize: 16 }}>Add a language...</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -1990,7 +1939,7 @@ export default function EditProfile() {
           {voiceIntroUrl && !isRecording && (
             <View style={{ marginTop: 16 }}>
               <Text style={styles.inputLabel}>Voice intro prompt</Text>
-              <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 12 }}>
+              <Text style={{ color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', fontSize: 13, marginBottom: 12 }}>
                 Give your voice intro a creative title
               </Text>
 
@@ -2002,15 +1951,15 @@ export default function EditProfile() {
                       paddingHorizontal: 14,
                       paddingVertical: 8,
                       borderRadius: 20,
-                      backgroundColor: voiceIntroPrompt === prompt ? '#A08AB7' : '#F3F4F6',
+                      backgroundColor: voiceIntroPrompt === prompt ? '#A08AB7' : (isDarkColorScheme ? '#1C1C2E' : '#F3F4F6'),
                       borderWidth: 1,
-                      borderColor: voiceIntroPrompt === prompt ? '#A08AB7' : '#E5E7EB',
+                      borderColor: voiceIntroPrompt === prompt ? '#A08AB7' : (isDarkColorScheme ? '#2C2C3E' : '#E5E7EB'),
                     }}
                     onPress={() => setVoiceIntroPrompt(prompt)}
                   >
                     <Text style={{
                       fontSize: 13,
-                      color: voiceIntroPrompt === prompt ? '#FFFFFF' : '#374151',
+                      color: voiceIntroPrompt === prompt ? '#FFFFFF' : (isDarkColorScheme ? '#F5F5F7' : '#374151'),
                     }}>
                       {prompt}
                     </Text>
@@ -2172,7 +2121,7 @@ export default function EditProfile() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Primary Reasons</Text>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
+            <Text style={{ fontSize: 12, color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {PRIMARY_REASONS.map((reason) => (
                 <TouchableOpacity
@@ -2228,22 +2177,22 @@ export default function EditProfile() {
             <Text style={styles.inputLabel}>Children</Text>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity
-                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === true && { backgroundColor: '#E9D5FF', borderColor: '#A08AB7' }]}
+                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === true && { backgroundColor: isDarkColorScheme ? '#2D2640' : '#E9D5FF', borderColor: '#A08AB7' }]}
                 onPress={() => setWantsChildren(true)}
               >
-                <Text style={{ color: wantsChildren === true ? '#A08AB7' : '#6B7280', fontWeight: wantsChildren === true ? '600' : '400' }}>Yes</Text>
+                <Text style={{ color: wantsChildren === true ? '#A08AB7' : (isDarkColorScheme ? '#9CA3AF' : '#6B7280'), fontWeight: wantsChildren === true ? '600' : '400' }}>Yes</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === false && { backgroundColor: '#E9D5FF', borderColor: '#A08AB7' }]}
+                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === false && { backgroundColor: isDarkColorScheme ? '#2D2640' : '#E9D5FF', borderColor: '#A08AB7' }]}
                 onPress={() => setWantsChildren(false)}
               >
-                <Text style={{ color: wantsChildren === false ? '#A08AB7' : '#6B7280', fontWeight: wantsChildren === false ? '600' : '400' }}>No</Text>
+                <Text style={{ color: wantsChildren === false ? '#A08AB7' : (isDarkColorScheme ? '#9CA3AF' : '#6B7280'), fontWeight: wantsChildren === false ? '600' : '400' }}>No</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === null && { backgroundColor: '#E9D5FF', borderColor: '#A08AB7' }]}
+                style={[styles.input, { flex: 1, alignItems: 'center' }, wantsChildren === null && { backgroundColor: isDarkColorScheme ? '#2D2640' : '#E9D5FF', borderColor: '#A08AB7' }]}
                 onPress={() => setWantsChildren(null)}
               >
-                <Text style={{ color: wantsChildren === null ? '#A08AB7' : '#6B7280', fontWeight: wantsChildren === null ? '600' : '400' }}>Open</Text>
+                <Text style={{ color: wantsChildren === null ? '#A08AB7' : (isDarkColorScheme ? '#9CA3AF' : '#6B7280'), fontWeight: wantsChildren === null ? '600' : '400' }}>Open</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2251,7 +2200,7 @@ export default function EditProfile() {
           {wantsChildren !== false && (
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Children Arrangement</Text>
-              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
+              <Text style={{ fontSize: 12, color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {CHILDREN_ARRANGEMENTS.map((arr) => (
                   <TouchableOpacity
@@ -2285,7 +2234,7 @@ export default function EditProfile() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Financial Arrangement</Text>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
+            <Text style={{ fontSize: 12, color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {FINANCIAL_ARRANGEMENTS.map((arr) => (
                 <TouchableOpacity
@@ -2318,7 +2267,7 @@ export default function EditProfile() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Housing Preference</Text>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
+            <Text style={{ fontSize: 12, color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', marginBottom: 8 }}>Select all that apply</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {HOUSING_PREFERENCES.map((pref) => (
                 <TouchableOpacity
@@ -2368,7 +2317,7 @@ export default function EditProfile() {
                   placeholderTextColor="#9CA3AF"
                 />
               </View>
-              <Text style={{ fontWeight: 'bold', color: '#6B7280' }}>to</Text>
+              <Text style={{ fontWeight: 'bold', color: isDarkColorScheme ? '#9CA3AF' : '#6B7280' }}>to</Text>
               <View style={{ flex: 1 }}>
                 <TextInput
                   style={styles.input}
@@ -2425,7 +2374,7 @@ export default function EditProfile() {
                 height: 24,
                 borderRadius: 6,
                 borderWidth: 2,
-                borderColor: willingToRelocate ? '#A08AB7' : '#D1D5DB',
+                borderColor: willingToRelocate ? '#A08AB7' : (isDarkColorScheme ? '#4B5563' : '#D1D5DB'),
                 backgroundColor: willingToRelocate ? '#A08AB7' : 'transparent',
                 alignItems: 'center',
                 justifyContent: 'center'
@@ -2434,7 +2383,7 @@ export default function EditProfile() {
                   <MaterialCommunityIcons name="check" size={16} color="white" />
                 )}
               </View>
-              <Text style={{ fontSize: 16, color: '#374151', fontWeight: '500' }}>
+              <Text style={{ fontSize: 16, color: isDarkColorScheme ? '#F5F5F7' : '#374151', fontWeight: '500' }}>
                 Willing to relocate
               </Text>
             </TouchableOpacity>
@@ -2450,11 +2399,11 @@ export default function EditProfile() {
             {dealbreakers.map((dealbreaker, index) => (
               <TouchableOpacity
                 key={index}
-                style={[styles.interestChip, { backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FCA5A5' }]}
+                style={[styles.interestChip, { backgroundColor: isDarkColorScheme ? '#3B1C1C' : '#FEE2E2', borderWidth: 1, borderColor: isDarkColorScheme ? '#5C2C2C' : '#FCA5A5' }]}
                 onPress={() => removeDealbreaker(index)}
               >
-                <Text style={[styles.interestText, { color: '#DC2626' }]}>❌ {dealbreaker}</Text>
-                <MaterialCommunityIcons name="close" size={16} color="#DC2626" />
+                <Text style={[styles.interestText, { color: isDarkColorScheme ? '#F87171' : '#DC2626' }]}>❌ {dealbreaker}</Text>
+                <MaterialCommunityIcons name="close" size={16} color={isDarkColorScheme ? '#F87171' : '#DC2626'} />
               </TouchableOpacity>
             ))}
           </View>
@@ -2485,11 +2434,11 @@ export default function EditProfile() {
             {mustHaves.map((mustHave, index) => (
               <TouchableOpacity
                 key={index}
-                style={[styles.interestChip, { backgroundColor: '#D1FAE5', borderWidth: 1, borderColor: '#6EE7B7' }]}
+                style={[styles.interestChip, { backgroundColor: isDarkColorScheme ? '#1C3B2A' : '#D1FAE5', borderWidth: 1, borderColor: isDarkColorScheme ? '#2C5C3E' : '#6EE7B7' }]}
                 onPress={() => removeMustHave(index)}
               >
-                <Text style={[styles.interestText, { color: '#059669' }]}>✓ {mustHave}</Text>
-                <MaterialCommunityIcons name="close" size={16} color="#059669" />
+                <Text style={[styles.interestText, { color: isDarkColorScheme ? '#34D399' : '#059669' }]}>✓ {mustHave}</Text>
+                <MaterialCommunityIcons name="close" size={16} color={isDarkColorScheme ? '#34D399' : '#059669'} />
               </TouchableOpacity>
             ))}
           </View>
@@ -2538,8 +2487,6 @@ export default function EditProfile() {
           <TouchableOpacity
             style={[styles.actionButton, styles.previewButton]}
             onPress={() => {
-            console.log('👁️ Live Preview button clicked. Photos in state:', photos.length, photos.map(p => p.url.substring(0, 30)));
-
             // Calculate age and zodiac from birth date
             const calculatedAge = birthDate ? calculateAge(birthDate) : age;
             const calculatedZodiac = birthDate ? calculateZodiac(birthDate) : zodiac;
@@ -2549,9 +2496,7 @@ export default function EditProfile() {
             const previewData = {
               display_name: displayName,
               age: calculatedAge,
-              bio,
-              occupation,
-              education,
+              // Location is read-only - set via GPS only
               location_city: locationCity,
               location_state: locationState,
               gender: gender.length > 0 ? gender : null,
@@ -2560,21 +2505,12 @@ export default function EditProfile() {
               sexual_orientation: sexualOrientation.length > 0 ? sexualOrientation : null,
               height_inches: totalHeightInches,
               zodiac_sign: calculatedZodiac,
-              personality_type: personality,
-              love_language: loveLanguage ? [loveLanguage] : null,
               languages_spoken: languagesSpoken.length > 0 ? languagesSpoken : null,
               religion,
               political_views: politicalViews,
               photos: photos.filter(p => !p.to_delete),
               prompt_answers: promptAnswers.filter(pa => pa.prompt && pa.answer),
-              interests: {
-                movies: favoriteMovies.split(',').map(s => s.trim()).filter(Boolean),
-                music: favoriteMusic.split(',').map(s => s.trim()).filter(Boolean),
-                books: favoriteBooks.split(',').map(s => s.trim()).filter(Boolean),
-                tv_shows: favoriteTvShows.split(',').map(s => s.trim()).filter(Boolean),
-              },
-              hobbies,
-              voice_intro_url: voiceIntroUrl,
+              voice_intro_url: voiceIntroStoragePath || voiceIntroUrl,
               voice_intro_duration: voiceDuration,
               voice_intro_prompt: voiceIntroPrompt || null,
               is_verified: false,
@@ -2590,7 +2526,7 @@ export default function EditProfile() {
                 age_max: parseInt(ageMax) || 45,
                 max_distance_miles: parseInt(maxDistance) || 50,
                 willing_to_relocate: willingToRelocate,
-                gender_preference: Array.isArray(genderPreference) ? genderPreference : [],
+                gender_preference: Array.isArray(genderPreference) && genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary'],
                 dealbreakers: Array.isArray(dealbreakers) ? dealbreakers : [],
                 must_haves: Array.isArray(mustHaves) ? mustHaves : [],
                 lifestyle_preferences: {
@@ -2647,7 +2583,7 @@ export default function EditProfile() {
                 }}
                 style={styles.modalCloseButton}
               >
-                <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
+                <MaterialCommunityIcons name="close" size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
               </TouchableOpacity>
             </View>
 
@@ -2697,409 +2633,469 @@ export default function EditProfile() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  saveButton: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
-  },
-  content: {
-    flex: 1,
-  },
-  section: {
-    backgroundColor: 'white',
-    marginTop: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 16,
-  },
-  fieldLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  photosScroll: {
-    marginHorizontal: -20,
-    paddingHorizontal: 20,
-  },
-  photoContainer: {
-    marginRight: 12,
-    position: 'relative',
-  },
-  photoImage: {
-    width: 120,
-    height: 160,
-    borderRadius: 12,
-    backgroundColor: '#E5E7EB',
-  },
-  photoControls: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    right: 8,
-    flexDirection: 'row',
-    gap: 4,
-  },
-  photoControl: {
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteControl: {
-    backgroundColor: 'rgba(239, 68, 68, 0.8)',
-  },
-  primaryBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: '#A08AB7',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  primaryText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  addPhotoButton: {
-    width: 120,
-    height: 160,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
-  },
-  addPhotoText: {
-    fontSize: 14,
-    color: '#A08AB7',
-    marginTop: 8,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
-  },
-  textArea: {
-    minHeight: 100,
-    paddingTop: 12,
-  },
-  promptContainer: {
-    marginBottom: 20,
-  },
-  promptSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F9FAFB',
-    marginBottom: 8,
-  },
-  promptText: {
-    fontSize: 15,
-    color: '#111827',
-    fontWeight: '500',
-    flex: 1,
-  },
-  promptPlaceholder: {
-    fontSize: 15,
-    color: '#9CA3AF',
-    flex: 1,
-  },
-  promptAnswer: {
-    minHeight: 80,
-    paddingTop: 12,
-  },
-  interestsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  interestChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F3E8FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  interestText: {
-    fontSize: 14,
-    color: '#A08AB7',
-    fontWeight: '500',
-  },
-  optionChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  optionChipSelected: {
-    backgroundColor: '#A08AB7',
-    borderColor: '#A08AB7',
-  },
-  optionChipText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  optionChipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  addInterestContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  addButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#F3E8FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  voiceButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    backgroundColor: '#F3E8FF',
-    paddingVertical: 20,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#E9D5FF',
-  },
-  voiceButtonRecording: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#FECACA',
-  },
-  voiceButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#A08AB7',
-  },
-  voiceStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 12,
-  },
-  voiceStatusText: {
-    fontSize: 14,
-    color: '#10B981',
-    fontWeight: '500',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginHorizontal: 20,
-    marginTop: 20,
-  },
-  actionButton: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  savePreviewButton: {
-    shadowColor: '#A08AB7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  actionButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-  },
-  actionButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: 'white',
-  },
-  previewButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderWidth: 2,
-    borderColor: '#A08AB7',
-    backgroundColor: 'white',
-  },
-  previewButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#A08AB7',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-    flex: 1,
-  },
-  modalCloseButton: {
-    padding: 4,
-    marginLeft: 8,
-  },
-  customPromptInput: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 15,
-    color: '#111827',
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  charCount: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    textAlign: 'right',
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  modalCancelButton: {
-    backgroundColor: '#F3F4F6',
-  },
-  modalSaveButton: {
-    backgroundColor: '#A08AB7',
-  },
-  modalButtonDisabled: {
-    backgroundColor: '#E5E7EB',
-  },
-  modalCancelText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  modalSaveText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: 'white',
-  },
-  modalButtonDisabledText: {
-    color: '#9CA3AF',
-  },
-  unitToggleButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-  },
-  unitToggleButtonActive: {
-    backgroundColor: '#A08AB7',
-    borderColor: '#A08AB7',
-  },
-  unitToggleText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  unitToggleTextActive: {
-    color: '#FFFFFF',
-  },
-});
+function createStyles(isDark: boolean) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? '#0F0F1A' : '#F9FAFB',
+    },
+    loadingContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? '#0F0F1A' : '#F9FAFB',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingTop: 60,
+      paddingBottom: 20,
+      paddingHorizontal: 20,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: 'white',
+    },
+    saveButton: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: 'white',
+    },
+    content: {
+      flex: 1,
+    },
+    section: {
+      backgroundColor: isDark ? '#1C1C2E' : 'white',
+      marginTop: 16,
+      paddingVertical: 20,
+      paddingHorizontal: 20,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: isDark ? '#F5F5F7' : '#111827',
+      marginBottom: 4,
+    },
+    sectionSubtitle: {
+      fontSize: 14,
+      color: isDark ? '#9CA3AF' : '#6B7280',
+      marginBottom: 16,
+    },
+    fieldLabel: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? '#F5F5F7' : '#111827',
+      marginBottom: 8,
+    },
+    helperText: {
+      fontSize: 12,
+      color: isDark ? '#9CA3AF' : '#6B7280',
+      marginTop: 4,
+    },
+    photosScroll: {
+      marginHorizontal: -20,
+      paddingHorizontal: 20,
+    },
+    photoContainer: {
+      marginRight: 12,
+      position: 'relative',
+    },
+    photoImage: {
+      width: 120,
+      height: 160,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#2C2C3E' : '#E5E7EB',
+    },
+    photoControls: {
+      position: 'absolute',
+      bottom: 8,
+      left: 8,
+      right: 8,
+      flexDirection: 'row',
+      gap: 4,
+    },
+    photoControl: {
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    deleteControl: {
+      backgroundColor: 'rgba(239, 68, 68, 0.8)',
+    },
+    primaryBadge: {
+      position: 'absolute',
+      top: 8,
+      left: 8,
+      backgroundColor: '#A08AB7',
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    primaryText: {
+      color: 'white',
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    addPhotoButton: {
+      width: 120,
+      height: 160,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: isDark ? '#2C2C3E' : '#E5E7EB',
+      borderStyle: 'dashed',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? '#1C1C2E' : '#F9FAFB',
+    },
+    addPhotoText: {
+      fontSize: 14,
+      color: '#A08AB7',
+      marginTop: 8,
+    },
+    inputGroup: {
+      marginBottom: 16,
+    },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? '#F5F5F7' : '#374151',
+      marginBottom: 8,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: isDark ? '#2C2C3E' : '#E5E7EB',
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      fontSize: 16,
+      color: isDark ? '#F5F5F7' : '#111827',
+      backgroundColor: isDark ? '#0F0F1A' : '#F9FAFB',
+    },
+    textArea: {
+      minHeight: 100,
+      paddingTop: 12,
+    },
+    promptContainer: {
+      marginBottom: 20,
+    },
+    promptSelector: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderWidth: 1,
+      borderColor: isDark ? '#2C2C3E' : '#E5E7EB',
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: isDark ? '#0F0F1A' : '#F9FAFB',
+      marginBottom: 8,
+    },
+    promptText: {
+      fontSize: 15,
+      color: isDark ? '#F5F5F7' : '#111827',
+      fontWeight: '500',
+      flex: 1,
+    },
+    promptPlaceholder: {
+      fontSize: 15,
+      color: '#9CA3AF',
+      flex: 1,
+    },
+    promptAnswer: {
+      minHeight: 80,
+      paddingTop: 12,
+    },
+    interestsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 16,
+    },
+    interestChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: isDark ? '#2D2640' : '#F3E8FF',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+    },
+    interestText: {
+      fontSize: 14,
+      color: '#A08AB7',
+      fontWeight: '500',
+    },
+    optionChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 20,
+      borderWidth: 2,
+      borderColor: isDark ? '#2C2C3E' : '#E5E7EB',
+      backgroundColor: isDark ? '#1C1C2E' : '#FFFFFF',
+    },
+    optionChipSelected: {
+      backgroundColor: '#A08AB7',
+      borderColor: '#A08AB7',
+    },
+    optionChipText: {
+      fontSize: 14,
+      color: isDark ? '#9CA3AF' : '#6B7280',
+      fontWeight: '500',
+    },
+    optionChipTextSelected: {
+      color: '#FFFFFF',
+      fontWeight: '600',
+    },
+    addInterestContainer: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    addButton: {
+      width: 48,
+      height: 48,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#2D2640' : '#F3E8FF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    voiceButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+      backgroundColor: isDark ? '#2D2640' : '#F3E8FF',
+      paddingVertical: 20,
+      borderRadius: 16,
+      borderWidth: 2,
+      borderColor: isDark ? '#3D3450' : '#E9D5FF',
+    },
+    voiceButtonRecording: {
+      backgroundColor: isDark ? '#3B1C1C' : '#FEE2E2',
+      borderColor: isDark ? '#5C2C2C' : '#FECACA',
+    },
+    voiceButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#A08AB7',
+    },
+    voiceStatus: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginTop: 12,
+    },
+    voiceStatusText: {
+      fontSize: 14,
+      color: '#10B981',
+      fontWeight: '500',
+    },
+    actionButtons: {
+      flexDirection: 'row',
+      gap: 12,
+      marginHorizontal: 20,
+      marginTop: 20,
+    },
+    actionButton: {
+      flex: 1,
+      borderRadius: 16,
+      overflow: 'hidden',
+    },
+    savePreviewButton: {
+      shadowColor: '#A08AB7',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 5,
+    },
+    actionButtonGradient: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 16,
+    },
+    actionButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: 'white',
+    },
+    previewButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 16,
+      borderWidth: 2,
+      borderColor: '#A08AB7',
+      backgroundColor: isDark ? '#1C1C2E' : 'white',
+    },
+    previewButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: '#A08AB7',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: isDark ? '#1C1C2E' : 'white',
+      borderRadius: 20,
+      padding: 24,
+      width: '100%',
+      maxWidth: 400,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: isDark ? '#F5F5F7' : '#111827',
+      flex: 1,
+    },
+    modalCloseButton: {
+      padding: 4,
+      marginLeft: 8,
+    },
+    customPromptInput: {
+      borderWidth: 1,
+      borderColor: isDark ? '#2C2C3E' : '#E5E7EB',
+      borderRadius: 12,
+      padding: 12,
+      fontSize: 15,
+      color: isDark ? '#F5F5F7' : '#111827',
+      backgroundColor: isDark ? '#0F0F1A' : undefined,
+      minHeight: 100,
+      textAlignVertical: 'top',
+    },
+    charCount: {
+      fontSize: 13,
+      color: '#9CA3AF',
+      textAlign: 'right',
+      marginTop: 8,
+      marginBottom: 16,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    modalCancelButton: {
+      backgroundColor: isDark ? '#2C2C3E' : '#F3F4F6',
+    },
+    modalSaveButton: {
+      backgroundColor: '#A08AB7',
+    },
+    modalButtonDisabled: {
+      backgroundColor: isDark ? '#2C2C3E' : '#E5E7EB',
+    },
+    modalCancelText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: isDark ? '#9CA3AF' : '#6B7280',
+    },
+    modalSaveText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: 'white',
+    },
+    modalButtonDisabledText: {
+      color: '#9CA3AF',
+    },
+    unitToggleButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: isDark ? '#2C2C3E' : '#D1D5DB',
+      backgroundColor: isDark ? '#1C1C2E' : '#FFFFFF',
+      alignItems: 'center',
+    },
+    unitToggleButtonActive: {
+      backgroundColor: '#A08AB7',
+      borderColor: '#A08AB7',
+    },
+    unitToggleText: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: isDark ? '#F5F5F7' : '#374151',
+    },
+    unitToggleTextActive: {
+      color: '#FFFFFF',
+    },
+    // Location Section Styles (GPS only)
+    locationDisplayContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: isDark ? '#0F0F1A' : '#F9FAFB',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+    },
+    locationIconContainer: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: isDark ? '#2D2640' : '#F3F0F7',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    locationTextContainer: {
+      flex: 1,
+    },
+    locationDisplayText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? '#F5F5F7' : '#111827',
+      marginBottom: 2,
+    },
+    locationHelpText: {
+      fontSize: 13,
+      color: isDark ? '#9CA3AF' : '#6B7280',
+    },
+    refreshLocationButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#A08AB7',
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 20,
+      gap: 8,
+    },
+    refreshLocationButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: '#FFFFFF',
+    },
+    locationNote: {
+      fontSize: 12,
+      color: '#9CA3AF',
+      marginTop: 12,
+      textAlign: 'center',
+      lineHeight: 18,
+    },
+  });
+}

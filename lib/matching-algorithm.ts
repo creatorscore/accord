@@ -6,11 +6,10 @@
  * algorithm prioritizes PRACTICAL COMPATIBILITY over romantic attraction.
  *
  * WEIGHT DISTRIBUTION (Optimized for Lavender Marriages):
- * - Marriage Goals & Practical Arrangements: 35% (PRIMARY FACTOR)
- * - Lifestyle & Values: 25% (Daily life compatibility)
- * - Location & Distance: 20% (Logistics)
+ * - Marriage Goals & Practical Arrangements: 37% (PRIMARY FACTOR)
+ * - Lifestyle & Values: 27% (Daily life compatibility)
+ * - Location & Distance: 21% (Logistics)
  * - Demographics (Age/Gender Preferences): 15% (Basic compatibility)
- * - Personality & Interests: 5% (Nice to have, but not critical)
  *
  * KEY FEATURES FOR LAVENDER MARRIAGES:
  * ✅ Practical Arrangement Compatibility (financial, housing, children)
@@ -32,9 +31,6 @@
  * - Basic: age, gender, pronouns, sexual_orientation, ethnicity
  * - Location: city, state, coordinates, distance
  * - Physical: height_inches
- * - Personality: zodiac_sign, personality_type (MBTI), love_language
- * - Interests: hobbies[], interests{movies, music, books, tv_shows}
- * - Bio: bio (keyword extraction)
  * - Values: religion, political_views, languages_spoken[]
  *
  * Preferences Fields:
@@ -64,18 +60,8 @@ interface Profile {
   latitude: number | null;
   longitude: number | null;
   height_inches?: number | null;
-  bio?: string | null;
-  hobbies: string[] | null;
-  interests: {
-    movies?: string[];
-    music?: string[];
-    books?: string[];
-    tv_shows?: string[];
-  } | null;
-  prompt_answers?: Array<{ prompt: string; answer: string }> | null;
+  prompt_answers?: { prompt: string; answer: string }[] | null;
   zodiac_sign: string | null;
-  personality_type: string | null;
-  love_language: string | string[] | null; // Multi-select support
   languages_spoken: string[] | null;
   religion: string | null;
   political_views: string | null;
@@ -316,12 +302,26 @@ function calculateGoalsScore(prefs1: Preferences, prefs2: Preferences): number {
         open: { biological: 12, adoption: 12, foster: 12, 'step-parenting': 12, surrogacy: 12, open: 15 }
       };
 
-      // Find best compatibility score between any pair
+      // FIX #4: Optimize nested loop - check for exact matches first (O(n) instead of O(n²))
+      const set2 = new Set(arr2);
       let bestScore = 0;
+      let foundExactMatch = false;
+
+      // First pass: check for exact matches (O(n))
       for (const a1 of arr1) {
-        for (const a2 of arr2) {
-          const pairScore = arrangementCompatibility[a1]?.[a2] || 8;
-          bestScore = Math.max(bestScore, pairScore);
+        if (set2.has(a1)) {
+          bestScore = Math.max(bestScore, arrangementCompatibility[a1]?.[a1] || 15);
+          foundExactMatch = true;
+        }
+      }
+
+      // Only do nested loop if no exact match found
+      if (!foundExactMatch) {
+        for (const a1 of arr1) {
+          for (const a2 of arr2) {
+            const pairScore = arrangementCompatibility[a1]?.[a2] || 8;
+            bestScore = Math.max(bestScore, pairScore);
+          }
         }
       }
       score += bestScore;
@@ -365,11 +365,24 @@ function calculateLifestyleScore(
       score += Math.round((overlapScore / 100) * 25); // Scale to max 25 points
     } else {
       // No overlap - find best compatibility score between any pair
+      // FIX #4: Optimize nested loop - check for exact matches first
+      const set2 = new Set(arr2);
       let bestScore = 0;
+      let foundExactMatch = false;
+
       for (const h1 of arr1) {
-        for (const h2 of arr2) {
-          const pairScore = housingCompatibility[h1]?.[h2] || 10;
-          bestScore = Math.max(bestScore, pairScore);
+        if (set2.has(h1)) {
+          bestScore = Math.max(bestScore, housingCompatibility[h1]?.[h1] || 25);
+          foundExactMatch = true;
+        }
+      }
+
+      if (!foundExactMatch) {
+        for (const h1 of arr1) {
+          for (const h2 of arr2) {
+            const pairScore = housingCompatibility[h1]?.[h2] || 10;
+            bestScore = Math.max(bestScore, pairScore);
+          }
         }
       }
       score += bestScore;
@@ -395,11 +408,24 @@ function calculateLifestyleScore(
       score += Math.round((overlapScore / 100) * 25); // Scale to max 25 points
     } else {
       // No overlap - find best compatibility score between any pair
+      // FIX #4: Optimize nested loop - check for exact matches first
+      const set2 = new Set(arr2);
       let bestScore = 0;
+      let foundExactMatch = false;
+
       for (const f1 of arr1) {
-        for (const f2 of arr2) {
-          const pairScore = financialCompatibility[f1]?.[f2] || 10;
-          bestScore = Math.max(bestScore, pairScore);
+        if (set2.has(f1)) {
+          bestScore = Math.max(bestScore, financialCompatibility[f1]?.[f1] || 25);
+          foundExactMatch = true;
+        }
+      }
+
+      if (!foundExactMatch) {
+        for (const f1 of arr1) {
+          for (const f2 of arr2) {
+            const pairScore = financialCompatibility[f1]?.[f2] || 10;
+            bestScore = Math.max(bestScore, pairScore);
+          }
         }
       }
       score += bestScore;
@@ -443,22 +469,24 @@ function calculateLifestyleScore(
   }
 
   // Languages compatibility (10 points)
-  if (profile1.languages_spoken && profile2.languages_spoken) {
+  // Note: languages_spoken is not currently collected during onboarding,
+  // so this only scores for profiles that manually added it via edit-profile.
+  if (profile1.languages_spoken?.length && profile2.languages_spoken?.length) {
     const sharedLanguages = profile1.languages_spoken.filter((lang) =>
       profile2.languages_spoken?.includes(lang)
     );
     if (sharedLanguages.length > 0) {
-      score += Math.min(10, sharedLanguages.length * 3); // More shared languages = higher score
+      score += Math.min(10, sharedLanguages.length * 3);
     }
   }
 
   // Smoking compatibility (10 points) - NEW
   if (prefs1.lifestyle_preferences?.smoking && prefs2.lifestyle_preferences?.smoking) {
     const smokingCompatibility: { [key: string]: { [key: string]: number } } = {
-      never: { never: 10, socially: 5, regularly: 0, 'trying to quit': 7 },
-      socially: { never: 5, socially: 10, regularly: 6, 'trying to quit': 8 },
-      regularly: { never: 0, socially: 6, regularly: 10, 'trying to quit': 7 },
-      'trying to quit': { never: 7, socially: 8, regularly: 7, 'trying to quit': 10 },
+      never: { never: 10, socially: 5, regularly: 0, trying_to_quit: 7 },
+      socially: { never: 5, socially: 10, regularly: 6, trying_to_quit: 8 },
+      regularly: { never: 0, socially: 6, regularly: 10, trying_to_quit: 7 },
+      trying_to_quit: { never: 7, socially: 8, regularly: 7, trying_to_quit: 10 },
     };
     score += smokingCompatibility[prefs1.lifestyle_preferences.smoking]?.[prefs2.lifestyle_preferences.smoking] || 5;
   } else {
@@ -481,11 +509,11 @@ function calculateLifestyleScore(
   // Pets compatibility (10 points) - NEW
   if (prefs1.lifestyle_preferences?.pets && prefs2.lifestyle_preferences?.pets) {
     const petsCompatibility: { [key: string]: { [key: string]: number } } = {
-      'love them': { 'love them': 10, 'have some': 9, "don't have but open": 8, allergic: 0, "don't like": 2 },
-      'have some': { 'love them': 9, 'have some': 10, "don't have but open": 8, allergic: 1, "don't like": 3 },
-      "don't have but open": { 'love them': 8, 'have some': 8, "don't have but open": 10, allergic: 7, "don't like": 7 },
-      allergic: { 'love them': 0, 'have some': 1, "don't have but open": 7, allergic: 10, "don't like": 8 },
-      "don't like": { 'love them': 2, 'have some': 3, "don't have but open": 7, allergic: 8, "don't like": 10 },
+      love_them: { love_them: 10, like_them: 9, indifferent: 8, allergic: 0, dont_like: 2 },
+      like_them: { love_them: 9, like_them: 10, indifferent: 8, allergic: 1, dont_like: 3 },
+      indifferent: { love_them: 8, like_them: 8, indifferent: 10, allergic: 7, dont_like: 7 },
+      allergic: { love_them: 0, like_them: 1, indifferent: 7, allergic: 10, dont_like: 8 },
+      dont_like: { love_them: 2, like_them: 3, indifferent: 7, allergic: 8, dont_like: 10 },
     };
     score += petsCompatibility[prefs1.lifestyle_preferences.pets]?.[prefs2.lifestyle_preferences.pets] || 5;
   } else {
@@ -523,124 +551,6 @@ function calculateLifestyleScore(
   return Math.min(Math.max(score, 0), 100);
 }
 
-/**
- * Calculate personality & interests compatibility score (0-100)
- * Weight: 20% of total score (INCREASED from 15%)
- *
- * This is heavily inspired by OkCupid's approach - shared interests
- * in media (movies, music, books, TV) are STRONG indicators of compatibility!
- */
-function calculatePersonalityScore(profile1: Profile, profile2: Profile): number {
-  let score = 20; // Start with base score
-
-  // Shared hobbies (25 points max) - General activities
-  if (profile1.hobbies && profile2.hobbies) {
-    const sharedHobbies = profile1.hobbies.filter((hobby) => profile2.hobbies?.includes(hobby));
-    score += Math.min(25, sharedHobbies.length * 4); // 4 points per shared hobby, max 25
-  }
-
-  // Media Interests Compatibility (35 points total) - NEW & CRITICAL
-  // This is inspired by OkCupid's heavy weighting of shared cultural interests
-  if (profile1.interests && profile2.interests) {
-    let mediaScore = 0;
-
-    // Shared movies (10 points)
-    if (profile1.interests.movies && profile2.interests.movies) {
-      const sharedMovies = profile1.interests.movies.filter(movie =>
-        profile2.interests?.movies?.some(m => m.toLowerCase() === movie.toLowerCase())
-      );
-      mediaScore += Math.min(10, sharedMovies.length * 3); // 3 points per shared movie
-    }
-
-    // Shared music artists (10 points)
-    if (profile1.interests.music && profile2.interests.music) {
-      const sharedMusic = profile1.interests.music.filter(artist =>
-        profile2.interests?.music?.some(a => a.toLowerCase() === artist.toLowerCase())
-      );
-      mediaScore += Math.min(10, sharedMusic.length * 3); // 3 points per shared artist
-    }
-
-    // Shared books (8 points)
-    if (profile1.interests.books && profile2.interests.books) {
-      const sharedBooks = profile1.interests.books.filter(book =>
-        profile2.interests?.books?.some(b => b.toLowerCase() === book.toLowerCase())
-      );
-      mediaScore += Math.min(8, sharedBooks.length * 2.5); // 2.5 points per shared book
-    }
-
-    // Shared TV shows (7 points)
-    if (profile1.interests.tv_shows && profile2.interests.tv_shows) {
-      const sharedShows = profile1.interests.tv_shows.filter(show =>
-        profile2.interests?.tv_shows?.some(s => s.toLowerCase() === show.toLowerCase())
-      );
-      mediaScore += Math.min(7, sharedShows.length * 2.5); // 2.5 points per shared show
-    }
-
-    score += mediaScore;
-  }
-
-  // Zodiac compatibility (12 points)
-  if (profile1.zodiac_sign && profile2.zodiac_sign) {
-    const zodiacCompatibility = calculateZodiacCompatibility(
-      profile1.zodiac_sign,
-      profile2.zodiac_sign
-    );
-    score += zodiacCompatibility;
-  }
-
-  // MBTI compatibility (12 points)
-  if (profile1.personality_type && profile2.personality_type) {
-    const mbtiCompatibility = calculateMBTICompatibility(
-      profile1.personality_type,
-      profile2.personality_type
-    );
-    score += mbtiCompatibility;
-  }
-
-  // Love language compatibility (8 points)
-  if (profile1.love_language && profile2.love_language) {
-    const arr1 = toArray(profile1.love_language);
-    const arr2 = toArray(profile2.love_language);
-
-    // Check for any overlap
-    if (hasArrayOverlap(arr1, arr2)) {
-      // Shared love language(s) - great compatibility indicator
-      const overlapScore = calculateArrayOverlapScore(arr1, arr2);
-      score += Math.round((overlapScore / 100) * 8); // Scale to max 8 points
-    } else {
-      score += 4; // Different but still valuable to know
-    }
-  }
-
-  // Bio/Story text similarity (8 points) - NEW
-  // Analyze shared keywords/themes in bios (simplified version)
-  if (profile1.bio && profile2.bio) {
-    const keywords1 = extractKeywords(profile1.bio);
-    const keywords2 = extractKeywords(profile2.bio);
-    const sharedKeywords = keywords1.filter(k => keywords2.includes(k));
-    score += Math.min(8, sharedKeywords.length * 2); // 2 points per shared keyword
-  }
-
-  return Math.min(score, 100);
-}
-
-/**
- * Extract meaningful keywords from text (simple implementation)
- * For a production app, you'd use NLP/ML for better keyword extraction
- */
-function extractKeywords(text: string): string[] {
-  // Remove common words and extract meaningful ones
-  const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'this', 'that', 'these', 'those', 'am', 'like', 'just', 'so', 'really', 'very', 'about', 'me', 'im']);
-
-  const words = text
-    .toLowerCase()
-    .replace(/[^\w\s]/g, ' ') // Remove punctuation
-    .split(/\s+/)
-    .filter(w => w.length > 3 && !commonWords.has(w)); // Only meaningful words
-
-  // Return unique words
-  return Array.from(new Set(words));
-}
 
 /**
  * Zodiac sign compatibility (simplified)
@@ -666,137 +576,6 @@ function calculateZodiacCompatibility(sign1: string, sign2: string): number {
   if (sign1 === sign2) return 12; // Same sign
   if (highCompatibility[sign1]?.includes(sign2)) return 15; // Highly compatible
   return 7; // Neutral or challenging
-}
-
-/**
- * MBTI compatibility (comprehensive)
- * Based on cognitive function theory and relationship research
- *
- * Scoring tiers:
- * - 15: Golden Pairs (ideal matches, opposite in E/I and J/P, same N/S and T/F)
- * - 13-14: Companion Pairs (strong compatibility, shared functions)
- * - 11-12: Same Type / Similar Pairs (good understanding)
- * - 9-10: Compatible Pairs (different but complementary)
- * - 7-8: Neutral / Growth Pairs (requires work but can succeed)
- * - 4-6: Challenging Pairs (significant differences, lower compatibility)
- */
-function calculateMBTICompatibility(type1: string, type2: string): number {
-  if (type1 === "Don't know" || type2 === "Don't know") return 8;
-  if (type1 === type2) return 12; // Same type - deep understanding
-
-  // GOLDEN PAIRS (15 points) - "Opposites attract" with shared perception/judgment
-  // These pairs share the same middle letters (N/S and T/F) but opposite energy (E/I) and lifestyle (J/P)
-  // Example: INTJ + ENFP (both iNtuitive Thinkers but different energy/structure)
-  const goldenPairs: { [key: string]: string[] } = {
-    INTJ: ['ENFP', 'ENTP'], // NTs who complement each other
-    INTP: ['ENFJ', 'ENTJ'], // NT + NF balance
-    ENTJ: ['INFP', 'INTP'], // NT pairs
-    ENTP: ['INFJ', 'INTJ'], // NT pairs
-    INFJ: ['ENFP', 'ENTP'], // NF + NT dynamic
-    INFP: ['ENFJ', 'ENTJ'], // NF pairs
-    ENFJ: ['INFP', 'INTP'], // NF + NT balance
-    ENFP: ['INFJ', 'INTJ'], // NF + NT energy
-    ISTJ: ['ESFP', 'ESTP'], // SJ + SP balance
-    ISFJ: ['ESFP', 'ESTP'], // SJ + SP harmony
-    ESTJ: ['ISFP', 'ISTP'], // SJ + SP structure
-    ESFJ: ['ISFP', 'ISTP'], // SJ + SP warmth
-    ISTP: ['ESFJ', 'ESTJ'], // SP + SJ practicality
-    ISFP: ['ESFJ', 'ESTJ'], // SP + SJ support
-    ESTP: ['ISFJ', 'ISTJ'], // SP + SJ adventure
-    ESFP: ['ISFJ', 'ISTJ'], // SP + SJ spontaneity
-  };
-
-  if (goldenPairs[type1]?.includes(type2)) return 15;
-
-  // COMPANION PAIRS (13-14 points) - Share dominant or auxiliary functions
-  // These share cognitive function preferences and work well together
-  const companionPairs: { [key: string]: string[] } = {
-    // Intuitive types that share N-dominance
-    INTJ: ['INFJ', 'ENTJ'], // All share Ni or Te
-    INTP: ['INFP', 'ENTP'], // All share Ne or Ti
-    ENTJ: ['ENFJ', 'INTJ'], // All share Te or Ni
-    ENTP: ['ENFP', 'INTP'], // All share Ne or Ti
-    INFJ: ['INTJ', 'ENFJ'], // All share Ni or Fe
-    INFP: ['INTP', 'ENFP'], // All share Fi or Ne
-    ENFJ: ['ENTJ', 'INFJ'], // All share Fe or Ni
-    ENFP: ['ENTP', 'INFP'], // All share Ne or Fi
-    // Sensing types that share S-dominance
-    ISTJ: ['ISFJ', 'ESTJ'], // All share Si or Te
-    ISFJ: ['ISTJ', 'ESFJ'], // All share Si or Fe
-    ESTJ: ['ESFJ', 'ISTJ'], // All share Te or Si
-    ESFJ: ['ESTJ', 'ISFJ'], // All share Fe or Si
-    ISTP: ['ISFP', 'ESTP'], // All share Ti or Se
-    ISFP: ['ISTP', 'ESFP'], // All share Fi or Se
-    ESTP: ['ESFP', 'ISTP'], // All share Se or Ti
-    ESFP: ['ESTP', 'ISFP'], // All share Se or Fi
-  };
-
-  if (companionPairs[type1]?.includes(type2)) return 14;
-
-  // MIRROR PAIRS (13 points) - Same functions, different order (e.g., INTJ + ISTP both use Ni-Te-Fi-Se)
-  const mirrorPairs: { [key: string]: string[] } = {
-    INTJ: ['ISTP'], INTP: ['ISTJ'], ENTJ: ['ESTP'], ENTP: ['ESTJ'],
-    INFJ: ['ISFP'], INFP: ['ISFJ'], ENFJ: ['ESFP'], ENFP: ['ESFJ'],
-    ISTJ: ['INTP'], ISFJ: ['INFP'], ESTJ: ['ENTP'], ESFJ: ['ENFP'],
-    ISTP: ['INTJ'], ISFP: ['INFJ'], ESTP: ['ENTJ'], ESFP: ['ENFJ'],
-  };
-
-  if (mirrorPairs[type1]?.includes(type2)) return 13;
-
-  // COMPATIBLE PAIRS (9-10 points) - Different but balanced
-  // Share 2 out of 4 letters
-  let sharedLetters = 0;
-  for (let i = 0; i < 4; i++) {
-    if (type1[i] === type2[i]) sharedLetters++;
-  }
-
-  if (sharedLetters === 2) {
-    // Check if they share the middle letters (N/S and T/F) - stronger compatibility
-    if (type1[1] === type2[1] && type1[2] === type2[2]) {
-      return 10; // Share perception and judgment functions
-    }
-    return 9; // Share 2 letters but not the core ones
-  }
-
-  // CHALLENGING PAIRS (4-6 points) - Significant differences
-  // These pairs have very different cognitive approaches
-  const challengingPairs: { [key: string]: string[] } = {
-    // Intuitive vs Sensing + Thinking vs Feeling (all 4 letters different)
-    INTJ: ['ESFP', 'ESTP', 'ISFP', 'ESFJ'],
-    INTP: ['ESFJ', 'ESFP', 'ISFJ', 'ESTJ'],
-    ENTJ: ['ISFP', 'ISFJ', 'INFP', 'ESFP'],
-    ENTP: ['ISFJ', 'ISTJ', 'INFJ', 'ESFJ'],
-    INFJ: ['ESTP', 'ESTJ', 'ISTP', 'ENTP'],
-    INFP: ['ESTJ', 'ESTP', 'ISTJ', 'ENTJ'],
-    ENFJ: ['ISTP', 'ISTJ', 'INTP', 'ESTP'],
-    ENFP: ['ISTJ', 'ISTP', 'INTJ', 'ESTJ'],
-    ISTJ: ['ENFP', 'ENTP', 'INFP', 'ESFP'],
-    ISFJ: ['ENTP', 'ENFP', 'INTP', 'ESTP'],
-    ESTJ: ['INFP', 'INTP', 'ENFP', 'ISFP'],
-    ESFJ: ['INTP', 'INTJ', 'ENTP', 'ISTP'],
-    ISTP: ['ENFJ', 'ESFJ', 'INFJ', 'ENTJ'],
-    ISFP: ['ENTJ', 'ESTJ', 'INTJ', 'ENTP'],
-    ESTP: ['INFJ', 'INFP', 'ENFJ', 'INTJ'],
-    ESFP: ['INTJ', 'ISTJ', 'INFJ', 'ENTJ'],
-  };
-
-  if (challengingPairs[type1]?.includes(type2)) {
-    // Still give some credit - with effort these can work
-    return sharedLetters === 1 ? 5 : 4; // Slightly better if they share 1 letter
-  }
-
-  // GROWTH PAIRS (7-8 points) - One shared letter, can learn from differences
-  if (sharedLetters === 1) {
-    // Check if they share E/I (same energy level)
-    if (type1[0] === type2[0]) return 8;
-    return 7;
-  }
-
-  // RARE CASE: Share 3 letters (very compatible)
-  if (sharedLetters === 3) return 11;
-
-  // Default neutral
-  return 7;
 }
 
 /**
@@ -832,44 +611,42 @@ function calculateDemographicsScore(
 ): number {
   let score = 0;
 
-  // Age preference compatibility (50 points)
-  if (
+  // HARD FILTER: age must mutually fit both users' ranges.
+  // DB-level filters already enforce this, so out-of-range profiles shouldn't
+  // reach the algorithm. The hard-fail here aligns with CLAUDE.md Golden Rule #1
+  // and makes any DB-bypass immediately visible (score collapses to 0).
+  const ageMutualMatch =
     profile1.age >= prefs2.age_min &&
     profile1.age <= prefs2.age_max &&
     profile2.age >= prefs1.age_min &&
-    profile2.age <= prefs1.age_max
-  ) {
-    score += 50;
-  } else if (
-    profile1.age >= prefs2.age_min - 3 &&
-    profile1.age <= prefs2.age_max + 3 &&
-    profile2.age >= prefs1.age_min - 3 &&
-    profile2.age <= prefs1.age_max + 3
-  ) {
-    score += 30; // Close to preferred range
-  } else {
-    score += 10; // Outside range but might still work
-  }
+    profile2.age <= prefs1.age_max;
 
-  // Gender preference compatibility (50 points)
+  if (!ageMutualMatch) {
+    return 0;
+  }
+  score += 50;
+
+  // HARD FILTER: gender preference must be mutually satisfied (or "Everyone").
+  // Same reasoning — DB filter is authoritative, algorithm aligns.
   const gender1Array = toArray(profile1.gender);
   const gender2Array = toArray(profile2.gender);
 
-  // Check if profile1's gender(s) match profile2's preferences
+  const genderPref2 = toArray(prefs2.gender_preference);
   const profile1MatchesPrefs =
-    prefs2.gender_preference.length === 0 ||
-    gender1Array.some(g => prefs2.gender_preference.includes(g));
+    genderPref2.length === 0 ||
+    genderPref2.includes('Everyone') ||
+    gender1Array.some(g => genderPref2.includes(g));
 
-  // Check if profile2's gender(s) match profile1's preferences
+  const genderPref1 = toArray(prefs1.gender_preference);
   const profile2MatchesPrefs =
-    prefs1.gender_preference.length === 0 ||
-    gender2Array.some(g => prefs1.gender_preference.includes(g));
+    genderPref1.length === 0 ||
+    genderPref1.includes('Everyone') ||
+    gender2Array.some(g => genderPref1.includes(g));
 
-  if (profile1MatchesPrefs && profile2MatchesPrefs) {
-    score += 50;
-  } else if (profile1MatchesPrefs || profile2MatchesPrefs) {
-    score += 25; // One-sided match
+  if (!profile1MatchesPrefs || !profile2MatchesPrefs) {
+    return 0;
   }
+  score += 50;
 
   return Math.min(score, 100);
 }
@@ -879,11 +656,10 @@ function calculateDemographicsScore(
  * Returns a score from 0-100
  *
  * Weight Distribution (Optimized for Practical Arrangements):
- * - Marriage Goals & Arrangements: 35% (PRIMARY - why they're here, children, finances)
- * - Lifestyle & Values: 25% (Daily compatibility - housing, politics, religion, habits)
- * - Location & Distance: 20% (Logistics - where they live, relocation)
+ * - Marriage Goals & Arrangements: 37% (PRIMARY - why they're here, children, finances)
+ * - Lifestyle & Values: 27% (Daily compatibility - housing, politics, religion, habits)
+ * - Location & Distance: 21% (Logistics - where they live, relocation)
  * - Demographics: 15% (Age/Gender preferences)
- * - Personality & Interests: 5% (Nice bonus but not critical for practical arrangements)
  * - Sexual Orientation: 0% (REMOVED - different orientations are IDEAL!)
  */
 export function calculateCompatibilityScore(
@@ -895,17 +671,14 @@ export function calculateCompatibilityScore(
   const locationScore = calculateLocationScore(profile1, profile2, prefs1, prefs2);
   const goalsScore = calculateGoalsScore(prefs1, prefs2);
   const lifestyleScore = calculateLifestyleScore(profile1, profile2, prefs1, prefs2);
-  const personalityScore = calculatePersonalityScore(profile1, profile2);
   const demographicsScore = calculateDemographicsScore(profile1, profile2, prefs1, prefs2);
-  // Note: orientationScore is NOT used in final calculation for lavender marriages
 
   // Weighted average optimized for practical lavender marriage arrangements
   const totalScore =
-    goalsScore * 0.35 +        // PRIMARY: Marriage goals & practical arrangements
-    lifestyleScore * 0.25 +    // Daily life compatibility
-    locationScore * 0.20 +     // Logistics
-    demographicsScore * 0.15 + // Age/Gender match
-    personalityScore * 0.05;   // Bonus but not critical
+    goalsScore * 0.37 +        // PRIMARY: Marriage goals & practical arrangements
+    lifestyleScore * 0.27 +    // Daily life compatibility
+    locationScore * 0.21 +     // Logistics
+    demographicsScore * 0.15;  // Age/Gender match
 
   // Round to whole number
   return Math.round(totalScore);
@@ -932,7 +705,8 @@ export function getCompatibilityBreakdown(
   profile1: Profile,
   profile2: Profile,
   prefs1: Preferences,
-  prefs2: Preferences
+  prefs2: Preferences,
+  preCalculatedScore?: number
 ): {
   location: number;
   goals: number;
@@ -942,13 +716,44 @@ export function getCompatibilityBreakdown(
   orientation: number;
   total: number;
 } {
+  const goals = calculateGoalsScore(prefs1, prefs2);
+  const lifestyle = calculateLifestyleScore(profile1, profile2, prefs1, prefs2);
+  const location = calculateLocationScore(profile1, profile2, prefs1, prefs2);
+  const demographics = calculateDemographicsScore(profile1, profile2, prefs1, prefs2);
+
   return {
-    goals: calculateGoalsScore(prefs1, prefs2), // PRIMARY FACTOR (35%)
-    lifestyle: calculateLifestyleScore(profile1, profile2, prefs1, prefs2), // 25%
-    location: calculateLocationScore(profile1, profile2, prefs1, prefs2), // 20%
-    demographics: calculateDemographicsScore(profile1, profile2, prefs1, prefs2), // 15%
-    personality: calculatePersonalityScore(profile1, profile2), // 5%
+    goals, // PRIMARY FACTOR (37%)
+    lifestyle, // 27%
+    location, // 21%
+    demographics, // 15%
+    personality: 0, // Removed - kept for interface compatibility
     orientation: 100, // Orientation compatibility is factored into demographics score
-    total: calculateCompatibilityScore(profile1, profile2, prefs1, prefs2),
+    total: preCalculatedScore ?? Math.round(
+      goals * 0.37 + lifestyle * 0.27 + location * 0.21 + demographics * 0.15
+    ),
+  };
+}
+
+/**
+ * PERF: Calculate score + breakdown in a single pass (avoids double-calculating all sub-scores)
+ */
+export function calculateScoreAndBreakdown(
+  profile1: Profile,
+  profile2: Profile,
+  prefs1: Preferences,
+  prefs2: Preferences
+): { score: number; breakdown: { location: number; goals: number; lifestyle: number; personality: number; demographics: number; orientation: number; total: number } } {
+  const goals = calculateGoalsScore(prefs1, prefs2);
+  const lifestyle = calculateLifestyleScore(profile1, profile2, prefs1, prefs2);
+  const location = calculateLocationScore(profile1, profile2, prefs1, prefs2);
+  const demographics = calculateDemographicsScore(profile1, profile2, prefs1, prefs2);
+
+  const total = Math.round(
+    goals * 0.37 + lifestyle * 0.27 + location * 0.21 + demographics * 0.15
+  );
+
+  return {
+    score: total,
+    breakdown: { goals, lifestyle, location, demographics, personality: 0, orientation: 100, total },
   };
 }

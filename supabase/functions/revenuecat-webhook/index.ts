@@ -22,6 +22,7 @@ type RevenueCatEventType =
 
 interface RevenueCatWebhookEvent {
   event: {
+    id?: string; // RevenueCat's unique event id — used for dedup.
     type: RevenueCatEventType;
     app_user_id: string;
     product_id: string;
@@ -62,7 +63,52 @@ serve(async (req) => {
       userId: payload.event.app_user_id,
       productId: payload.event.product_id,
       entitlements: payload.event.entitlement_ids,
+      environment: payload.event.environment,
     });
+
+    // Idempotency: RC retries deliver the same event multiple times. Fall
+    // back to a composite key if RC didn't provide event.id (older payloads).
+    // Primary-key violation on insert = duplicate delivery → ack and exit.
+    const eventDedupKey = payload.event.id
+      ?? `${payload.event.type}:${payload.event.app_user_id}:${payload.event.purchased_at_ms}`;
+    const { error: dedupError } = await supabase
+      .from('revenuecat_webhook_events')
+      .insert({
+        event_id: eventDedupKey,
+        event_type: payload.event.type,
+        app_user_id: payload.event.app_user_id,
+      });
+    if (dedupError && dedupError.code === '23505') {
+      // Unique violation on PK — we already processed this event.
+      console.log('⏭️ Duplicate webhook event, skipping:', eventDedupKey);
+      return new Response(
+        JSON.stringify({ ok: true, ignored: 'duplicate_event', eventId: eventDedupKey }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    } else if (dedupError) {
+      // Any OTHER insert failure: log and proceed anyway. Dedup is a nice-to-have,
+      // not a blocker — reconcile-subscriptions catches drift weekly.
+      console.warn('⚠️ webhook dedup insert failed, continuing:', dedupError);
+    }
+
+    // Sandbox events (TestFlight / dev test purchases) must not flip prod
+    // is_premium flags. Without this guard a tester who buys in sandbox gets
+    // production premium on the same Supabase project. Set
+    // ALLOW_SANDBOX_SUBSCRIPTIONS=true in the function env if you run a single
+    // Supabase for both prod + TestFlight and explicitly want sandbox entitlements
+    // to reach the DB. Default: log and return 200 (ack so RC stops retrying).
+    if (payload.event.environment === 'SANDBOX' &&
+        Deno.env.get('ALLOW_SANDBOX_SUBSCRIPTIONS') !== 'true') {
+      console.log('⚠️ Sandbox webhook ignored (prod safety):', {
+        userId: payload.event.app_user_id,
+        eventType: payload.event.type,
+        product: payload.event.product_id,
+      });
+      return new Response(
+        JSON.stringify({ ok: true, ignored: 'sandbox_event' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
 
     const { type, app_user_id, entitlement_ids, expiration_at_ms } = payload.event;
 
@@ -71,25 +117,42 @@ serve(async (req) => {
     const hasPlatinum = entitlement_ids?.includes('platinum') || false;
 
     // Check if subscription is active (not expired)
-    const isActive = expiration_at_ms ? expiration_at_ms > Date.now() : false;
+    // If no expiration date, treat as active (lifetime subscriptions have no expiry)
+    const isActive = expiration_at_ms ? expiration_at_ms > Date.now() : true;
 
-    // Get the user's profile ID from auth.users -> profiles
+    // Get the user's profile ID and admin status from auth.users -> profiles
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, is_admin')
       .eq('user_id', app_user_id)
-      .single();
+      .maybeSingle();
 
     if (profileError || !profile) {
       console.error('Profile not found for user:', app_user_id, profileError);
+      // Log to dead-letter so we can audit/reconcile later. Return 200 so
+      // RevenueCat stops retrying indefinitely — the client will call
+      // sync-subscription on next launch, and reconcile-subscriptions covers
+      // anything missed.
+      await supabase.from('revenuecat_webhook_failures').insert({
+        event_type: type,
+        app_user_id,
+        product_id: payload.event.product_id,
+        entitlement_ids,
+        reason: 'profile_not_found',
+        error_details: profileError?.message ?? null,
+        raw_payload: payload as unknown as Record<string, unknown>,
+      });
       return new Response(
-        JSON.stringify({ error: 'Profile not found', userId: app_user_id }),
-        {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        }
+        JSON.stringify({ ok: true, logged: 'profile_not_found', userId: app_user_id }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }
+
+    // Check if user is admin (admins always keep premium)
+    const isAdmin = profile.is_admin === true;
+
+    // Determine if this is a trial subscription
+    const isTrial = payload.event.period_type === 'TRIAL';
 
     // Update subscription status based on event type
     switch (type) {
@@ -97,26 +160,61 @@ serve(async (req) => {
       case 'RENEWAL':
       case 'UNCANCELLATION':
       case 'PRODUCT_CHANGE':
-        // Activate subscription
-        await updateSubscriptionStatus(profile.id, hasPremium, hasPlatinum, true);
-        console.log('✅ Subscription activated:', { userId: app_user_id, hasPremium, hasPlatinum });
+        // Activate subscription with expiration date
+        await updateSubscriptionStatus(profile.id, hasPremium, hasPlatinum, true, expiration_at_ms, isTrial, app_user_id);
+        console.log('✅ Subscription activated:', {
+          userId: app_user_id,
+          hasPremium,
+          hasPlatinum,
+          expiresAt: expiration_at_ms ? new Date(expiration_at_ms).toISOString() : null,
+          periodType: payload.event.period_type, // TRIAL, INTRO, or NORMAL
+          isTrial,
+        });
         break;
 
       case 'CANCELLATION':
-        // Keep subscription active until expiration
-        console.log('⚠️ Subscription cancelled (will expire):', app_user_id);
-        // Don't deactivate immediately - wait for EXPIRATION event
+        // Keep subscription active until expiration, but update auto_renew to false
+        console.log('⚠️ Subscription cancelled (will expire at ' + (expiration_at_ms ? new Date(expiration_at_ms).toISOString() : 'unknown') + '):', app_user_id);
+        // Update subscription to show it won't renew
+        await supabase
+          .from('subscriptions')
+          .update({ auto_renew: false })
+          .eq('profile_id', profile.id);
         break;
 
       case 'EXPIRATION':
-        // Deactivate subscription
+        // Skip expiration for admin accounts - they always keep premium
+        if (isAdmin) {
+          console.log('⏭️ Skipping expiration for admin account:', app_user_id);
+          break;
+        }
+        // Deactivate subscription - this is critical for trial expirations
         await updateSubscriptionStatus(profile.id, false, false, false);
-        console.log('❌ Subscription expired:', app_user_id);
+        console.log('❌ Subscription/trial expired:', {
+          userId: app_user_id,
+          periodType: payload.event.period_type,
+          wasTrialConversion: payload.event.is_trial_conversion,
+        });
         break;
 
       case 'BILLING_ISSUE':
-        // Keep subscription active temporarily, send notification
-        console.log('⚠️ Billing issue for user:', app_user_id);
+        // Grace period: payment failed but Apple/Google still considers the
+        // subscription valid for a few days. Keep is_premium = true until the
+        // eventual EXPIRATION event, but flag the status so clients can show
+        // a "payment issue — update your card" banner and admins can see the
+        // user is at risk. Also queue a push nudging them to fix payment.
+        console.log('⚠️ Billing issue for user — entering grace:', app_user_id);
+        await supabase.from('subscriptions')
+          .update({ status: 'grace' })
+          .eq('profile_id', profile.id);
+        await supabase.from('notification_queue').insert({
+          recipient_profile_id: profile.id,
+          notification_type: 'billing_issue',
+          title: 'Payment issue with your subscription',
+          body: 'We had trouble charging your card. Update your payment method in the store to keep your Premium features.',
+          data: { type: 'billing_issue', screen: 'subscription' },
+          status: 'pending',
+        });
         break;
 
       default:
@@ -129,6 +227,23 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error processing webhook:', error);
+    // Best-effort dead-letter log — swallow any failure of the log itself.
+    try {
+      const bodyText = await req.clone().text().catch(() => '');
+      let parsed: any = null;
+      try { parsed = JSON.parse(bodyText); } catch {}
+      await supabase.from('revenuecat_webhook_failures').insert({
+        event_type: parsed?.event?.type ?? null,
+        app_user_id: parsed?.event?.app_user_id ?? null,
+        product_id: parsed?.event?.product_id ?? null,
+        entitlement_ids: parsed?.event?.entitlement_ids ?? null,
+        reason: 'processing_error',
+        error_details: (error as Error)?.message ?? String(error),
+        raw_payload: parsed,
+      });
+    } catch (logError) {
+      console.error('Failed to write webhook failure log:', logError);
+    }
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -143,7 +258,10 @@ async function updateSubscriptionStatus(
   profileId: string,
   isPremium: boolean,
   isPlatinum: boolean,
-  isActive: boolean
+  isActive: boolean,
+  expirationMs?: number | null,
+  isTrial: boolean = false,
+  appUserId?: string
 ) {
   try {
     // Update profiles table
@@ -162,14 +280,19 @@ async function updateSubscriptionStatus(
 
     // Update or insert into subscriptions table
     const tier = isPlatinum ? 'platinum' : isPremium ? 'premium' : null;
+    const expiresAt = expirationMs ? new Date(expirationMs).toISOString() : null;
+    // Set status to 'trial' for trial periods, 'active' for paid subscriptions
+    const status = isTrial ? 'trial' : 'active';
 
     if (isActive && tier) {
       const { error: subscriptionError } = await supabase.from('subscriptions').upsert(
         {
           profile_id: profileId,
           tier,
-          status: 'active',
+          status,
           auto_renew: true,
+          expires_at: expiresAt,
+          ...(appUserId ? { revenuecat_customer_id: appUserId } : {}),
         },
         { onConflict: 'profile_id' }
       );
@@ -179,10 +302,13 @@ async function updateSubscriptionStatus(
         throw subscriptionError;
       }
     } else if (!isActive) {
-      // Mark subscription as expired
+      // Mark subscription as expired and clear premium status
       const { error: subscriptionError } = await supabase
         .from('subscriptions')
-        .update({ status: 'expired' })
+        .update({
+          status: 'expired',
+          auto_renew: false,
+        })
         .eq('profile_id', profileId);
 
       if (subscriptionError) {
@@ -195,6 +321,9 @@ async function updateSubscriptionStatus(
       isPremium,
       isPlatinum,
       isActive,
+      isTrial,
+      status,
+      expiresAt,
     });
   } catch (error) {
     console.error('Failed to update subscription status:', error);
