@@ -479,13 +479,16 @@ export default function Onboarding() {
       return;
     }
 
-    // Save at checkpoints: after location (3), after pets (14), after drugs (26), final (30).
+    // Save at intermediate checkpoints: after location (3), after pets (14), after drugs (26).
+    // The final step (30) has its own dedicated save block below — including it
+    // here would fire saveCheckpoint(31) twice in a row, doubling DB writes
+    // and re-firing trigger_create_preferences_on_complete on the second call.
     // Show a "Saving your progress..." toast only if the save actually takes
     // more than ~600ms — avoids a toast-flash on the common fast path but
     // reassures users that the app isn't frozen when the queue is stalled.
     let savingToastShown = false;
     let savingToastTimer: ReturnType<typeof setTimeout> | null = null;
-    const checkpoints = [3, 14, 26, 30];
+    const checkpoints = [3, 14, 26];
     if (checkpoints.includes(subStep)) {
       savingToastTimer = setTimeout(() => {
         savingToastShown = true;
@@ -527,12 +530,25 @@ export default function Onboarding() {
     }
 
     if (subStep >= TOTAL_ONBOARDING_STEPS - 1) {
-      // Final step — save and exit
+      // Final step — save and exit. Mirror the intermediate-checkpoint UX:
+      // delayed "Saving..." toast so the user isn't left guessing on a slow
+      // network, plus a success toast if it actually took long enough to show.
+      let finalToastShown = false;
+      const finalToastTimer = setTimeout(() => {
+        finalToastShown = true;
+        showToast({ type: 'info', title: 'Saving...', message: 'Finishing up your profile.' });
+      }, 600);
       try {
         await saveCheckpoint(TOTAL_ONBOARDING_STEPS);
       } catch {
         // Save failed — stay on current step so user can retry
+        clearTimeout(finalToastTimer);
         return;
+      } finally {
+        clearTimeout(finalToastTimer);
+      }
+      if (finalToastShown) {
+        showToast({ type: 'success', title: 'Saved', message: "All set — taking you in." });
       }
 
       // Post-save validation: verify critical preferences made it to DB
