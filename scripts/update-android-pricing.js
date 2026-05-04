@@ -116,7 +116,8 @@ function priceToMoney(price, currencyCode) {
 /** Pretty-print a Money for log output. */
 function formatMoney(money) {
   if (!money) return '—';
-  const frac = money.nanos / 1_000_000_000;
+  // Google's protobuf JSON omits `nanos` when it's zero, so default it.
+  const frac = (money.nanos || 0) / 1_000_000_000;
   const value = parseInt(money.units, 10) + frac;
   return `${money.currencyCode} ${value.toFixed(WHOLE_NUMBER_CURRENCIES.has(money.currencyCode) ? 0 : 2)}`;
 }
@@ -246,7 +247,7 @@ async function listSubscriptions() {
   let pageToken = null;
   do {
     const qs = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : '';
-    const res = await api('GET', `/applications/${CONFIG.packageName}/monetization/subscriptions${qs}`);
+    const res = await api('GET', `/applications/${CONFIG.packageName}/subscriptions${qs}`);
     if (res?.subscriptions) out.push(...res.subscriptions);
     pageToken = res?.nextPageToken || null;
   } while (pageToken);
@@ -287,18 +288,60 @@ function buildRegionalConfigs(subType, pricing, regionFilter) {
   return { configs, skipped };
 }
 
-async function patchSubscription(productId, updatedBasePlans) {
-  // Updates only the basePlans on the subscription. Google requires us to
-  // use the latencyTolerance query so the call doesn't get throttled when we
-  // touch every region.
-  const endpoint = `/applications/${CONFIG.packageName}/monetization/subscriptions/${productId}`
+async function patchSubscription(productId, updatedBasePlans, rebuiltBasePlanIds = new Set(), originalConfigsById = new Map()) {
+  // Updates only the basePlans on the subscription. We retry up to 25 times,
+  // peeling off any region Google rejects as not-billable for the current
+  // regions version. Google's billable region list shifts over time
+  // (sanctions, market exits) so the CSV inevitably includes some regions
+  // that don't ship to Play Console — easier to discover them at runtime
+  // than to maintain a static skip list.
+  const endpoint = `/applications/${CONFIG.packageName}/subscriptions/${productId}`
                  + `?updateMask=basePlans&latencyTolerance=PRODUCT_UPDATE_LATENCY_TOLERANCE_LATENCY_TOLERANT`
-                 + `&regionsVersion.version=2022/02/15`;
-  return api('PATCH', endpoint, {
-    packageName: CONFIG.packageName,
-    productId,
-    basePlans: updatedBasePlans,
-  });
+                 + `&regionsVersion.version=2025/03`;
+  const droppedRegions = new Set();
+  let plans = updatedBasePlans;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    try {
+      const result = await api('PATCH', endpoint, {
+        packageName: CONFIG.packageName,
+        productId,
+        basePlans: plans,
+      });
+      if (droppedRegions.size > 0) {
+        console.log(`    ⓘ Skipped ${droppedRegions.size} non-billable region(s): ${[...droppedRegions].sort().join(', ')}`);
+      }
+      return result;
+    } catch (err) {
+      // Two retryable failure modes per region:
+      //   1. "Region code XX is not billable"        — sanctioned / unsupported markets
+      //   2. "Invalid currency for region code XX"   — our Apple-derived currency
+      //      doesn't match what Google bills in for that region (e.g. Apple
+      //      uses USD for Algeria, Google requires DZD). Cleanest fix is to
+      //      drop the region; Google's auto-converted "other regions" price
+      //      kicks in for it instead of our localized target.
+      const m = err.message.match(/(?:Region code|for region code) ([A-Z]{2}) is not billable|Invalid currency for region code ([A-Z]{2})/);
+      const bad = m && (m[1] || m[2]);
+      if (!bad) throw err;
+      droppedRegions.add(bad);
+      // For rebuilt base plans, swap our custom config for the region with
+      // its original Google-set config. We can't simply DELETE the region —
+      // PATCH treats basePlans as the complete new state, so a missing
+      // region trips "Regional configs were removed". The original config
+      // (preserved from the GET) is the safest fallback. If Google had no
+      // config for the region, drop it entirely.
+      plans = plans.map(bp => {
+        if (!rebuiltBasePlanIds.has(bp.basePlanId)) return bp;
+        const original = originalConfigsById.get(bp.basePlanId) || [];
+        const originalForBad = original.find(c => c.regionCode === bad);
+        const without = (bp.regionalConfigs || []).filter(c => c.regionCode !== bad);
+        return {
+          ...bp,
+          regionalConfigs: originalForBad ? [...without, originalForBad] : without,
+        };
+      });
+    }
+  }
+  throw new Error(`Gave up after stripping ${droppedRegions.size} non-billable regions; still failing.`);
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -360,9 +403,20 @@ async function main() {
     console.log('='.repeat(70));
 
     const newBasePlans = [];
+    const rebuiltBasePlanIds = new Set();
+    const originalConfigsById = new Map();
     let touched = false;
 
     for (const basePlan of sub.basePlans || []) {
+      // Skip non-ACTIVE base plans — they're either deactivated (no new
+      // subscribers, but Google still returns them) or in some other state we
+      // shouldn't touch. Pass them through verbatim so the PATCH doesn't drop
+      // them from the subscription.
+      if (basePlan.state && basePlan.state !== 'ACTIVE') {
+        console.log(`  basePlan ${basePlan.basePlanId} (state=${basePlan.state}): leaving untouched`);
+        newBasePlans.push(basePlan);
+        continue;
+      }
       const subType = getBasePlanType(basePlan);
       if (!subType) {
         console.log(`  basePlan ${basePlan.basePlanId}: unknown billing period, leaving as-is`);
@@ -370,8 +424,15 @@ async function main() {
         continue;
       }
 
-      const { configs, skipped } = buildRegionalConfigs(subType, pricing, regionFilter);
-      console.log(`  basePlan ${basePlan.basePlanId} (${subType}): building ${configs.length} regional configs (skipped ${skipped.length})`);
+      const { configs: customConfigs, skipped } = buildRegionalConfigs(subType, pricing, regionFilter);
+      // Merge: regions in our CSV get the localized price; regions Google
+      // already had but we don't customize are preserved as-is. Without this,
+      // Google rejects the PATCH with "Regional configs were removed" because
+      // PATCH on basePlans is interpreted as the complete new state.
+      const customRegions = new Set(customConfigs.map(c => c.regionCode));
+      const preserved = (basePlan.regionalConfigs || []).filter(c => !customRegions.has(c.regionCode));
+      const configs = [...customConfigs, ...preserved];
+      console.log(`  basePlan ${basePlan.basePlanId} (${subType}): ${customConfigs.length} customized + ${preserved.length} preserved (skipped ${skipped.length} from CSV)`);
 
       // Preview a few rows so the dry run is easy to eyeball.
       const sample = ['US', 'IN', 'NG', 'BR', 'DE', 'GB', 'JP'].filter(r => !regionFilter || r === regionFilter);
@@ -389,6 +450,8 @@ async function main() {
       // Replace regionalConfigs entirely. Preserve other basePlan fields verbatim
       // so we don't accidentally clobber offer tags, grace periods, etc.
       newBasePlans.push({ ...basePlan, regionalConfigs: configs });
+      rebuiltBasePlanIds.add(basePlan.basePlanId);
+      originalConfigsById.set(basePlan.basePlanId, basePlan.regionalConfigs || []);
       touched = true;
     }
 
@@ -402,7 +465,7 @@ async function main() {
       results.updated.push({ productId, dryRun: true, basePlans: newBasePlans.length });
     } else {
       try {
-        await patchSubscription(productId, newBasePlans);
+        await patchSubscription(productId, newBasePlans, rebuiltBasePlanIds, originalConfigsById);
         console.log('  ✓ APPLIED');
         results.updated.push({ productId, basePlans: newBasePlans.length });
       } catch (err) {
