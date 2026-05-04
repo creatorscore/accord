@@ -1,7 +1,12 @@
-# Accord iOS Subscription Pricing Update Instructions
+# Accord Subscription Pricing Update Instructions
 
 ## Overview
-This guide helps you update subscription prices in App Store Connect to implement fair worldwide pricing based on income levels.
+This guide helps you update subscription prices on **both** App Store Connect (iOS) and Google Play Console (Android) to implement fair worldwide pricing based on income levels.
+
+Both platforms read the same source of truth — `scripts/apple-regional-pricing.csv` — and have dedicated automated updaters:
+
+- **iOS:** `scripts/update-ios-pricing-v2.js`
+- **Android:** `scripts/update-android-pricing.js`
 
 ## Your Subscription Products (6 subscriptions)
 1. **Accord Premium Weekly** - Weekly premium tier (`accord_premium_weekly`)
@@ -192,8 +197,7 @@ Regenerate any of these by running:
 node scripts/generate-asc-price-csv.js
 ```
 
-To push prices live to App Store Connect for **all** Premium tiers
-(including Weekly):
+### Push to App Store Connect (iOS)
 ```
 # Preview first
 APP_STORE_KEY_ID=... APP_STORE_ISSUER_ID=... APP_STORE_PRIVATE_KEY=... APP_STORE_APP_ID=... \
@@ -206,6 +210,43 @@ APP_STORE_KEY_ID=... APP_STORE_ISSUER_ID=... APP_STORE_PRIVATE_KEY=... APP_STORE
 The script auto-detects the Weekly product (matched by "weekly" in the
 subscription name) and applies localized prices alongside Monthly /
 3-Month / Annual.
+
+### Push to Google Play Console (Android)
+```
+# Service account JSON file path OR raw JSON string
+export GOOGLE_PLAY_SERVICE_ACCOUNT_JSON=/path/to/play-service-account.json
+
+# Preview
+node scripts/update-android-pricing.js --dry-run
+
+# Apply
+node scripts/update-android-pricing.js --apply
+
+# Targeted runs
+node scripts/update-android-pricing.js --dry-run --product=accord_premium_weekly
+node scripts/update-android-pricing.js --dry-run --region=IN
+```
+
+**One-time Play Console setup before the script will work:**
+1. In Google Cloud Console, create (or reuse) a service account.
+2. Generate a JSON key for it; save the file locally and point
+   `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` at the path.
+3. In Play Console → Setup → API access, link the service account.
+4. Grant it permissions: **View app information**, **Manage store presence**,
+   **Manage products** (Monetization). The subscription products must already
+   exist — the script updates prices, it does not create products.
+
+The Android script:
+- Lists every subscription product on `com.privyreviews.accord` (override via
+  `GOOGLE_PLAY_PACKAGE_NAME`).
+- Skips Platinum, mirroring the iOS script.
+- For each Premium product, walks every basePlan, infers `weekly` /
+  `monthly` / `threeMonth` / `annual` from the basePlan's
+  `billingPeriodDuration` (`P1W` / `P1M` / `P3M` / `P1Y`), and rewrites the
+  basePlan's `regionalConfigs` array with localized prices for ~165
+  territories.
+- Existing subscribers keep their current price until renewal — only new
+  purchases pick up the change.
 
 ## Notes
 
