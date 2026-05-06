@@ -16,6 +16,7 @@ import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
 import MatchModal from '@/components/matching/MatchModal';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import FilterModal, { FilterOptions } from '@/components/matching/FilterModal';
+import ConfirmGenderPreferenceModal from '@/components/matching/ConfirmGenderPreferenceModal';
 import ProfileBoostModal from '@/components/premium/ProfileBoostModal';
 import ReportUserModal from '@/components/moderation/ReportUserModal';
 // NOTE: Match and like notifications are sent via database triggers (notify_on_match, notify_on_like)
@@ -138,6 +139,7 @@ export default function Discover() {
   const [superLikesRemaining, setSuperLikesRemaining] = useState(5);
   const [pendingLikesCount, setPendingLikesCount] = useState(0); // Likes received (for teaser banner)
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showConfirmGenderModal, setShowConfirmGenderModal] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
     // Free filters
     ageMin: 18,
@@ -543,6 +545,7 @@ export default function Discover() {
           // for that surface, but earlier this wrap silently wiped canonical values
           // (audit 2026-05-05 found 1,338 users with gender_preference=[] from this).
           gender_preference: expandGenderPreference(newFilters.genderPreference),
+          gender_preference_confirmed_at: new Date().toISOString(),
           discovery_filters: discoveryFilters,
         })
         .eq('profile_id', currentProfileId);
@@ -713,6 +716,14 @@ export default function Discover() {
             setShowVerificationBanner(true);
           }
         });
+      }
+
+      // One-time prompt for users whose gender_preference was wiped to []
+      // by the now-fixed expandGenderPreference bug (audit 2026-05-05). Only
+      // gate completed profiles — incomplete profiles still need to finish
+      // onboarding and the matching-prefs step there will set the flag.
+      if (data.profile_complete && userPreferences && !userPreferences.gender_preference_confirmed_at) {
+        setShowConfirmGenderModal(true);
       }
 
       // Check if profile is complete - if not, show onboarding banner
@@ -3289,7 +3300,10 @@ export default function Discover() {
 
                                     const { error: updateError } = await supabase
                                       .from('preferences')
-                                      .update({ gender_preference: newGenderPrefs })
+                                      .update({
+                                        gender_preference: newGenderPrefs,
+                                        gender_preference_confirmed_at: new Date().toISOString(),
+                                      })
                                       .eq('profile_id', currentProfileId);
 
                                     if (updateError) {
@@ -3482,6 +3496,37 @@ export default function Discover() {
             </View>
           )}
         </ScrollView>
+
+        {/* One-time gender preference confirmation (only shown if user's
+            gender_preference_confirmed_at is null — i.e. they were affected
+            by the pre-2026-05-05 expandGenderPreference wipe bug). */}
+        <ConfirmGenderPreferenceModal
+          visible={showConfirmGenderModal}
+          onConfirm={async (uiSelections) => {
+            if (!currentProfileId) return;
+            const expanded = expandGenderPreference(uiSelections);
+            const { error } = await supabase
+              .from('preferences')
+              .update({
+                gender_preference: expanded,
+                gender_preference_confirmed_at: new Date().toISOString(),
+              })
+              .eq('profile_id', currentProfileId);
+            if (error) {
+              showToast({
+                type: 'error',
+                title: t('common.error'),
+                message: t('toast.filtersSaveError') || "Couldn't save your preference. Please try again.",
+              });
+              captureException(new Error((error as any)?.message || 'confirm gender modal save failed'), { context: 'confirm_gender_modal_save' });
+              return;
+            }
+            setFilters((prev) => ({ ...prev, genderPreference: expanded }));
+            setShowConfirmGenderModal(false);
+            // Re-load discovery feed with the new filter applied
+            loadProfiles();
+          }}
+        />
 
         {/* Filter Modal */}
         <FilterModal

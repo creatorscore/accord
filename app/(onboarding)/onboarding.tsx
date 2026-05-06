@@ -337,6 +337,11 @@ export default function Onboarding() {
       const buildPrefsData = (pid: string): Record<string, any> => ({
         profile_id: pid,
         gender_preference: expandGenderPreference(store.genderPreference),
+        // Mark gender preference as explicitly confirmed by the user. Any
+        // checkpoint after step 7 (genderPreference picker) means they've
+        // explicitly answered. The discover screen uses this flag to decide
+        // whether to show the recovery prompt for pre-fix wiped users.
+        gender_preference_confirmed_at: new Date().toISOString(),
         relationship_type: store.relationshipType || 'platonic',
         primary_reasons: store.primaryReasons.length > 0 ? store.primaryReasons : null,
         // Legacy column — keep in sync to avoid NOT NULL constraint on older schema

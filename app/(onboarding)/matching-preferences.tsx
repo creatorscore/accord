@@ -134,6 +134,7 @@ export default function MatchingPreferences() {
           distance_unit: distanceUnit,
           willing_to_relocate: willingToRelocate,
           gender_preference: expandGenderPreference(genderPreference),
+          gender_preference_confirmed_at: new Date().toISOString(),
         }, { onConflict: 'profile_id' });
 
       if (prefsError) throw prefsError;

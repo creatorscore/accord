@@ -244,6 +244,7 @@ export default function MatchingPreferences() {
       const prefsToSave = {
         ...basePrefs,
         gender_preference: expandGenderPreference(basePrefs.gender_preference),
+        gender_preference_confirmed_at: new Date().toISOString(),
       };
 
       // Use .update() instead of .upsert() to only modify fields managed by this page.
