@@ -538,9 +538,10 @@ export default function Discover() {
           age_min: newFilters.ageMin,
           age_max: newFilters.ageMax,
           max_distance_miles: newFilters.maxDistance,
-          // expandGenderPreference: ['Men'] → ['Man'], ['Everyone'] → [], etc.
-          // FilterModal already uses canonical values so this is usually a no-op,
-          // but the defensive wrap protects against any future UI that passes UI labels.
+          // expandGenderPreference is idempotent: ['Men']→['Man'], ['Woman']→['Woman'],
+          // ['Everyone']→[]. FilterModal stores canonical values so this is a pass-through
+          // for that surface, but earlier this wrap silently wiped canonical values
+          // (audit 2026-05-05 found 1,338 users with gender_preference=[] from this).
           gender_preference: expandGenderPreference(newFilters.genderPreference),
           discovery_filters: discoveryFilters,
         })
