@@ -537,6 +537,36 @@ export default function Onboarding() {
 
       // Post-save validation: verify critical preferences made it to DB
       if (profileId) {
+        // Verify the profile_complete flag actually landed. saveCheckpoint
+        // wraps the profile upsert in raceWithTimeout and treats a 6s
+        // response timeout as "write likely succeeded" — but production
+        // audit (2026-05-05) found 135 users where the timeout fired,
+        // the sequential preferences upsert succeeded, but the profile
+        // row never got profile_complete=true. Those users sat stuck in
+        // preview mode with a fully-filled onboarding flow. Re-read the
+        // flag here and do a focused UPDATE if it didn't persist.
+        const { data: savedProfile } = await supabase
+          .from('profiles')
+          .select('profile_complete')
+          .eq('id', profileId)
+          .maybeSingle();
+
+        if (!savedProfile?.profile_complete) {
+          captureException(new Error('Final onboarding save: profile_complete did not persist; retrying'), { profileId });
+          const { error: retryErr } = await supabase
+            .from('profiles')
+            .update({ profile_complete: true, onboarding_step: TOTAL_ONBOARDING_STEPS, updated_at: new Date().toISOString() })
+            .eq('id', profileId);
+          if (retryErr) {
+            // Don't advance to discover — that would land them in
+            // preview-mode purgatory. Stay on step 30 so they can hit
+            // Continue again once the network recovers.
+            showToast({ type: 'error', title: "Couldn't finalize profile", message: 'Network issue — please tap Continue once more.' });
+            captureException(new Error((retryErr as any)?.message || 'profile_complete retry failed'), { profileId, context: 'profile_complete_retry' });
+            return;
+          }
+        }
+
         const { data: savedPrefs } = await supabase
           .from('preferences')
           .select('gender_preference, relationship_type, age_min, age_max')

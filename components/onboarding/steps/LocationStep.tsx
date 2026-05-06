@@ -15,6 +15,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { useOnboardingStore } from '@/stores/onboardingStore';
+import { supabase } from '@/lib/supabase';
 import citiesData from '@/assets/data/cities';
 
 type CityTuple = readonly [string, string, string];
@@ -122,17 +123,45 @@ export default function LocationStep() {
     // Best-effort: geocode the selection to populate lat/lng so the matching
     // RPC (get_nearby_profiles) can actually place this user. Without this,
     // dropdown-picker users get no discovery results because the haversine
-    // filter has nothing to compute against. Permission may be denied and
-    // geocoding may fail offline — either way the city/state fields above
-    // are already saved and Continue is enabled.
+    // filter has nothing to compute against, AND the
+    // location_required_when_complete CHECK on profiles blocks the final
+    // save from flipping profile_complete=true (audit 2026-05-05 found
+    // 124 users stuck this way).
+    //
+    // Try device geocoding first (fast, no network round-trip) — but it
+    // requires location permission on iOS, so falls through silently when
+    // the user denied the prompt. The Nominatim fallback via our edge
+    // function works regardless of permission state.
+    let lat: number | null = null;
+    let lng: number | null = null;
     try {
       const results = await Location.geocodeAsync(formatted);
       const first = results?.[0];
       if (first && typeof first.latitude === 'number' && typeof first.longitude === 'number') {
-        setFields({ latitude: first.latitude, longitude: first.longitude });
+        lat = first.latitude;
+        lng = first.longitude;
       }
     } catch {
-      // geocoding unavailable (permission denied, offline, etc.) — not fatal
+      // device geocoder unavailable — fall through to server fallback
+    }
+
+    if (lat == null || lng == null) {
+      try {
+        const { data, error } = await supabase.functions.invoke('geocode-city', {
+          body: { city: city.name, state: city.admin1, country: city.country },
+        });
+        if (!error && data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+          lat = data.latitude;
+          lng = data.longitude;
+        }
+      } catch {
+        // server geocoding also failed — user can still continue, but their
+        // final save will surface the same toast handled in onboarding.tsx
+      }
+    }
+
+    if (lat != null && lng != null) {
+      setFields({ latitude: lat, longitude: lng });
     }
   };
 
