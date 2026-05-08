@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, useColorScheme } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { registerForPushNotifications } from '@/lib/notifications';
@@ -14,6 +14,11 @@ export default function NotificationsStep({ onGranted, onContinue, granted = fal
   const isDark = useColorScheme() === 'dark';
   const [requesting, setRequesting] = useState(false);
   const [denied, setDenied] = useState(false);
+  const advanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
+  }, []);
 
   const handleEnable = async () => {
     setRequesting(true);
@@ -21,7 +26,9 @@ export default function NotificationsStep({ onGranted, onContinue, granted = fal
       const token = await registerForPushNotifications();
       if (token) {
         onGranted();
-        if (onContinue) setTimeout(onContinue, 700);
+        if (onContinue) {
+          advanceTimeoutRef.current = setTimeout(onContinue, 700);
+        }
       } else {
         setDenied(true);
       }
