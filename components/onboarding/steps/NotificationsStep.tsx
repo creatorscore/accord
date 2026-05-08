@@ -1,53 +1,44 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useColorScheme, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useColorScheme } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { registerForPushNotifications } from '@/lib/notifications';
 import { openAppSettings } from '@/lib/open-settings';
 
 interface Props {
   onGranted: () => void;
+  onContinue?: () => void;
   granted?: boolean;
 }
 
-export default function NotificationsStep({ onGranted, granted = false }: Props) {
+export default function NotificationsStep({ onGranted, onContinue, granted = false }: Props) {
   const isDark = useColorScheme() === 'dark';
   const [requesting, setRequesting] = useState(false);
-
-  console.log('[NotificationsStep] render — granted prop:', granted);
+  const [denied, setDenied] = useState(false);
 
   const handleEnable = async () => {
-    console.log('[NotificationsStep] Enable button pressed');
     setRequesting(true);
     try {
-      console.log('[NotificationsStep] Calling registerForPushNotifications...');
       const token = await registerForPushNotifications();
-      console.log('[NotificationsStep] Token result:', token);
       if (token) {
-        console.log('[NotificationsStep] Calling onGranted()');
         onGranted();
+        if (onContinue) setTimeout(onContinue, 700);
       } else {
-        console.log('[NotificationsStep] No token returned');
-        Alert.alert(
-          'Notifications Disabled',
-          'You can enable notifications later in Settings.',
-          [
-            { text: 'Open Settings', onPress: openAppSettings },
-            { text: 'OK' },
-          ]
-        );
+        setDenied(true);
       }
     } catch (error: any) {
-      console.error('[NotificationsStep] ERROR:', error.message, error);
-      Alert.alert('Error', 'Failed to enable notifications. You can try again later in Settings.');
+      console.error('[NotificationsStep] ERROR:', error?.message, error);
+      setDenied(true);
     } finally {
       setRequesting(false);
     }
   };
 
+  const iconName = granted ? 'bell-check' : denied ? 'bell-off-outline' : 'bell-ring-outline';
+
   return (
     <View style={styles.container}>
       <View style={[styles.iconCircle, { backgroundColor: isDark ? '#2C2C3E' : '#F5F2F7' }]}>
-        <MaterialCommunityIcons name={granted ? 'bell-check' : 'bell-ring-outline'} size={52} color="#A08AB7" />
+        <MaterialCommunityIcons name={iconName} size={52} color="#A08AB7" />
       </View>
 
       <Text style={[styles.description, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>
@@ -55,12 +46,33 @@ export default function NotificationsStep({ onGranted, granted = false }: Props)
       </Text>
 
       {granted ? (
-        <View style={[styles.enabledCard, { backgroundColor: isDark ? 'rgba(160,138,183,0.12)' : '#F3F0F7' }]}>
+        <View style={[styles.statusCard, { backgroundColor: isDark ? 'rgba(160,138,183,0.12)' : '#F3F0F7' }]}>
           <MaterialCommunityIcons name="check-circle" size={24} color="#A08AB7" />
-          <Text style={[styles.enabledText, { color: isDark ? '#D4C4E8' : '#A08AB7' }]}>
+          <Text style={[styles.statusText, { color: isDark ? '#D4C4E8' : '#A08AB7' }]}>
             Notifications enabled
           </Text>
         </View>
+      ) : denied ? (
+        <>
+          <View style={[styles.statusCard, { backgroundColor: isDark ? 'rgba(156,163,175,0.12)' : '#F3F4F6' }]}>
+            <MaterialCommunityIcons name="bell-off-outline" size={22} color={isDark ? '#9CA3AF' : '#6B7280'} />
+            <Text style={[styles.statusText, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>
+              Notifications off
+            </Text>
+          </View>
+          <Text style={[styles.deniedHint, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+            No problem — tap Continue to keep going. You can enable notifications anytime in Settings.
+          </Text>
+          <TouchableOpacity
+            onPress={openAppSettings}
+            activeOpacity={0.7}
+            style={styles.linkButton}
+            accessibilityRole="button"
+            accessibilityLabel="Open device settings to enable notifications"
+          >
+            <Text style={styles.linkText}>Open Settings</Text>
+          </TouchableOpacity>
+        </>
       ) : (
         <>
           <TouchableOpacity
@@ -123,7 +135,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
   },
-  enabledCard: {
+  statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -131,9 +143,27 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
   },
-  enabledText: {
+  statusText: {
     fontSize: 17,
     fontWeight: '600',
+  },
+  deniedHint: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginTop: 16,
+    paddingHorizontal: 24,
+  },
+  linkButton: {
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  linkText: {
+    color: '#A08AB7',
+    fontSize: 15,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   skipHint: {
     fontSize: 13,
