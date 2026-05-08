@@ -641,7 +641,7 @@ export default function Onboarding() {
     switch (subStep) {
       case 0: return <NameStep />;
       case 1: return <DOBStep />;
-      case 2: return <NotificationsStep onGranted={() => setNotificationsGranted(true)} granted={notificationsGranted} />;
+      case 2: return <NotificationsStep onGranted={() => setNotificationsGranted(true)} onContinue={handleContinue} granted={notificationsGranted} />;
       case 3: return <LocationStep />;
       case 4: // Pronouns
         return <ChipSelect options={tOptions(t, 'pronouns', PRONOUNS)} selected={store.pronouns ? [store.pronouns] : []} onSelect={(v) => setField('pronouns', v[0] || '')} multi={false} />;
