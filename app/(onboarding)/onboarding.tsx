@@ -226,23 +226,14 @@ export default function Onboarding() {
       case 0: return store.displayName.trim().length >= 1;
       case 1: return store.birthDate !== null && store.age !== null && store.age >= 18;
       case 2: return true; // notifications now skippable
-      case 3: {
-        const result = !!(store.locationCity || store.locationState);
-        // TEMP DIAGNOSTIC: log each isStepValid call on location step so we
-        // can see from device logs what the store actually contains when the
-        // Continue button evaluates. Remove once the "can't continue on
-        // location" complaint is understood.
-        console.log('[Onboarding] isStepValid(3):', JSON.stringify({
-          locationCity: store.locationCity,
-          locationState: store.locationState,
-          locationCountry: store.locationCountry,
-          latitude: store.latitude,
-          longitude: store.longitude,
-          result,
-          saving,
-        }));
-        return result;
-      }
+      case 3:
+        // Require BOTH a selected city AND resolved lat/lng. Lat/lng is what
+        // the location_required_when_complete CHECK constraint enforces at
+        // final save; gating Continue here prevents users from advancing
+        // into purgatory when geocoding hasn't landed yet (or failed).
+        return !!(store.locationCity || store.locationState)
+          && store.latitude != null
+          && store.longitude != null;
       case 4: return !!store.pronouns; // Pronouns required per ONBOARDING_SPEC (incl. "prefer not to say")
       case 5: return store.gender.length > 0;
       case 6: return store.sexualOrientation.length > 0;
@@ -462,6 +453,51 @@ export default function Onboarding() {
       }
       console.log('[saveCheckpoint] all done, returning');
     } catch (error: any) {
+      // Defense in depth: on the final save, the location_required_when_complete
+      // CHECK constraint trips if lat/lng are null. Step 3's UI gate normally
+      // prevents this, but an older client/build could still surface it.
+      // Try one geocode + retry before bubbling the error to the toast.
+      const msg = error?.message || '';
+      const isLocationConstraint =
+        msg.includes('location_required_when_complete') ||
+        (msg.includes('violates check constraint') && msg.includes('location'));
+      const isFinalStep = step >= TOTAL_ONBOARDING_STEPS;
+      if (isLocationConstraint && isFinalStep && store.locationCity) {
+        try {
+          const { data: geo, error: geoErr } = await supabase.functions.invoke('geocode-city', {
+            body: {
+              city: store.locationCity,
+              state: store.locationState,
+              country: store.locationCountry,
+            },
+          });
+          if (!geoErr && geo && typeof geo.latitude === 'number' && typeof geo.longitude === 'number') {
+            store.setFields({ latitude: geo.latitude, longitude: geo.longitude });
+            const pid = profileId;
+            if (pid) {
+              const { error: retryErr } = await supabase
+                .from('profiles')
+                .update({
+                  latitude: geo.latitude,
+                  longitude: geo.longitude,
+                  profile_complete: true,
+                  onboarding_step: TOTAL_ONBOARDING_STEPS,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', pid);
+              if (!retryErr) {
+                console.log('[saveCheckpoint] recovered from location constraint via geocode + retry');
+                return;
+              }
+              captureException(new Error((retryErr as any)?.message || 'location constraint retry failed'), { step, context: 'location_constraint_retry' });
+            }
+          } else {
+            captureException(new Error(geoErr?.message || 'geocode-city returned no coords'), { step, context: 'location_constraint_geocode' });
+          }
+        } catch (recoveryErr: any) {
+          captureException(recoveryErr instanceof Error ? recoveryErr : new Error(recoveryErr?.message || 'recovery failed'), { step, context: 'location_constraint_recovery' });
+        }
+      }
       console.error('Checkpoint save error:', error);
       captureException(error instanceof Error ? error : new Error(error?.message || 'Checkpoint save failed'), { step, context: 'onboarding_checkpoint' });
       showToast({ type: 'error', title: 'Error', message: error.message || 'Failed to save progress. Please try again.' });
