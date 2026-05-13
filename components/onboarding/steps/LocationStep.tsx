@@ -62,9 +62,37 @@ function searchCities(text: string): City[] {
   return [...startsWith, ...contains].slice(0, 12);
 }
 
+async function geocodeCity(city: City): Promise<{ lat: number; lng: number } | null> {
+  const formatted = formatCity(city);
+  try {
+    const results = await Location.geocodeAsync(formatted);
+    const first = results?.[0];
+    if (first && typeof first.latitude === 'number' && typeof first.longitude === 'number') {
+      return { lat: first.latitude, lng: first.longitude };
+    }
+  } catch {
+    // device geocoder unavailable — fall through to server fallback
+  }
+  try {
+    const { data, error } = await supabase.functions.invoke('geocode-city', {
+      body: { city: city.name, state: city.admin1, country: city.country },
+    });
+    if (!error && data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+      return { lat: data.latitude, lng: data.longitude };
+    }
+  } catch {
+    // server geocoding also failed
+  }
+  return null;
+}
+
+type GeocodingState = 'idle' | 'pending' | 'done' | 'failed';
+
 export default function LocationStep() {
   const locationCity = useOnboardingStore((s) => s.locationCity);
   const locationState = useOnboardingStore((s) => s.locationState);
+  const latitude = useOnboardingStore((s) => s.latitude);
+  const longitude = useOnboardingStore((s) => s.longitude);
   const setFields = useOnboardingStore((s) => s.setFields);
   const isDark = useColorScheme() === 'dark';
   const [loading, setLoading] = useState(false);
@@ -77,6 +105,13 @@ export default function LocationStep() {
   const [query, setQuery] = useState(selectedValue);
   const [results, setResults] = useState<City[]>([]);
   const [showResults, setShowResults] = useState(false);
+  // Geocoding state — gates Continue via parent's isStepValid (which reads
+  // store.latitude/longitude). If a returning user already has coords in
+  // store, treat as 'done'; otherwise idle until a selection triggers it.
+  const [geocodingState, setGeocodingState] = useState<GeocodingState>(
+    latitude != null && longitude != null ? 'done' : 'idle'
+  );
+  const [lastSelectedCity, setLastSelectedCity] = useState<City | null>(null);
   const inputRef = useRef<TextInput>(null);
   const debounceRef = useRef<NodeJS.Timeout>(null);
 
@@ -87,13 +122,13 @@ export default function LocationStep() {
   }, []);
 
   const handleChangeText = (text: string) => {
-    console.log('[LocationStep] handleChangeText:', JSON.stringify({ text, len: text.length }));
     setQuery(text);
     // Don't update store — only update on selection
     if (text.length === 0) {
-      // Clear location if input cleared
-      console.log('[LocationStep] clearing store (empty input)');
-      setFields({ locationCity: '', locationState: '' });
+      // Clear location if input cleared (including lat/lng — they're now stale)
+      setFields({ locationCity: '', locationState: '', latitude: null, longitude: null });
+      setGeocodingState('idle');
+      setLastSelectedCity(null);
       setShowResults(false);
       return;
     }
@@ -101,75 +136,49 @@ export default function LocationStep() {
     debounceRef.current = setTimeout(() => doSearch(text), 150);
   };
 
+  const runGeocode = useCallback(async (city: City) => {
+    setGeocodingState('pending');
+    // Clear any stale coords from a previous selection so isStepValid stays
+    // false until the new geocode lands. This is what gates the Continue
+    // button — without this, a user who picks city A then quickly changes
+    // to city B could advance with A's coords still in the store.
+    setFields({ latitude: null, longitude: null });
+    const coords = await geocodeCity(city);
+    if (coords) {
+      setFields({ latitude: coords.lat, longitude: coords.lng });
+      setGeocodingState('done');
+    } else {
+      setGeocodingState('failed');
+    }
+  }, [setFields]);
+
   const handleSelectCity = async (city: City) => {
-    console.log('[LocationStep] handleSelectCity:', JSON.stringify(city));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const formatted = formatCity(city);
-    setQuery(formatted);
+    setQuery(formatCity(city));
     setShowResults(false);
     Keyboard.dismiss();
-    // Commit city fields immediately so the Continue button enables.
+    setLastSelectedCity(city);
     setFields({
       locationCity: city.name,
       locationState: city.admin1,
       locationCountry: city.country,
     });
-    console.log('[LocationStep] setFields called with:', JSON.stringify({ locationCity: city.name, locationState: city.admin1, locationCountry: city.country }));
-    // Read back immediately to verify the store actually took the update
-    setTimeout(() => {
-      const s = useOnboardingStore.getState();
-      console.log('[LocationStep] store AFTER setFields:', JSON.stringify({ locationCity: s.locationCity, locationState: s.locationState, locationCountry: s.locationCountry, latitude: s.latitude, longitude: s.longitude }));
-    }, 50);
-    // Best-effort: geocode the selection to populate lat/lng so the matching
-    // RPC (get_nearby_profiles) can actually place this user. Without this,
-    // dropdown-picker users get no discovery results because the haversine
-    // filter has nothing to compute against, AND the
-    // location_required_when_complete CHECK on profiles blocks the final
-    // save from flipping profile_complete=true (audit 2026-05-05 found
-    // 124 users stuck this way).
-    //
-    // Try device geocoding first (fast, no network round-trip) — but it
-    // requires location permission on iOS, so falls through silently when
-    // the user denied the prompt. The Nominatim fallback via our edge
-    // function works regardless of permission state.
-    let lat: number | null = null;
-    let lng: number | null = null;
-    try {
-      const results = await Location.geocodeAsync(formatted);
-      const first = results?.[0];
-      if (first && typeof first.latitude === 'number' && typeof first.longitude === 'number') {
-        lat = first.latitude;
-        lng = first.longitude;
-      }
-    } catch {
-      // device geocoder unavailable — fall through to server fallback
-    }
+    await runGeocode(city);
+  };
 
-    if (lat == null || lng == null) {
-      try {
-        const { data, error } = await supabase.functions.invoke('geocode-city', {
-          body: { city: city.name, state: city.admin1, country: city.country },
-        });
-        if (!error && data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-          lat = data.latitude;
-          lng = data.longitude;
-        }
-      } catch {
-        // server geocoding also failed — user can still continue, but their
-        // final save will surface the same toast handled in onboarding.tsx
-      }
-    }
-
-    if (lat != null && lng != null) {
-      setFields({ latitude: lat, longitude: lng });
-    }
+  const handleRetryGeocode = async () => {
+    if (!lastSelectedCity) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await runGeocode(lastSelectedCity);
   };
 
   const handleClear = () => {
     setQuery('');
     setResults([]);
     setShowResults(false);
-    setFields({ locationCity: '', locationState: '' });
+    setFields({ locationCity: '', locationState: '', latitude: null, longitude: null });
+    setGeocodingState('idle');
+    setLastSelectedCity(null);
     inputRef.current?.focus();
   };
 
@@ -242,7 +251,9 @@ export default function LocationStep() {
       });
       setQuery([city, state].filter(Boolean).join(', '));
       setShowResults(false);
-      console.log('[LocationStep] GPS done in', Date.now() - t0, 'ms');
+      // GPS path always yields coords directly — mark done so isStepValid passes
+      setGeocodingState('done');
+      setLastSelectedCity(null);
     } catch (error: any) {
       console.log('[LocationStep] GPS error:', error?.message, '+', Date.now() - t0, 'ms');
       Alert.alert(
@@ -356,12 +367,35 @@ export default function LocationStep() {
       </View>
 
       {/* Selected location confirmation */}
-      {selectedValue && !showResults && (
+      {selectedValue && !showResults && geocodingState === 'done' && (
         <View style={[styles.selectedCard, { backgroundColor: isDark ? '#1A2A1A' : '#F0F9F0' }]}>
           <MaterialCommunityIcons name="map-marker-check" size={20} color="#4CAF50" />
           <Text style={[styles.selectedText, { color: isDark ? '#81C784' : '#2E7D32' }]}>
             {selectedValue}
           </Text>
+        </View>
+      )}
+
+      {selectedValue && !showResults && geocodingState === 'pending' && (
+        <View style={[styles.selectedCard, { backgroundColor: isDark ? '#1A1A2D' : '#F5F2F7' }]}>
+          <MaterialCommunityIcons name="map-marker" size={20} color="#A08AB7" />
+          <Text style={[styles.selectedText, { color: isDark ? '#D4C4E8' : '#8B72A8' }]}>
+            Pinning {selectedValue} on the map…
+          </Text>
+        </View>
+      )}
+
+      {selectedValue && !showResults && geocodingState === 'failed' && (
+        <View style={[styles.selectedCard, { backgroundColor: isDark ? '#2D1A1A' : '#FDF0F0', flexDirection: 'column', alignItems: 'stretch', gap: 8 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <MaterialCommunityIcons name="map-marker-alert" size={20} color="#D9534F" />
+            <Text style={[styles.selectedText, { color: isDark ? '#F5A5A5' : '#A03030', flex: 1 }]}>
+              We couldn't pin this city. Try another spelling, a nearby city, or use GPS.
+            </Text>
+          </View>
+          <TouchableOpacity onPress={handleRetryGeocode} style={{ paddingVertical: 6, alignSelf: 'flex-start' }}>
+            <Text style={{ color: '#A08AB7', fontWeight: '600', fontSize: 14 }}>Retry</Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>
