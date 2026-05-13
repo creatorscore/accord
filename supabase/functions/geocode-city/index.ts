@@ -25,6 +25,46 @@ interface GeocodeRequest {
   country?: string;
 }
 
+async function tryQuery(
+  input: { city: string; state: string; country: string },
+  mode: 'structured' | 'freetext',
+): Promise<{ lat: number; lng: number } | null> {
+  const params = new URLSearchParams({ format: 'jsonv2', limit: '1', 'accept-language': 'en' });
+
+  if (mode === 'structured') {
+    if (input.city) params.set('city', input.city);
+    if (input.state) params.set('state', input.state);
+    if (input.country) params.set('country', input.country);
+  } else {
+    // Free-text — concatenate everything we have. Nominatim's q= is the same
+    // engine OSM's website uses and tolerates typos / wrong admin levels.
+    const q = [input.city, input.state, input.country].filter(Boolean).join(', ');
+    if (!q) return null;
+    params.set('q', q);
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      signal: controller.signal,
+      headers: { 'User-Agent': NOMINATIM_USER_AGENT, Accept: 'application/json' },
+    });
+    if (!response.ok) return null;
+    const results = (await response.json()) as Array<{ lat: string; lon: string }>;
+    const first = results?.[0];
+    if (!first?.lat || !first?.lon) return null;
+    const lat = parseFloat(first.lat);
+    const lng = parseFloat(first.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -43,55 +83,26 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const params = new URLSearchParams({
-      format: 'jsonv2',
-      limit: '1',
-      'accept-language': 'en',
-    });
-    if (city) params.set('city', city);
-    if (state) params.set('state', state);
-    if (country) params.set('country', country);
+    // Three-pass strategy. 2026-05-13 backfill audit found that some users
+    // have admin1 strings our cities dataset stores with missing apostrophes
+    // or accents (e.g. "Provence-Alpes-Cote dAzur"), and these poison both
+    // structured and free-text queries even for famous cities. So:
+    //   1. Structured city+state+country (most precise when inputs are clean)
+    //   2. Free-text "city, state, country" (forgiving of Unicode/typos)
+    //   3. Free-text "city, country" (last resort — drops the bad state)
+    const coords =
+      (await tryQuery({ city, state, country }, 'structured'))
+      ?? (await tryQuery({ city, state, country }, 'freetext'))
+      ?? (state ? await tryQuery({ city, state: '', country }, 'freetext') : null);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': NOMINATIM_USER_AGENT,
-        'Accept': 'application/json',
-      },
-    });
-
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      return new Response(JSON.stringify({ error: `geocoder returned ${response.status}` }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const results = (await response.json()) as Array<{ lat: string; lon: string }>;
-    const first = results?.[0];
-    if (!first || !first.lat || !first.lon) {
+    if (!coords) {
       return new Response(JSON.stringify({ error: 'no results' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const latitude = parseFloat(first.lat);
-    const longitude = parseFloat(first.lon);
-
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      return new Response(JSON.stringify({ error: 'invalid coordinates returned' }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    return new Response(JSON.stringify({ latitude, longitude }), {
+    return new Response(JSON.stringify({ latitude: coords.lat, longitude: coords.lng }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
