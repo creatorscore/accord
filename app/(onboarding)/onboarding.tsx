@@ -439,15 +439,22 @@ export default function Onboarding() {
       // Push token save is fire-and-forget — we're not going to block Continue
       // on it. Fires in the background; if it fails, NotificationContext has
       // its own retry loop that'll pick up on next app launch.
+      //
+      // ensurePushTokenSaved looks up the profile via user_id (auth uid), NOT
+      // profile_id. Passing profileId here silently fails — the lookup
+      // returns PGRST116 and the token never lands. (~33% of post-2026-04-22
+      // cohort had no push token saved because of this.) Also: 3s was too
+      // tight for getExpoPushTokenAsync on first call — FCM/APNS registration
+      // routinely takes 5-10s on a real device. Bumped to 10s.
       if (notificationsGranted && pid) {
-        const pidFinal: string = pid;
+        const authUserId: string = user.id;
         (async () => {
           try {
             const token = await Promise.race<string | null>([
               registerForPushNotifications().catch(() => null),
-              new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
             ]);
-            if (token) await ensurePushTokenSaved(pidFinal, token).catch(() => {});
+            if (token) await ensurePushTokenSaved(authUserId, token).catch(() => {});
           } catch {}
         })();
       }
