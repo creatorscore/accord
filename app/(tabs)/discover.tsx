@@ -894,12 +894,18 @@ export default function Discover() {
     // Use ref for profile ID to avoid stale closure issues
     const profileId = currentProfileIdRef.current;
 
+    // Diagnostic timing — each mark() records elapsed-ms since loadProfiles
+    // started. Attached to captureException on error so Sentry shows which
+    // stage timed out (cache / RPC / full-fetch / prefs) without needing
+    // console output. See JAVASCRIPT-REACT-70 incident 2026-05-15.
+    const t0 = Date.now();
+    const marks: Record<string, number> = {};
+    const mark = (label: string) => { marks[label] = Date.now() - t0; };
+
     try {
       setLoading(true);
 
-      if (!profileId) {
-        return;
-      }
+      if (!profileId) return;
 
       // Get profiles that:
       // 1. Are active
@@ -976,6 +982,8 @@ export default function Discover() {
           .select('reported_profile_id')
           .eq('reporter_profile_id', profileId),
       ]);
+
+      mark('exclusionQueries');
 
       if (currentUserError) throw currentUserError;
 
@@ -1059,19 +1067,18 @@ export default function Discover() {
           p_profile_id: profileId,
           p_limit: 50,
         });
+        mark('cacheLookup');
 
         let nearbyIds: string[] = [];
 
         if (!cacheError && cachedFeed && cachedFeed.length > 0) {
           // Cache hit — use pre-computed feed (skips 9 exclusion queries + RPC)
-          console.log(`✅ Discovery cache hit: ${cachedFeed.length} candidates`);
           const swipedSet = new Set(swipedIds);
           nearbyIds = cachedFeed
             .map((c: any) => c.candidate_id)
             .filter((id: string) => !swipedSet.has(id));
         } else {
           // Cache miss — fall back to live RPC
-          console.log('⚠️ Discovery cache miss, using live RPC');
           // Gender prefs: use in-session filter only. Empty array = "Everyone" (RPC skips the filter).
           // No DB fallback — if the user clears to Everyone but DB save raced, we honor the user's intent.
           const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_profiles', {
@@ -1084,11 +1091,8 @@ export default function Discover() {
             p_gender_prefs: effectiveFilters.genderPreference || [],
             p_result_limit: 50
           });
-
-          if (rpcError) {
-            console.error('RPC error:', rpcError);
-            throw rpcError;
-          }
+          mark('liveRpc');
+          if (rpcError) throw rpcError;
 
           if (rpcData && rpcData.length > 0) {
             const swipedSet = new Set(swipedIds);
@@ -1116,11 +1120,8 @@ export default function Discover() {
               .eq('incognito_mode', false)
               .eq('photo_review_required', false)
               .or('policy_restricted.is.null,policy_restricted.eq.false');
-
-            if (profilesError) {
-              console.error('❌ Full profile fetch error:', profilesError);
-              throw profilesError;
-            }
+            mark('fullProfilesFetch');
+            if (profilesError) throw profilesError;
 
             data = fullProfiles || [];
 
@@ -1129,6 +1130,7 @@ export default function Discover() {
             if (data.length > 0) {
               const profileIds = data.map((p: any) => p.id);
               const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: profileIds });
+              mark('prefsFetch');
               if (prefsData) {
                 const prefsMap = new Map(prefsData.map((p: any) => [p.profile_id, p]));
                 data = data.map((profile: any) => ({
@@ -1139,21 +1141,17 @@ export default function Discover() {
             }
         }
       } else {
-        // GLOBAL SEARCH or SEARCH MODE: Use standard query
+        // GLOBAL SEARCH or SEARCH MODE: two-phase query.
+        // Phase 1 fetches only profile IDs with the filter+order — the
+        // idx_profiles_global_discovery partial index makes this ~2ms.
+        // Phase 2 hydrates those IDs with profile+photos+preferences.
+        // Previously this was one fat query with a photos LEFT JOIN, which
+        // joined photos for all ~17k active profiles BEFORE the LIMIT 200,
+        // taking 8+ seconds cold and timing out at JAVASCRIPT-REACT-70.
 
         let query = supabase
           .from('profiles')
-          .select(`
-            *,
-            photos (
-              url,
-              storage_path,
-              is_primary,
-              display_order,
-              blur_data_uri
-            ),
-            preferences:preferences(*)
-          `)
+          .select('id')
           .neq('id', profileId)
           .eq('is_active', true) // CRITICAL: Filter out banned/deactivated users
           .or('policy_restricted.is.null,policy_restricted.eq.false') // Filter policy restricted users
@@ -1266,23 +1264,57 @@ export default function Discover() {
           }
         }
 
-        const { data: queryData, error: queryError } = await query;
-        if (queryError) throw queryError;
-        data = queryData || [];
-        error = queryError;
+        // Phase 1: ID-only fetch (uses idx_profiles_global_discovery)
+        const { data: idData, error: idError } = await query;
+        mark('globalIdQuery');
+        if (idError) throw idError;
+        const candidateIds = (idData ?? []).map((p: any) => p.id);
 
-        // Fetch preference fields for global search results too
-        if (data.length > 0) {
-          const profileIds = data.map((p: any) => p.id);
-          const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: profileIds });
-          if (prefsData) {
-            const prefsMap = new Map(prefsData.map((p: any) => [p.profile_id, p]));
-            data = data.map((profile: any) => ({
-              ...profile,
-              preferences: prefsMap.get(profile.id) || null,
-            }));
+        // Phase 2: hydrate full profiles + photos + preferences
+        if (candidateIds.length > 0) {
+          const { data: fullData, error: fullError } = await supabase
+            .from('profiles')
+            .select(`
+              *,
+              photos (
+                url,
+                storage_path,
+                is_primary,
+                display_order,
+                blur_data_uri
+              ),
+              preferences:preferences(*)
+            `)
+            .in('id', candidateIds);
+          mark('globalFullFetch');
+          if (fullError) throw fullError;
+
+          // .in() doesn't preserve order — re-sort to match the indexed
+          // created_at DESC ordering from phase 1.
+          const orderMap = new Map(candidateIds.map((id: string, i: number) => [id, i]));
+          data = (fullData ?? []).slice().sort((a: any, b: any) =>
+            (orderMap.get(a.id) ?? Infinity) - (orderMap.get(b.id) ?? Infinity)
+          );
+
+          // Preferences RLS blocks direct reads of other users' rows, so
+          // the inline preferences:preferences(*) select returns null. Use
+          // the SECURITY DEFINER RPC to hydrate prefs (same pattern as the
+          // local-search branch).
+          if (data.length > 0) {
+            const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: candidateIds });
+            mark('globalPrefsFetch');
+            if (prefsData) {
+              const prefsMap = new Map(prefsData.map((p: any) => [p.profile_id, p]));
+              data = data.map((profile: any) => ({
+                ...profile,
+                preferences: prefsMap.get(profile.id) || profile.preferences || null,
+              }));
+            }
           }
+        } else {
+          data = [];
         }
+        error = idError;
       }
 
       if (error) throw error;
@@ -1893,11 +1925,13 @@ export default function Discover() {
 
       // Sign first batch — this is what the user sees immediately
       const signedFirst = await signProfileMediaUrls(firstBatch);
+      mark('signFirstBatch');
 
       // Show profiles NOW (first batch signed, rest unsigned but will be signed before user reaches them)
       setProfiles([...signedFirst, ...restBatch]);
       setCurrentIndex(0);
       hasInitiallyLoaded.current = true;
+      mark('total');
 
       // Prefetch images for the first few profiles for instant loading
       const imagesToPrefetch = signedFirst
@@ -1924,8 +1958,16 @@ export default function Discover() {
         }).catch(err => console.warn('Background URL signing failed:', err));
       }
     } catch (error: any) {
-      console.error('❌ Error loading profiles:', error);
-      captureException(error instanceof Error ? error : new Error(error?.message || 'Discovery profile load failed'), { context: 'discovery_load' });
+      mark('totalAtError');
+      console.error('[Discover] loadProfiles error', error?.message ?? error);
+      // Attach stage marks to Sentry so the issue page shows which stage
+      // timed out without requiring console output. See JAVASCRIPT-REACT-70.
+      captureException(error instanceof Error ? error : new Error(error?.message || 'Discovery profile load failed'), {
+        context: 'discovery_load',
+        marks,
+        errorCode: error?.code,
+        lastReachedStage: Object.keys(marks).filter(k => k !== 'totalAtError').pop() ?? null,
+      });
       showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profilesLoadError') });
     } finally {
       setLoading(false);
