@@ -155,9 +155,12 @@ export default function Profile() {
         .single();
 
       if (error) {
-        // If profile doesn't exist (PGRST116 = no rows), redirect to onboarding
+        // If profile doesn't exist (PGRST116 = no rows), redirect to onboarding.
+        // Route through '/' so the unified flow handles resume — going directly
+        // to legacy basic-info bypasses the welcome-info gate and the 31-step
+        // unified onboarding, fragmenting the funnel.
         if (error.code === 'PGRST116') {
-          router.replace('/(onboarding)/basic-info');
+          router.replace('/');
           return;
         }
         throw error;

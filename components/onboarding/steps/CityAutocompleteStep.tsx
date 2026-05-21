@@ -135,6 +135,28 @@ export default function CityAutocompleteStep({
 
   return (
     <View style={styles.container}>
+      {/* Inline Skip — rendered ABOVE the input so it's visible before the
+          keyboard pops up and pushes the bottom action area off-screen. The
+          header's small Skip link wasn't getting tapped on this step (508
+          users stuck at hometown in 14d cohort); users see only the search
+          field once focus + keyboard kick in. */}
+      {onSkip && (
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            Keyboard.dismiss();
+            onSkip();
+          }}
+          style={styles.topSkipButton}
+          accessibilityRole="button"
+          accessibilityLabel="Skip this step"
+        >
+          <Text style={[styles.topSkipText, { color: isDark ? '#A08AB7' : '#8B72A8' }]}>
+            Skip for now
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Input */}
       <View style={[styles.inputRow, {
         borderColor: showResults ? '#A08AB7' : (isDark ? '#374151' : '#E4E4E7'),
@@ -237,25 +259,6 @@ export default function CityAutocompleteStep({
         </View>
       )}
 
-      {/* Inline skip — only rendered when the parent passes onSkip. The
-          corner Skip in OnboardingLayout is too small for a text-input
-          step where the user is staring at the keyboard. */}
-      {onSkip && (
-        <TouchableOpacity
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            Keyboard.dismiss();
-            onSkip();
-          }}
-          style={styles.inlineSkipButton}
-          accessibilityRole="button"
-          accessibilityLabel="Skip this step"
-        >
-          <Text style={[styles.inlineSkipText, { color: isDark ? '#A08AB7' : '#8B72A8' }]}>
-            Skip for now
-          </Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -329,14 +332,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  inlineSkipButton: {
-    alignSelf: 'center',
-    marginTop: 24,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+  topSkipButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
-  inlineSkipText: {
-    fontSize: 16,
+  topSkipText: {
+    fontSize: 15,
     fontWeight: '600',
     textDecorationLine: 'underline',
   },

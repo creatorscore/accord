@@ -6,6 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { captureException } from '@/lib/sentry';
 import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { validateContent } from '@/lib/content-moderation';
@@ -54,11 +55,15 @@ export default function Prompts({ embedded, onContinue: parentContinue, onBack: 
 
   const { loadDraft, saveDraft, clearDraft } = useOnboardingDraft<PromptsDraft>(user?.id, 'prompts');
 
+  // Wait for auth to hydrate. Previous empty-deps useEffect silently no-op'd
+  // when user wasn't ready, leaving profileId=null and surfacing "Profile
+  // not found" on save.
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (user?.id) loadProfile();
+  }, [user?.id]);
 
   const loadProfile = async () => {
+    console.log('[legacy-prompts.loadProfile] user?.id =', user?.id);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -66,7 +71,22 @@ export default function Prompts({ embedded, onContinue: parentContinue, onBack: 
         .eq('user_id', user?.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error && error.code !== 'PGRST116') {
+        const e: any = error;
+        captureException(new Error(e?.message || 'legacy-prompts loadProfile failed'), {
+          context: 'legacy_prompts_loadProfile',
+          code: e?.code,
+          userId: user?.id,
+        });
+        throw error;
+      }
+      if (!data) {
+        console.warn('[legacy-prompts.loadProfile] PGRST116 — no profile row for user', user?.id);
+        captureException(new Error('legacy-prompts: no profile row for user'), {
+          context: 'legacy_prompts_no_profile',
+          userId: user?.id,
+        });
+      }
 
       if (data) {
         setProfileId(data.id);
