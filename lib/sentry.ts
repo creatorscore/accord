@@ -209,6 +209,23 @@ export const initializeSentry = () => {
           return null;
         }
 
+        // Drop transient network errors — mobile connectivity is flaky and
+        // these aren't bugs. Was contributing significant noise to the
+        // discover-like issue bucket (REACT-71) and hiding real failures.
+        // Keep them only when not caught by a known retry path (i.e.,
+        // unhandled mechanism — already filtered above by handled=no for
+        // fatal).
+        const lowerMsg = errorMessage.toLowerCase();
+        if (
+          (errorType === 'TypeError' || errorType === 'Error') &&
+          (lowerMsg.includes('network request failed') ||
+            lowerMsg.includes('the internet connection appears to be offline') ||
+            lowerMsg === 'network error' ||
+            lowerMsg.includes('failed to fetch'))
+        ) {
+          return null;
+        }
+
         // Drop DeadSystemException — Android OS process died, app can't recover
         if (errorType === 'DeadSystemRuntimeException' || errorMessage.includes('DeadSystemException')) {
           return null;
@@ -369,9 +386,20 @@ export const initializeSentry = () => {
 };
 
 /**
- * Capture an exception manually
+ * Capture an exception manually.
+ *
+ * Pass `fingerprint` when callers want Sentry to group events by their
+ * actual error class rather than by the call site. Without it, every
+ * error thrown from the same anonymous catch handler collapses into a
+ * single "issue" — the like-flow catch at discover.tsx was bundling
+ * permission-denied, duplicate-key, network, and single-row failures
+ * under one fingerprint and inflating the user count 100x.
  */
-export const captureException = (error: Error, context?: Record<string, any>) => {
+export const captureException = (
+  error: Error,
+  context?: Record<string, any>,
+  fingerprint?: string[],
+) => {
   if (!SENTRY_DSN) {
     console.error('Exception (Sentry not configured):', error, context);
     return;
@@ -379,7 +407,26 @@ export const captureException = (error: Error, context?: Record<string, any>) =>
 
   Sentry.captureException(error, {
     extra: context,
+    ...(fingerprint ? { fingerprint } : {}),
   });
+};
+
+/**
+ * Returns true for transient network errors that shouldn't be treated as
+ * app bugs. Mobile devices drop connections constantly; capturing these
+ * as Sentry errors floods the dashboard and hides real problems.
+ */
+export const isTransientNetworkError = (error: any): boolean => {
+  const msg: string = (error?.message || String(error || '')).toLowerCase();
+  if (!msg) return false;
+  return (
+    msg.includes('network request failed') ||
+    msg.includes('network error') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('the internet connection appears to be offline') ||
+    msg.includes('timed out') ||
+    msg.includes('timeout')
+  );
 };
 
 /**

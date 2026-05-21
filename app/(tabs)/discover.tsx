@@ -33,7 +33,7 @@ import { useColorScheme } from '@/lib/useColorScheme';
 import { COLORS } from '@/theme/colors';
 import { expandGenderPreference } from '@/lib/gender-preferences';
 import { trackUserAction, trackFunnel, trackEvent } from '@/lib/analytics';
-import { captureException } from '@/lib/sentry';
+import { captureException, isTransientNetworkError } from '@/lib/sentry';
 import { prefetchImages } from '@/components/shared/ConditionalImage';
 import VerificationBanner from '@/components/shared/VerificationBanner';
 import HandshakeLoader from '@/components/shared/HandshakeLoader';
@@ -118,6 +118,12 @@ export default function Discover() {
     currentProfileIdRef.current = id;
     _setCurrentProfileId(id);
   };
+  // Re-entry guard for the like flow. Without this, rapid taps (the user
+  // double-taps before the first insert commits) race the existingLike
+  // SELECT and hit the unique-constraint on (liker_profile_id,
+  // liked_profile_id) — surfacing as duplicate-key errors in Sentry
+  // (REACT-71). Cleared in the handler's finally block.
+  const isLikingRef = useRef(false);
   // Hash of the filter set most recently passed to loadProfiles. If this diverges from
   // the current DB preferences on focus, the feed needs to refetch — fixes the bug where
   // editing preferences in settings didn't take effect until leaving & reopening the app.
@@ -2040,12 +2046,33 @@ export default function Discover() {
   }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete, transitionToNextProfile]);
 
   const handleSwipeRight = useCallback(async (message?: string, likedContentData?: { type: string; prompt?: string; answer?: string; index?: number }): Promise<boolean> => {
+    // Hard auth gate. Without an auth.uid the supabase client sends the
+    // anon JWT, and INSERT on `likes` is not granted to anon → users
+    // were hitting "permission denied for table likes" in Sentry. Don't
+    // even attempt the request if there's no user session.
+    if (!user?.id) {
+      captureException(
+        new Error('handleSwipeRight invoked without auth user'),
+        { context: 'discovery_like_no_user', currentProfileId },
+        ['discovery-like-no-user'],
+      );
+      return false;
+    }
+
     if (!currentProfileId || currentIndex >= profiles.length) {
       return false;
     }
 
+    // Re-entry guard. Without this, double-taps before the insert
+    // commits race the duplicate-key check and crash with 23505.
+    if (isLikingRef.current) {
+      return false;
+    }
+    isLikingRef.current = true;
+
     // Block swiping if profile is incomplete
     if (!isProfileComplete) {
+      isLikingRef.current = false;
       const destination = returnRoute || '/(onboarding)/onboarding';
       Alert.alert(
         t('discover.completeProfile.title'),
@@ -2062,10 +2089,16 @@ export default function Discover() {
     }
 
     // Check like limit (free users: 5 likes/day, premium: unlimited)
-    if (!checkLikeLimit()) return false;
+    if (!checkLikeLimit()) {
+      isLikingRef.current = false;
+      return false;
+    }
 
     const targetProfile = profiles[currentIndex];
-    if (!targetProfile) return false;
+    if (!targetProfile) {
+      isLikingRef.current = false;
+      return false;
+    }
 
 
     try {
@@ -2109,7 +2142,10 @@ export default function Discover() {
 
 
           if (existingMatch && existingMatch.status === 'unmatched') {
-            // Update the existing unmatched record to active
+            // Update the existing unmatched record to active. maybeSingle()
+            // here so a 0-row return from RLS doesn't throw "Cannot coerce
+            // result to a single JSON object" — we'd rather log and fall
+            // through than crash the like flow.
             const { data: reactivatedMatch, error: updateError } = await supabase
               .from('matches')
               .update({
@@ -2123,7 +2159,7 @@ export default function Discover() {
               })
               .eq('id', existingMatch.id)
               .select('id')
-              .single();
+              .maybeSingle();
 
             if (updateError) {
               console.error('❌ Error reactivating match:', updateError);
@@ -2138,7 +2174,10 @@ export default function Discover() {
               return true;
             }
           } else {
-            // Create new match
+            // Create new match. maybeSingle() prevents a 0-row return
+            // (e.g., RLS dropping the returned row) from throwing "Cannot
+            // coerce result to a single JSON object" instead of the real
+            // matchError.
             const { data: newMatch, error: matchError } = await supabase
               .from('matches')
               .insert({
@@ -2149,7 +2188,7 @@ export default function Discover() {
                 status: 'active',
               })
               .select('id')
-              .single();
+              .maybeSingle();
 
             if (matchError) {
               // Check if it's the match limit error
@@ -2208,6 +2247,17 @@ export default function Discover() {
           setShowPaywall(true);
           return false;
         }
+        // 23505 = unique_violation on (liker_profile_id, liked_profile_id).
+        // The existingLike SELECT above is best-effort, but the user can
+        // tap fast enough to race past it before the first insert
+        // commits. Treat as already-liked: silently advance the card
+        // rather than throwing, since the underlying intent (like this
+        // profile) is already satisfied. Do NOT capture to Sentry.
+        if (likeError.code === '23505') {
+          const newIndex = currentIndex + 1;
+          setCurrentIndex(newIndex);
+          return true;
+        }
         throw likeError;
       }
 
@@ -2240,7 +2290,7 @@ export default function Discover() {
             status: 'active',
           })
           .select('id')
-          .single();
+          .maybeSingle();
 
         if (matchError) {
           console.error('❌ Match error:', matchError);
@@ -2292,7 +2342,48 @@ export default function Discover() {
       return true;
     } catch (error: any) {
       console.error('❌ Error recording like:', error);
-      captureException(error instanceof Error ? error : new Error(error?.message || 'Like recording failed'), { context: 'discovery_like' });
+
+      // Classify the error so Sentry groups events by their real cause
+      // instead of all collapsing under the catch-handler fingerprint.
+      // Before this, REACT-71 buried 4 distinct bugs (permission denied,
+      // duplicate key, network, single-row mismatch) under one 813-user
+      // issue and made triage impossible.
+      const code: string | undefined = error?.code;
+      const msg: string = (error?.message || '').toString();
+      const lowerMsg = msg.toLowerCase();
+
+      // Transient network errors are not bugs — don't pollute Sentry.
+      const isNetwork = isTransientNetworkError(error);
+
+      let fingerprint: string[] | undefined;
+      let errorClass = 'unknown';
+      if (code === '42501' || lowerMsg.includes('permission denied for table')) {
+        fingerprint = ['discovery-like-permission-denied'];
+        errorClass = 'permission_denied';
+      } else if (code === '23505' || lowerMsg.includes('duplicate key value')) {
+        // Should be impossible here since we swallow 23505 above, but
+        // keep a distinct bucket for any path that slips through.
+        fingerprint = ['discovery-like-duplicate'];
+        errorClass = 'duplicate_key';
+      } else if (lowerMsg.includes('cannot coerce') || lowerMsg.includes('single json object')) {
+        fingerprint = ['discovery-like-single-row-mismatch'];
+        errorClass = 'single_row_mismatch';
+      } else if (code === 'P0001') {
+        fingerprint = ['discovery-like-server-rejection'];
+        errorClass = 'server_rejection';
+      } else if (isNetwork) {
+        errorClass = 'network';
+        // No fingerprint and no capture — handled below.
+      }
+
+      if (!isNetwork) {
+        captureException(
+          error instanceof Error ? error : new Error(msg || 'Like recording failed'),
+          { context: 'discovery_like', error_class: errorClass, error_code: code, has_user: !!user?.id },
+          fingerprint,
+        );
+      }
+
       if (error?.code === 'P0001' && error?.message?.includes('Daily like limit')) {
         setLikeCount(DAILY_LIKE_LIMIT);
         try {
@@ -2305,10 +2396,19 @@ export default function Discover() {
         // Surface other server-side rejections (profile incomplete, photo count,
         // premium required for super like, etc.) instead of silently returning.
         showToast({ type: 'error', title: t('common.error'), message: error.message });
+      } else if (isNetwork) {
+        // User-visible nudge for network failures so the silent return
+        // doesn't look like the like was accepted.
+        showToast({ type: 'error', title: t('common.error'), message: t('common.networkError', 'Network error — please try again.') });
       }
       return false;
+    } finally {
+      // Always release the re-entry guard, even on early returns or
+      // unhandled throws — otherwise the like button stays dead for the
+      // rest of the session.
+      isLikingRef.current = false;
     }
-  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete, returnRoute, exitPreviewMode]);
+  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete, returnRoute, exitPreviewMode, user?.id]);
 
   const handleSwipeUp = useCallback(async (): Promise<boolean> => {
     if (!currentProfileId || currentIndex >= profiles.length) return false;
