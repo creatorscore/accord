@@ -566,9 +566,12 @@ export default function EditProfile() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        // Disable cropping on Android — native canhub/cropper crashes on low-end devices
-        allowsEditing: Platform.OS === 'ios',
-        aspect: [3, 4],
+        // No in-picker cropping on either platform. iOS's "Crop" button is the
+        // confirm action and users mistake it for an optional edit step — they
+        // back out instead of finishing. Android's canhub/cropper also crashes
+        // on low-end devices. Upload as-is; aspect ratio is enforced visually
+        // by the photo grid.
+        allowsEditing: false,
         quality: 0.8,
       });
 

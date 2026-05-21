@@ -1671,11 +1671,10 @@ export default function Chat() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        // Disable cropping on Android — the native canhub/cropper crashes with
-        // FileNotFoundException on low-end devices with limited storage.
-        // iOS uses its own stable UIImagePickerController so cropping is safe there.
-        allowsEditing: Platform.OS === 'ios',
-        aspect: [4, 3],
+        // No in-picker cropping. iOS's "Crop" button is the confirm action and
+        // users mistake it for an optional edit step — they back out instead
+        // of sending. Android's canhub/cropper also crashes on low-end devices.
+        allowsEditing: false,
         quality: 0.8,
         exif: false, // Don't include EXIF data for privacy
       });
