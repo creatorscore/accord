@@ -58,7 +58,10 @@ export default function OnboardingLayout({
   onContinue,
   onSkip,
   continueDisabled = false,
-  continueLabel = 'Continue',
+  // No default — leaving this undefined lets the finish-button branch fall
+  // through to t('onboarding.finish', "Let's go!"). A default of 'Continue'
+  // here always wins the `||` check and the localized fallback never fires.
+  continueLabel,
   hideContinue = false,
   hideBack = false,
   hideTitle = false,
@@ -289,11 +292,11 @@ export default function OnboardingLayout({
               disabled={continueDisabled}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel={continueLabel || t('onboarding.finish', 'Finish')}
+              accessibilityLabel={continueLabel || t('onboarding.finish', "Let's go!")}
               accessibilityState={{ disabled: continueDisabled }}
             >
               <Text style={styles.finishButtonText}>
-                {continueLabel || t('onboarding.finish', 'Finish')}
+                {continueLabel || t('onboarding.finish', "Let's go!")}
               </Text>
               <MaterialCommunityIcons
                 name="check"

@@ -220,6 +220,26 @@ export default function Onboarding() {
     })();
   }, [user?.id]);
 
+  // ── Prefetch heavy lazy chunks ──
+  // photos/prompts/voice each pull in big native deps (expo-image-picker,
+  // expo-av, audio-waveform). When fired only at first paint of their
+  // own step, the user stares at a spinner while Metro (dev) or RN
+  // (prod) does the chunk fetch + module init. Kick the imports off as
+  // soon as the user enters the relevant section so the chunk is warm
+  // by the time we render it. Fire-and-forget; errors are swallowed
+  // because Suspense will retry the import on actual render anyway.
+  useEffect(() => {
+    if (subStep >= 24 && subStep < 27) {
+      import('@/app/(onboarding)/photos').catch(() => {});
+    }
+    if (subStep >= 26 && subStep < 28) {
+      import('@/app/(onboarding)/prompts').catch(() => {});
+    }
+    if (subStep >= 27 && subStep < 29) {
+      import('@/app/(onboarding)/voice-intro').catch(() => {});
+    }
+  }, [subStep]);
+
   // ── Validation ──
   const isStepValid = useCallback((): boolean => {
     switch (subStep) {
@@ -744,7 +764,7 @@ export default function Onboarding() {
       case 26: // Drugs
         return <ChipSelect options={tOptions(t, 'drugOptions', DRUG_OPTIONS)} selected={store.doesDrugs ? [store.doesDrugs] : []} onSelect={(v) => setField('doesDrugs', v[0] || '')} multi={false} showVisibility visible={vis('does_drugs')} onVisibilityChange={(v) => setVis('does_drugs', v)} />;
       case 27: // Photos (embedded — manages its own continue)
-        return <Suspense fallback={<StepFallback />}><PhotosStep embedded onContinue={handleContinue} onBack={handleBack} /></Suspense>;
+        return <Suspense fallback={<StepFallback />}><PhotosStep embedded onContinue={handleContinue} onBack={handleBack} initialProfileId={profileId} /></Suspense>;
       case 28: // Prompts (embedded — has internal sub-steps)
         return <Suspense fallback={<StepFallback />}><PromptsStep embedded onContinue={handleContinue} onBack={handleBack} /></Suspense>;
       case 29: // Voice Note (embedded — manages its own continue)

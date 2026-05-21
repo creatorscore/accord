@@ -86,8 +86,11 @@ export function getDistanceStep(unit: DistanceUnit): number {
 
 /**
  * Canonical distance range for all matching-distance sliders.
- * Anything at or above DISTANCE_MAX is shown as "Anywhere"; users who want
- * genuinely global search should use the separate `search_globally` toggle.
+ * The slider caps at DISTANCE_MAX miles; users who want genuinely global
+ * search should use the separate `search_globally` toggle. The cap is shown
+ * as "500+ mi" (matching the slider end marker) instead of "Anywhere",
+ * which was misleading — "Anywhere" implied a global search but the
+ * underlying value is still bounded.
  */
 export const DISTANCE_MIN = 5;
 export const DISTANCE_MAX = 500;
@@ -114,10 +117,17 @@ export function sliderToDistance(position: number): number {
 }
 
 /**
- * Display label: "42 mi", "68 km", or "Anywhere" when at/above DISTANCE_MAX.
+ * Display label: "42 mi", "68 km", or the max with a "+" when at/above
+ * DISTANCE_MAX (e.g. "500+ mi", "805+ km"). The label parameter is kept
+ * for callers that still want a custom string at max; default mirrors
+ * the slider end marker shown directly under the chip.
  */
-export function formatDistanceRangeLabel(miles: number, unit: DistanceUnit = 'miles', anywhereLabel: string = 'Anywhere'): string {
-  if (miles >= DISTANCE_MAX) return anywhereLabel;
+export function formatDistanceRangeLabel(miles: number, unit: DistanceUnit = 'miles', maxLabel?: string): string {
+  if (miles >= DISTANCE_MAX) {
+    if (maxLabel) return maxLabel;
+    if (unit === 'km') return `${Math.round(milesToKm(DISTANCE_MAX))}+ km`;
+    return `${DISTANCE_MAX}+ mi`;
+  }
   if (unit === 'km') return `${Math.round(milesToKm(miles))} km`;
   return `${miles} mi`;
 }

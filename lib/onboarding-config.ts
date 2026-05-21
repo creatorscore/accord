@@ -95,7 +95,7 @@ export const ONBOARDING_STEPS: OnboardingStepConfig[] = [
   { key: 'prompts', title: 'Answer some prompts', subtitle: "Choose at least 2 prompts to help others get to know you.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'profile' },
   { key: 'voice_note', title: 'Record a voice intro', subtitle: "Let others hear your voice. 30 seconds max.", skippable: true, previewAvailable: true, hasVisibility: false, section: 'profile' },
   // ── Preferences (29) ──
-  { key: 'matching_prefs', title: 'Set your preferences', subtitle: "Set your age range and distance preferences.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'preferences' },
+  { key: 'matching_prefs', title: 'Set your preferences', subtitle: "Set your age range and distance preferences.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'preferences' },
 ];
 
 export const TOTAL_ONBOARDING_STEPS = ONBOARDING_STEPS.length; // 31
