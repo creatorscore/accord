@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri, cleanupOptimizedImages } from '@/lib/image-optimization';
 import { signPhotoUrls } from '@/lib/signed-urls';
+import { captureException } from '@/lib/sentry';
 import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { useTranslation } from 'react-i18next';
@@ -42,9 +43,14 @@ interface PhotosProps {
   embedded?: boolean;
   onContinue?: () => void;
   onBack?: () => void;
+  // When embedded inside the unified onboarding flow, the parent already
+  // knows the profile id (it created the row at step 3). Passing it down
+  // skips a redundant SELECT roundtrip on mount — meaningful when the
+  // user is on a flaky connection or the chunk just loaded.
+  initialProfileId?: string | null;
 }
 
-export default function Photos({ embedded, onContinue: parentContinue, onBack: parentBack }: PhotosProps = {}) {
+export default function Photos({ embedded, onContinue: parentContinue, onBack: parentBack, initialProfileId }: PhotosProps = {}) {
   const router = useRouter();
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -55,7 +61,7 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [profileId, setProfileId] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(initialProfileId ?? null);
   const [photoBlurEnabled, setPhotoBlurEnabled] = useState(false);
   const [processingImage, setProcessingImage] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
@@ -66,22 +72,52 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
   const isMounted = useRef(true);
 
   useEffect(() => {
-    loadProfile();
     return () => {
       isMounted.current = false;
     };
   }, []);
 
+  // Re-run loadProfile when auth becomes available. Previous empty-deps
+  // useEffect fired once at mount and silently no-op'd if user wasn't
+  // hydrated yet, leaving profileId=null forever and surfacing
+  // "Profile not found" when the user hit Continue.
+  //
+  // Fast path: when the parent passed initialProfileId, skip the profile
+  // SELECT entirely and go straight to fetching existing photos (the
+  // common case for embedded onboarding — the parent already created the
+  // row at step 3 and has its id in state).
+  useEffect(() => {
+    if (initialProfileId) {
+      console.log('[photos] using initialProfileId from parent =', initialProfileId);
+      loadExistingPhotos(initialProfileId).finally(() => {
+        if (isMounted.current) setInitialLoading(false);
+      });
+      return;
+    }
+    if (user?.id) {
+      loadProfile();
+    }
+  }, [user?.id, initialProfileId]);
+
   const loadProfile = async () => {
+    const t0 = Date.now();
+    console.log('[photos.loadProfile] start, user?.id =', user?.id);
     try {
+      if (!user?.id) {
+        const err = new Error('photos.loadProfile called without user.id (auth not ready)');
+        console.warn('[photos.loadProfile]', err.message);
+        captureException(err, { context: 'photos_loadProfile_no_user' });
+        return;
+      }
       const { data, error } = await supabase
         .from('profiles')
         .select('id, photo_blur_enabled')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .single();
 
       if (error) throw error;
       if (!isMounted.current) return;
+      console.log('[photos.loadProfile] got profileId =', data.id, 'in', Date.now() - t0, 'ms');
       setProfileId(data.id);
 
       if (data.photo_blur_enabled !== null) {
@@ -90,6 +126,12 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
 
       await loadExistingPhotos(data.id);
     } catch (error: any) {
+      console.error('[photos.loadProfile] failed in', Date.now() - t0, 'ms:', error?.code, error?.message);
+      captureException(error instanceof Error ? error : new Error(error?.message || 'photos.loadProfile failed'), {
+        context: 'photos_loadProfile',
+        code: error?.code,
+        userId: user?.id,
+      });
       showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
     } finally {
       if (isMounted.current) setInitialLoading(false);
@@ -254,6 +296,13 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
     }
 
     if (!profileId) {
+      console.error('[photos.handleContinue] profileId is null at Continue — embedded =', embedded, 'user?.id =', user?.id);
+      captureException(new Error('photos.handleContinue fired with null profileId'), {
+        context: 'photos_continue_no_profile',
+        embedded,
+        userId: user?.id,
+        photosCount: photos.length,
+      });
       showToast({ type: 'error', title: t('common.error'), message: t('toast.profileNotFound') });
       return;
     }

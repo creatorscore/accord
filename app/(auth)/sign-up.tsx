@@ -183,14 +183,14 @@ export default function SignUp() {
         identifyUser(result.user!.id, { email: email.toLowerCase() });
         Keyboard.dismiss();
         setTimeout(() => {
-          router.replace('/(onboarding)/language');
+          router.replace('/');
         }, 500);
       } else if (result.user) {
         // User created but no session - try to sign in
         try {
           await signIn(email, password);
           Keyboard.dismiss();
-          router.replace('/(onboarding)/language');
+          router.replace('/');
         } catch (signInError) {
           // Email confirmation is likely required
           setUserEmail(email);
@@ -323,7 +323,7 @@ export default function SignUp() {
               text: 'OK',
               onPress: () => {
                 Keyboard.dismiss();
-                router.replace('/(onboarding)/language');
+                router.replace('/');
               }
             }
           ]
