@@ -516,17 +516,50 @@ export default function Onboarding() {
                 console.log('[saveCheckpoint] recovered from location constraint via geocode + retry');
                 return;
               }
-              captureException(new Error((retryErr as any)?.message || 'location constraint retry failed'), { step, context: 'location_constraint_retry' });
+              captureException(
+                new Error((retryErr as any)?.message || 'location constraint retry failed'),
+                { step, context: 'location_constraint_retry' },
+                ['onboarding-location-constraint-retry'],
+              );
             }
           } else {
-            captureException(new Error(geoErr?.message || 'geocode-city returned no coords'), { step, context: 'location_constraint_geocode' });
+            captureException(
+              new Error(geoErr?.message || 'geocode-city returned no coords'),
+              { step, context: 'location_constraint_geocode' },
+              ['onboarding-location-geocode-failed'],
+            );
           }
         } catch (recoveryErr: any) {
-          captureException(recoveryErr instanceof Error ? recoveryErr : new Error(recoveryErr?.message || 'recovery failed'), { step, context: 'location_constraint_recovery' });
+          captureException(
+            recoveryErr instanceof Error ? recoveryErr : new Error(recoveryErr?.message || 'recovery failed'),
+            { step, context: 'location_constraint_recovery' },
+            ['onboarding-location-recovery-failed'],
+          );
         }
       }
       console.error('Checkpoint save error:', error);
-      captureException(error instanceof Error ? error : new Error(error?.message || 'Checkpoint save failed'), { step, context: 'onboarding_checkpoint' });
+      // Classify by error.code so retryable transient failures (network,
+      // PGRST timeouts) don't collide with real schema/constraint bugs
+      // in the same Sentry bucket.
+      const ckptCode: string | undefined = (error as any)?.code;
+      const ckptMsg: string = (error?.message || '').toString();
+      let ckptFingerprint = 'onboarding-checkpoint-other';
+      if (ckptMsg.includes('location_required_when_complete')) {
+        ckptFingerprint = 'onboarding-checkpoint-location-required';
+      } else if (ckptCode === '23505') {
+        ckptFingerprint = 'onboarding-checkpoint-duplicate';
+      } else if (ckptCode === '23514') {
+        ckptFingerprint = 'onboarding-checkpoint-check-constraint';
+      } else if (ckptCode === '42501') {
+        ckptFingerprint = 'onboarding-checkpoint-permission-denied';
+      } else if (ckptCode === 'PGRST303' || ckptMsg.toLowerCase().includes('jwt expired')) {
+        ckptFingerprint = 'onboarding-checkpoint-jwt-expired';
+      }
+      captureException(
+        error instanceof Error ? error : new Error(error?.message || 'Checkpoint save failed'),
+        { step, context: 'onboarding_checkpoint', error_code: ckptCode },
+        [ckptFingerprint],
+      );
       showToast({ type: 'error', title: 'Error', message: error.message || 'Failed to save progress. Please try again.' });
       throw error; // Re-throw so callers know the save failed
     } finally {
@@ -620,7 +653,11 @@ export default function Onboarding() {
           .maybeSingle();
 
         if (!savedProfile?.profile_complete) {
-          captureException(new Error('Final onboarding save: profile_complete did not persist; retrying'), { profileId });
+          captureException(
+            new Error('Final onboarding save: profile_complete did not persist; retrying'),
+            { profileId },
+            ['onboarding-profile-complete-did-not-persist'],
+          );
           const { error: retryErr } = await supabase
             .from('profiles')
             .update({ profile_complete: true, onboarding_step: TOTAL_ONBOARDING_STEPS, updated_at: new Date().toISOString() })
@@ -630,7 +667,11 @@ export default function Onboarding() {
             // preview-mode purgatory. Stay on step 30 so they can hit
             // Continue again once the network recovers.
             showToast({ type: 'error', title: "Couldn't finalize profile", message: 'Network issue — please tap Continue once more.' });
-            captureException(new Error((retryErr as any)?.message || 'profile_complete retry failed'), { profileId, context: 'profile_complete_retry' });
+            captureException(
+              new Error((retryErr as any)?.message || 'profile_complete retry failed'),
+              { profileId, context: 'profile_complete_retry', error_code: (retryErr as any)?.code },
+              ['onboarding-profile-complete-retry-failed'],
+            );
             return;
           }
         }
@@ -647,7 +688,11 @@ export default function Onboarding() {
         if (!savedPrefs?.relationship_type) missing.push('relationship type');
         if (missing.length > 0) {
           showToast({ type: 'error', title: 'Preferences may not have saved', message: `Please check your ${missing.join(' and ')} in settings.` });
-          captureException(new Error('Post-onboarding validation failed'), { missing, profileId });
+          captureException(
+            new Error('Post-onboarding validation failed'),
+            { missing, profileId },
+            ['onboarding-post-validation-missing-prefs'],
+          );
         }
       }
 

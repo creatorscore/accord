@@ -2357,6 +2357,14 @@ export default function Discover() {
 
       let fingerprint: string[] | undefined;
       let errorClass = 'unknown';
+      // PGRST303 / "JWT expired" — the supabase client's
+      // autoRefreshToken missed its window (typically because the device
+      // was backgrounded for hours, or the refresh token itself died).
+      // The user object is still populated client-side so our up-front
+      // !user?.id gate doesn't catch this. Trigger a manual refresh in
+      // the background so the next tap works, and surface a "try again"
+      // nudge instead of failing silently.
+      const isJwtExpired = code === 'PGRST303' || lowerMsg.includes('jwt expired');
       if (code === '42501' || lowerMsg.includes('permission denied for table')) {
         fingerprint = ['discovery-like-permission-denied'];
         errorClass = 'permission_denied';
@@ -2368,6 +2376,11 @@ export default function Discover() {
       } else if (lowerMsg.includes('cannot coerce') || lowerMsg.includes('single json object')) {
         fingerprint = ['discovery-like-single-row-mismatch'];
         errorClass = 'single_row_mismatch';
+      } else if (isJwtExpired) {
+        fingerprint = ['discovery-like-jwt-expired'];
+        errorClass = 'jwt_expired';
+        // Fire-and-forget refresh so the next user tap succeeds.
+        supabase.auth.refreshSession().catch(() => {});
       } else if (code === 'P0001') {
         fingerprint = ['discovery-like-server-rejection'];
         errorClass = 'server_rejection';
@@ -2396,6 +2409,10 @@ export default function Discover() {
         // Surface other server-side rejections (profile incomplete, photo count,
         // premium required for super like, etc.) instead of silently returning.
         showToast({ type: 'error', title: t('common.error'), message: error.message });
+      } else if (isJwtExpired) {
+        // Refresh was kicked off above; nudge the user to retry so the
+        // next tap goes out with the new token.
+        showToast({ type: 'info', title: t('common.tryAgain', 'Try again'), message: t('common.sessionExpiredRetry', 'Session refreshed — tap like again.') });
       } else if (isNetwork) {
         // User-visible nudge for network failures so the silent return
         // doesn't look like the like was accepted.
