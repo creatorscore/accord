@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import { getOfferings, purchasePackage } from '@/lib/revenue-cat';
+import { openExternalURL } from '@/lib/external-link';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useTranslation } from 'react-i18next';
 
@@ -643,11 +644,11 @@ export default function PremiumPaywall({
                 <Text style={styles.bottomLinkText}>{t('premiumPaywall.restorePurchases')}</Text>
               </TouchableOpacity>
               <Text style={styles.legalLinkSeparator}>·</Text>
-              <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}>
+              <TouchableOpacity onPress={() => openExternalURL('https://joinaccord.app/terms')}>
                 <Text style={styles.bottomLinkText}>{t('premiumPaywall.termsOfUse')}</Text>
               </TouchableOpacity>
               <Text style={styles.legalLinkSeparator}>·</Text>
-              <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}>
+              <TouchableOpacity onPress={() => openExternalURL('https://joinaccord.app/privacy')}>
                 <Text style={styles.bottomLinkText}>{t('premiumPaywall.privacyPolicy')}</Text>
               </TouchableOpacity>
             </View>
