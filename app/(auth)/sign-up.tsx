@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet, Keyboard, Linking } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, ScrollView, KeyboardAvoidingView, StyleSheet, Keyboard } from 'react-native';
+import { openExternalURL } from '@/lib/external-link';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { signInWithGoogle, signInWithApple, isAppleAuthAvailable } from '@/lib/auth-providers';
@@ -522,11 +523,11 @@ export default function SignUp() {
             />
             <Text style={[styles.terms, { flex: 1, color: themeColors.mutedText }]}>
               {t('auth.signUp.iAgreeToThe')}{' '}
-              <Text style={styles.termsLink} onPress={() => Linking.openURL('https://joinaccord.app/terms')}>
+              <Text style={styles.termsLink} onPress={() => openExternalURL('https://joinaccord.app/terms')}>
                 {t('auth.signUp.termsOfServiceLink')}
               </Text>
               {' '}{t('auth.signUp.andWord')}{' '}
-              <Text style={styles.termsLink} onPress={() => Linking.openURL('https://joinaccord.app/privacy')}>
+              <Text style={styles.termsLink} onPress={() => openExternalURL('https://joinaccord.app/privacy')}>
                 {t('auth.signUp.privacyPolicyLink')}
               </Text>
             </Text>

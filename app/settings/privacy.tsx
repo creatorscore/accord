@@ -8,10 +8,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  Linking,
   TextInput,
   Keyboard,
 } from 'react-native';
+import { openExternalURL } from '@/lib/external-link';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -596,7 +596,7 @@ export default function PrivacySettings() {
       <View style={styles.legalSection}>
         <TouchableOpacity
           style={styles.learnMoreButton}
-          onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}
+          onPress={() => openExternalURL('https://joinaccord.app/privacy')}
         >
           <MaterialCommunityIcons name="shield-lock-outline" size={20} color="#A08AB7" />
           <Text style={styles.learnMoreText}>{t('privacySettings.legal.privacyPolicy')}</Text>
@@ -605,7 +605,7 @@ export default function PrivacySettings() {
 
         <TouchableOpacity
           style={styles.learnMoreButton}
-          onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}
+          onPress={() => openExternalURL('https://joinaccord.app/terms')}
         >
           <MaterialCommunityIcons name="file-document-outline" size={20} color="#A08AB7" />
           <Text style={styles.learnMoreText}>{t('privacySettings.legal.termsOfService')}</Text>
