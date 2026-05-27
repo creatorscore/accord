@@ -1183,16 +1183,24 @@ export default function Discover() {
         // Array fields (gender, ethnicity, sexual_orientation, etc.)
         // are handled by the client-side filter instead
         if (effectiveSearchKeyword.trim()) {
-          const keyword = effectiveSearchKeyword.trim();
-          // Only search scalar text fields - NOT arrays
-          query = query.or(
-            `display_name.ilike.%${keyword}%,` +
-            `zodiac_sign.ilike.%${keyword}%,` +
-            `location_city.ilike.%${keyword}%,` +
-            `location_state.ilike.%${keyword}%,` +
-            `religion.ilike.%${keyword}%,` +
-            `political_views.ilike.%${keyword}%`
-          );
+          // PostgREST .or() uses `,` and `()` as filter delimiters. A raw
+          // keyword like "Phee, 24" interpolated directly would split the
+          // value across columns and trip "failed to parse logic tree".
+          // Strip the reserved chars before injection — users searching
+          // "Alex, 28" still match the ilike on "Alex" and "28" gracefully
+          // collapses to a single space.
+          const keyword = effectiveSearchKeyword.trim().replace(/[,()*]/g, ' ').trim();
+          if (keyword) {
+            // Only search scalar text fields - NOT arrays
+            query = query.or(
+              `display_name.ilike.%${keyword}%,` +
+              `zodiac_sign.ilike.%${keyword}%,` +
+              `location_city.ilike.%${keyword}%,` +
+              `location_state.ilike.%${keyword}%,` +
+              `religion.ilike.%${keyword}%,` +
+              `political_views.ilike.%${keyword}%`
+            );
+          }
         }
 
         // HARD FILTERS: Always enforce age range and gender preference, even in search mode.
@@ -1968,12 +1976,33 @@ export default function Discover() {
       console.error('[Discover] loadProfiles error', error?.message ?? error);
       // Attach stage marks to Sentry so the issue page shows which stage
       // timed out without requiring console output. See JAVASCRIPT-REACT-70.
-      captureException(error instanceof Error ? error : new Error(error?.message || 'Discovery profile load failed'), {
-        context: 'discovery_load',
-        marks,
-        errorCode: error?.code,
-        lastReachedStage: Object.keys(marks).filter(k => k !== 'totalAtError').pop() ?? null,
-      });
+      // Fingerprint by error code so distinct failures (network, RLS,
+      // PGRST, custom) form distinct Sentry issues instead of collapsing
+      // into one grab-bag like JS-71 did.
+      const loadCode: string | undefined = error?.code;
+      const loadMsg: string = (error?.message || '').toString();
+      let loadFingerprint = 'discovery-load-other';
+      if (loadCode === 'PGRST301' || loadMsg.toLowerCase().includes('timed out')) {
+        loadFingerprint = 'discovery-load-timeout';
+      } else if (loadCode === '42501') {
+        loadFingerprint = 'discovery-load-permission-denied';
+      } else if (loadCode === 'PGRST116') {
+        loadFingerprint = 'discovery-load-no-rows';
+      } else if (loadCode === 'PGRST303' || loadMsg.toLowerCase().includes('jwt expired')) {
+        loadFingerprint = 'discovery-load-jwt-expired';
+      } else if (loadCode) {
+        loadFingerprint = `discovery-load-${loadCode}`;
+      }
+      captureException(
+        error instanceof Error ? error : new Error(error?.message || 'Discovery profile load failed'),
+        {
+          context: 'discovery_load',
+          marks,
+          errorCode: loadCode,
+          lastReachedStage: Object.keys(marks).filter(k => k !== 'totalAtError').pop() ?? null,
+        },
+        [loadFingerprint],
+      );
       showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profilesLoadError') });
     } finally {
       setLoading(false);
@@ -3677,7 +3706,11 @@ export default function Discover() {
                 title: t('common.error'),
                 message: t('toast.filtersSaveError') || "Couldn't save your preference. Please try again.",
               });
-              captureException(new Error((error as any)?.message || 'confirm gender modal save failed'), { context: 'confirm_gender_modal_save' });
+              captureException(
+                new Error((error as any)?.message || 'confirm gender modal save failed'),
+                { context: 'confirm_gender_modal_save', errorCode: (error as any)?.code },
+                ['confirm-gender-modal-save'],
+              );
               return;
             }
             setFilters((prev) => ({ ...prev, genderPreference: expanded }));

@@ -86,9 +86,17 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
   // SELECT entirely and go straight to fetching existing photos (the
   // common case for embedded onboarding — the parent already created the
   // row at step 3 and has its id in state).
+  //
+  // Sync local profileId whenever the parent's initialProfileId transitions
+  // from null → real id. useState only captures the FIRST prop value, so a
+  // late-arriving parent profileId (e.g. parent's initial profile load
+  // finishes after Photos mounts) would otherwise leave us locked at null
+  // — handleContinue then fires the no-profile guard and surfaces
+  // "Profile not found" to a user whose row actually exists.
   useEffect(() => {
     if (initialProfileId) {
       console.log('[photos] using initialProfileId from parent =', initialProfileId);
+      setProfileId(initialProfileId);
       loadExistingPhotos(initialProfileId).finally(() => {
         if (isMounted.current) setInitialLoading(false);
       });
