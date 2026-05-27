@@ -266,7 +266,10 @@
     "loseVoiceMessages": "Voice messages",
     "keepPremium": "Keep Premium",
     "upgradeToPremium": "Upgrade to Premium",
-    "upgradeToPremiumSubtitle": "Get unlimited likes, see who liked you, and more."
+    "upgradeToPremiumSubtitle": "Get unlimited likes, see who liked you, and more.",
+    "paymentFailedTitle": "Your payment was declined",
+    "paymentFailedBody": "Your Premium subscription paused because your card was declined. Update payment to resume.",
+    "updatePaymentMethod": "Update Payment"
   },
   "trialValue": {
     "title": "Your Trial Stats",
