@@ -628,6 +628,38 @@ export default function Onboarding() {
     }
 
     if (subStep >= TOTAL_ONBOARDING_STEPS - 1) {
+      // Final step — pre-flight: photos table must have >= 2 rows or the
+      // check_minimum_photos trigger rejects the profile_complete=true
+      // upsert with a cryptic P0001. The photos screen tracks local state
+      // optimistically; partial-failure paths (silently-swallowed 23505,
+      // moderation rejections, stuck-onboarding-backfill rows) can leave
+      // local state showing 3 photos while the DB has fewer. Verify
+      // server-side and bounce back to step 27 with a clear message
+      // before triggering the doomed upsert.
+      if (profileId) {
+        const { count: photoCount, error: countErr } = await supabase
+          .from('photos')
+          .select('id', { count: 'exact', head: true })
+          .eq('profile_id', profileId)
+          .neq('moderation_status', 'rejected');
+        if (countErr) {
+          console.warn('[Onboarding] photo count preflight failed', countErr.message);
+        } else if ((photoCount ?? 0) < 2) {
+          showToast({
+            type: 'error',
+            title: 'Add more photos',
+            message: 'Please add at least 2 photos before finishing.',
+          });
+          captureException(
+            new Error('Final save blocked: insufficient photos in DB'),
+            { profileId, photoCount: photoCount ?? 0 },
+            ['onboarding-final-insufficient-photos'],
+          );
+          setSubStep(27);
+          return;
+        }
+      }
+
       // Final step — save and exit
       try {
         await saveCheckpoint(TOTAL_ONBOARDING_STEPS);
