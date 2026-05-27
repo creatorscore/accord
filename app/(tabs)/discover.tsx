@@ -38,6 +38,7 @@ import { prefetchImages } from '@/components/shared/ConditionalImage';
 import VerificationBanner from '@/components/shared/VerificationBanner';
 import HandshakeLoader from '@/components/shared/HandshakeLoader';
 import TrialExpirationBanner from '@/components/premium/TrialExpirationBanner';
+import PaymentFailedBanner from '@/components/premium/PaymentFailedBanner';
 
 interface Profile {
   id: string;
@@ -4027,6 +4028,11 @@ export default function Discover() {
               {showVerificationBanner && !isPhotoVerified && isProfileComplete && (
                 <VerificationBanner onDismiss={handleDismissVerificationBanner} />
               )}
+
+              {/* Payment-failed recovery — auto-renew tried, card declined,
+                  billing retry exhausted. Higher priority than trial banner
+                  because these users actively wanted to keep paying. */}
+              <PaymentFailedBanner key="payment-failed-banner" />
 
               {/* Trial Expiration Banner - Warn users when trial is about to end */}
               <TrialExpirationBanner key="trial-expiration-banner" />
