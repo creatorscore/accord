@@ -573,7 +573,21 @@ export default function Onboarding() {
   }, [user?.id, store, profileId, notificationsGranted]);
 
   // ── Navigation ──
+  // Debounce accidental double-taps on Continue. Real-device walk-through
+  // 2026-05-28 showed users tapping Continue 2-3x within ~200ms at the
+  // first preview-eligible step transitions (8: relationship_type, 9:
+  // intention) — the parent re-renders the entire onboarding tree on
+  // every store change and the fade-out/in animation runs 300ms total,
+  // so the screen feels frozen and users panic-tap. Each tap registers
+  // and they end up skipping a step.
+  const lastContinueAt = useRef(0);
   const handleContinue = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastContinueAt.current < 600) {
+      console.log('[Onboarding] handleContinue ignored (double-tap within 600ms)');
+      return;
+    }
+    lastContinueAt.current = now;
     console.log('[Onboarding] handleContinue pressed at step', subStep);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Keyboard.dismiss();
