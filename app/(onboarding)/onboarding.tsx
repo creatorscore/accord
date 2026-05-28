@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert, Keyboard } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/lib/i18n';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
@@ -337,7 +338,11 @@ export default function Onboarding() {
         does_drugs: store.doesDrugs || null,
         field_visibility: store.fieldVisibility,
         device_id: deviceFingerprint,
-        preferred_language: 'en',
+        // Previously hardcoded 'en' — sent every non-English user English
+        // push notifications and emails regardless of UI language. Use the
+        // active i18n locale so localized email/push templates actually
+        // reach the right cohort.
+        preferred_language: i18n.language || 'en',
         onboarding_step: step,
         // Only set profile_complete on the final step
         ...(step >= TOTAL_ONBOARDING_STEPS - 1 ? { profile_complete: true } : {}),
