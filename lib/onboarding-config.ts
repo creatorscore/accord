@@ -107,9 +107,16 @@ export const SAVE_CHECKPOINTS = [3, 14, 26] as const;
 
 export const GENDERS = ['Man', 'Woman', 'Non-binary'] as const;
 
+// 'prefer not to say' lives at index 0 intentionally: pronouns is the
+// first identity question in onboarding (step 4 — name/DOB/location
+// before it are all neutral) and a measurable 13% of users who reach
+// this screen bail without picking anything. Putting the explicit
+// opt-out first gives nervous or uncertain users a visible escape
+// instead of forcing them through a 1-of-7 commitment to advance.
+// Stored DB values are unchanged; only the chip render order moves.
 export const PRONOUNS = [
-  'she/her', 'he/him', 'they/them', 'she/they',
-  'he/they', 'any pronouns', 'ask me', 'prefer not to say',
+  'prefer not to say', 'she/her', 'he/him', 'they/them',
+  'she/they', 'he/they', 'any pronouns', 'ask me',
 ] as const;
 
 export const ORIENTATIONS = [
