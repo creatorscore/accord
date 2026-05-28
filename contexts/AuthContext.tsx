@@ -215,7 +215,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         const city = addressInfo.city || addressInfo.subregion || addressInfo.district || '';
         const state = addressInfo.region || '';
-        const country = addressInfo.country || addressInfo.isoCountryCode || '';
+        // isoCountryCode FIRST — addressInfo.country returns the country
+        // name in the device locale ('भारत', 'Türkiye', 'Côte d'Ivoire',
+        // 'Oʻzbekiston') which splits the same country into many cohorts
+        // and breaks downstream grouping/filtering. ISO is locale-agnostic
+        // and matches what LocationStep already writes from the cities DB.
+        const country = addressInfo.isoCountryCode || addressInfo.country || '';
 
         // Get profile ID
         const { data: profile } = await supabase
