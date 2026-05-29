@@ -244,7 +244,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           }
         }
 
-        // Update profile with new location
+        // Update profile with new location. last_gps_at marks "I have
+        // a fresh GPS reading from this device" — drives the staleness
+        // banner that prompts users who revoked permission to re-grant.
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
@@ -254,6 +256,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             location_state: state,
             location_country: country,
             last_active_at: new Date().toISOString(),
+            last_gps_at: new Date().toISOString(),
           })
           .eq('id', profile.id);
 
