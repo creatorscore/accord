@@ -60,7 +60,7 @@ import EmojiPicker from 'rn-emoji-keyboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import SwipeableMessageBubble from '@/components/messaging/SwipeableMessageBubble';
-import { captureException } from '@/lib/sentry';
+import { captureException, isTransientNetworkError } from '@/lib/sentry';
 
 interface MessageReaction {
   id: string;
@@ -541,7 +541,20 @@ export default function Chat() {
           .then(({ error: readError }) => {
             if (readError) {
               console.error('Failed to mark messages read:', readError);
-              captureException(readError, { context: 'markMessagesAsRead on chat open', matchId });
+              // Supabase returns {code, details, hint, message} — not a
+              // real Error instance — so passing it directly causes Sentry
+              // to serialize it as "Object captured as exception with
+              // keys: code, details, hint, message" and the network-
+              // failed beforeSend filter can't match the buried message.
+              // Wrap in Error + skip transient network failures, mirroring
+              // the pattern used elsewhere (see lib/sentry isTransient...).
+              if (!isTransientNetworkError(readError)) {
+                captureException(
+                  new Error(readError?.message || 'markMessagesAsRead failed'),
+                  { context: 'markMessagesAsRead on chat open', matchId, code: readError?.code },
+                  [`chat-mark-read-${readError?.code || 'other'}`],
+                );
+              }
             } else {
               refreshUnreadCount();
             }
@@ -1608,7 +1621,13 @@ export default function Chat() {
 
         if (firstMsgError) {
           console.error('Failed to set first_message_sent_at:', firstMsgError);
-          captureException(firstMsgError, { context: 'first_message_sent_at update failed', matchId });
+          if (!isTransientNetworkError(firstMsgError)) {
+            captureException(
+              new Error((firstMsgError as any)?.message || 'first_message_sent_at update failed'),
+              { context: 'first_message_sent_at update failed', matchId, code: (firstMsgError as any)?.code },
+              [`chat-first-msg-${(firstMsgError as any)?.code || 'other'}`],
+            );
+          }
           showToast({
             type: 'error',
             title: t('chat.expirationWarningTitle', { defaultValue: 'Match may expire' }),
@@ -1991,7 +2010,13 @@ export default function Chat() {
 
         if (firstMsgError) {
           console.error('Failed to set first_message_sent_at (voice):', firstMsgError);
-          captureException(firstMsgError, { context: 'first_message_sent_at update failed (voice)', matchId });
+          if (!isTransientNetworkError(firstMsgError)) {
+            captureException(
+              new Error((firstMsgError as any)?.message || 'first_message_sent_at update failed (voice)'),
+              { context: 'first_message_sent_at update failed (voice)', matchId, code: (firstMsgError as any)?.code },
+              [`chat-first-msg-voice-${(firstMsgError as any)?.code || 'other'}`],
+            );
+          }
           showToast({
             type: 'error',
             title: t('chat.expirationWarningTitle', { defaultValue: 'Match may expire' }),
