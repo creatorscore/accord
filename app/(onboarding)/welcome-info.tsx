@@ -22,8 +22,18 @@ export default function WelcomeInfo() {
 
   const handleProceed = async () => {
     trackEvent('welcome_info_proceed_tapped');
-    // Clear any saved onboarding draft so basic-info starts at step 1 (name)
+    // Clear any saved onboarding draft so basic-info starts at step 1 (name).
+    // BOTH keys must be cleared:
+    //   - 'onboarding_draft_basic-info' — legacy basic-info screen
+    //   - 'accord-onboarding-draft' — zustand persist for the unified flow
+    // 2026-05-28 real-device test showed that without the zustand key
+    // clear, a user could sign out and sign up again and inherit the
+    // previous account's lat/lng + city — bypassing the GPS-only
+    // LocationStep entirely because store.latitude was already non-null
+    // from the prior session. That's the exact location-faking vector
+    // the autocomplete removal was meant to close.
     try { await AsyncStorage.removeItem('onboarding_draft_basic-info'); } catch {}
+    try { await AsyncStorage.removeItem('accord-onboarding-draft'); } catch {}
     router.push('/(onboarding)/onboarding');
   };
 
