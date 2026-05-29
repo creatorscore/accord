@@ -599,13 +599,18 @@ export default function Onboarding() {
       return;
     }
 
-    // Save at checkpoints: after location (3), after pets (14), after drugs (26), final (30).
+    // Save at checkpoints: after location (3), after pets (14), after drugs (26).
+    // Step 30 (final) is handled by the dedicated final-step block below —
+    // including it here too caused step 30 → 31 to fire saveCheckpoint twice
+    // (verified in real-device walkthroughs 2026-05-28). Both writes
+    // succeeded, but the duplicate added ~1s of network latency before the
+    // navigation to Discover and burned a free write quota.
     // Show a "Saving your progress..." toast only if the save actually takes
     // more than ~600ms — avoids a toast-flash on the common fast path but
     // reassures users that the app isn't frozen when the queue is stalled.
     let savingToastShown = false;
     let savingToastTimer: ReturnType<typeof setTimeout> | null = null;
-    const checkpoints = [3, 14, 26, 30];
+    const checkpoints = [3, 14, 26];
     if (checkpoints.includes(subStep)) {
       savingToastTimer = setTimeout(() => {
         savingToastShown = true;
