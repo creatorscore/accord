@@ -262,7 +262,7 @@ export default function Discover() {
 
   // Smart recommendations - dynamic array from database
   const [smartRecommendations, setSmartRecommendations] = useState<{
-    type: 'age' | 'distance' | 'gender' | 'global';
+    type: 'age' | 'distance' | 'gender' | 'global' | 'clear_filter';
     count: number;
     description: string;
     increment?: number;
@@ -270,6 +270,10 @@ export default function Discover() {
     newAgeMin?: number;
     newAgeMax?: number;
     addedGender?: string;
+    /** For type === 'clear_filter': which filter the user would toggle off.
+     * Currently only 'active_today' is emitted by the smart-recs RPC, but
+     * the union keeps room for future cleared filters (e.g. show_blurred). */
+    clearedFilter?: 'active_today';
   }[]>([]);
 
   // Quick filter options
@@ -897,7 +901,18 @@ export default function Discover() {
     // This fixes the React state timing issue where state updates are async
     const effectiveSearchMode = searchModeOverride !== undefined ? searchModeOverride : isSearchMode;
     const effectiveSearchKeyword = searchKeywordOverride !== undefined ? searchKeywordOverride : searchKeyword;
-    const effectiveFilters = filtersOverride ? { ...filters, ...filtersOverride } : filters;
+    const rawFilters = filtersOverride ? { ...filters, ...filtersOverride } : filters;
+    // Defense in depth on the 500mi distance cap. The slider is bounded
+    // by DISTANCE_MAX in matching-preferences but the DB column can hold
+    // any value, and pre-2026-05-28 backfill found 3,257 legacy rows
+    // (max ever observed: 1,000,000,000) saved by old app versions
+    // before the slider cap existed. Even after the backfill, old app
+    // versions can still write >500 — clamp here so the RPC + bbox
+    // queries are always bounded regardless of what's in the row.
+    const effectiveFilters = {
+      ...rawFilters,
+      maxDistance: Math.min(rawFilters.maxDistance, 500),
+    };
     // Use ref for profile ID to avoid stale closure issues
     const profileId = currentProfileIdRef.current;
 
@@ -1223,10 +1238,28 @@ export default function Discover() {
           }
         }
 
-        // Distance prefilter via bounding box — only when not searching globally.
-        // The client-side Haversine check (below) is the precise filter; the bbox
-        // just cuts the candidate set dramatically so we fetch fewer profile+photo rows.
-        if (!isSearchingGlobally && currentUserData.latitude && currentUserData.longitude) {
+        // Distance prefilter via bounding box — only when not searching globally
+        // AND the user has no preferred cities. The bbox is a server-side
+        // cut to keep the candidate set small; the client-side Haversine
+        // check below is the precise filter.
+        //
+        // Preferred cities (premium feature) intentionally extend reach beyond
+        // the bbox. Previously the bbox always fired, which excluded any
+        // preferred-city profile from being fetched at all — the client-side
+        // "if profile is in preferred cities, skip the distance filter" never
+        // got a chance to keep them because they were already filtered out
+        // in SQL. When preferred_cities is set, skip the strict bbox and
+        // let the result set carry both local (via distance filter client-side)
+        // and the named cities.
+        //
+        // Free users with stale preferred_cities saved from before the paywall
+        // are ignored — the discovery feed is gated by isPremium here, not by
+        // the DB row.
+        const userPrefCities: string[] = isPremium
+          ? (currentUserData.preferences?.preferred_cities || [])
+          : [];
+
+        if (!isSearchingGlobally && userPrefCities.length === 0 && currentUserData.latitude && currentUserData.longitude) {
           const latMiles = 69;
           const lat0 = currentUserData.latitude;
           const lng0 = currentUserData.longitude;
@@ -1617,8 +1650,14 @@ export default function Discover() {
           // to help grow the user base during early launch phase.
           const userSearchGlobally = isSearchingGlobally;
 
-          // Preferred cities is now FREE for all users
-          const userPreferredCities = currentUserData.preferences?.preferred_cities || [];
+          // Preferred cities is a PREMIUM feature. Only apply for premium
+          // users — free users with stale saved cities (added before the
+          // paywall) are silently ignored so the broader feed is not a
+          // backdoor around the entitlement. UI in matching-preferences
+          // already gates new additions behind the same flag.
+          const userPreferredCities: string[] = isPremium
+            ? (currentUserData.preferences?.preferred_cities || [])
+            : [];
 
           // Check if profile is in CURRENT USER's preferred cities
           // This lets users see profiles in cities they're interested in
@@ -3345,8 +3384,18 @@ export default function Discover() {
                 <Text className="text-center" style={{ fontSize: 24, fontWeight: '700', letterSpacing: -0.5, marginTop: 16, marginBottom: 6, color: colors.foreground }}>
                   {t('discover.emptyState.allCaughtUp')}
                 </Text>
+                {/* Vague "Check back later" gave no signal for what to do
+                    next. When we know the local search radius, name it so
+                    the user understands the boundary they hit ("...within
+                    500 miles") instead of feeling like the app is broken. */}
                 <Text className="text-center font-sans" style={{ fontSize: 15, lineHeight: 21, maxWidth: 280, color: colors.mutedForeground }}>
-                  {t('discover.emptyState.checkBack')}
+                  {filters?.maxDistance
+                    ? t(
+                        'discover.emptyState.allCaughtUpDetailed',
+                        `You've seen everyone within ${filters.maxDistance} ${distanceUnit === 'km' ? 'km' : 'mi'}. Expand your reach to see more.`,
+                        { distance: filters.maxDistance, unit: distanceUnit === 'km' ? 'km' : 'mi' },
+                      )
+                    : t('discover.emptyState.checkBack')}
                 </Text>
               </View>
 
@@ -3378,8 +3427,25 @@ export default function Discover() {
                           {t('discover.premiumCta.goPremium')}
                         </Text>
                       </View>
+                      {/* Concrete number from the smart-recs RPC ("Unlock
+                          6,751 more profiles globally") beats the generic
+                          description for converting browsers — they know
+                          exactly what they're paying for. Falls back to the
+                          generic copy when smart-recs hasn't loaded yet or
+                          there's no global rec (e.g. user already has
+                          search_globally on). */}
                       <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 18 }}>
-                        {t('discover.premiumCta.description')}
+                        {(() => {
+                          const globalRec = smartRecommendations.find(r => r.type === 'global');
+                          const count = globalRec?.count;
+                          return count && count > 0
+                            ? t(
+                                'discover.premiumCta.descriptionWithCount',
+                                `Unlock ${count.toLocaleString()} more profiles globally + premium features`,
+                                { count },
+                              )
+                            : t('discover.premiumCta.description');
+                        })()}
                       </Text>
                     </View>
                     <View style={{
@@ -3409,6 +3475,7 @@ export default function Discover() {
                         case 'age': return 'calendar-range';
                         case 'gender': return 'account-plus-outline';
                         case 'global': return 'earth';
+                        case 'clear_filter': return 'filter-off-outline';
                         default: return 'star';
                       }
                     };
@@ -3423,6 +3490,17 @@ export default function Discover() {
                           return t('discover.recommendations.includeGender', { gender: rec.addedGender });
                         case 'global':
                           return t('discover.recommendations.searchGlobally');
+                        case 'clear_filter':
+                          // Only 'active_today' is emitted by the RPC today;
+                          // fall back to generic copy for future cleared
+                          // filters so we never render an empty title.
+                          if (rec.clearedFilter === 'active_today') {
+                            return t(
+                              'discover.recommendations.clearActiveToday',
+                              'Show members not active today',
+                            );
+                          }
+                          return t('discover.recommendations.expandSearch');
                         default:
                           return t('discover.recommendations.expandSearch');
                       }
@@ -3561,6 +3639,46 @@ export default function Discover() {
                               },
                             ]
                           );
+                        } else if (rec.type === 'clear_filter' && rec.clearedFilter === 'active_today') {
+                          // No confirmation alert here — the suggestion text
+                          // already states what we'll do ("Show members not
+                          // active today") and the user opted in by tapping
+                          // it. Adding a confirm step would feel sluggish on
+                          // top of the existing taps-to-fix-feed flow.
+                          setFilters(prev => ({ ...prev, activeToday: false }));
+                          setActiveToday(false);
+                          setCurrentIndex(0);
+
+                          // Persist to discovery_filters in the DB so the
+                          // change survives an app restart and matches what
+                          // settings/matching-preferences shows. Merge into
+                          // the existing JSONB rather than overwrite — we
+                          // don't know the full shape of the user's other
+                          // filters from here.
+                          try {
+                            const { data: prefRow } = await supabase
+                              .from('preferences')
+                              .select('discovery_filters')
+                              .eq('profile_id', currentProfileId)
+                              .maybeSingle();
+                            const nextFilters = { ...(prefRow?.discovery_filters || {}), activeToday: false };
+                            await supabase
+                              .from('preferences')
+                              .update({ discovery_filters: nextFilters })
+                              .eq('profile_id', currentProfileId);
+                          } catch (err) {
+                            console.warn('[Discovery] Failed to persist activeToday=false', err);
+                            // Don't block the feed reload on persist failure
+                            // — the in-session filter change is what the
+                            // user actually wanted.
+                          }
+
+                          trackEvent('smart_recommendation_clicked', {
+                            type: 'clear_filter',
+                            clearedFilter: 'active_today',
+                            count: rec.count,
+                          });
+                          loadProfiles(undefined, undefined, { activeToday: false });
                         }
                       } catch (error) {
                         console.error('[Discovery] Unexpected error in handlePress:', error);

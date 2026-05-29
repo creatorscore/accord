@@ -92,7 +92,12 @@ export default function PremiumPaywall({
         if (cancelled) return;
         if (visible) {
           await NavigationBar.setVisibilityAsync('hidden');
-          await NavigationBar.setBehaviorAsync('overlay-swipe');
+          // setBehaviorAsync('overlay-swipe') was used here to let the user
+          // swipe to reveal the nav bar while hidden. It's deprecated/
+          // unsupported on Android 15+ with edge-to-edge layout (Expo SDK
+          // 54 default) and emits a WARN per open. The OS already handles
+          // swipe-to-reveal on edge-to-edge, so dropping the call is a
+          // no-op behaviorally and just silences the warning.
         } else {
           await NavigationBar.setVisibilityAsync('visible');
         }
@@ -115,8 +120,16 @@ export default function PremiumPaywall({
   // about package metadata (price + currency + which periods are
   // available) — there are no trials configured on any plan, so we
   // skip the trial-eligibility check entirely.
+  //
+  // Previously this effect bailed early under __DEV__ to avoid hitting
+  // RC in development. The side-effect was that hasWeeklyPackage stayed
+  // false for every dev build, which meant the weekly plan was
+  // invisible during local testing — a real-device walk-through on
+  // 2026-05-28 surfaced this as "weekly subscription plan is missing"
+  // without anyone realizing the dev skip was responsible. RC is
+  // internet-accessible from dev too; let it run.
   useEffect(() => {
-    if (!visible || __DEV__) return;
+    if (!visible) return;
 
     let cancelled = false;
 
@@ -126,6 +139,10 @@ export default function PremiumPaywall({
         if (!offerings || cancelled) return;
         const packages: Record<string, { priceString: string; price: number; currencyCode: string }> = {};
         let weeklyFound = false;
+        // Log the raw RC offering so we can debug "weekly is missing"
+        // reports without having to attach a debugger. The output is
+        // small (a few entries) and only fires when the paywall opens.
+        const debugSummary: { product: string; package: string; period: string | undefined }[] = [];
         for (const pkg of offerings.availablePackages) {
           const id = pkg.product.identifier.toLowerCase();
           const pkgId = pkg.identifier.toLowerCase();
@@ -134,6 +151,7 @@ export default function PremiumPaywall({
             price: pkg.product.price,
             currencyCode: pkg.product.currencyCode,
           };
+          debugSummary.push({ product: pkg.product.identifier, package: pkg.identifier, period: (pkg.product as any).subscriptionPeriod });
           // Detect a weekly package across the common naming schemes:
           //   accord_premium_weekly, $rc_weekly, premium_1w, weekly, etc.
           if ((id.includes('week') || id.includes('1w') || pkgId.includes('week') || pkgId === '$rc_weekly') &&
@@ -141,10 +159,11 @@ export default function PremiumPaywall({
             weeklyFound = true;
           }
         }
+        console.log('[Paywall] RC offerings:', debugSummary, 'weeklyFound =', weeklyFound);
         setLivePackages(packages);
         setHasWeeklyPackage(weeklyFound);
       } catch (error) {
-        console.warn('⚠️ Failed to fetch RC offerings:', error);
+        console.warn('[Paywall] Failed to fetch RC offerings:', error);
       }
     };
 

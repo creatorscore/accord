@@ -1240,6 +1240,7 @@
       "locationPreferences": "Location Preferences",
       "preferredCities": "Preferred Cities",
       "preferredCitiesDesc": "Add cities you're interested in...",
+      "preferredCitiesPremium": "Unlock with Premium",
       "searchCitiesPlaceholder": "Search cities (e.g., Tokyo, Mumbai, NYC)",
       "citiesAdded": "{{count}}/2 cities added",
       "noCitiesEmpty": "No preferred cities yet. Add cities where you'd like to find matches!",
