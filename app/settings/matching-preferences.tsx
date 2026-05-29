@@ -710,7 +710,13 @@ export default function MatchingPreferences() {
           </View>
         </View>
 
-        {/* Preferred Cities - Now free for all users */}
+        {/* Preferred Cities — premium feature. Free users see the card title
+            with a Premium badge + locked input that opens the paywall when
+            tapped. Existing city chips stay visible (so a former-premium
+            user can see what they had + remove them), but new adds are
+            gated. The discovery feed enforces the same gate server-side
+            so a non-premium user can't keep the broader feed by toggling
+            their entitlement. */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings.matchingPreferences.locationPreferences')}</Text>
           <View style={styles.card}>
@@ -719,34 +725,61 @@ export default function MatchingPreferences() {
                 <MaterialCommunityIcons name="city-variant" size={24} color="#A08AB7" />
               </View>
               <View style={styles.cardHeaderText}>
-                <Text style={styles.cardTitle}>{t('settings.matchingPreferences.preferredCities')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.cardTitle}>{t('settings.matchingPreferences.preferredCities')}</Text>
+                  {!isPremium && (
+                    <View style={{ backgroundColor: '#A08AB7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{t('common.premium').toUpperCase()}</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={styles.cardDescription}>
                   {t('settings.matchingPreferences.preferredCitiesDesc')}
                 </Text>
               </View>
             </View>
 
-            {/* City Input with Autocomplete */}
+            {/* City Input with Autocomplete (premium-only) */}
             <View>
-              <View style={styles.cityInputContainer}>
-                <TextInput
-                  style={styles.cityInput}
-                  placeholder={t('settings.matchingPreferences.searchCitiesPlaceholder')}
-                  value={newCity}
-                  onChangeText={handleCitySearch}
-                  onSubmitEditing={addCity}
-                  returnKeyType="done"
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                />
+              {isPremium ? (
+                <View style={styles.cityInputContainer}>
+                  <TextInput
+                    style={styles.cityInput}
+                    placeholder={t('settings.matchingPreferences.searchCitiesPlaceholder')}
+                    value={newCity}
+                    onChangeText={handleCitySearch}
+                    onSubmitEditing={addCity}
+                    returnKeyType="done"
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity
+                    style={[styles.addCityButton, (!newCity.trim() || preferences.preferred_cities.length >= 2) && styles.addCityButtonDisabled]}
+                    onPress={addCity}
+                    disabled={!newCity.trim() || preferences.preferred_cities.length >= 2}
+                  >
+                    <MaterialCommunityIcons name="plus" size={20} color={newCity.trim() && preferences.preferred_cities.length < 2 ? '#fff' : '#9CA3AF'} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
                 <TouchableOpacity
-                  style={[styles.addCityButton, (!newCity.trim() || preferences.preferred_cities.length >= 2) && styles.addCityButtonDisabled]}
-                  onPress={addCity}
-                  disabled={!newCity.trim() || preferences.preferred_cities.length >= 2}
+                  onPress={() => setShowPaywall(true)}
+                  activeOpacity={0.7}
+                  style={[styles.cityInputContainer, { backgroundColor: '#F5F3F8', borderColor: '#E8E3F0' }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Preferred cities — Premium feature. Tap to upgrade."
                 >
-                  <MaterialCommunityIcons name="plus" size={20} color={newCity.trim() && preferences.preferred_cities.length < 2 ? '#fff' : '#9CA3AF'} />
+                  <View style={[styles.cityInput, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+                    <MaterialCommunityIcons name="lock" size={18} color="#A08AB7" />
+                    <Text style={{ color: '#6B7280', fontSize: 14 }}>
+                      {t('settings.matchingPreferences.preferredCitiesPremium', 'Unlock with Premium')}
+                    </Text>
+                  </View>
+                  <View style={[styles.addCityButton, styles.addCityButtonDisabled]}>
+                    <MaterialCommunityIcons name="plus" size={20} color="#9CA3AF" />
+                  </View>
                 </TouchableOpacity>
-              </View>
+              )}
               <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>
                 {t('settings.matchingPreferences.citiesAdded', { count: preferences.preferred_cities.length })}
               </Text>
