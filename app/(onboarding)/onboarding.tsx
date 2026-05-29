@@ -321,6 +321,11 @@ export default function Onboarding() {
         location_country: store.locationCountry,
         latitude: store.latitude,
         longitude: store.longitude,
+        // Stamp last_gps_at at the location checkpoint (step 3 → 4) so
+        // the staleness banner knows this profile has a fresh GPS read.
+        // LocationStep is GPS-only (autocomplete removed), so lat/lng
+        // being present at this step necessarily implies a GPS source.
+        ...(step === 4 && store.latitude != null && store.longitude != null ? { last_gps_at: new Date().toISOString() } : {}),
         pronouns: store.pronouns || null,
         gender: store.gender,
         sexual_orientation: store.sexualOrientation,

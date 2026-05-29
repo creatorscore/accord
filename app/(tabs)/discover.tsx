@@ -39,6 +39,8 @@ import VerificationBanner from '@/components/shared/VerificationBanner';
 import HandshakeLoader from '@/components/shared/HandshakeLoader';
 import TrialExpirationBanner from '@/components/premium/TrialExpirationBanner';
 import PaymentFailedBanner from '@/components/premium/PaymentFailedBanner';
+import PremiumExpiringBanner from '@/components/premium/PremiumExpiringBanner';
+import LocationStaleBanner from '@/components/security/LocationStaleBanner';
 
 interface Profile {
   id: string;
@@ -4151,6 +4153,18 @@ export default function Discover() {
                   billing retry exhausted. Higher priority than trial banner
                   because these users actively wanted to keep paying. */}
               <PaymentFailedBanner key="payment-failed-banner" />
+
+              {/* Premium-expiring nudge — user cancelled auto-renew but
+                  is still in paid period. Mutually exclusive with the
+                  payment-failed banner (one queries status=expired, this
+                  one queries status=active), so they won't both render. */}
+              <PremiumExpiringBanner key="premium-expiring-banner" />
+
+              {/* Location stale — active user but GPS hasn't been read
+                  in 30+ days (likely revoked permission post-onboarding).
+                  Nudges them to re-grant so AuthContext.refreshLocation
+                  can keep their stored location honest. */}
+              <LocationStaleBanner key="location-stale-banner" />
 
               {/* Trial Expiration Banner - Warn users when trial is about to end */}
               <TrialExpirationBanner key="trial-expiration-banner" />

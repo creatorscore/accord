@@ -269,7 +269,14 @@
     "upgradeToPremiumSubtitle": "Get unlimited likes, see who liked you, and more.",
     "paymentFailedTitle": "Your payment was declined",
     "paymentFailedBody": "Your Premium subscription paused because your card was declined. Update payment to resume.",
-    "updatePaymentMethod": "Update Payment"
+    "updatePaymentMethod": "Update Payment",
+    "expiringToday": "Your Premium ends today",
+    "expiringTomorrow": "Your Premium ends tomorrow",
+    "expiringInDays": "Your Premium ends in {{count}} days",
+    "expiringBody": "Auto-renew is off. Tap to keep your Premium features going.",
+    "locationStaleTitle": "Verify your location",
+    "locationStaleBody": "We haven't seen a location update in a while. Grant location access to keep your matches accurate.",
+    "openSettings": "Open Settings"
   },
   "trialValue": {
     "title": "Your Trial Stats",

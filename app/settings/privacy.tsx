@@ -187,10 +187,13 @@ export default function PrivacySettings() {
         return;
       }
 
-      // Update profile in database (include city/state if available)
+      // Update profile in database (include city/state if available).
+      // last_gps_at marks "fresh GPS reading received" — drives the
+      // staleness banner that nudges users who revoked permission.
       const updateData: any = {
         latitude: location.latitude,
         longitude: location.longitude,
+        last_gps_at: new Date().toISOString(),
       };
       if (location.city) updateData.location_city = location.city;
       if (location.state) updateData.location_state = location.state;
