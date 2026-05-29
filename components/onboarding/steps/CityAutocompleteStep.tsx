@@ -44,18 +44,59 @@ function formatCity(city: City): string {
   return `${city.name}, ${city.country}`;
 }
 
+// Pre-built first-letter index of citiesData. Real-device 2026-05-29
+// report: the hometown step "froze" on low-end Android because every
+// keystroke linear-scanned the entire ~50k-entry cities array (700KB
+// data file) with .includes() comparisons. Multi-hundred-ms JS-thread
+// block per stroke = unresponsive input.
+//
+// Indexing by first letter of every word in the name cuts the scan
+// to the relevant bucket (~2k items on average). "New York" goes into
+// both 'n' (first word) and 'y' (second word) buckets so typing
+// either first letter still finds it. Built lazily on first search
+// so module load stays fast.
+let firstLetterIndex: Map<string, number[]> | null = null;
+
+function buildIndex(): Map<string, number[]> {
+  if (firstLetterIndex) return firstLetterIndex;
+  const idx = new Map<string, number[]>();
+  for (let i = 0; i < citiesData.length; i++) {
+    const t = citiesData[i] as CityTuple;
+    const name = t[0];
+    // Index every word's first letter — handles "New York" via 'n' AND 'y'.
+    let prev = ' ';
+    for (let j = 0; j < name.length; j++) {
+      const ch = name[j];
+      if (prev === ' ' && ch !== ' ') {
+        const first = ch.toLowerCase();
+        const bucket = idx.get(first);
+        if (bucket) bucket.push(i);
+        else idx.set(first, [i]);
+      }
+      prev = ch;
+    }
+  }
+  firstLetterIndex = idx;
+  return idx;
+}
+
 function searchCities(text: string): City[] {
   if (text.length < 2) return [];
 
   const lower = text.toLowerCase();
+  const firstChar = lower[0];
+  const index = buildIndex();
+  const bucket = index.get(firstChar);
+  if (!bucket || bucket.length === 0) return [];
+
   const startsWith: City[] = [];
   const contains: City[] = [];
   const seen = new Set<string>();
 
-  for (let i = 0; i < citiesData.length; i++) {
+  for (let bi = 0; bi < bucket.length; bi++) {
     if (startsWith.length >= 20 && contains.length >= 5) break;
 
-    const t = citiesData[i] as CityTuple;
+    const t = citiesData[bucket[bi]] as CityTuple;
     const nameLower = t[0].toLowerCase();
     const regionLower = t[2].toLowerCase();
     const fullLower = `${nameLower}, ${regionLower}`;
