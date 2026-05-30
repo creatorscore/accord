@@ -11,7 +11,12 @@ import {
 } from '@/lib/distance-utils';
 
 export default function MatchingPrefsStep() {
-  const { ageMin, ageMax, maxDistanceMiles, willingToRelocate } = useOnboardingStore();
+  // Per-field selectors — see onboarding.tsx comment on why bare
+  // `useOnboardingStore()` triggers parent-wide re-render storms.
+  const ageMin = useOnboardingStore((s) => s.ageMin);
+  const ageMax = useOnboardingStore((s) => s.ageMax);
+  const maxDistanceMiles = useOnboardingStore((s) => s.maxDistanceMiles);
+  const willingToRelocate = useOnboardingStore((s) => s.willingToRelocate);
   const setField = useOnboardingStore((s) => s.setField);
   const isDark = useColorScheme() === 'dark';
   const textColor = isDark ? '#F5F5F7' : '#1F2937';

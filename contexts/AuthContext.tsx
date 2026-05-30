@@ -341,7 +341,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setSession(null);
 
     const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    if (error) {
+      // The server-side logout can fail when the session is already invalid —
+      // e.g. the account was deleted out from under this device, so /logout
+      // returns 401. The default global-scope signOut does NOT remove the
+      // persisted session from storage on a failed server call, so getSession()
+      // would rehydrate the now-deleted user on next launch and every
+      // authenticated write (profile upsert, etc.) fails with an FK violation.
+      // The user's intent is to sign out regardless, so force a local-scope
+      // sign-out to guarantee the stored session is cleared, and don't surface
+      // the server error.
+      console.warn('[signOut] server logout failed, clearing local session:', error.message);
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+    }
 
     // Track sign out
     trackUserAction.signOut();
