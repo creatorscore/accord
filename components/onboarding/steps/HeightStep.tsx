@@ -5,12 +5,16 @@ import ScrollPicker from '@/components/onboarding/ScrollPicker';
 import * as Haptics from 'expo-haptics';
 
 export default function HeightStep() {
-  const { heightInches, heightUnit, fieldVisibility } = useOnboardingStore();
+  // Per-field selectors — bare `useOnboardingStore()` made this step
+  // re-render on every unrelated store change (see onboarding.tsx
+  // comment for the iPhone 14 Pro freeze context).
+  const heightInches = useOnboardingStore((s) => s.heightInches);
+  const heightUnit = useOnboardingStore((s) => s.heightUnit);
+  const visible = useOnboardingStore((s) => s.fieldVisibility.height !== false);
   const setField = useOnboardingStore((s) => s.setField);
   const setVisibility = useOnboardingStore((s) => s.setVisibility);
   const isDark = useColorScheme() === 'dark';
   const options = getHeightOptions(heightUnit);
-  const visible = fieldVisibility.height !== false;
 
   // Default to a mid-range value if nothing selected
   const defaultValue = heightUnit === 'imperial' ? 67 : 170; // 5'7" or 170cm

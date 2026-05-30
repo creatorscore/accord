@@ -12,7 +12,7 @@ import {
   Platform,
   Linking,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import { getOfferings, purchasePackage } from '@/lib/revenue-cat';
@@ -530,6 +530,14 @@ export default function PremiumPaywall({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+      {/* A React Native Modal renders in a separate native root that is
+          outside the app's SafeAreaProvider, so SafeAreaView insets resolve
+          to 0 inside it — which left the close "X" flush against the top edge
+          (under the status bar) and untappable, most visibly on iPad. Adding
+          a SafeAreaProvider here gives the inner SafeAreaViews real insets;
+          initialWindowMetrics seeds them synchronously to avoid a layout
+          flicker on open. */}
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
         <StatusBar
           barStyle="dark-content"
@@ -682,6 +690,7 @@ export default function PremiumPaywall({
           </View>
         </View>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
