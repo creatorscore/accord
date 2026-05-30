@@ -239,6 +239,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           const lonDiff = Math.abs(profile.longitude - location.coords.longitude);
           // Roughly 0.005 degrees = ~500 meters
           if (latDiff < 0.005 && lonDiff < 0.005) {
+            // Position unchanged — skip the lat/lng/city rewrite, but STILL
+            // stamp last_gps_at: we just took a fresh GPS reading. Without this,
+            // a user who stays put never refreshes last_gps_at, so it stays at
+            // its onboarding value (or NULL) and the staleness banner eventually
+            // flags them despite location being granted and perfectly current.
+            await supabase
+              .from('profiles')
+              .update({
+                last_active_at: new Date().toISOString(),
+                last_gps_at: new Date().toISOString(),
+              })
+              .eq('id', profile.id);
             lastLocationUpdate.current = now;
             return;
           }
