@@ -614,8 +614,11 @@ export default function EditProfile() {
           }
 
           // Optimize image with compression now that dedup cleared
+          // No client thumbnail — it was discarded here anyway, and the
+          // privacy-blur thumbnail is generated separately (generateBlurDataUri)
+          // + server-side. Skipping it removes a redundant image decode.
           const { optimized } = await optimizeImage(selectedUri, {
-            generateThumbnail: true,
+            generateThumbnail: false,
           });
           const blurDataUri = await generateBlurDataUri(optimized.uri).catch(() => undefined);
 
