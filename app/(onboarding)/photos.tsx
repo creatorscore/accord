@@ -247,8 +247,12 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
               }
             }
 
+            // No client thumbnail — it was discarded here anyway, and the
+            // privacy-blur thumbnail is generated separately below
+            // (generateBlurDataUri) + server-side. Skipping it removes a
+            // redundant image decode on Android.
             const { optimized } = await optimizeImage(selectedUri, {
-              generateThumbnail: true,
+              generateThumbnail: false,
             });
 
             const blurDataUri = await generateBlurDataUri(optimized.uri).catch(() => undefined);
