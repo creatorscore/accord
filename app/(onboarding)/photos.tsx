@@ -335,6 +335,24 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
       if (newPhotos.length === 0) {
         setUploadProgress(100);
       } else {
+        // Determine the starting display_order from the DATABASE, not the local
+        // `photos` array. On resume, existing photos can fail to hydrate into
+        // local state (e.g. a signed-URL load race/error), and numbering new
+        // photos from the local count then collides with the rows already in
+        // the DB — producing duplicate display_orders (two sets of 0/1/2 for one
+        // profile). Basing it on the current max in the DB makes new photos slot
+        // in after whatever already exists, regardless of local-state hydration.
+        let nextOrder = 0;
+        if (profileId) {
+          const { data: maxRow } = await supabase
+            .from('photos')
+            .select('display_order')
+            .eq('profile_id', profileId)
+            .order('display_order', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          nextOrder = maxRow ? (maxRow.display_order ?? -1) + 1 : 0;
+        }
         for (let i = 0; i < newPhotos.length; i++) {
           const photo = newPhotos[i];
           const timestamp = Date.now();
@@ -367,8 +385,8 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
                 profile_id: profileId,
                 storage_path: fileName,
                 url: fileName,
-                display_order: photos.length - newPhotos.length + i,
-                is_primary: photos.length - newPhotos.length + i === 0,
+                display_order: nextOrder + i,
+                is_primary: nextOrder + i === 0,
                 content_hash: photo.contentHash,
                 blur_data_uri: photo.blurDataUri || null,
                 moderation_status: 'pending',
