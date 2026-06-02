@@ -948,6 +948,7 @@ export default function Discover() {
         { data: currentUserDataRaw, error: currentUserError },
         { data: boostedProfiles },
         { data: reportedByMe },
+        { data: everMatchedRows },
       ] = await Promise.all([
         // Get people you already LIKED (we'll exclude these)
         supabase
@@ -1005,6 +1006,15 @@ export default function Discover() {
           .from('reports')
           .select('reported_profile_id')
           .eq('reporter_profile_id', profileId),
+        // Exclude anyone you've EVER matched with — any status, including
+        // 'unmatched' and 'blocked'. Once matched, a profile must never
+        // resurface in discovery, even after an unmatch (which sets
+        // status='unmatched' and can delete the like rows that would otherwise
+        // keep them filtered out, causing them to reappear in the feed).
+        supabase
+          .from('matches')
+          .select('profile1_id, profile2_id')
+          .or(`profile1_id.eq.${profileId},profile2_id.eq.${profileId}`),
       ]);
 
       mark('exclusionQueries');
@@ -1026,14 +1036,25 @@ export default function Discover() {
 
       const reportedIds = reportedByMe?.map(r => r.reported_profile_id) || [];
 
-      // Only exclude: already liked, already passed, blocked users, banned users, AND REPORTED USERS
-      // DO NOT exclude people who liked you!
+      // Exclude anyone you've ever matched with — a matched (or formerly
+      // matched) user must never reappear in discovery. The feed previously
+      // relied solely on the `likes` row to keep them out, so if that row was
+      // ever missing (an unmatch deleting the likes, rewind, or a server-cached
+      // feed built before the match) the user resurfaced. Derive the partner id
+      // from each match (the side that isn't me).
+      const matchedProfileIds = (everMatchedRows || [])
+        .map((m: any) => (m.profile1_id === profileId ? m.profile2_id : m.profile1_id))
+        .filter(Boolean);
+
+      // Only exclude: already liked, already passed, blocked, banned, reported,
+      // AND already-matched users. DO NOT exclude people who liked you!
       const swipedIds = [
         ...(alreadySwipedLikes?.map(l => l.liked_profile_id) || []),
         ...(alreadySwipedPasses?.map(p => p.passed_profile_id) || []),
         ...blockedIds,
         ...bannedProfileIds,
         ...reportedIds,
+        ...matchedProfileIds,
       ];
 
       // Extract preferences as single object (Supabase returns array for joined queries)
