@@ -86,14 +86,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!profileId) return;
 
     try {
-      const { count, error } = await supabase
-        .from('messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('receiver_profile_id', profileId)
-        .is('read_at', null);
+      // Count only unread messages from ACTIVE matches. The previous naive
+      // count of all unread received messages kept counting messages from
+      // conversations that were later unmatched/blocked, leaving a stuck badge
+      // (e.g. a "4" that never cleared after the other person unmatched).
+      const { data: count, error } = await supabase.rpc('count_unread_active_messages');
 
       if (!error && count !== null) {
-        setUnreadMessageCount(count);
+        setUnreadMessageCount(count || 0);
       }
     } catch (error) {
       console.error('Error fetching unread count:', error);
