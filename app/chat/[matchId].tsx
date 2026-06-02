@@ -146,6 +146,15 @@ export default function Chat() {
   const [matchProfile, setMatchProfile] = useState<MatchProfile | null>(null);
   const [matchStatus, setMatchStatus] = useState<MatchStatus | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  // Belt-and-suspenders: the rendered list must have unique keys. Even with the
+  // knownMessageIds dedup on insert, any stray duplicate (e.g. a pagination
+  // merge or an insert race) must never reach the FlatList — otherwise React
+  // throws "Encountered two children with the same key" and can drop/duplicate
+  // messages. Dedupe by id at render, keeping the first occurrence.
+  const dedupedMessages = useMemo(() => {
+    const seen = new Set<string>();
+    return messages.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
+  }, [messages]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -997,6 +1006,12 @@ export default function Chat() {
 
       // Show UI immediately with plaintext + placeholders
       setMessages(signedMessages);
+      // Seed the dedup set with the freshly-fetched ids. Without this, a
+      // Realtime INSERT for a message that's already in this initial load
+      // (subscription-boundary race, or a Realtime reconnect/replay) passes the
+      // knownMessageIds check and gets prepended again — producing two list
+      // items with the same key ("Encountered two children with the same key").
+      signedMessages.forEach((m) => knownMessageIds.current.add(m.id));
       setLoading(false);
       setRefreshing(false);
 
@@ -3233,7 +3248,7 @@ export default function Chat() {
       {/* Messages List */}
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={dedupedMessages}
         renderItem={renderMessage}
         keyExtractor={messageKeyExtractor}
         inverted={true}
