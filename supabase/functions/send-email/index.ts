@@ -119,6 +119,23 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // Internal-only auth guard. send-email is invoked exclusively by other edge
+  // functions (email-new-match, email-unread-messages, email-inactive-users,
+  // onboarding-reminders, winback-subscribers) using the service-role key as a
+  // bearer token — never directly by clients. It is deployed with
+  // verify_jwt=false because the API gateway's JWT check began 401-rejecting
+  // valid service-role calls after the Supabase API-key rotation; we enforce
+  // the same restriction here so the function can't be invoked anonymously to
+  // send arbitrary email.
+  const _serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const _bearer = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+  if (!_serviceKey || _bearer !== _serviceKey) {
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+    );
+  }
+
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -195,6 +212,52 @@ serve(async (req) => {
       );
     }
 
+    // Build the one-click unsubscribe URL. Required by Gmail/Yahoo/Apple
+    // bulk-sender rules (RFC 8058): without these, mass re-engagement email
+    // gets junked by default. Per-profile token prevents forged unsubscribes.
+    let unsubscribeUrl: string | null = null;
+    const unsubscribeMailto = 'mailto:unsubscribe@news.joinaccord.app';
+    try {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('email_unsubscribe_token')
+        .eq('user_id', payload.userId)
+        .maybeSingle();
+      if (prof?.email_unsubscribe_token) {
+        const baseUrl = Deno.env.get('SUPABASE_URL');
+        unsubscribeUrl = `${baseUrl}/functions/v1/email-unsubscribe?u=${encodeURIComponent(payload.userId)}&t=${encodeURIComponent(prof.email_unsubscribe_token as string)}`;
+      }
+    } catch (e) {
+      console.warn('[send-email] could not resolve unsubscribe token:', e);
+    }
+
+    // Append the unsubscribe link inline so users have a visible escape hatch
+    // even if their mail client doesn't surface the List-Unsubscribe header.
+    // CASL (Canada) and CAN-SPAM (US) require a valid physical postal address
+    // in every commercial email. EMAIL_PHYSICAL_ADDRESS env var overrides the
+    // hardcoded default below.
+    const physicalAddress = Deno.env.get('EMAIL_PHYSICAL_ADDRESS')
+      ?? 'Accord, 1323 Homer Street, Vancouver, BC V6B 5T1, Canada';
+    let html = payload.htmlContent;
+    let text = payload.textContent;
+    if (unsubscribeUrl) {
+      html += `<div style="text-align:center;font-size:12px;color:#888;padding:18px 16px;line-height:1.6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <a href="${unsubscribeUrl}" style="color:#888;text-decoration:underline;">Unsubscribe</a>
+  &nbsp;·&nbsp;
+  ${physicalAddress}
+</div>`;
+      text += `\n\n--\nUnsubscribe: ${unsubscribeUrl}\n${physicalAddress}`;
+    }
+
+    // Resend forwards arbitrary headers to the SMTP envelope. List-Unsubscribe
+    // (RFC 2369) + List-Unsubscribe-Post: List-Unsubscribe=One-Click (RFC 8058)
+    // are what Gmail/Yahoo expect for inbox placement on bulk mail.
+    const resendHeaders: Record<string, string> = {};
+    if (unsubscribeUrl) {
+      resendHeaders['List-Unsubscribe'] = `<${unsubscribeUrl}>, <${unsubscribeMailto}>`;
+      resendHeaders['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+    }
+
     // Send email via Resend
     const emailResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -206,8 +269,9 @@ serve(async (req) => {
         from: 'Accord <hello@news.joinaccord.app>',
         to: [payload.recipientEmail],
         subject: payload.subject,
-        html: payload.htmlContent,
-        text: payload.textContent,
+        html,
+        text,
+        ...(Object.keys(resendHeaders).length > 0 ? { headers: resendHeaders } : {}),
       }),
     });
 
