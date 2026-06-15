@@ -18,6 +18,8 @@ import { calculateCompatibilityScore } from '@/lib/matching-algorithm';
 import { usePhotoBlur } from '@/hooks/usePhotoBlur';
 import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 import { signProfileMediaUrls } from '@/lib/signed-urls';
+import { calculateDistance } from '@/lib/geolocation';
+import { formatDistance } from '@/lib/distance-utils';
 
 interface LikeProfile {
   id: string;
@@ -31,6 +33,10 @@ interface LikeProfile {
     age: number;
     location_city?: string;
     location_state?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    hide_distance?: boolean;
+    distance?: number;
     photo_blur_enabled?: boolean;
     photos: { url: string; storage_path?: string; is_primary: boolean; blur_data_uri?: string | null }[];
     compatibility_score?: number;
@@ -80,11 +86,21 @@ const LikeCard = React.memo(({ like, onPass, onLikeBack, isAdmin }: {
               <Text className="text-white font-sans-bold text-body-lg">
                 {like.profile.display_name}{like.profile.age ? `, ${like.profile.age}` : ''}
               </Text>
-              {(like.profile.location_city || like.profile.location_state) && (
-                <Text className="text-white/80 font-sans text-body-sm mt-0.5">
-                  {[like.profile.location_city, like.profile.location_state].filter(Boolean).join(', ')}
-                </Text>
-              )}
+              {(() => {
+                // Current city + distance — NOT hometown. A liker can reach you
+                // from up to your 500mi cap (or further via premium global
+                // search), so surfacing how far away they actually are lets you
+                // judge proximity at a glance instead of mistaking their
+                // hometown for where they live.
+                const loc = [like.profile.location_city, like.profile.location_state].filter(Boolean).join(', ');
+                const dist = typeof like.profile.distance === 'number'
+                  ? formatDistance(like.profile.distance, 'miles', like.profile.hide_distance)
+                  : '';
+                const line = [loc, dist].filter(Boolean).join(' · ');
+                return line ? (
+                  <Text className="text-white/80 font-sans text-body-sm mt-0.5">{line}</Text>
+                ) : null;
+              })()}
             </View>
           </View>
           <LikedContentSection parsedContent={parsedContent} message={like.message} />
@@ -357,6 +373,9 @@ export default function Likes() {
                 age,
                 location_city,
                 location_state,
+                latitude,
+                longitude,
+                hide_distance,
                 photo_blur_enabled,
                 photos (
                   url,
@@ -435,6 +454,12 @@ export default function Likes() {
           })
           .map(like => {
             const likerProfile = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
+            const d = calculateDistance(
+              profileDataContext?.profile?.latitude ?? null,
+              profileDataContext?.profile?.longitude ?? null,
+              likerProfile.latitude,
+              likerProfile.longitude,
+            );
             return {
               id: like.id,
               profile_id: like.liker_profile_id,
@@ -447,6 +472,10 @@ export default function Likes() {
                 age: likerProfile.age,
                 location_city: likerProfile.location_city,
                 location_state: likerProfile.location_state,
+                latitude: likerProfile.latitude,
+                longitude: likerProfile.longitude,
+                hide_distance: likerProfile.hide_distance || false,
+                distance: d >= 999999 ? undefined : d,
                 photo_blur_enabled: likerProfile.photo_blur_enabled || false,
                 photos: likerProfile.photos || [],
               },
@@ -555,6 +584,9 @@ export default function Likes() {
               age,
               location_city,
               location_state,
+              latitude,
+              longitude,
+              hide_distance,
               photo_blur_enabled,
               photos (
                 url,
@@ -631,6 +663,12 @@ export default function Likes() {
         .map(like => {
           // Supabase returns joined data as array, extract first element
           const likerProfile = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
+          const d = calculateDistance(
+            profileDataContext?.profile?.latitude ?? null,
+            profileDataContext?.profile?.longitude ?? null,
+            likerProfile.latitude,
+            likerProfile.longitude,
+          );
           return {
             id: like.id,
             profile_id: like.liker_profile_id,
@@ -643,6 +681,10 @@ export default function Likes() {
               age: likerProfile.age,
               location_city: likerProfile.location_city,
               location_state: likerProfile.location_state,
+              latitude: likerProfile.latitude,
+              longitude: likerProfile.longitude,
+              hide_distance: likerProfile.hide_distance || false,
+              distance: d >= 999999 ? undefined : d,
               photo_blur_enabled: likerProfile.photo_blur_enabled || false,
               photos: likerProfile.photos || [],
             },

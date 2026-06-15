@@ -1106,26 +1106,62 @@ export default function Discover() {
       let error: any = null;
 
       if (!isSearchingGlobally && !effectiveSearchMode && currentUserData.latitude && currentUserData.longitude) {
-        // PERFORMANCE: Try cached discovery feed first (pre-computed every 30min)
-        // Falls back to live RPC if cache is empty/stale
-        const { data: cachedFeed, error: cacheError } = await supabase.rpc('get_cached_discovery_feed', {
-          p_profile_id: profileId,
-          p_limit: 50,
-        });
-        mark('cacheLookup');
-
+        const swipedSet = new Set(swipedIds);
         let nearbyIds: string[] = [];
 
-        if (!cacheError && cachedFeed && cachedFeed.length > 0) {
-          // Cache hit — use pre-computed feed (skips 9 exclusion queries + RPC)
-          const swipedSet = new Set(swipedIds);
-          nearbyIds = cachedFeed
-            .map((c: any) => c.candidate_id)
-            .filter((id: string) => !swipedSet.has(id));
-        } else {
-          // Cache miss — fall back to live RPC
-          // Gender prefs: use in-session filter only. Empty array = "Everyone" (RPC skips the filter).
-          // No DB fallback — if the user clears to Everyone but DB save raced, we honor the user's intent.
+        // Is this load using filters that differ from the SAVED prefs the cache
+        // was precomputed from? The cache (get_cached_discovery_feed) ignores
+        // filter params entirely, so a widened/changed filter must not be capped
+        // by it — we skip the cache and query live with effectiveFilters. Premium
+        // filters aren't part of the cache basis at all, so any active premium
+        // filter also forces the live path.
+        const savedPrefs: any = currentUserData.preferences || {};
+        const savedGenders: string[] = Array.isArray(savedPrefs.gender_preference) ? savedPrefs.gender_preference : [];
+        const sessionGenders: string[] = effectiveFilters.genderPreference || [];
+        const filtersModified =
+          effectiveFilters.maxDistance !== (savedPrefs.max_distance_miles ?? effectiveFilters.maxDistance) ||
+          effectiveFilters.ageMin !== (savedPrefs.age_min ?? effectiveFilters.ageMin) ||
+          effectiveFilters.ageMax !== (savedPrefs.age_max ?? effectiveFilters.ageMax) ||
+          sessionGenders.length !== savedGenders.length ||
+          sessionGenders.some((g: string) => !savedGenders.includes(g)) ||
+          (effectiveFilters.religion?.length || 0) > 0 ||
+          (effectiveFilters.politicalViews?.length || 0) > 0 ||
+          (effectiveFilters.ethnicity?.length || 0) > 0 ||
+          (effectiveFilters.sexualOrientation?.length || 0) > 0 ||
+          (effectiveFilters.languagesSpoken?.length || 0) > 0 ||
+          (effectiveFilters.zodiacSign?.length || 0) > 0 ||
+          (effectiveFilters.housingPreference?.length || 0) > 0 ||
+          (effectiveFilters.financialArrangement?.length || 0) > 0 ||
+          (effectiveFilters.primaryReason?.length || 0) > 0 ||
+          (effectiveFilters.relationshipType?.length || 0) > 0 ||
+          effectiveFilters.heightMin !== 48 || effectiveFilters.heightMax !== 84 ||
+          effectiveFilters.activeToday === true ||
+          effectiveFilters.wantsChildren !== null ||
+          !!selectedIntentionRef.current;
+
+        // Cache path — only when filters are untouched. Pre-computed every 30min,
+        // skips 9 exclusion queries + the live RPC.
+        if (!filtersModified) {
+          const { data: cachedFeed, error: cacheError } = await supabase.rpc('get_cached_discovery_feed', {
+            p_profile_id: profileId,
+            p_limit: 50,
+          });
+          mark('cacheLookup');
+          if (!cacheError && cachedFeed && cachedFeed.length > 0) {
+            nearbyIds = cachedFeed
+              .map((c: any) => c.candidate_id)
+              .filter((id: string) => !swipedSet.has(id));
+          }
+        }
+
+        // Live RPC when filters changed, OR to BACKFILL a shallow/drained cache.
+        // The cache is a fixed precomputed set (≤100, rebuilt every 30min); as the
+        // user swipes, the unswiped remainder shrinks and — without this — never
+        // refills until the next cron, producing the "same rotation of users" the
+        // user reported and surfacing nobody new when a filter is widened.
+        // Gender prefs: in-session only. Empty array = "Everyone" (RPC skips it).
+        const MIN_POOL = 20;
+        if (filtersModified || nearbyIds.length < MIN_POOL) {
           const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_profiles', {
             p_user_lat: currentUserData.latitude,
             p_user_lon: currentUserData.longitude,
@@ -1134,14 +1170,19 @@ export default function Discover() {
             p_min_age: Math.max(18, effectiveFilters.ageMin),
             p_max_age: effectiveFilters.ageMax,
             p_gender_prefs: effectiveFilters.genderPreference || [],
-            p_result_limit: 50
+            p_result_limit: 100
           });
           mark('liveRpc');
-          if (rpcError) throw rpcError;
-
+          // Only fatal if we have nothing at all to show.
+          if (rpcError && nearbyIds.length === 0) throw rpcError;
           if (rpcData && rpcData.length > 0) {
-            const swipedSet = new Set(swipedIds);
-            nearbyIds = rpcData.map((p: any) => p.id).filter((id: string) => !swipedSet.has(id));
+            const seen = new Set(nearbyIds);
+            for (const p of rpcData) {
+              if (!swipedSet.has(p.id) && !seen.has(p.id)) {
+                nearbyIds.push(p.id);
+                seen.add(p.id);
+              }
+            }
           }
         }
 
@@ -1951,22 +1992,32 @@ export default function Discover() {
       // Sort other profiles by: 1) Boosted status, 2) Subscriber status, 3) Compatibility score
       // Subscribers get a ranking boost so they appear higher in feeds, increasing
       // their match rate and reducing churn from low engagement.
-      const sortedOtherProfiles = otherProfiles.sort((a, b) => {
-        const aIsBoosted = boostedProfileIds.has(a.id);
-        const bIsBoosted = boostedProfileIds.has(b.id);
+      // Attach a per-load random key so ties break differently every refresh.
+      // Sorting by EXACT compatibility score was fully deterministic, so the
+      // same pool produced the identical sequence on every load — the "same
+      // rotation of users" the user reported. We keep the priority tiers
+      // (boosted → subscriber → strong matches first) but bucket compatibility
+      // into 10-point bands and randomize order WITHIN a band, so high-quality
+      // matches still surface first while the exact order rotates each load.
+      const sortedOtherProfiles = otherProfiles
+        .map((p) => ({ p, r: Math.random() }))
+        .sort((a, b) => {
+          const aIsBoosted = boostedProfileIds.has(a.p.id);
+          const bIsBoosted = boostedProfileIds.has(b.p.id);
+          if (aIsBoosted !== bIsBoosted) return aIsBoosted ? -1 : 1;
 
-        if (aIsBoosted && !bIsBoosted) return -1;
-        if (!aIsBoosted && bIsBoosted) return 1;
+          // Subscribers rank higher than free users (within same boost tier)
+          const aIsSub = (a.p as any).is_premium === true;
+          const bIsSub = (b.p as any).is_premium === true;
+          if (aIsSub !== bIsSub) return aIsSub ? -1 : 1;
 
-        // Subscribers rank higher than free users (within same boost tier)
-        const aIsSub = (a as any).is_premium === true;
-        const bIsSub = (b as any).is_premium === true;
-        if (aIsSub && !bIsSub) return -1;
-        if (!aIsSub && bIsSub) return 1;
-
-        // Otherwise sort by compatibility score
-        return (b.compatibility_score || 0) - (a.compatibility_score || 0);
-      });
+          // Compatibility bucketed into 10-pt bands; randomize within a band.
+          const aBand = Math.floor((a.p.compatibility_score || 0) / 10);
+          const bBand = Math.floor((b.p.compatibility_score || 0) / 10);
+          if (aBand !== bBand) return bBand - aBand;
+          return a.r - b.r;
+        })
+        .map((x) => x.p);
 
       // ORGANIC MIXING: Take up to 3 profiles who liked you and mix them into the deck
       // This gives free users a fair chance to match without knowing who liked them
