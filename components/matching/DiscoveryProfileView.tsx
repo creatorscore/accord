@@ -419,23 +419,24 @@ const VitalsSection = React.memo(function VitalsSection({
   const pills: { icon: string; value: string }[] = [];
 
   if (profile.age) pills.push({ icon: 'cake-variant-outline', value: String(profile.age) });
-  if (profile.gender && isFieldVisible(fv, 'gender')) pills.push({ icon: 'account-outline', value: translateProfileArray(t, 'gender', profile.gender) });
-  if (profile.sexual_orientation && isFieldVisible(fv, 'sexual_orientation')) pills.push({ icon: 'magnet', value: translateProfileArray(t, 'sexual_orientation', profile.sexual_orientation) });
-  if (profile.height_inches && isFieldVisible(fv, 'height')) pills.push({ icon: 'human-male-height-variant', value: formatHeight(profile.height_inches, heightUnit) });
-  if (profile.occupation && isFieldVisible(fv, 'job_title')) pills.push({ icon: 'briefcase-outline', value: profile.occupation });
-  if (profile.education && isFieldVisible(fv, 'education')) pills.push({ icon: 'school-outline', value: profile.education });
-  if (profile.education_level && isFieldVisible(fv, 'education_level')) pills.push({ icon: 'certificate-outline', value: formatLabelI18n(profile.education_level) });
-  // Current location
+  // Current location + distance lead the pills so where they ACTUALLY are (and
+  // how far) is the first thing seen — not their hometown, which sits in the
+  // rows below and was previously the only visible location cue.
   if (profile.location_city) {
     const locationText = profile.location_state
       ? `${profile.location_city}, ${profile.location_state}`
       : profile.location_city;
     pills.push({ icon: 'map-marker-outline', value: locationText });
   }
-  // Distance
   if (profile.distance) {
     pills.push({ icon: 'map-marker-distance', value: formatDistance(profile.distance, distanceUnit, profile.hide_distance) });
   }
+  if (profile.gender && isFieldVisible(fv, 'gender')) pills.push({ icon: 'account-outline', value: translateProfileArray(t, 'gender', profile.gender) });
+  if (profile.sexual_orientation && isFieldVisible(fv, 'sexual_orientation')) pills.push({ icon: 'magnet', value: translateProfileArray(t, 'sexual_orientation', profile.sexual_orientation) });
+  if (profile.height_inches && isFieldVisible(fv, 'height')) pills.push({ icon: 'human-male-height-variant', value: formatHeight(profile.height_inches, heightUnit) });
+  if (profile.occupation && isFieldVisible(fv, 'job_title')) pills.push({ icon: 'briefcase-outline', value: profile.occupation });
+  if (profile.education && isFieldVisible(fv, 'education')) pills.push({ icon: 'school-outline', value: profile.education });
+  if (profile.education_level && isFieldVisible(fv, 'education_level')) pills.push({ icon: 'certificate-outline', value: formatLabelI18n(profile.education_level) });
   if (profile.zodiac_sign && isFieldVisible(fv, 'zodiac_sign')) pills.push({ icon: 'star-four-points-outline', value: translateProfileValue(t, 'zodiac_sign', profile.zodiac_sign) });
   // Note: pronouns are already shown in the header, so not duplicated here
   // Lifestyle preferences — filter "prefer_not_to_say" values
@@ -459,7 +460,9 @@ const VitalsSection = React.memo(function VitalsSection({
   // Build rows for vertical list (using outline icons for clean Hinge look)
   const rows: { icon: string; value: string }[] = [];
 
-  if (profile.hometown && isFieldVisible(fv, 'hometown')) rows.push({ icon: 'home-outline', value: profile.hometown });
+  // Prefix with the "Hometown" label so it can't be misread as where they
+  // currently live (current city + distance now lead the pills above).
+  if (profile.hometown && isFieldVisible(fv, 'hometown')) rows.push({ icon: 'home-outline', value: `${t('profileCard.vitals.hometown', 'Hometown')}: ${profile.hometown}` });
   if (profile.religion && profile.religion !== 'Prefer not to say' && isFieldVisible(fv, 'religion')) rows.push({ icon: 'book-open-outline', value: translateProfileValue(t, 'religion', profile.religion) });
   if (profile.ethnicity && isFieldVisible(fv, 'ethnicity') && (Array.isArray(profile.ethnicity) ? !profile.ethnicity.includes('Prefer not to say') : profile.ethnicity !== 'Prefer not to say')) {
     rows.push({ icon: 'account-circle-outline', value: translateProfileArray(t, 'ethnicity', profile.ethnicity) });
