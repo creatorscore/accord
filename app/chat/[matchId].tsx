@@ -60,7 +60,7 @@ import EmojiPicker from 'rn-emoji-keyboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import SwipeableMessageBubble from '@/components/messaging/SwipeableMessageBubble';
-import { captureException } from '@/lib/sentry';
+import { captureException, isTransientNetworkError } from '@/lib/sentry';
 
 interface MessageReaction {
   id: string;
@@ -146,6 +146,15 @@ export default function Chat() {
   const [matchProfile, setMatchProfile] = useState<MatchProfile | null>(null);
   const [matchStatus, setMatchStatus] = useState<MatchStatus | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  // Belt-and-suspenders: the rendered list must have unique keys. Even with the
+  // knownMessageIds dedup on insert, any stray duplicate (e.g. a pagination
+  // merge or an insert race) must never reach the FlatList — otherwise React
+  // throws "Encountered two children with the same key" and can drop/duplicate
+  // messages. Dedupe by id at render, keeping the first occurrence.
+  const dedupedMessages = useMemo(() => {
+    const seen = new Set<string>();
+    return messages.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
+  }, [messages]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -541,7 +550,20 @@ export default function Chat() {
           .then(({ error: readError }) => {
             if (readError) {
               console.error('Failed to mark messages read:', readError);
-              captureException(readError, { context: 'markMessagesAsRead on chat open', matchId });
+              // Supabase returns {code, details, hint, message} — not a
+              // real Error instance — so passing it directly causes Sentry
+              // to serialize it as "Object captured as exception with
+              // keys: code, details, hint, message" and the network-
+              // failed beforeSend filter can't match the buried message.
+              // Wrap in Error + skip transient network failures, mirroring
+              // the pattern used elsewhere (see lib/sentry isTransient...).
+              if (!isTransientNetworkError(readError)) {
+                captureException(
+                  new Error(readError?.message || 'markMessagesAsRead failed'),
+                  { context: 'markMessagesAsRead on chat open', matchId, code: readError?.code },
+                  [`chat-mark-read-${readError?.code || 'other'}`],
+                );
+              }
             } else {
               refreshUnreadCount();
             }
@@ -984,6 +1006,12 @@ export default function Chat() {
 
       // Show UI immediately with plaintext + placeholders
       setMessages(signedMessages);
+      // Seed the dedup set with the freshly-fetched ids. Without this, a
+      // Realtime INSERT for a message that's already in this initial load
+      // (subscription-boundary race, or a Realtime reconnect/replay) passes the
+      // knownMessageIds check and gets prepended again — producing two list
+      // items with the same key ("Encountered two children with the same key").
+      signedMessages.forEach((m) => knownMessageIds.current.add(m.id));
       setLoading(false);
       setRefreshing(false);
 
@@ -1608,7 +1636,13 @@ export default function Chat() {
 
         if (firstMsgError) {
           console.error('Failed to set first_message_sent_at:', firstMsgError);
-          captureException(firstMsgError, { context: 'first_message_sent_at update failed', matchId });
+          if (!isTransientNetworkError(firstMsgError)) {
+            captureException(
+              new Error((firstMsgError as any)?.message || 'first_message_sent_at update failed'),
+              { context: 'first_message_sent_at update failed', matchId, code: (firstMsgError as any)?.code },
+              [`chat-first-msg-${(firstMsgError as any)?.code || 'other'}`],
+            );
+          }
           showToast({
             type: 'error',
             title: t('chat.expirationWarningTitle', { defaultValue: 'Match may expire' }),
@@ -1671,11 +1705,10 @@ export default function Chat() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        // Disable cropping on Android — the native canhub/cropper crashes with
-        // FileNotFoundException on low-end devices with limited storage.
-        // iOS uses its own stable UIImagePickerController so cropping is safe there.
-        allowsEditing: Platform.OS === 'ios',
-        aspect: [4, 3],
+        // No in-picker cropping. iOS's "Crop" button is the confirm action and
+        // users mistake it for an optional edit step — they back out instead
+        // of sending. Android's canhub/cropper also crashes on low-end devices.
+        allowsEditing: false,
         quality: 0.8,
         exif: false, // Don't include EXIF data for privacy
       });
@@ -1992,7 +2025,13 @@ export default function Chat() {
 
         if (firstMsgError) {
           console.error('Failed to set first_message_sent_at (voice):', firstMsgError);
-          captureException(firstMsgError, { context: 'first_message_sent_at update failed (voice)', matchId });
+          if (!isTransientNetworkError(firstMsgError)) {
+            captureException(
+              new Error((firstMsgError as any)?.message || 'first_message_sent_at update failed (voice)'),
+              { context: 'first_message_sent_at update failed (voice)', matchId, code: (firstMsgError as any)?.code },
+              [`chat-first-msg-voice-${(firstMsgError as any)?.code || 'other'}`],
+            );
+          }
           showToast({
             type: 'error',
             title: t('chat.expirationWarningTitle', { defaultValue: 'Match may expire' }),
@@ -3209,7 +3248,7 @@ export default function Chat() {
       {/* Messages List */}
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={dedupedMessages}
         renderItem={renderMessage}
         keyExtractor={messageKeyExtractor}
         inverted={true}

@@ -7,3 +7,8 @@ export { default as MatchingPrefsStep } from './MatchingPrefsStep';
 export { default as ChipSelect } from './ChipSelect';
 export { default as TextInputStep } from './TextInputStep';
 export { default as CityAutocompleteStep } from './CityAutocompleteStep';
+export { default as FieldChipStep } from './FieldChipStep';
+export { default as FieldTextStep } from './FieldTextStep';
+export { default as OrientationFieldStep } from './OrientationFieldStep';
+export { default as GenderPrefFieldStep } from './GenderPrefFieldStep';
+export { default as HometownFieldStep } from './HometownFieldStep';

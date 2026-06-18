@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri, cleanupOptimizedImages } from '@/lib/image-optimization';
 import { signPhotoUrls } from '@/lib/signed-urls';
+import { captureException } from '@/lib/sentry';
 import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { useTranslation } from 'react-i18next';
@@ -42,9 +43,14 @@ interface PhotosProps {
   embedded?: boolean;
   onContinue?: () => void;
   onBack?: () => void;
+  // When embedded inside the unified onboarding flow, the parent already
+  // knows the profile id (it created the row at step 3). Passing it down
+  // skips a redundant SELECT roundtrip on mount — meaningful when the
+  // user is on a flaky connection or the chunk just loaded.
+  initialProfileId?: string | null;
 }
 
-export default function Photos({ embedded, onContinue: parentContinue, onBack: parentBack }: PhotosProps = {}) {
+export default function Photos({ embedded, onContinue: parentContinue, onBack: parentBack, initialProfileId }: PhotosProps = {}) {
   const router = useRouter();
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -55,7 +61,7 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [profileId, setProfileId] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(initialProfileId ?? null);
   const [photoBlurEnabled, setPhotoBlurEnabled] = useState(false);
   const [processingImage, setProcessingImage] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
@@ -66,22 +72,60 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
   const isMounted = useRef(true);
 
   useEffect(() => {
-    loadProfile();
     return () => {
       isMounted.current = false;
     };
   }, []);
 
+  // Re-run loadProfile when auth becomes available. Previous empty-deps
+  // useEffect fired once at mount and silently no-op'd if user wasn't
+  // hydrated yet, leaving profileId=null forever and surfacing
+  // "Profile not found" when the user hit Continue.
+  //
+  // Fast path: when the parent passed initialProfileId, skip the profile
+  // SELECT entirely and go straight to fetching existing photos (the
+  // common case for embedded onboarding — the parent already created the
+  // row at step 3 and has its id in state).
+  //
+  // Sync local profileId whenever the parent's initialProfileId transitions
+  // from null → real id. useState only captures the FIRST prop value, so a
+  // late-arriving parent profileId (e.g. parent's initial profile load
+  // finishes after Photos mounts) would otherwise leave us locked at null
+  // — handleContinue then fires the no-profile guard and surfaces
+  // "Profile not found" to a user whose row actually exists.
+  useEffect(() => {
+    if (initialProfileId) {
+      console.log('[photos] using initialProfileId from parent =', initialProfileId);
+      setProfileId(initialProfileId);
+      loadExistingPhotos(initialProfileId).finally(() => {
+        if (isMounted.current) setInitialLoading(false);
+      });
+      return;
+    }
+    if (user?.id) {
+      loadProfile();
+    }
+  }, [user?.id, initialProfileId]);
+
   const loadProfile = async () => {
+    const t0 = Date.now();
+    console.log('[photos.loadProfile] start, user?.id =', user?.id);
     try {
+      if (!user?.id) {
+        const err = new Error('photos.loadProfile called without user.id (auth not ready)');
+        console.warn('[photos.loadProfile]', err.message);
+        captureException(err, { context: 'photos_loadProfile_no_user' });
+        return;
+      }
       const { data, error } = await supabase
         .from('profiles')
         .select('id, photo_blur_enabled')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .single();
 
       if (error) throw error;
       if (!isMounted.current) return;
+      console.log('[photos.loadProfile] got profileId =', data.id, 'in', Date.now() - t0, 'ms');
       setProfileId(data.id);
 
       if (data.photo_blur_enabled !== null) {
@@ -90,6 +134,12 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
 
       await loadExistingPhotos(data.id);
     } catch (error: any) {
+      console.error('[photos.loadProfile] failed in', Date.now() - t0, 'ms:', error?.code, error?.message);
+      captureException(error instanceof Error ? error : new Error(error?.message || 'photos.loadProfile failed'), {
+        context: 'photos_loadProfile',
+        code: error?.code,
+        userId: user?.id,
+      });
       showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
     } finally {
       if (isMounted.current) setInitialLoading(false);
@@ -197,8 +247,12 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
               }
             }
 
+            // No client thumbnail — it was discarded here anyway, and the
+            // privacy-blur thumbnail is generated separately below
+            // (generateBlurDataUri) + server-side. Skipping it removes a
+            // redundant image decode on Android.
             const { optimized } = await optimizeImage(selectedUri, {
-              generateThumbnail: true,
+              generateThumbnail: false,
             });
 
             const blurDataUri = await generateBlurDataUri(optimized.uri).catch(() => undefined);
@@ -254,6 +308,13 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
     }
 
     if (!profileId) {
+      console.error('[photos.handleContinue] profileId is null at Continue — embedded =', embedded, 'user?.id =', user?.id);
+      captureException(new Error('photos.handleContinue fired with null profileId'), {
+        context: 'photos_continue_no_profile',
+        embedded,
+        userId: user?.id,
+        photosCount: photos.length,
+      });
       showToast({ type: 'error', title: t('common.error'), message: t('toast.profileNotFound') });
       return;
     }
@@ -274,6 +335,24 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
       if (newPhotos.length === 0) {
         setUploadProgress(100);
       } else {
+        // Determine the starting display_order from the DATABASE, not the local
+        // `photos` array. On resume, existing photos can fail to hydrate into
+        // local state (e.g. a signed-URL load race/error), and numbering new
+        // photos from the local count then collides with the rows already in
+        // the DB — producing duplicate display_orders (two sets of 0/1/2 for one
+        // profile). Basing it on the current max in the DB makes new photos slot
+        // in after whatever already exists, regardless of local-state hydration.
+        let nextOrder = 0;
+        if (profileId) {
+          const { data: maxRow } = await supabase
+            .from('photos')
+            .select('display_order')
+            .eq('profile_id', profileId)
+            .order('display_order', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          nextOrder = maxRow ? (maxRow.display_order ?? -1) + 1 : 0;
+        }
         for (let i = 0; i < newPhotos.length; i++) {
           const photo = newPhotos[i];
           const timestamp = Date.now();
@@ -306,8 +385,8 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
                 profile_id: profileId,
                 storage_path: fileName,
                 url: fileName,
-                display_order: photos.length - newPhotos.length + i,
-                is_primary: photos.length - newPhotos.length + i === 0,
+                display_order: nextOrder + i,
+                is_primary: nextOrder + i === 0,
                 content_hash: photo.contentHash,
                 blur_data_uri: photo.blurDataUri || null,
                 moderation_status: 'pending',

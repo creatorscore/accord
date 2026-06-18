@@ -95,7 +95,7 @@ export const ONBOARDING_STEPS: OnboardingStepConfig[] = [
   { key: 'prompts', title: 'Answer some prompts', subtitle: "Choose at least 2 prompts to help others get to know you.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'profile' },
   { key: 'voice_note', title: 'Record a voice intro', subtitle: "Let others hear your voice. 30 seconds max.", skippable: true, previewAvailable: true, hasVisibility: false, section: 'profile' },
   // ── Preferences (29) ──
-  { key: 'matching_prefs', title: 'Set your preferences', subtitle: "Set your age range and distance preferences.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'preferences' },
+  { key: 'matching_prefs', title: 'Set your preferences', subtitle: "Set your age range and distance preferences.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'preferences' },
 ];
 
 export const TOTAL_ONBOARDING_STEPS = ONBOARDING_STEPS.length; // 31
@@ -107,9 +107,16 @@ export const SAVE_CHECKPOINTS = [3, 14, 26] as const;
 
 export const GENDERS = ['Man', 'Woman', 'Non-binary'] as const;
 
+// 'prefer not to say' lives at index 0 intentionally: pronouns is the
+// first identity question in onboarding (step 4 — name/DOB/location
+// before it are all neutral) and a measurable 13% of users who reach
+// this screen bail without picking anything. Putting the explicit
+// opt-out first gives nervous or uncertain users a visible escape
+// instead of forcing them through a 1-of-7 commitment to advance.
+// Stored DB values are unchanged; only the chip render order moves.
 export const PRONOUNS = [
-  'she/her', 'he/him', 'they/them', 'she/they',
-  'he/they', 'any pronouns', 'ask me', 'prefer not to say',
+  'prefer not to say', 'she/her', 'he/him', 'they/them',
+  'she/they', 'he/they', 'any pronouns', 'ask me',
 ] as const;
 
 export const ORIENTATIONS = [

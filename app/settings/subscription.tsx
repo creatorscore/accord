@@ -8,6 +8,7 @@ import { useColorScheme } from '@/lib/useColorScheme';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { restorePurchases, getCustomerInfo, getOfferings, purchasePackage, presentCodeRedemptionSheet, checkTrialEligibility, TrialInfo } from '@/lib/revenue-cat';
 import { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
+import { openExternalURL } from '@/lib/external-link';
 export default function SubscriptionManagement() {
   const router = useRouter();
   const { t } = useTranslation();
@@ -716,14 +717,14 @@ export default function SubscriptionManagement() {
         {/* Terms of Use & Privacy Policy (Required by App Store) */}
         <View className="mt-4 flex-row justify-center items-center space-x-4">
           <TouchableOpacity
-            onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}
+            onPress={() => openExternalURL('https://joinaccord.app/terms')}
             className="py-2"
           >
             <Text className="text-lavender-600 text-sm font-medium underline">{t('subscriptionSettings.termsOfUse')}</Text>
           </TouchableOpacity>
           <Text style={{ color: isDarkColorScheme ? '#6B7280' : '#9CA3AF' }}>•</Text>
           <TouchableOpacity
-            onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}
+            onPress={() => openExternalURL('https://joinaccord.app/privacy')}
             className="py-2"
           >
             <Text className="text-lavender-600 text-sm font-medium underline">{t('subscriptionSettings.privacyPolicy')}</Text>

@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { captureException } from '@/lib/sentry';
 import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import {
@@ -51,11 +52,15 @@ export default function MatchingPreferences() {
 
   const { loadDraft, saveDraft, clearDraft } = useOnboardingDraft<MatchingPrefsDraft>(user?.id, 'matching-preferences');
 
+  // Wait for auth to hydrate. Previous empty-deps useEffect silently no-op'd
+  // when user wasn't ready, leaving profileId=null and surfacing "Profile
+  // not found" on save.
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (user?.id) loadProfile();
+  }, [user?.id]);
 
   const loadProfile = async () => {
+    console.log('[legacy-matching.loadProfile] user?.id =', user?.id);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -63,7 +68,22 @@ export default function MatchingPreferences() {
         .eq('user_id', user?.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error && error.code !== 'PGRST116') {
+        const e: any = error;
+        captureException(new Error(e?.message || 'legacy-matching loadProfile failed'), {
+          context: 'legacy_matching_loadProfile',
+          code: e?.code,
+          userId: user?.id,
+        });
+        throw error;
+      }
+      if (!data) {
+        console.warn('[legacy-matching.loadProfile] PGRST116 — no profile row for user', user?.id);
+        captureException(new Error('legacy-matching: no profile row for user'), {
+          context: 'legacy_matching_no_profile',
+          userId: user?.id,
+        });
+      }
 
       if (data) {
         setProfileId(data.id);
@@ -134,6 +154,7 @@ export default function MatchingPreferences() {
           distance_unit: distanceUnit,
           willing_to_relocate: willingToRelocate,
           gender_preference: expandGenderPreference(genderPreference),
+          gender_preference_confirmed_at: new Date().toISOString(),
         }, { onConflict: 'profile_id' });
 
       if (prefsError) throw prefsError;

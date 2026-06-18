@@ -65,8 +65,15 @@ export const normalizeImageProps = (props: any) => {
 export const prefetchImages = async (urls: string[]): Promise<void> => {
   if (!urls || urls.length === 0) return;
 
-  // Filter out data URIs — Image.prefetch only supports HTTP(S) URLs
-  urls = urls.filter(url => !url.startsWith('data:'));
+  // Image.prefetch (both expo-image and RN Image) only supports HTTP(S).
+  // Whitelist instead of blacklist: discover.tsx prefetches photos as
+  // soon as profiles arrive, but the rest-batch is signed asynchronously
+  // and `photo.url` is the raw storage path (e.g. <uuid>/<ts>.jpg) until
+  // signing lands. The native loader rejected those paths with
+  // "Unsupported uri scheme for encoded image fetch! Uri is: <uuid>..."
+  // and emitted a WARN per profile, which compounded on low-end devices.
+  urls = urls.filter(url => typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://')));
+  if (urls.length === 0) return;
 
   const ownership = Constants.appOwnership as string | null;
   const isProd = ownership === 'standalone';

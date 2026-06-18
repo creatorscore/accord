@@ -16,6 +16,7 @@ import ImmersiveProfileCard from '@/components/matching/ImmersiveProfileCard';
 import MatchModal from '@/components/matching/MatchModal';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import FilterModal, { FilterOptions } from '@/components/matching/FilterModal';
+import ConfirmGenderPreferenceModal from '@/components/matching/ConfirmGenderPreferenceModal';
 import ProfileBoostModal from '@/components/premium/ProfileBoostModal';
 import ReportUserModal from '@/components/moderation/ReportUserModal';
 // NOTE: Match and like notifications are sent via database triggers (notify_on_match, notify_on_like)
@@ -32,11 +33,14 @@ import { useColorScheme } from '@/lib/useColorScheme';
 import { COLORS } from '@/theme/colors';
 import { expandGenderPreference } from '@/lib/gender-preferences';
 import { trackUserAction, trackFunnel, trackEvent } from '@/lib/analytics';
-import { captureException } from '@/lib/sentry';
+import { captureException, isTransientNetworkError } from '@/lib/sentry';
 import { prefetchImages } from '@/components/shared/ConditionalImage';
 import VerificationBanner from '@/components/shared/VerificationBanner';
 import HandshakeLoader from '@/components/shared/HandshakeLoader';
 import TrialExpirationBanner from '@/components/premium/TrialExpirationBanner';
+import PaymentFailedBanner from '@/components/premium/PaymentFailedBanner';
+import PremiumExpiringBanner from '@/components/premium/PremiumExpiringBanner';
+import LocationStaleBanner from '@/components/security/LocationStaleBanner';
 
 interface Profile {
   id: string;
@@ -117,6 +121,12 @@ export default function Discover() {
     currentProfileIdRef.current = id;
     _setCurrentProfileId(id);
   };
+  // Re-entry guard for the like flow. Without this, rapid taps (the user
+  // double-taps before the first insert commits) race the existingLike
+  // SELECT and hit the unique-constraint on (liker_profile_id,
+  // liked_profile_id) — surfacing as duplicate-key errors in Sentry
+  // (REACT-71). Cleared in the handler's finally block.
+  const isLikingRef = useRef(false);
   // Hash of the filter set most recently passed to loadProfiles. If this diverges from
   // the current DB preferences on focus, the feed needs to refetch — fixes the bug where
   // editing preferences in settings didn't take effect until leaving & reopening the app.
@@ -138,6 +148,7 @@ export default function Discover() {
   const [superLikesRemaining, setSuperLikesRemaining] = useState(5);
   const [pendingLikesCount, setPendingLikesCount] = useState(0); // Likes received (for teaser banner)
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showConfirmGenderModal, setShowConfirmGenderModal] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
     // Free filters
     ageMin: 18,
@@ -253,7 +264,7 @@ export default function Discover() {
 
   // Smart recommendations - dynamic array from database
   const [smartRecommendations, setSmartRecommendations] = useState<{
-    type: 'age' | 'distance' | 'gender' | 'global';
+    type: 'age' | 'distance' | 'gender' | 'global' | 'clear_filter';
     count: number;
     description: string;
     increment?: number;
@@ -261,6 +272,10 @@ export default function Discover() {
     newAgeMin?: number;
     newAgeMax?: number;
     addedGender?: string;
+    /** For type === 'clear_filter': which filter the user would toggle off.
+     * Currently only 'active_today' is emitted by the smart-recs RPC, but
+     * the union keeps room for future cleared filters (e.g. show_blurred). */
+    clearedFilter?: 'active_today';
   }[]>([]);
 
   // Quick filter options
@@ -538,10 +553,12 @@ export default function Discover() {
           age_min: newFilters.ageMin,
           age_max: newFilters.ageMax,
           max_distance_miles: newFilters.maxDistance,
-          // expandGenderPreference: ['Men'] → ['Man'], ['Everyone'] → [], etc.
-          // FilterModal already uses canonical values so this is usually a no-op,
-          // but the defensive wrap protects against any future UI that passes UI labels.
+          // expandGenderPreference is idempotent: ['Men']→['Man'], ['Woman']→['Woman'],
+          // ['Everyone']→[]. FilterModal stores canonical values so this is a pass-through
+          // for that surface, but earlier this wrap silently wiped canonical values
+          // (audit 2026-05-05 found 1,338 users with gender_preference=[] from this).
           gender_preference: expandGenderPreference(newFilters.genderPreference),
+          gender_preference_confirmed_at: new Date().toISOString(),
           discovery_filters: discoveryFilters,
         })
         .eq('profile_id', currentProfileId);
@@ -714,6 +731,14 @@ export default function Discover() {
         });
       }
 
+      // One-time prompt for users whose gender_preference was wiped to []
+      // by the now-fixed expandGenderPreference bug (audit 2026-05-05). Only
+      // gate completed profiles — incomplete profiles still need to finish
+      // onboarding and the matching-prefs step there will set the flag.
+      if (data.profile_complete && userPreferences && !userPreferences.gender_preference_confirmed_at) {
+        setShowConfirmGenderModal(true);
+      }
+
       // Check if profile is complete - if not, show onboarding banner
       const profileComplete = data.profile_complete || false;
       setIsProfileComplete(profileComplete);
@@ -878,16 +903,33 @@ export default function Discover() {
     // This fixes the React state timing issue where state updates are async
     const effectiveSearchMode = searchModeOverride !== undefined ? searchModeOverride : isSearchMode;
     const effectiveSearchKeyword = searchKeywordOverride !== undefined ? searchKeywordOverride : searchKeyword;
-    const effectiveFilters = filtersOverride ? { ...filters, ...filtersOverride } : filters;
+    const rawFilters = filtersOverride ? { ...filters, ...filtersOverride } : filters;
+    // Defense in depth on the 500mi distance cap. The slider is bounded
+    // by DISTANCE_MAX in matching-preferences but the DB column can hold
+    // any value, and pre-2026-05-28 backfill found 3,257 legacy rows
+    // (max ever observed: 1,000,000,000) saved by old app versions
+    // before the slider cap existed. Even after the backfill, old app
+    // versions can still write >500 — clamp here so the RPC + bbox
+    // queries are always bounded regardless of what's in the row.
+    const effectiveFilters = {
+      ...rawFilters,
+      maxDistance: Math.min(rawFilters.maxDistance, 500),
+    };
     // Use ref for profile ID to avoid stale closure issues
     const profileId = currentProfileIdRef.current;
+
+    // Diagnostic timing — each mark() records elapsed-ms since loadProfiles
+    // started. Attached to captureException on error so Sentry shows which
+    // stage timed out (cache / RPC / full-fetch / prefs) without needing
+    // console output. See JAVASCRIPT-REACT-70 incident 2026-05-15.
+    const t0 = Date.now();
+    const marks: Record<string, number> = {};
+    const mark = (label: string) => { marks[label] = Date.now() - t0; };
 
     try {
       setLoading(true);
 
-      if (!profileId) {
-        return;
-      }
+      if (!profileId) return;
 
       // Get profiles that:
       // 1. Are active
@@ -906,6 +948,7 @@ export default function Discover() {
         { data: currentUserDataRaw, error: currentUserError },
         { data: boostedProfiles },
         { data: reportedByMe },
+        { data: everMatchedRows },
       ] = await Promise.all([
         // Get people you already LIKED (we'll exclude these)
         supabase
@@ -963,7 +1006,18 @@ export default function Discover() {
           .from('reports')
           .select('reported_profile_id')
           .eq('reporter_profile_id', profileId),
+        // Exclude anyone you've EVER matched with — any status, including
+        // 'unmatched' and 'blocked'. Once matched, a profile must never
+        // resurface in discovery, even after an unmatch (which sets
+        // status='unmatched' and can delete the like rows that would otherwise
+        // keep them filtered out, causing them to reappear in the feed).
+        supabase
+          .from('matches')
+          .select('profile1_id, profile2_id')
+          .or(`profile1_id.eq.${profileId},profile2_id.eq.${profileId}`),
       ]);
+
+      mark('exclusionQueries');
 
       if (currentUserError) throw currentUserError;
 
@@ -982,14 +1036,25 @@ export default function Discover() {
 
       const reportedIds = reportedByMe?.map(r => r.reported_profile_id) || [];
 
-      // Only exclude: already liked, already passed, blocked users, banned users, AND REPORTED USERS
-      // DO NOT exclude people who liked you!
+      // Exclude anyone you've ever matched with — a matched (or formerly
+      // matched) user must never reappear in discovery. The feed previously
+      // relied solely on the `likes` row to keep them out, so if that row was
+      // ever missing (an unmatch deleting the likes, rewind, or a server-cached
+      // feed built before the match) the user resurfaced. Derive the partner id
+      // from each match (the side that isn't me).
+      const matchedProfileIds = (everMatchedRows || [])
+        .map((m: any) => (m.profile1_id === profileId ? m.profile2_id : m.profile1_id))
+        .filter(Boolean);
+
+      // Only exclude: already liked, already passed, blocked, banned, reported,
+      // AND already-matched users. DO NOT exclude people who liked you!
       const swipedIds = [
         ...(alreadySwipedLikes?.map(l => l.liked_profile_id) || []),
         ...(alreadySwipedPasses?.map(p => p.passed_profile_id) || []),
         ...blockedIds,
         ...bannedProfileIds,
         ...reportedIds,
+        ...matchedProfileIds,
       ];
 
       // Extract preferences as single object (Supabase returns array for joined queries)
@@ -1047,19 +1112,18 @@ export default function Discover() {
           p_profile_id: profileId,
           p_limit: 50,
         });
+        mark('cacheLookup');
 
         let nearbyIds: string[] = [];
 
         if (!cacheError && cachedFeed && cachedFeed.length > 0) {
           // Cache hit — use pre-computed feed (skips 9 exclusion queries + RPC)
-          console.log(`✅ Discovery cache hit: ${cachedFeed.length} candidates`);
           const swipedSet = new Set(swipedIds);
           nearbyIds = cachedFeed
             .map((c: any) => c.candidate_id)
             .filter((id: string) => !swipedSet.has(id));
         } else {
           // Cache miss — fall back to live RPC
-          console.log('⚠️ Discovery cache miss, using live RPC');
           // Gender prefs: use in-session filter only. Empty array = "Everyone" (RPC skips the filter).
           // No DB fallback — if the user clears to Everyone but DB save raced, we honor the user's intent.
           const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_profiles', {
@@ -1072,11 +1136,8 @@ export default function Discover() {
             p_gender_prefs: effectiveFilters.genderPreference || [],
             p_result_limit: 50
           });
-
-          if (rpcError) {
-            console.error('RPC error:', rpcError);
-            throw rpcError;
-          }
+          mark('liveRpc');
+          if (rpcError) throw rpcError;
 
           if (rpcData && rpcData.length > 0) {
             const swipedSet = new Set(swipedIds);
@@ -1104,11 +1165,8 @@ export default function Discover() {
               .eq('incognito_mode', false)
               .eq('photo_review_required', false)
               .or('policy_restricted.is.null,policy_restricted.eq.false');
-
-            if (profilesError) {
-              console.error('❌ Full profile fetch error:', profilesError);
-              throw profilesError;
-            }
+            mark('fullProfilesFetch');
+            if (profilesError) throw profilesError;
 
             data = fullProfiles || [];
 
@@ -1117,6 +1175,7 @@ export default function Discover() {
             if (data.length > 0) {
               const profileIds = data.map((p: any) => p.id);
               const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: profileIds });
+              mark('prefsFetch');
               if (prefsData) {
                 const prefsMap = new Map(prefsData.map((p: any) => [p.profile_id, p]));
                 data = data.map((profile: any) => ({
@@ -1127,21 +1186,17 @@ export default function Discover() {
             }
         }
       } else {
-        // GLOBAL SEARCH or SEARCH MODE: Use standard query
+        // GLOBAL SEARCH or SEARCH MODE: two-phase query.
+        // Phase 1 fetches only profile IDs with the filter+order — the
+        // idx_profiles_global_discovery partial index makes this ~2ms.
+        // Phase 2 hydrates those IDs with profile+photos+preferences.
+        // Previously this was one fat query with a photos LEFT JOIN, which
+        // joined photos for all ~17k active profiles BEFORE the LIMIT 200,
+        // taking 8+ seconds cold and timing out at JAVASCRIPT-REACT-70.
 
         let query = supabase
           .from('profiles')
-          .select(`
-            *,
-            photos (
-              url,
-              storage_path,
-              is_primary,
-              display_order,
-              blur_data_uri
-            ),
-            preferences:preferences(*)
-          `)
+          .select('id')
           .neq('id', profileId)
           .eq('is_active', true) // CRITICAL: Filter out banned/deactivated users
           .or('policy_restricted.is.null,policy_restricted.eq.false') // Filter policy restricted users
@@ -1167,16 +1222,24 @@ export default function Discover() {
         // Array fields (gender, ethnicity, sexual_orientation, etc.)
         // are handled by the client-side filter instead
         if (effectiveSearchKeyword.trim()) {
-          const keyword = effectiveSearchKeyword.trim();
-          // Only search scalar text fields - NOT arrays
-          query = query.or(
-            `display_name.ilike.%${keyword}%,` +
-            `zodiac_sign.ilike.%${keyword}%,` +
-            `location_city.ilike.%${keyword}%,` +
-            `location_state.ilike.%${keyword}%,` +
-            `religion.ilike.%${keyword}%,` +
-            `political_views.ilike.%${keyword}%`
-          );
+          // PostgREST .or() uses `,` and `()` as filter delimiters. A raw
+          // keyword like "Phee, 24" interpolated directly would split the
+          // value across columns and trip "failed to parse logic tree".
+          // Strip the reserved chars before injection — users searching
+          // "Alex, 28" still match the ilike on "Alex" and "28" gracefully
+          // collapses to a single space.
+          const keyword = effectiveSearchKeyword.trim().replace(/[,()*]/g, ' ').trim();
+          if (keyword) {
+            // Only search scalar text fields - NOT arrays
+            query = query.or(
+              `display_name.ilike.%${keyword}%,` +
+              `zodiac_sign.ilike.%${keyword}%,` +
+              `location_city.ilike.%${keyword}%,` +
+              `location_state.ilike.%${keyword}%,` +
+              `religion.ilike.%${keyword}%,` +
+              `political_views.ilike.%${keyword}%`
+            );
+          }
         }
 
         // HARD FILTERS: Always enforce age range and gender preference, even in search mode.
@@ -1198,10 +1261,28 @@ export default function Discover() {
           }
         }
 
-        // Distance prefilter via bounding box — only when not searching globally.
-        // The client-side Haversine check (below) is the precise filter; the bbox
-        // just cuts the candidate set dramatically so we fetch fewer profile+photo rows.
-        if (!isSearchingGlobally && currentUserData.latitude && currentUserData.longitude) {
+        // Distance prefilter via bounding box — only when not searching globally
+        // AND the user has no preferred cities. The bbox is a server-side
+        // cut to keep the candidate set small; the client-side Haversine
+        // check below is the precise filter.
+        //
+        // Preferred cities (premium feature) intentionally extend reach beyond
+        // the bbox. Previously the bbox always fired, which excluded any
+        // preferred-city profile from being fetched at all — the client-side
+        // "if profile is in preferred cities, skip the distance filter" never
+        // got a chance to keep them because they were already filtered out
+        // in SQL. When preferred_cities is set, skip the strict bbox and
+        // let the result set carry both local (via distance filter client-side)
+        // and the named cities.
+        //
+        // Free users with stale preferred_cities saved from before the paywall
+        // are ignored — the discovery feed is gated by isPremium here, not by
+        // the DB row.
+        const userPrefCities: string[] = isPremium
+          ? (currentUserData.preferences?.preferred_cities || [])
+          : [];
+
+        if (!isSearchingGlobally && userPrefCities.length === 0 && currentUserData.latitude && currentUserData.longitude) {
           const latMiles = 69;
           const lat0 = currentUserData.latitude;
           const lng0 = currentUserData.longitude;
@@ -1254,23 +1335,57 @@ export default function Discover() {
           }
         }
 
-        const { data: queryData, error: queryError } = await query;
-        if (queryError) throw queryError;
-        data = queryData || [];
-        error = queryError;
+        // Phase 1: ID-only fetch (uses idx_profiles_global_discovery)
+        const { data: idData, error: idError } = await query;
+        mark('globalIdQuery');
+        if (idError) throw idError;
+        const candidateIds = (idData ?? []).map((p: any) => p.id);
 
-        // Fetch preference fields for global search results too
-        if (data.length > 0) {
-          const profileIds = data.map((p: any) => p.id);
-          const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: profileIds });
-          if (prefsData) {
-            const prefsMap = new Map(prefsData.map((p: any) => [p.profile_id, p]));
-            data = data.map((profile: any) => ({
-              ...profile,
-              preferences: prefsMap.get(profile.id) || null,
-            }));
+        // Phase 2: hydrate full profiles + photos + preferences
+        if (candidateIds.length > 0) {
+          const { data: fullData, error: fullError } = await supabase
+            .from('profiles')
+            .select(`
+              *,
+              photos (
+                url,
+                storage_path,
+                is_primary,
+                display_order,
+                blur_data_uri
+              ),
+              preferences:preferences(*)
+            `)
+            .in('id', candidateIds);
+          mark('globalFullFetch');
+          if (fullError) throw fullError;
+
+          // .in() doesn't preserve order — re-sort to match the indexed
+          // created_at DESC ordering from phase 1.
+          const orderMap = new Map(candidateIds.map((id: string, i: number) => [id, i]));
+          data = (fullData ?? []).slice().sort((a: any, b: any) =>
+            (orderMap.get(a.id) ?? Infinity) - (orderMap.get(b.id) ?? Infinity)
+          );
+
+          // Preferences RLS blocks direct reads of other users' rows, so
+          // the inline preferences:preferences(*) select returns null. Use
+          // the SECURITY DEFINER RPC to hydrate prefs (same pattern as the
+          // local-search branch).
+          if (data.length > 0) {
+            const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: candidateIds });
+            mark('globalPrefsFetch');
+            if (prefsData) {
+              const prefsMap = new Map(prefsData.map((p: any) => [p.profile_id, p]));
+              data = data.map((profile: any) => ({
+                ...profile,
+                preferences: prefsMap.get(profile.id) || profile.preferences || null,
+              }));
+            }
           }
+        } else {
+          data = [];
         }
+        error = idError;
       }
 
       if (error) throw error;
@@ -1558,8 +1673,14 @@ export default function Discover() {
           // to help grow the user base during early launch phase.
           const userSearchGlobally = isSearchingGlobally;
 
-          // Preferred cities is now FREE for all users
-          const userPreferredCities = currentUserData.preferences?.preferred_cities || [];
+          // Preferred cities is a PREMIUM feature. Only apply for premium
+          // users — free users with stale saved cities (added before the
+          // paywall) are silently ignored so the broader feed is not a
+          // backdoor around the entitlement. UI in matching-preferences
+          // already gates new additions behind the same flag.
+          const userPreferredCities: string[] = isPremium
+            ? (currentUserData.preferences?.preferred_cities || [])
+            : [];
 
           // Check if profile is in CURRENT USER's preferred cities
           // This lets users see profiles in cities they're interested in
@@ -1881,11 +2002,13 @@ export default function Discover() {
 
       // Sign first batch — this is what the user sees immediately
       const signedFirst = await signProfileMediaUrls(firstBatch);
+      mark('signFirstBatch');
 
       // Show profiles NOW (first batch signed, rest unsigned but will be signed before user reaches them)
       setProfiles([...signedFirst, ...restBatch]);
       setCurrentIndex(0);
       hasInitiallyLoaded.current = true;
+      mark('total');
 
       // Prefetch images for the first few profiles for instant loading
       const imagesToPrefetch = signedFirst
@@ -1912,8 +2035,37 @@ export default function Discover() {
         }).catch(err => console.warn('Background URL signing failed:', err));
       }
     } catch (error: any) {
-      console.error('❌ Error loading profiles:', error);
-      captureException(error instanceof Error ? error : new Error(error?.message || 'Discovery profile load failed'), { context: 'discovery_load' });
+      mark('totalAtError');
+      console.error('[Discover] loadProfiles error', error?.message ?? error);
+      // Attach stage marks to Sentry so the issue page shows which stage
+      // timed out without requiring console output. See JAVASCRIPT-REACT-70.
+      // Fingerprint by error code so distinct failures (network, RLS,
+      // PGRST, custom) form distinct Sentry issues instead of collapsing
+      // into one grab-bag like JS-71 did.
+      const loadCode: string | undefined = error?.code;
+      const loadMsg: string = (error?.message || '').toString();
+      let loadFingerprint = 'discovery-load-other';
+      if (loadCode === 'PGRST301' || loadMsg.toLowerCase().includes('timed out')) {
+        loadFingerprint = 'discovery-load-timeout';
+      } else if (loadCode === '42501') {
+        loadFingerprint = 'discovery-load-permission-denied';
+      } else if (loadCode === 'PGRST116') {
+        loadFingerprint = 'discovery-load-no-rows';
+      } else if (loadCode === 'PGRST303' || loadMsg.toLowerCase().includes('jwt expired')) {
+        loadFingerprint = 'discovery-load-jwt-expired';
+      } else if (loadCode) {
+        loadFingerprint = `discovery-load-${loadCode}`;
+      }
+      captureException(
+        error instanceof Error ? error : new Error(error?.message || 'Discovery profile load failed'),
+        {
+          context: 'discovery_load',
+          marks,
+          errorCode: loadCode,
+          lastReachedStage: Object.keys(marks).filter(k => k !== 'totalAtError').pop() ?? null,
+        },
+        [loadFingerprint],
+      );
       showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profilesLoadError') });
     } finally {
       setLoading(false);
@@ -1986,12 +2138,33 @@ export default function Discover() {
   }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete, transitionToNextProfile]);
 
   const handleSwipeRight = useCallback(async (message?: string, likedContentData?: { type: string; prompt?: string; answer?: string; index?: number }): Promise<boolean> => {
+    // Hard auth gate. Without an auth.uid the supabase client sends the
+    // anon JWT, and INSERT on `likes` is not granted to anon → users
+    // were hitting "permission denied for table likes" in Sentry. Don't
+    // even attempt the request if there's no user session.
+    if (!user?.id) {
+      captureException(
+        new Error('handleSwipeRight invoked without auth user'),
+        { context: 'discovery_like_no_user', currentProfileId },
+        ['discovery-like-no-user'],
+      );
+      return false;
+    }
+
     if (!currentProfileId || currentIndex >= profiles.length) {
       return false;
     }
 
+    // Re-entry guard. Without this, double-taps before the insert
+    // commits race the duplicate-key check and crash with 23505.
+    if (isLikingRef.current) {
+      return false;
+    }
+    isLikingRef.current = true;
+
     // Block swiping if profile is incomplete
     if (!isProfileComplete) {
+      isLikingRef.current = false;
       const destination = returnRoute || '/(onboarding)/onboarding';
       Alert.alert(
         t('discover.completeProfile.title'),
@@ -2008,10 +2181,16 @@ export default function Discover() {
     }
 
     // Check like limit (free users: 5 likes/day, premium: unlimited)
-    if (!checkLikeLimit()) return false;
+    if (!checkLikeLimit()) {
+      isLikingRef.current = false;
+      return false;
+    }
 
     const targetProfile = profiles[currentIndex];
-    if (!targetProfile) return false;
+    if (!targetProfile) {
+      isLikingRef.current = false;
+      return false;
+    }
 
 
     try {
@@ -2055,7 +2234,10 @@ export default function Discover() {
 
 
           if (existingMatch && existingMatch.status === 'unmatched') {
-            // Update the existing unmatched record to active
+            // Update the existing unmatched record to active. maybeSingle()
+            // here so a 0-row return from RLS doesn't throw "Cannot coerce
+            // result to a single JSON object" — we'd rather log and fall
+            // through than crash the like flow.
             const { data: reactivatedMatch, error: updateError } = await supabase
               .from('matches')
               .update({
@@ -2069,7 +2251,7 @@ export default function Discover() {
               })
               .eq('id', existingMatch.id)
               .select('id')
-              .single();
+              .maybeSingle();
 
             if (updateError) {
               console.error('❌ Error reactivating match:', updateError);
@@ -2084,7 +2266,10 @@ export default function Discover() {
               return true;
             }
           } else {
-            // Create new match
+            // Create new match. maybeSingle() prevents a 0-row return
+            // (e.g., RLS dropping the returned row) from throwing "Cannot
+            // coerce result to a single JSON object" instead of the real
+            // matchError.
             const { data: newMatch, error: matchError } = await supabase
               .from('matches')
               .insert({
@@ -2095,7 +2280,7 @@ export default function Discover() {
                 status: 'active',
               })
               .select('id')
-              .single();
+              .maybeSingle();
 
             if (matchError) {
               // Check if it's the match limit error
@@ -2154,6 +2339,17 @@ export default function Discover() {
           setShowPaywall(true);
           return false;
         }
+        // 23505 = unique_violation on (liker_profile_id, liked_profile_id).
+        // The existingLike SELECT above is best-effort, but the user can
+        // tap fast enough to race past it before the first insert
+        // commits. Treat as already-liked: silently advance the card
+        // rather than throwing, since the underlying intent (like this
+        // profile) is already satisfied. Do NOT capture to Sentry.
+        if (likeError.code === '23505') {
+          const newIndex = currentIndex + 1;
+          setCurrentIndex(newIndex);
+          return true;
+        }
         throw likeError;
       }
 
@@ -2186,7 +2382,7 @@ export default function Discover() {
             status: 'active',
           })
           .select('id')
-          .single();
+          .maybeSingle();
 
         if (matchError) {
           console.error('❌ Match error:', matchError);
@@ -2238,7 +2434,61 @@ export default function Discover() {
       return true;
     } catch (error: any) {
       console.error('❌ Error recording like:', error);
-      captureException(error instanceof Error ? error : new Error(error?.message || 'Like recording failed'), { context: 'discovery_like' });
+
+      // Classify the error so Sentry groups events by their real cause
+      // instead of all collapsing under the catch-handler fingerprint.
+      // Before this, REACT-71 buried 4 distinct bugs (permission denied,
+      // duplicate key, network, single-row mismatch) under one 813-user
+      // issue and made triage impossible.
+      const code: string | undefined = error?.code;
+      const msg: string = (error?.message || '').toString();
+      const lowerMsg = msg.toLowerCase();
+
+      // Transient network errors are not bugs — don't pollute Sentry.
+      const isNetwork = isTransientNetworkError(error);
+
+      let fingerprint: string[] | undefined;
+      let errorClass = 'unknown';
+      // PGRST303 / "JWT expired" — the supabase client's
+      // autoRefreshToken missed its window (typically because the device
+      // was backgrounded for hours, or the refresh token itself died).
+      // The user object is still populated client-side so our up-front
+      // !user?.id gate doesn't catch this. Trigger a manual refresh in
+      // the background so the next tap works, and surface a "try again"
+      // nudge instead of failing silently.
+      const isJwtExpired = code === 'PGRST303' || lowerMsg.includes('jwt expired');
+      if (code === '42501' || lowerMsg.includes('permission denied for table')) {
+        fingerprint = ['discovery-like-permission-denied'];
+        errorClass = 'permission_denied';
+      } else if (code === '23505' || lowerMsg.includes('duplicate key value')) {
+        // Should be impossible here since we swallow 23505 above, but
+        // keep a distinct bucket for any path that slips through.
+        fingerprint = ['discovery-like-duplicate'];
+        errorClass = 'duplicate_key';
+      } else if (lowerMsg.includes('cannot coerce') || lowerMsg.includes('single json object')) {
+        fingerprint = ['discovery-like-single-row-mismatch'];
+        errorClass = 'single_row_mismatch';
+      } else if (isJwtExpired) {
+        fingerprint = ['discovery-like-jwt-expired'];
+        errorClass = 'jwt_expired';
+        // Fire-and-forget refresh so the next user tap succeeds.
+        supabase.auth.refreshSession().catch(() => {});
+      } else if (code === 'P0001') {
+        fingerprint = ['discovery-like-server-rejection'];
+        errorClass = 'server_rejection';
+      } else if (isNetwork) {
+        errorClass = 'network';
+        // No fingerprint and no capture — handled below.
+      }
+
+      if (!isNetwork) {
+        captureException(
+          error instanceof Error ? error : new Error(msg || 'Like recording failed'),
+          { context: 'discovery_like', error_class: errorClass, error_code: code, has_user: !!user?.id },
+          fingerprint,
+        );
+      }
+
       if (error?.code === 'P0001' && error?.message?.includes('Daily like limit')) {
         setLikeCount(DAILY_LIKE_LIMIT);
         try {
@@ -2251,10 +2501,23 @@ export default function Discover() {
         // Surface other server-side rejections (profile incomplete, photo count,
         // premium required for super like, etc.) instead of silently returning.
         showToast({ type: 'error', title: t('common.error'), message: error.message });
+      } else if (isJwtExpired) {
+        // Refresh was kicked off above; nudge the user to retry so the
+        // next tap goes out with the new token.
+        showToast({ type: 'info', title: t('common.tryAgain', 'Try again'), message: t('common.sessionExpiredRetry', 'Session refreshed — tap like again.') });
+      } else if (isNetwork) {
+        // User-visible nudge for network failures so the silent return
+        // doesn't look like the like was accepted.
+        showToast({ type: 'error', title: t('common.error'), message: t('common.networkError', 'Network error — please try again.') });
       }
       return false;
+    } finally {
+      // Always release the re-entry guard, even on early returns or
+      // unhandled throws — otherwise the like button stays dead for the
+      // rest of the session.
+      isLikingRef.current = false;
     }
-  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete, returnRoute, exitPreviewMode]);
+  }, [currentProfileId, currentIndex, profiles, likeCount, isPremium, isProfileComplete, returnRoute, exitPreviewMode, user?.id]);
 
   const handleSwipeUp = useCallback(async (): Promise<boolean> => {
     if (!currentProfileId || currentIndex >= profiles.length) return false;
@@ -3144,8 +3407,18 @@ export default function Discover() {
                 <Text className="text-center" style={{ fontSize: 24, fontWeight: '700', letterSpacing: -0.5, marginTop: 16, marginBottom: 6, color: colors.foreground }}>
                   {t('discover.emptyState.allCaughtUp')}
                 </Text>
+                {/* Vague "Check back later" gave no signal for what to do
+                    next. When we know the local search radius, name it so
+                    the user understands the boundary they hit ("...within
+                    500 miles") instead of feeling like the app is broken. */}
                 <Text className="text-center font-sans" style={{ fontSize: 15, lineHeight: 21, maxWidth: 280, color: colors.mutedForeground }}>
-                  {t('discover.emptyState.checkBack')}
+                  {filters?.maxDistance
+                    ? t(
+                        'discover.emptyState.allCaughtUpDetailed',
+                        `You've seen everyone within ${filters.maxDistance} ${distanceUnit === 'km' ? 'km' : 'mi'}. Expand your reach to see more.`,
+                        { distance: filters.maxDistance, unit: distanceUnit === 'km' ? 'km' : 'mi' },
+                      )
+                    : t('discover.emptyState.checkBack')}
                 </Text>
               </View>
 
@@ -3177,8 +3450,25 @@ export default function Discover() {
                           {t('discover.premiumCta.goPremium')}
                         </Text>
                       </View>
+                      {/* Concrete number from the smart-recs RPC ("Unlock
+                          6,751 more profiles globally") beats the generic
+                          description for converting browsers — they know
+                          exactly what they're paying for. Falls back to the
+                          generic copy when smart-recs hasn't loaded yet or
+                          there's no global rec (e.g. user already has
+                          search_globally on). */}
                       <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 18 }}>
-                        {t('discover.premiumCta.description')}
+                        {(() => {
+                          const globalRec = smartRecommendations.find(r => r.type === 'global');
+                          const count = globalRec?.count;
+                          return count && count > 0
+                            ? t(
+                                'discover.premiumCta.descriptionWithCount',
+                                `Unlock ${count.toLocaleString()} more profiles globally + premium features`,
+                                { count },
+                              )
+                            : t('discover.premiumCta.description');
+                        })()}
                       </Text>
                     </View>
                     <View style={{
@@ -3208,6 +3498,7 @@ export default function Discover() {
                         case 'age': return 'calendar-range';
                         case 'gender': return 'account-plus-outline';
                         case 'global': return 'earth';
+                        case 'clear_filter': return 'filter-off-outline';
                         default: return 'star';
                       }
                     };
@@ -3222,6 +3513,17 @@ export default function Discover() {
                           return t('discover.recommendations.includeGender', { gender: rec.addedGender });
                         case 'global':
                           return t('discover.recommendations.searchGlobally');
+                        case 'clear_filter':
+                          // Only 'active_today' is emitted by the RPC today;
+                          // fall back to generic copy for future cleared
+                          // filters so we never render an empty title.
+                          if (rec.clearedFilter === 'active_today') {
+                            return t(
+                              'discover.recommendations.clearActiveToday',
+                              'Show members not active today',
+                            );
+                          }
+                          return t('discover.recommendations.expandSearch');
                         default:
                           return t('discover.recommendations.expandSearch');
                       }
@@ -3288,7 +3590,10 @@ export default function Discover() {
 
                                     const { error: updateError } = await supabase
                                       .from('preferences')
-                                      .update({ gender_preference: newGenderPrefs })
+                                      .update({
+                                        gender_preference: newGenderPrefs,
+                                        gender_preference_confirmed_at: new Date().toISOString(),
+                                      })
                                       .eq('profile_id', currentProfileId);
 
                                     if (updateError) {
@@ -3357,6 +3662,46 @@ export default function Discover() {
                               },
                             ]
                           );
+                        } else if (rec.type === 'clear_filter' && rec.clearedFilter === 'active_today') {
+                          // No confirmation alert here — the suggestion text
+                          // already states what we'll do ("Show members not
+                          // active today") and the user opted in by tapping
+                          // it. Adding a confirm step would feel sluggish on
+                          // top of the existing taps-to-fix-feed flow.
+                          setFilters(prev => ({ ...prev, activeToday: false }));
+                          setActiveToday(false);
+                          setCurrentIndex(0);
+
+                          // Persist to discovery_filters in the DB so the
+                          // change survives an app restart and matches what
+                          // settings/matching-preferences shows. Merge into
+                          // the existing JSONB rather than overwrite — we
+                          // don't know the full shape of the user's other
+                          // filters from here.
+                          try {
+                            const { data: prefRow } = await supabase
+                              .from('preferences')
+                              .select('discovery_filters')
+                              .eq('profile_id', currentProfileId)
+                              .maybeSingle();
+                            const nextFilters = { ...(prefRow?.discovery_filters || {}), activeToday: false };
+                            await supabase
+                              .from('preferences')
+                              .update({ discovery_filters: nextFilters })
+                              .eq('profile_id', currentProfileId);
+                          } catch (err) {
+                            console.warn('[Discovery] Failed to persist activeToday=false', err);
+                            // Don't block the feed reload on persist failure
+                            // — the in-session filter change is what the
+                            // user actually wanted.
+                          }
+
+                          trackEvent('smart_recommendation_clicked', {
+                            type: 'clear_filter',
+                            clearedFilter: 'active_today',
+                            count: rec.count,
+                          });
+                          loadProfiles(undefined, undefined, { activeToday: false });
                         }
                       } catch (error) {
                         console.error('[Discovery] Unexpected error in handlePress:', error);
@@ -3481,6 +3826,41 @@ export default function Discover() {
             </View>
           )}
         </ScrollView>
+
+        {/* One-time gender preference confirmation (only shown if user's
+            gender_preference_confirmed_at is null — i.e. they were affected
+            by the pre-2026-05-05 expandGenderPreference wipe bug). */}
+        <ConfirmGenderPreferenceModal
+          visible={showConfirmGenderModal}
+          onConfirm={async (uiSelections) => {
+            if (!currentProfileId) return;
+            const expanded = expandGenderPreference(uiSelections);
+            const { error } = await supabase
+              .from('preferences')
+              .update({
+                gender_preference: expanded,
+                gender_preference_confirmed_at: new Date().toISOString(),
+              })
+              .eq('profile_id', currentProfileId);
+            if (error) {
+              showToast({
+                type: 'error',
+                title: t('common.error'),
+                message: t('toast.filtersSaveError') || "Couldn't save your preference. Please try again.",
+              });
+              captureException(
+                new Error((error as any)?.message || 'confirm gender modal save failed'),
+                { context: 'confirm_gender_modal_save', errorCode: (error as any)?.code },
+                ['confirm-gender-modal-save'],
+              );
+              return;
+            }
+            setFilters((prev) => ({ ...prev, genderPreference: expanded }));
+            setShowConfirmGenderModal(false);
+            // Re-load discovery feed with the new filter applied
+            loadProfiles();
+          }}
+        />
 
         {/* Filter Modal */}
         <FilterModal
@@ -3789,6 +4169,23 @@ export default function Discover() {
               {showVerificationBanner && !isPhotoVerified && isProfileComplete && (
                 <VerificationBanner onDismiss={handleDismissVerificationBanner} />
               )}
+
+              {/* Payment-failed recovery — auto-renew tried, card declined,
+                  billing retry exhausted. Higher priority than trial banner
+                  because these users actively wanted to keep paying. */}
+              <PaymentFailedBanner key="payment-failed-banner" />
+
+              {/* Premium-expiring nudge — user cancelled auto-renew but
+                  is still in paid period. Mutually exclusive with the
+                  payment-failed banner (one queries status=expired, this
+                  one queries status=active), so they won't both render. */}
+              <PremiumExpiringBanner key="premium-expiring-banner" />
+
+              {/* Location stale — active user but GPS hasn't been read
+                  in 30+ days (likely revoked permission post-onboarding).
+                  Nudges them to re-grant so AuthContext.refreshLocation
+                  can keep their stored location honest. */}
+              <LocationStaleBanner key="location-stale-banner" />
 
               {/* Trial Expiration Banner - Warn users when trial is about to end */}
               <TrialExpirationBanner key="trial-expiration-banner" />

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, useColorScheme } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackEvent } from '@/lib/analytics';
 
 export default function WelcomeInfo() {
   const router = useRouter();
@@ -15,9 +16,24 @@ export default function WelcomeInfo() {
   const isDark = colorScheme === 'dark';
   const [deleting, setDeleting] = useState(false);
 
+  // Instrument the step-0 ghost cohort: 5k+ users sign up but never type a name.
+  // Need to know whether they bounce on this screen or never reach it.
+  useEffect(() => { trackEvent('welcome_info_viewed'); }, []);
+
   const handleProceed = async () => {
-    // Clear any saved onboarding draft so basic-info starts at step 1 (name)
+    trackEvent('welcome_info_proceed_tapped');
+    // Clear any saved onboarding draft so basic-info starts at step 1 (name).
+    // BOTH keys must be cleared:
+    //   - 'onboarding_draft_basic-info' — legacy basic-info screen
+    //   - 'accord-onboarding-draft' — zustand persist for the unified flow
+    // 2026-05-28 real-device test showed that without the zustand key
+    // clear, a user could sign out and sign up again and inherit the
+    // previous account's lat/lng + city — bypassing the GPS-only
+    // LocationStep entirely because store.latitude was already non-null
+    // from the prior session. That's the exact location-faking vector
+    // the autocomplete removal was meant to close.
     try { await AsyncStorage.removeItem('onboarding_draft_basic-info'); } catch {}
+    try { await AsyncStorage.removeItem('accord-onboarding-draft'); } catch {}
     router.push('/(onboarding)/onboarding');
   };
 
@@ -31,16 +47,34 @@ export default function WelcomeInfo() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            trackEvent('welcome_info_delete_tapped');
+            setDeleting(true);
             try {
-              setDeleting(true);
               const { error } = await supabase.functions.invoke('delete-account', {
                 body: { reason: 'not_target_audience', feedback: 'Opted out at welcome screen' },
               });
-              // Sign out regardless — even if the function errors, the account may already be deleted
+              if (error) {
+                // The previous behavior signed the user out even on error,
+                // which created ghost rows: row still present in DB, but the
+                // user is signed out and can't retry (would have to sign up
+                // again with the same email and hit the existing-account
+                // branch). Keep the session alive so the user can retry.
+                setDeleting(false);
+                Alert.alert(
+                  "Couldn't delete account",
+                  error.message || 'Please check your connection and try again.',
+                  [{ text: 'OK' }]
+                );
+                return;
+              }
               await signOut();
-            } catch (error: any) {
-              // Still sign out — account may have been deleted even if we got an error
-              try { await signOut(); } catch {}
+            } catch (e: any) {
+              setDeleting(false);
+              Alert.alert(
+                "Couldn't delete account",
+                e?.message || 'Please check your connection and try again.',
+                [{ text: 'OK' }]
+              );
             }
           },
         },
@@ -136,6 +170,10 @@ export default function WelcomeInfo() {
           </Text>
         </TouchableOpacity>
 
+        {/* Prominent Delete is intentional: this screen is the audience
+            filter. Users who realize Accord isn't a fit should have an
+            obvious opt-out so their account is cleanly deleted rather
+            than left as a ghost row. */}
         <TouchableOpacity
           onPress={handleDeleteAccount}
           disabled={deleting}

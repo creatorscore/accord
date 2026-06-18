@@ -8,10 +8,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  Linking,
   TextInput,
   Keyboard,
 } from 'react-native';
+import { openExternalURL } from '@/lib/external-link';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,7 +23,6 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { updateUserLocation } from '@/lib/geolocation';
 import { openAppSettings } from '@/lib/open-settings';
-import { searchCities, CityResult } from '@/lib/city-search';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import PhotoVerificationCard from '@/components/security/PhotoVerificationCard';
 
@@ -52,15 +51,18 @@ export default function PrivacySettings() {
     hide_distance: false,
   });
   const [currentLocation, setCurrentLocation] = useState<string>('');
-  const [cityQuery, setCityQuery] = useState('');
-  const [cityResults, setCityResults] = useState<CityResult[]>([]);
-  const [showCitySearch, setShowCitySearch] = useState(false);
-  const [savingCity, setSavingCity] = useState(false);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    loadSettings();
-  }, []);
+    // Wait for auth to hydrate before querying — an empty-deps effect fires
+    // before user.id lands, and supabase serializes undefined as the
+    // literal string "undefined" which Postgres rejects on a uuid column
+    // with code 22P02. Surfaced as "Error loading privacy settings:
+    // invalid input syntax for type uuid: 'undefined'" on real-device
+    // walkthrough 2026-05-28.
+    if (user?.id) {
+      loadSettings();
+    }
+  }, [user?.id]);
 
   // Scroll to verification section if requested via URL param
   useEffect(() => {
@@ -72,11 +74,18 @@ export default function PrivacySettings() {
   }, [scrollTo, verificationSectionY, loading]);
 
   const loadSettings = async () => {
+    if (!user?.id) {
+      // Defense in depth — the calling useEffect already gates on user.id,
+      // but if loadSettings is called from elsewhere we don't want to fire
+      // a uuid query with "undefined".
+      setLoading(false);
+      return;
+    }
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('photo_blur_enabled, incognito_mode, hide_last_active, hide_distance, location_city, location_state, latitude, longitude')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .single();
 
       if (error) throw error;
@@ -178,10 +187,13 @@ export default function PrivacySettings() {
         return;
       }
 
-      // Update profile in database (include city/state if available)
+      // Update profile in database (include city/state if available).
+      // last_gps_at marks "fresh GPS reading received" — drives the
+      // staleness banner that nudges users who revoked permission.
       const updateData: any = {
         latitude: location.latitude,
         longitude: location.longitude,
+        last_gps_at: new Date().toISOString(),
       };
       if (location.city) updateData.location_city = location.city;
       if (location.state) updateData.location_state = location.state;
@@ -215,51 +227,8 @@ export default function PrivacySettings() {
     }
   };
 
-  const handleCitySearch = useCallback((query: string) => {
-    setCityQuery(query);
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-
-    if (query.length < 2) {
-      setCityResults([]);
-      return;
-    }
-
-    searchTimeoutRef.current = setTimeout(() => {
-      const results = searchCities(query, 8);
-      setCityResults(results);
-    }, 150);
-  }, []);
-
-  const handleSelectCity = async (city: CityResult) => {
-    Keyboard.dismiss();
-    setSavingCity(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          location_city: city.city,
-          location_state: city.state,
-          location_country: city.countryCode,
-          latitude: city.latitude,
-          longitude: city.longitude,
-        })
-        .eq('user_id', user?.id);
-
-      if (error) throw error;
-
-      setCurrentLocation(city.displayName);
-      setCityQuery('');
-      setCityResults([]);
-      setShowCitySearch(false);
-
-      Alert.alert(t('common.success'), t('privacySettings.alerts.locationSuccess', { location: city.displayName }));
-    } catch (error: any) {
-      console.error('Error setting city location:', error);
-      Alert.alert(t('common.error'), t('privacySettings.alerts.locationError'));
-    } finally {
-      setSavingCity(false);
-    }
-  };
+  // handleCitySearch + handleSelectCity removed 2026-05-28 along with
+  // the city autocomplete UI. GPS is now the only way to set location.
 
   const SettingRow = ({
     icon,
@@ -472,94 +441,31 @@ export default function PrivacySettings() {
             </View>
           </View>
 
-          <View style={styles.locationButtonsRow}>
-            <TouchableOpacity
-              style={[
-                styles.updateLocationButton,
-                { flex: 1 },
-                updatingLocation && styles.updateLocationButtonDisabled,
-              ]}
-              onPress={handleUpdateLocation}
-              disabled={updatingLocation}
-            >
-              {updatingLocation ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <MaterialCommunityIcons
-                    name="crosshairs-gps"
-                    size={18}
-                    color="#fff"
-                  />
-                  <Text style={styles.updateLocationButtonText}>{t('privacySettings.location.useGps')}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.searchCityButton,
-                showCitySearch && styles.searchCityButtonActive,
-              ]}
-              onPress={() => {
-                setShowCitySearch(!showCitySearch);
-                if (showCitySearch) {
-                  setCityQuery('');
-                  setCityResults([]);
-                }
-              }}
-            >
-              <MaterialCommunityIcons
-                name="magnify"
-                size={18}
-                color={showCitySearch ? '#fff' : '#A08AB7'}
-              />
-              <Text style={[
-                styles.searchCityButtonText,
-                showCitySearch && { color: '#fff' },
-              ]}>
-                {t('privacySettings.location.searchCity')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {showCitySearch && (
-            <View style={styles.citySearchContainer}>
-              <TextInput
-                style={styles.citySearchInput}
-                placeholder={t('privacySettings.location.searchPlaceholder')}
-                placeholderTextColor="#9CA3AF"
-                value={cityQuery}
-                onChangeText={handleCitySearch}
-                autoFocus
-              />
-              {savingCity && (
-                <ActivityIndicator size="small" color="#A08AB7" style={{ marginTop: 8 }} />
-              )}
-              {cityResults.length > 0 && (
-                <View style={styles.cityResultsList}>
-                  {cityResults.map((result, index) => (
-                    <TouchableOpacity
-                      key={`${result.city}-${result.state}-${result.countryCode}-${index}`}
-                      style={[
-                        styles.cityResultItem,
-                        index < cityResults.length - 1 && styles.cityResultBorder,
-                      ]}
-                      onPress={() => handleSelectCity(result)}
-                    >
-                      <MaterialCommunityIcons name="map-marker-outline" size={18} color="#A08AB7" />
-                      <Text style={styles.cityResultText} numberOfLines={1}>
-                        {result.displayName}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-              {cityQuery.length >= 2 && cityResults.length === 0 && !savingCity && (
-                <Text style={styles.noResultsText}>{t('privacySettings.location.noCitiesFound')}</Text>
-              )}
-            </View>
-          )}
+          {/* Manual city autocomplete removed 2026-05-28 — users were
+              typing fake cities to game distance searches. GPS is the
+              only way to update location now; AuthContext's foreground
+              refresh keeps it current on every app open. */}
+          <TouchableOpacity
+            style={[
+              styles.updateLocationButton,
+              updatingLocation && styles.updateLocationButtonDisabled,
+            ]}
+            onPress={handleUpdateLocation}
+            disabled={updatingLocation}
+          >
+            {updatingLocation ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <MaterialCommunityIcons
+                  name="crosshairs-gps"
+                  size={18}
+                  color="#fff"
+                />
+                <Text style={styles.updateLocationButtonText}>{t('privacySettings.location.useGps')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </MotiView>
       </View>
 
@@ -596,7 +502,7 @@ export default function PrivacySettings() {
       <View style={styles.legalSection}>
         <TouchableOpacity
           style={styles.learnMoreButton}
-          onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}
+          onPress={() => openExternalURL('https://joinaccord.app/privacy')}
         >
           <MaterialCommunityIcons name="shield-lock-outline" size={20} color="#A08AB7" />
           <Text style={styles.learnMoreText}>{t('privacySettings.legal.privacyPolicy')}</Text>
@@ -605,7 +511,7 @@ export default function PrivacySettings() {
 
         <TouchableOpacity
           style={styles.learnMoreButton}
-          onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}
+          onPress={() => openExternalURL('https://joinaccord.app/terms')}
         >
           <MaterialCommunityIcons name="file-document-outline" size={20} color="#A08AB7" />
           <Text style={styles.learnMoreText}>{t('privacySettings.legal.termsOfService')}</Text>

@@ -566,9 +566,12 @@ export default function EditProfile() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        // Disable cropping on Android — native canhub/cropper crashes on low-end devices
-        allowsEditing: Platform.OS === 'ios',
-        aspect: [3, 4],
+        // No in-picker cropping on either platform. iOS's "Crop" button is the
+        // confirm action and users mistake it for an optional edit step — they
+        // back out instead of finishing. Android's canhub/cropper also crashes
+        // on low-end devices. Upload as-is; aspect ratio is enforced visually
+        // by the photo grid.
+        allowsEditing: false,
         quality: 0.8,
       });
 
@@ -611,8 +614,11 @@ export default function EditProfile() {
           }
 
           // Optimize image with compression now that dedup cleared
+          // No client thumbnail — it was discarded here anyway, and the
+          // privacy-blur thumbnail is generated separately (generateBlurDataUri)
+          // + server-side. Skipping it removes a redundant image decode.
           const { optimized } = await optimizeImage(selectedUri, {
-            generateThumbnail: true,
+            generateThumbnail: false,
           });
           const blurDataUri = await generateBlurDataUri(optimized.uri).catch(() => undefined);
 
@@ -1032,26 +1038,39 @@ export default function EditProfile() {
       const photosToUpload = photos.filter(p => p.is_new && !p.to_delete);
       const photosToUpdate = photos.filter(p => !p.is_new && !p.to_delete && p.id);
 
-      // Delete photos from storage and database in parallel
+      // Delete the DB rows FIRST, then remove the storage objects only if the
+      // row deletion actually succeeded.
+      //
+      // Previously both ran in parallel and errors were merely logged. If the
+      // storage remove succeeded but the row delete silently failed (RLS, a
+      // partial batch, a transient error), the row was left pointing at a
+      // now-missing file — rendering as a permanent grey "ghost" box in the
+      // photo grid that the user couldn't get rid of (the reported bug).
+      //
+      // Deleting the row first inverts the failure mode: if anything goes
+      // wrong, the photo stays fully intact (row + file) and is recoverable,
+      // instead of being half-deleted into an orphaned row. The worst case
+      // now is an orphaned storage object (a file with no row), which is
+      // invisible to users and just wastes a little storage.
       if (photosToDelete.length > 0) {
-        // Batch storage deletions
-        const storagePaths = photosToDelete
-          .filter(p => p.storage_path && !p.storage_path.startsWith('file://'))
-          .map(p => p.storage_path!);
-        const storageDeletePromise = storagePaths.length > 0
-          ? supabase.storage.from('profile-photos').remove(storagePaths)
-          : Promise.resolve({ error: null });
-
-        // Batch DB deletions
         const photoIds = photosToDelete.map(p => p.id!);
-        const dbDeletePromise = supabase
+        const { error: dbDeleteError } = await supabase
           .from('photos')
           .delete()
           .in('id', photoIds);
 
-        const [storageResult, dbResult] = await Promise.all([storageDeletePromise, dbDeletePromise]);
-        if (storageResult.error) console.error('Error deleting from storage:', storageResult.error);
-        if (dbResult.error) console.error('Error deleting photos from database:', dbResult.error);
+        if (dbDeleteError) {
+          console.error('Error deleting photos from database:', dbDeleteError);
+          Alert.alert('Error', "Couldn't remove a photo. Please try again.");
+        } else {
+          const storagePaths = photosToDelete
+            .filter(p => p.storage_path && !p.storage_path.startsWith('file://'))
+            .map(p => p.storage_path!);
+          if (storagePaths.length > 0) {
+            const { error: storageError } = await supabase.storage.from('profile-photos').remove(storagePaths);
+            if (storageError) console.error('Error deleting from storage:', storageError);
+          }
+        }
       }
 
       // Upload new photos in parallel (each photo: convert -> upload -> sign -> insert -> moderate)

@@ -215,7 +215,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         const city = addressInfo.city || addressInfo.subregion || addressInfo.district || '';
         const state = addressInfo.region || '';
-        const country = addressInfo.country || addressInfo.isoCountryCode || '';
+        // isoCountryCode FIRST — addressInfo.country returns the country
+        // name in the device locale ('भारत', 'Türkiye', 'Côte d'Ivoire',
+        // 'Oʻzbekiston') which splits the same country into many cohorts
+        // and breaks downstream grouping/filtering. ISO is locale-agnostic
+        // and matches what LocationStep already writes from the cities DB.
+        const country = addressInfo.isoCountryCode || addressInfo.country || '';
 
         // Get profile ID
         const { data: profile } = await supabase
@@ -234,12 +239,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           const lonDiff = Math.abs(profile.longitude - location.coords.longitude);
           // Roughly 0.005 degrees = ~500 meters
           if (latDiff < 0.005 && lonDiff < 0.005) {
+            // Position unchanged — skip the lat/lng/city rewrite, but STILL
+            // stamp last_gps_at: we just took a fresh GPS reading. Without this,
+            // a user who stays put never refreshes last_gps_at, so it stays at
+            // its onboarding value (or NULL) and the staleness banner eventually
+            // flags them despite location being granted and perfectly current.
+            await supabase
+              .from('profiles')
+              .update({
+                last_active_at: new Date().toISOString(),
+                last_gps_at: new Date().toISOString(),
+              })
+              .eq('id', profile.id);
             lastLocationUpdate.current = now;
             return;
           }
         }
 
-        // Update profile with new location
+        // Update profile with new location. last_gps_at marks "I have
+        // a fresh GPS reading from this device" — drives the staleness
+        // banner that prompts users who revoked permission to re-grant.
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
@@ -249,6 +268,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             location_state: state,
             location_country: country,
             last_active_at: new Date().toISOString(),
+            last_gps_at: new Date().toISOString(),
           })
           .eq('id', profile.id);
 
@@ -333,7 +353,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setSession(null);
 
     const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    if (error) {
+      // The server-side logout can fail when the session is already invalid —
+      // e.g. the account was deleted out from under this device, so /logout
+      // returns 401. The default global-scope signOut does NOT remove the
+      // persisted session from storage on a failed server call, so getSession()
+      // would rehydrate the now-deleted user on next launch and every
+      // authenticated write (profile upsert, etc.) fails with an FK violation.
+      // The user's intent is to sign out regardless, so force a local-scope
+      // sign-out to guarantee the stored session is cleared, and don't surface
+      // the server error.
+      console.warn('[signOut] server logout failed, clearing local session:', error.message);
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+    }
 
     // Track sign out
     trackUserAction.signOut();
