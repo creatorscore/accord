@@ -6,7 +6,7 @@ import i18n from '@/lib/i18n';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
-import { captureException } from '@/lib/sentry';
+import { captureException, addBreadcrumb } from '@/lib/sentry';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import {
   ONBOARDING_STEPS,
@@ -562,6 +562,28 @@ export default function Onboarding() {
       // in the same Sentry bucket.
       const ckptCode: string | undefined = (error as any)?.code;
       const ckptMsg: string = (error?.message || '').toString();
+
+      // Photo-minimum trigger (check_minimum_photos) — the DB rejects a
+      // profile_complete=true save when there are too few photos. This is the
+      // same expected user state the preflight above catches, but it still
+      // fires for clients running an older OTA bundle without the preflight, or
+      // when moderation rejects a photo between preflight and save. Treat it as
+      // a recoverable user state (bounce to the photos step) rather than a hard
+      // app error — this was JAVASCRIPT-REACT-71 (8.5k captureException events).
+      if (ckptMsg.includes('photos to be marked complete')) {
+        addBreadcrumb('onboarding', 'Final save blocked by photo-minimum trigger', {
+          step,
+          error_code: ckptCode,
+        });
+        showToast({
+          type: 'error',
+          title: 'Add more photos',
+          message: 'Please add at least 2 photos before finishing.',
+        });
+        setSubStep(27);
+        throw error; // Re-throw so the caller does NOT advance the step
+      }
+
       let ckptFingerprint = 'onboarding-checkpoint-other';
       if (ckptMsg.includes('location_required_when_complete')) {
         ckptFingerprint = 'onboarding-checkpoint-location-required';
@@ -679,26 +701,42 @@ export default function Onboarding() {
       // server-side and bounce back to step 27 with a clear message
       // before triggering the doomed upsert.
       if (profileId) {
-        const { count: photoCount, error: countErr } = await supabase
+        // Fetch the per-photo moderation status (≤6 rows) so we can both count
+        // the usable (non-rejected) photos AND explain to the user when some
+        // were removed by moderation — the common reason a user who "added 3
+        // photos" still can't finish.
+        const { data: photoRows, error: countErr } = await supabase
           .from('photos')
-          .select('id', { count: 'exact', head: true })
-          .eq('profile_id', profileId)
-          .neq('moderation_status', 'rejected');
+          .select('moderation_status')
+          .eq('profile_id', profileId);
         if (countErr) {
           console.warn('[Onboarding] photo count preflight failed', countErr.message);
-        } else if ((photoCount ?? 0) < 2) {
-          showToast({
-            type: 'error',
-            title: 'Add more photos',
-            message: 'Please add at least 2 photos before finishing.',
-          });
-          captureException(
-            new Error('Final save blocked: insufficient photos in DB'),
-            { profileId, photoCount: photoCount ?? 0 },
-            ['onboarding-final-insufficient-photos'],
-          );
-          setSubStep(27);
-          return;
+        } else {
+          const rows = photoRows ?? [];
+          const rejectedCount = rows.filter((p) => p.moderation_status === 'rejected').length;
+          const usableCount = rows.length - rejectedCount;
+          if (usableCount < 2) {
+            // Expected user state (their photos didn't pass moderation), NOT an
+            // app bug. Leave a breadcrumb instead of captureException so this
+            // doesn't flood Sentry — this was JAVASCRIPT-REACT-8Y, and the raw
+            // trigger error it pre-empts was JAVASCRIPT-REACT-71 (8.5k events).
+            addBreadcrumb('onboarding', 'Final save blocked: insufficient usable photos', {
+              profileId,
+              usableCount,
+              rejectedCount,
+              total: rows.length,
+            });
+            showToast({
+              type: 'error',
+              title: rejectedCount > 0 ? 'Some photos were removed' : 'Add more photos',
+              message:
+                rejectedCount > 0
+                  ? `${rejectedCount} of your photo${rejectedCount > 1 ? 's were' : ' was'} removed for not meeting our photo guidelines. Please add new photos to finish.`
+                  : 'Please add at least 2 photos before finishing.',
+            });
+            setSubStep(27);
+            return;
+          }
         }
       }
 

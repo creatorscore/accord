@@ -2938,12 +2938,16 @@ export default function Discover() {
           .from('profiles')
           .select('latitude, longitude, is_premium, is_platinum')
           .eq('id', currentProfileId)
-          .single(),
+          .maybeSingle(),
+        // maybeSingle: a profile can legitimately have no preferences row yet.
+        // .single() throws PGRST116 ("Cannot coerce the result to a single JSON
+        // object") on 0 rows — the result is already null-guarded below, so
+        // tolerate the empty result instead of throwing (was JAVASCRIPT-REACT-9P).
         supabase
           .from('preferences')
           .select('gender_preference')
           .eq('profile_id', currentProfileId)
-          .single()
+          .maybeSingle()
       ]);
 
       if (!userData || !userData.latitude || !userData.longitude) {

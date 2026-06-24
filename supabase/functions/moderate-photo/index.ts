@@ -50,9 +50,16 @@ const SUGGESTIVE_LABELS = [
 // false-positive rate that blocked legitimate users at the photo step.
 // Handles bundled inside a phone/url/email line still match those rules.
 const CONTACT_INFO_PATTERNS: { name: string; re: RegExp }[] = [
-  // 7+ digits in a phone-style sequence (allows +, spaces, dots, dashes, parens).
-  // Excludes '/' on purpose so dates like "09/05/2024" don't trigger.
-  { name: 'phone',  re: /(?:\+?\s*\d)(?:[\s\-\.\(\)]*\d){6,}/ },
+  // Phone numbers — require a phone-LIKE length/structure, not just any digit
+  // run. The old rule (7+ digits) was the single biggest false-positive bucket
+  // (57 rejections in 7 days), flagging jersey numbers, prices, addresses, and
+  // dates written without slashes ("2024 08 15"). A real off-platform number is
+  // ~10+ digits, often country-coded. Match either: a leading-`+` international
+  // run of 8+ digits, OR a sequence totalling 10+ digits. Still allows phone
+  // separators (spaces, dots, dashes, parens); still excludes '/' so dates like
+  // "09/05/2024" don't trigger. Tune conservatively — false positives block
+  // legitimate users at the photo step.
+  { name: 'phone',  re: /\+\s*\d(?:[\s\-\.\(\)]*\d){7,}|\d(?:[\s\-\.\(\)]*\d){9,}/ },
   // Explicit URLs or bare domains on common spam TLDs.
   { name: 'url',    re: /\b(?:https?:\/\/|www\.)\S+|\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:com|net|org|io|co|me|gg|xyz|app|link|bio|tel|wa|page|site|online|store|info|fit|dev|live|chat|fun|buzz|top|shop|ly|to|pw)\b/i },
   // Email addresses.
