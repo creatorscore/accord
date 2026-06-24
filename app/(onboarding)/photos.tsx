@@ -69,6 +69,10 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
   // Start at 3 (the minimum required) so first paint never shows an empty grid.
   const [skeletonCount, setSkeletonCount] = useState(3);
   const [initialLoading, setInitialLoading] = useState(true);
+  // How many of this profile's photos were rejected by moderation. Surfaced as
+  // a notice so a user who was bounced back here understands why some photos
+  // are missing and what to do (replace them).
+  const [rejectedCount, setRejectedCount] = useState(0);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -148,17 +152,16 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
 
   const loadExistingPhotos = async (profileId: string) => {
     try {
-      // Exclude rejected photos so the count the user sees matches what
-      // actually counts toward the 3-photo minimum. Otherwise a user with
-      // 2 approved + 1 rejected sees "3 photos", taps Continue, and is
-      // either rejected again or advances with an invisible-in-discovery
-      // photo. 'pending' is included so that in-flight moderations still
-      // appear during the brief window before the edge function returns.
-      const { data: existingPhotos, error } = await supabase
+      // Fetch ALL photos (including rejected) so we can both (a) render only the
+      // usable ones and (b) tell the user how many were removed by moderation.
+      // Without that notice, a user bounced back here from the final step just
+      // sees fewer photos than they added, with no explanation — the silent
+      // hole behind JAVASCRIPT-REACT-71 / -8Y. 'pending' is treated as usable so
+      // in-flight moderations still appear before the edge function returns.
+      const { data: allPhotos, error } = await supabase
         .from('photos')
         .select('url, storage_path, display_order, content_hash, moderation_status')
         .eq('profile_id', profileId)
-        .neq('moderation_status', 'rejected')
         .order('display_order', { ascending: true });
 
       if (error) {
@@ -166,6 +169,10 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
         setSkeletonCount(0);
         return;
       }
+
+      const rejected = (allPhotos ?? []).filter((p) => p.moderation_status === 'rejected');
+      const existingPhotos = (allPhotos ?? []).filter((p) => p.moderation_status !== 'rejected');
+      if (isMounted.current) setRejectedCount(rejected.length);
 
       if (existingPhotos && existingPhotos.length > 0) {
         // Reserve skeleton slots immediately so the grid doesn't jump from 0 → N
@@ -519,6 +526,18 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
         )}
       </View>
 
+      {/* Moderation-rejection notice — explains missing photos so the user can recover */}
+      {rejectedCount > 0 && (
+        <View style={[styles.rejectedNotice, { backgroundColor: isDark ? 'rgba(220,38,38,0.12)' : '#FEF2F2', borderColor: isDark ? 'rgba(248,113,113,0.4)' : '#FECACA' }]}>
+          <MaterialCommunityIcons name="alert-circle-outline" size={16} color={isDark ? '#FCA5A5' : '#DC2626'} />
+          <Text style={[styles.rejectedNoticeText, { color: isDark ? '#FCA5A5' : '#B91C1C' }]}>
+            {rejectedCount === 1
+              ? '1 photo was removed for not meeting our photo guidelines (no nudity or contact info). Please add a new one.'
+              : `${rejectedCount} photos were removed for not meeting our photo guidelines (no nudity or contact info). Please add new ones.`}
+          </Text>
+        </View>
+      )}
+
       {/* Photo Grid — tap to select, tap another to swap */}
       <View style={styles.photoGrid}>
         {showSkeleton && Array.from({ length: skeletonCount }).map((_, i) => (
@@ -773,6 +792,21 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 10,
     paddingHorizontal: 2,
+  },
+  rejectedNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  rejectedNoticeText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: '500',
+    lineHeight: 17,
   },
   hintText: {
     fontSize: 13,
