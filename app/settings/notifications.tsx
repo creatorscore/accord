@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import { registerForPushNotifications, savePushToken } from '@/lib/notifications';
 import { openAppSettings } from '@/lib/open-settings';
@@ -47,6 +48,11 @@ export default function NotificationSettings() {
   const { t } = useTranslation();
   const { colors, isDarkColorScheme } = useColorScheme();
   const { user } = useAuth();
+  // Premium status from the subscription source of truth (RevenueCat), NOT
+  // profiles.is_premium — the DB column lags the sync webhook and would lock
+  // active subscribers out of premium-only notification toggles.
+  const { isPremium: subIsPremium, isPlatinum } = useSubscription();
+  const isPremium = subIsPremium || isPlatinum;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -54,7 +60,6 @@ export default function NotificationSettings() {
   const [permissionStatus, setPermissionStatus] = useState<'granted' | 'denied' | 'undetermined'>('undetermined');
   const [profileId, setProfileId] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<NotificationPreferences>(defaultPreferences);
-  const [isPremium, setIsPremium] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -84,7 +89,6 @@ export default function NotificationSettings() {
       setProfileId(profile?.id || null);
       setPushEnabled(profile?.push_enabled || false);
       setHasToken(!!profile?.push_token);
-      setIsPremium(profile?.is_premium || profile?.is_platinum || false);
 
       // Get notification preferences
       if (profile?.id) {

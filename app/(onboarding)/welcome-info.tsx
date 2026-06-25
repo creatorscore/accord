@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, useColorScheme } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ScrollView, useColorScheme } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -86,14 +86,28 @@ export default function WelcomeInfo() {
     <View style={{
       flex: 1,
       backgroundColor: isDark ? '#0A0A0B' : '#FFFFFF',
-      paddingTop: insets.top,
-      paddingBottom: insets.bottom,
       paddingHorizontal: 24,
-      justifyContent: 'space-between',
     }}>
 
+      {/* Everything lives inside a ScrollView so the disclaimer + buttons stay
+          reachable on short screens / large system font scaling. Previously the
+          fixed space-between layout pushed the accept button off-screen with no
+          way to scroll, so users "saw the disclaimer but couldn't accept it".
+          flexGrow + space-between preserves the original spaced-out look when
+          the content fits, and simply scrolls when it doesn't. */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'space-between',
+          paddingTop: insets.top + 32,
+          paddingBottom: Math.max(insets.bottom, 16),
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+
       {/* Top Section */}
-      <View style={{ alignItems: 'center', marginTop: 32 }}>
+      <View style={{ alignItems: 'center' }}>
         <View style={{
           width: 64, height: 64, borderRadius: 32,
           backgroundColor: isDark ? 'rgba(160, 138, 183, 0.15)' : '#F5F2F7',
@@ -155,8 +169,9 @@ export default function WelcomeInfo() {
         </View>
       </View>
 
-      {/* Bottom Buttons */}
-      <View style={{ gap: 12, marginBottom: 16 }}>
+      {/* Bottom action buttons — kept inside the ScrollView so they scroll into
+          reach when the disclaimer is taller than the viewport. */}
+      <View style={{ gap: 12, marginTop: 16 }}>
         <TouchableOpacity
           onPress={handleProceed}
           style={{
@@ -190,6 +205,7 @@ export default function WelcomeInfo() {
           </Text>
         </TouchableOpacity>
       </View>
+      </ScrollView>
     </View>
   );
 }

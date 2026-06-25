@@ -19,6 +19,7 @@ import Slider from '@react-native-community/slider';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import {
   formatDistanceSlider,
@@ -118,6 +119,13 @@ const MAJOR_CITIES = [
 export default function MatchingPreferences() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  // Premium status MUST come from the subscription source of truth (RevenueCat
+  // via SubscriptionContext), NOT profiles.is_premium. The DB column lags behind
+  // RevenueCat whenever the sync webhook misses, which left active subscribers
+  // locked out of Global Search and told to upgrade despite paying. The context
+  // falls back to the DB flag only until RevenueCat finishes loading.
+  const { isPremium: subIsPremium, isPlatinum } = useSubscription();
+  const isPremium = subIsPremium || isPlatinum;
   const insets = useSafeAreaInsets();
 
   const RELATIONSHIP_TYPES: Record<string, string> = {
@@ -153,7 +161,6 @@ export default function MatchingPreferences() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
-  const [isPremium, setIsPremium] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [newCity, setNewCity] = useState('');
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
@@ -189,7 +196,6 @@ export default function MatchingPreferences() {
       if (!profileData) throw new Error('Profile not found');
 
       setProfileId(profileData.id);
-      setIsPremium(profileData.is_premium || profileData.is_platinum || false);
 
       // Then get preferences using profile_id
       const { data, error } = await supabase
