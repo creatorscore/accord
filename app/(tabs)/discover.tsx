@@ -107,7 +107,7 @@ export default function Discover() {
 
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { isPremium, isPlatinum } = useSubscription();
+  const { isPremium, isPlatinum, isLoading: subscriptionLoading } = useSubscription();
   const { showToast } = useToast();
   const { colors } = useColorScheme();
   const { isPreviewMode, returnRoute, exitPreviewMode } = usePreviewModeStore();
@@ -1065,15 +1065,23 @@ export default function Discover() {
           : currentUserDataRaw.preferences
       };
 
-      // Check premium status (used for other features like advanced filters)
-      const userHasPremium = currentUserData.is_premium || currentUserData.is_platinum || false;
+      // Premium status from the subscription source of truth (RevenueCat via
+      // SubscriptionContext), NOT profiles.is_premium. The DB column lags behind
+      // whenever the RevenueCat→DB sync webhook misses, which made paying users
+      // look free here: global search silently downgraded to local AND their
+      // search_globally preference auto-wiped below — an empty feed for an
+      // active subscriber (support ticket, 2026-06).
+      const userHasPremium = isPremium || isPlatinum;
 
       // Global search is now PREMIUM ONLY
       const isSearchingGlobally = currentUserData.preferences?.search_globally === true && userHasPremium;
 
 
-      // Alert free users who had search_globally enabled — disable on confirmation
-      if (!userHasPremium && currentUserData.preferences?.search_globally === true) {
+      // Alert free users who had search_globally enabled — disable on confirmation.
+      // Guarded on subscriptionLoading so we never wipe a real subscriber's
+      // preference during the brief window before RevenueCat finishes loading
+      // (when isPremium is still falling back to the possibly-stale DB flag).
+      if (!subscriptionLoading && !userHasPremium && currentUserData.preferences?.search_globally === true) {
         Alert.alert(
           t('toast.globalSearchPremiumTitle'),
           t('toast.globalSearchPremiumMessage'),
@@ -2969,8 +2977,11 @@ export default function Discover() {
 
 
       // Call database RPC function for accurate recommendations
-      // Pass current filters so counts match what the discovery feed actually shows
-      const userIsPremium = userData.is_premium || userData.is_platinum || false;
+      // Pass current filters so counts match what the discovery feed actually shows.
+      // Premium status from the subscription source of truth (RevenueCat), NOT
+      // userData.is_premium — the DB column lags the sync webhook and would feed
+      // the RPC a stale "free" flag for an active subscriber.
+      const userIsPremium = isPremium || isPlatinum;
       const { data, error } = await supabase.rpc('get_smart_recommendations', {
         p_user_profile_id: currentProfileId,
         p_user_lat: userData.latitude,
@@ -3009,7 +3020,7 @@ export default function Discover() {
     } catch (error) {
       console.error('Error calculating smart recommendations:', error);
     }
-  }, [currentProfileId, filters]);
+  }, [currentProfileId, filters, isPremium, isPlatinum]);
 
   // Calculate smart recommendations when empty state is shown (only after first load)
   useEffect(() => {

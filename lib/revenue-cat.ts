@@ -150,6 +150,25 @@ export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
 };
 
 /**
+ * Look up an active entitlement by identifier, case-insensitively.
+ *
+ * RevenueCat entitlement identifiers have been configured with inconsistent
+ * casing across this project's history ("Premium" vs "premium", "Platinum" vs
+ * "platinum"). A hardcoded lowercase key lookup (active['premium']) silently
+ * misses a subscriber whose active entitlement id is "Premium" — they get told
+ * they need Premium despite an active subscription. Match case-insensitively so
+ * the entitlement is detected regardless of how it was cased when the product
+ * was mapped in the RevenueCat dashboard.
+ */
+const hasActiveEntitlement = (customerInfo: CustomerInfo | null, identifier: string): boolean => {
+  if (!customerInfo) return false;
+  const target = identifier.toLowerCase();
+  return Object.keys(customerInfo.entitlements.active).some(
+    (key) => key.toLowerCase() === target
+  );
+};
+
+/**
  * Check if user has an active subscription
  */
 export const hasActiveSubscription = (customerInfo: CustomerInfo | null): boolean => {
@@ -166,8 +185,8 @@ export const hasPremium = (customerInfo: CustomerInfo | null): boolean => {
   if (!customerInfo) return false;
 
   return (
-    customerInfo.entitlements.active['premium'] !== undefined ||
-    customerInfo.entitlements.active['platinum'] !== undefined
+    hasActiveEntitlement(customerInfo, 'premium') ||
+    hasActiveEntitlement(customerInfo, 'platinum')
   );
 };
 
@@ -177,7 +196,7 @@ export const hasPremium = (customerInfo: CustomerInfo | null): boolean => {
 export const hasPlatinum = (customerInfo: CustomerInfo | null): boolean => {
   if (!customerInfo) return false;
 
-  return customerInfo.entitlements.active['platinum'] !== undefined;
+  return hasActiveEntitlement(customerInfo, 'platinum');
 };
 
 /**

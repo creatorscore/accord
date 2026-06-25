@@ -787,7 +787,14 @@ export default function Likes() {
         throw likeError;
       }
 
-      // Fetch both profiles with preferences to calculate compatibility
+      // Fetch both profiles with preferences to calculate compatibility.
+      // maybeSingle (not single): these reads are ONLY for the compatibility
+      // score and the match-celebration modal — both null-guarded below. The
+      // other profile can legitimately be missing from this SELECT (gone
+      // incognito/inactive, hidden by RLS). .single() threw PGRST116 ("Cannot
+      // coerce the result to a single JSON object") on 0 rows, which aborted
+      // the whole like-back AFTER the enforce_like_limits trigger had already
+      // deducted a daily like — the "Unable to match but a like was used" bug.
       const { data: myProfile } = await supabase
         .from('profiles')
         .select(`
@@ -795,7 +802,7 @@ export default function Likes() {
           preferences (*)
         `)
         .eq('id', currentProfileId)
-        .single();
+        .maybeSingle();
 
       const { data: otherProfileRaw } = await supabase
         .from('profiles')
@@ -810,7 +817,7 @@ export default function Likes() {
           )
         `)
         .eq('id', likeProfileId)
-        .single();
+        .maybeSingle();
 
       // Sign photo URLs for private storage buckets
       const [otherProfile] = otherProfileRaw
@@ -887,7 +894,7 @@ export default function Likes() {
               .select('id, status')
               .eq('profile1_id', profile1Id)
               .eq('profile2_id', profile2Id)
-              .single();
+              .maybeSingle();
             matchData = raceMatch;
           } else if (matchError.message?.includes('MATCH_LIMIT_REACHED')) {
             // Free user hit match cap — restore UI and show clear message
