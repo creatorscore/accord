@@ -36,6 +36,7 @@ AS $function$
 DECLARE
   v_swiped_ids UUID[];
   v_blocked_ids UUID[];
+  v_liked_me_ids UUID[];
   v_lat_delta DOUBLE PRECISION;
   v_lon_delta DOUBLE PRECISION;
   v_lat_min DOUBLE PRECISION;
@@ -68,6 +69,12 @@ BEGIN
     UNION
     SELECT blocker_profile_id AS blocked_id FROM blocks WHERE blocked_profile_id = p_user_profile_id
   ) AS blocked;
+
+  -- People who have liked the viewer. These bypass the distance cut below so a
+  -- received like is always reachable (and therefore matchable) regardless of
+  -- distance. Age and gender remain hard filters.
+  SELECT ARRAY_AGG(liker_profile_id) INTO v_liked_me_ids
+  FROM likes WHERE liked_profile_id = p_user_profile_id;
 
   RETURN QUERY
   SELECT
@@ -106,17 +113,23 @@ BEGIN
     )
     AND p.latitude IS NOT NULL
     AND p.longitude IS NOT NULL
-    AND p.latitude BETWEEN v_lat_min AND v_lat_max
-    AND p.longitude BETWEEN v_lon_min AND v_lon_max
-    AND 3959 * acos(
-      LEAST(1.0, GREATEST(-1.0,
-        cos(radians(p_user_lat)) *
-        cos(radians(p.latitude)) *
-        cos(radians(p.longitude) - radians(p_user_lon)) +
-        sin(radians(p_user_lat)) *
-        sin(radians(p.latitude))
-      ))
-    ) <= p_max_distance_miles
+    -- Distance is a hard filter EXCEPT for people who liked you (always surface).
+    AND (
+      (p.id = ANY(v_liked_me_ids))
+      OR (
+        p.latitude BETWEEN v_lat_min AND v_lat_max
+        AND p.longitude BETWEEN v_lon_min AND v_lon_max
+        AND 3959 * acos(
+          LEAST(1.0, GREATEST(-1.0,
+            cos(radians(p_user_lat)) *
+            cos(radians(p.latitude)) *
+            cos(radians(p.longitude) - radians(p_user_lon)) +
+            sin(radians(p_user_lat)) *
+            sin(radians(p.latitude))
+          ))
+        ) <= p_max_distance_miles
+      )
+    )
     AND NOT EXISTS (
       SELECT 1 FROM bans b
       WHERE b.banned_profile_id = p.id
@@ -125,7 +138,7 @@ BEGIN
     )
     AND (v_swiped_ids IS NULL OR NOT (p.id = ANY(v_swiped_ids)))
     AND (v_blocked_ids IS NULL OR NOT (p.id = ANY(v_blocked_ids)))
-  ORDER BY distance_miles ASC
+  ORDER BY (p.id = ANY(v_liked_me_ids)) DESC, distance_miles ASC
   LIMIT p_result_limit;
 END;
 $function$;
@@ -198,12 +211,16 @@ BEGIN
     AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_profile_id = p_profile_id AND b.blocked_profile_id = p.id) OR (b.blocker_profile_id = p.id AND b.blocked_profile_id = p_profile_id))
     AND NOT EXISTS(SELECT 1 FROM bans ba WHERE ba.banned_profile_id = p.id AND (ba.expires_at IS NULL OR ba.expires_at > now()))
     AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
-    AND 3959 * acos(
-      LEAST(1, GREATEST(-1,
-        cos(radians(v_lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians(v_lon))
-        + sin(radians(v_lat)) * sin(radians(p.latitude))
-      ))
-    ) <= v_max_distance
+    -- Distance is a hard filter EXCEPT for people who liked you (always surface).
+    AND (
+      EXISTS(SELECT 1 FROM likes l WHERE l.liker_profile_id = p.id AND l.liked_profile_id = p_profile_id)
+      OR 3959 * acos(
+        LEAST(1, GREATEST(-1,
+          cos(radians(v_lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians(v_lon))
+          + sin(radians(v_lat)) * sin(radians(p.latitude))
+        ))
+      ) <= v_max_distance
+    )
   ORDER BY
     EXISTS(SELECT 1 FROM likes l WHERE l.liker_profile_id = p.id AND l.liked_profile_id = p_profile_id) DESC,
     dist ASC

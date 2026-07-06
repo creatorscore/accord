@@ -1078,10 +1078,15 @@ export default function Discover() {
 
 
       // Alert free users who had search_globally enabled — disable on confirmation.
-      // Guarded on subscriptionLoading so we never wipe a real subscriber's
-      // preference during the brief window before RevenueCat finishes loading
-      // (when isPremium is still falling back to the possibly-stale DB flag).
-      if (!subscriptionLoading && !userHasPremium && currentUserData.preferences?.search_globally === true) {
+      // This is DESTRUCTIVE (tapping OK wipes search_globally), so only nag a
+      // user who is non-premium in BOTH sources: the RevenueCat context AND the
+      // freshly-fetched DB row. This avoids false-nagging admin/comped accounts
+      // (DB premium, RC entitlement expired) and survives the cold-start window
+      // where the RC status briefly resolves to "not premium" before the
+      // admin/DB fallback is applied. Also guarded on subscriptionLoading so it
+      // never fires before RevenueCat has loaded at all.
+      const dbSaysPremium = currentUserData.is_premium === true || currentUserData.is_platinum === true;
+      if (!subscriptionLoading && !userHasPremium && !dbSaysPremium && currentUserData.preferences?.search_globally === true) {
         Alert.alert(
           t('toast.globalSearchPremiumTitle'),
           t('toast.globalSearchPremiumMessage'),
@@ -1390,7 +1395,13 @@ export default function Discover() {
         if (idError) throw idError;
         const candidateIds = (idData ?? []).map((p: any) => p.id);
 
-        // Phase 2: hydrate full profiles + photos + preferences
+        // Phase 2: hydrate full profiles + photos
+        // NOTE: Do NOT join preferences here. Preferences RLS blocks reads of
+        // other users' rows, so the join returns null anyway — and forcing that
+        // correlated subselect across up to 200 rows blew phase-2 past the
+        // Postgres statement_timeout (JAVASCRIPT-REACT-93, "discovery_load"
+        // globalFullFetch ~11s). Prefs are hydrated below via the
+        // get_profile_preferences SECURITY DEFINER RPC instead.
         if (candidateIds.length > 0) {
           const { data: fullData, error: fullError } = await supabase
             .from('profiles')
@@ -1402,8 +1413,7 @@ export default function Discover() {
                 is_primary,
                 display_order,
                 blur_data_uri
-              ),
-              preferences:preferences(*)
+              )
             `)
             .in('id', candidateIds);
           mark('globalFullFetch');
