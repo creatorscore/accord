@@ -76,69 +76,88 @@ BEGIN
   SELECT ARRAY_AGG(liker_profile_id) INTO v_liked_me_ids
   FROM likes WHERE liked_profile_id = p_user_profile_id;
 
+  -- UNION ALL of two DISJOINT arms. Arm 1 (in-distance) keeps the bounding-box
+  -- predicates as top-level ANDs so idx_profiles_location is used as a range
+  -- scan; a top-level `liked_me OR (bbox ...)` instead defeats that index and
+  -- forces a full geo scan that times out (JAVASCRIPT-REACT-93, liveRpc stage).
+  -- Arm 2 pulls people who liked you by array lookup, bypassing distance. Arm 1
+  -- excludes likers so the arms don't overlap (UNION ALL is safe). Age + gender
+  -- stay hard filters; distance is bypassed only for likers.
   RETURN QUERY
-  SELECT
-    p.id,
-    p.display_name,
-    p.age,
-    p.gender,
-    p.location_city,
-    p.location_state,
-    p.latitude,
-    p.longitude,
-    ROUND(
-      3959 * acos(
-        LEAST(1.0, GREATEST(-1.0,
-          cos(radians(p_user_lat)) *
-          cos(radians(p.latitude)) *
+  SELECT q.id, q.display_name, q.age, q.gender, q.location_city, q.location_state,
+         q.latitude, q.longitude, q.distance_miles
+  FROM (
+    SELECT
+      p.id, p.display_name, p.age, p.gender, p.location_city, p.location_state,
+      p.latitude, p.longitude,
+      ROUND(
+        3959 * acos(LEAST(1.0, GREATEST(-1.0,
+          cos(radians(p_user_lat)) * cos(radians(p.latitude)) *
           cos(radians(p.longitude) - radians(p_user_lon)) +
-          sin(radians(p_user_lat)) *
-          sin(radians(p.latitude))
-        ))
-      )
-    )::INTEGER as distance_miles
-  FROM profiles p
-  WHERE
-    p.id != p_user_profile_id
-    AND p.profile_complete = true
-    AND (p.is_active = true OR p.is_active IS NULL)
-    AND (p.policy_restricted = false OR p.policy_restricted IS NULL)
-    AND (p.incognito_mode = false OR p.incognito_mode IS NULL)
-    AND (p.photo_review_required = false OR p.photo_review_required IS NULL)
-    AND p.age >= p_min_age
-    AND p.age <= p_max_age
-    AND (
-      v_skip_gender_filter
-      OR p.gender && p_gender_prefs
-    )
-    AND p.latitude IS NOT NULL
-    AND p.longitude IS NOT NULL
-    -- Distance is a hard filter EXCEPT for people who liked you (always surface).
-    AND (
-      (p.id = ANY(v_liked_me_ids))
-      OR (
-        p.latitude BETWEEN v_lat_min AND v_lat_max
-        AND p.longitude BETWEEN v_lon_min AND v_lon_max
-        AND 3959 * acos(
-          LEAST(1.0, GREATEST(-1.0,
-            cos(radians(p_user_lat)) *
-            cos(radians(p.latitude)) *
+          sin(radians(p_user_lat)) * sin(radians(p.latitude))
+        )))
+      )::INTEGER AS distance_miles,
+      FALSE AS is_liker
+    FROM profiles p
+    WHERE p.id != p_user_profile_id
+      AND p.profile_complete = true
+      AND (p.is_active = true OR p.is_active IS NULL)
+      AND (p.policy_restricted = false OR p.policy_restricted IS NULL)
+      AND (p.incognito_mode = false OR p.incognito_mode IS NULL)
+      AND (p.photo_review_required = false OR p.photo_review_required IS NULL)
+      AND p.age >= p_min_age
+      AND p.age <= p_max_age
+      AND (v_skip_gender_filter OR p.gender && p_gender_prefs)
+      AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
+      AND p.latitude BETWEEN v_lat_min AND v_lat_max
+      AND p.longitude BETWEEN v_lon_min AND v_lon_max
+      AND 3959 * acos(LEAST(1.0, GREATEST(-1.0,
+            cos(radians(p_user_lat)) * cos(radians(p.latitude)) *
             cos(radians(p.longitude) - radians(p_user_lon)) +
-            sin(radians(p_user_lat)) *
-            sin(radians(p.latitude))
-          ))
-        ) <= p_max_distance_miles
+            sin(radians(p_user_lat)) * sin(radians(p.latitude))
+          ))) <= p_max_distance_miles
+      AND (v_liked_me_ids IS NULL OR NOT (p.id = ANY(v_liked_me_ids)))
+      AND NOT EXISTS (
+        SELECT 1 FROM bans b WHERE b.banned_profile_id = p.id
+        AND b.unbanned_at IS NULL AND (b.expires_at IS NULL OR b.expires_at > NOW())
       )
-    )
-    AND NOT EXISTS (
-      SELECT 1 FROM bans b
-      WHERE b.banned_profile_id = p.id
-      AND b.unbanned_at IS NULL
-      AND (b.expires_at IS NULL OR b.expires_at > NOW())
-    )
-    AND (v_swiped_ids IS NULL OR NOT (p.id = ANY(v_swiped_ids)))
-    AND (v_blocked_ids IS NULL OR NOT (p.id = ANY(v_blocked_ids)))
-  ORDER BY (p.id = ANY(v_liked_me_ids)) DESC, distance_miles ASC
+      AND (v_swiped_ids IS NULL OR NOT (p.id = ANY(v_swiped_ids)))
+      AND (v_blocked_ids IS NULL OR NOT (p.id = ANY(v_blocked_ids)))
+
+    UNION ALL
+
+    SELECT
+      p.id, p.display_name, p.age, p.gender, p.location_city, p.location_state,
+      p.latitude, p.longitude,
+      ROUND(
+        3959 * acos(LEAST(1.0, GREATEST(-1.0,
+          cos(radians(p_user_lat)) * cos(radians(p.latitude)) *
+          cos(radians(p.longitude) - radians(p_user_lon)) +
+          sin(radians(p_user_lat)) * sin(radians(p.latitude))
+        )))
+      )::INTEGER AS distance_miles,
+      TRUE AS is_liker
+    FROM profiles p
+    WHERE v_liked_me_ids IS NOT NULL
+      AND p.id = ANY(v_liked_me_ids)
+      AND p.id != p_user_profile_id
+      AND p.profile_complete = true
+      AND (p.is_active = true OR p.is_active IS NULL)
+      AND (p.policy_restricted = false OR p.policy_restricted IS NULL)
+      AND (p.incognito_mode = false OR p.incognito_mode IS NULL)
+      AND (p.photo_review_required = false OR p.photo_review_required IS NULL)
+      AND p.age >= p_min_age
+      AND p.age <= p_max_age
+      AND (v_skip_gender_filter OR p.gender && p_gender_prefs)
+      AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM bans b WHERE b.banned_profile_id = p.id
+        AND b.unbanned_at IS NULL AND (b.expires_at IS NULL OR b.expires_at > NOW())
+      )
+      AND (v_swiped_ids IS NULL OR NOT (p.id = ANY(v_swiped_ids)))
+      AND (v_blocked_ids IS NULL OR NOT (p.id = ANY(v_blocked_ids)))
+  ) q
+  ORDER BY q.is_liker DESC, q.distance_miles ASC
   LIMIT p_result_limit;
 END;
 $function$;
