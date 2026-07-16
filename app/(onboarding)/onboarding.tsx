@@ -740,6 +740,51 @@ export default function Onboarding() {
         }
       }
 
+      // Final step — location preflight. The profile_complete=true upsert trips
+      // the location_required_when_complete CHECK constraint when lat/lng are
+      // null. Step 3's UI gate normally prevents this, but resumed/backfilled
+      // rows (and older clients) can reach the final step with a city but no
+      // coords. Recover coords from the saved city; if that fails too, bounce
+      // back to the location step with a clear message instead of firing a
+      // doomed save that dead-ends on a constraint error toast with no way
+      // forward. This is JAVASCRIPT-REACT-8R (49 users stuck at completion).
+      if (state.latitude == null || state.longitude == null) {
+        let recoveredCoords = false;
+        if (state.locationCity || state.locationState) {
+          try {
+            const { data: geo } = await supabase.functions.invoke('geocode-city', {
+              body: {
+                city: state.locationCity,
+                state: state.locationState,
+                country: state.locationCountry,
+              },
+            });
+            if (geo && typeof geo.latitude === 'number' && typeof geo.longitude === 'number') {
+              // Fresh coords land in the store, so saveCheckpoint's getState()
+              // read below picks them up before the profile_complete upsert.
+              state.setFields({ latitude: geo.latitude, longitude: geo.longitude });
+              recoveredCoords = true;
+            }
+          } catch {
+            // fall through to the bounce below
+          }
+        }
+        if (!recoveredCoords) {
+          addBreadcrumb('onboarding', 'Final save blocked: missing location coords', {
+            profileId: profileId ?? undefined,
+            hasCity: !!state.locationCity,
+            hasState: !!state.locationState,
+          });
+          showToast({
+            type: 'error',
+            title: 'Add your location',
+            message: 'We need your location to finish setting up your profile. Please set it and try again.',
+          });
+          setSubStep(3);
+          return;
+        }
+      }
+
       // Final step — save and exit
       try {
         await saveCheckpoint(TOTAL_ONBOARDING_STEPS);

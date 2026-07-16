@@ -1019,7 +1019,19 @@ export default function Discover() {
 
       mark('exclusionQueries');
 
-      if (currentUserError) throw currentUserError;
+      if (currentUserError) {
+        // PGRST116 = the current user's own profile row came back empty (0 rows):
+        // profile still initializing right after signup, or a transient RLS /
+        // session hiccup — not an app bug. Bail out of this load quietly and let
+        // the next focus/refresh retry, instead of a hard error toast + Sentry
+        // noise every time (JAVASCRIPT-REACT-9P, "coerce to a single JSON object").
+        if (currentUserError.code === 'PGRST116') {
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+        throw currentUserError;
+      }
 
       const peopleWhoLikedMeIds = new Set(peopleWhoLikedMe?.map(l => l.liker_profile_id) || []);
 
@@ -1175,18 +1187,42 @@ export default function Discover() {
         // Gender prefs: in-session only. Empty array = "Everyone" (RPC skips it).
         const MIN_POOL = 20;
         if (filtersModified || nearbyIds.length < MIN_POOL) {
-          const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_profiles', {
-            p_user_lat: currentUserData.latitude,
-            p_user_lon: currentUserData.longitude,
-            p_max_distance_miles: effectiveFilters.maxDistance,
-            p_user_profile_id: profileId,
-            p_min_age: Math.max(18, effectiveFilters.ageMin),
-            p_max_age: effectiveFilters.ageMax,
-            p_gender_prefs: effectiveFilters.genderPreference || [],
-            p_result_limit: 100
-          });
+          const callNearby = (maxMiles: number, limit: number) =>
+            supabase.rpc('get_nearby_profiles', {
+              p_user_lat: currentUserData.latitude,
+              p_user_lon: currentUserData.longitude,
+              p_max_distance_miles: maxMiles,
+              p_user_profile_id: profileId,
+              p_min_age: Math.max(18, effectiveFilters.ageMin),
+              p_max_age: effectiveFilters.ageMax,
+              p_gender_prefs: effectiveFilters.genderPreference || [],
+              p_result_limit: limit,
+            });
+
+          let { data: rpcData, error: rpcError } = await callNearby(effectiveFilters.maxDistance, 100);
           mark('liveRpc');
-          // Only fatal if we have nothing at all to show.
+
+          // Resilience for JAVASCRIPT-REACT-71/93 ("canceling statement due to
+          // statement timeout", code 57014). The geo RPC plan is healthy (~0.9s
+          // cold) but can tip past the 8s statement_timeout under cold-cache +
+          // concurrent load. Rather than dead-ending on an error toast, retry
+          // ONCE with a tighter radius + smaller limit when we'd otherwise have
+          // nothing: a smaller bounding box scans far fewer rows and comes back
+          // in well under a second. Widening back out happens on the next load.
+          const isTimeout = !!rpcError && (
+            rpcError.code === '57014' ||
+            (rpcError.message || '').toLowerCase().includes('statement timeout') ||
+            (rpcError.message || '').toLowerCase().includes('timed out')
+          );
+          if (isTimeout && nearbyIds.length === 0) {
+            const tighterMiles = Math.min(effectiveFilters.maxDistance, 50);
+            const retry = await callNearby(tighterMiles, 50);
+            rpcData = retry.data;
+            rpcError = retry.error;
+            mark('liveRpcRetry');
+          }
+
+          // Only fatal if we STILL have nothing at all to show.
           if (rpcError && nearbyIds.length === 0) throw rpcError;
           if (rpcData && rpcData.length > 0) {
             const seen = new Set(nearbyIds);
