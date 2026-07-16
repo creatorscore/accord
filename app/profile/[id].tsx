@@ -313,14 +313,21 @@ export default function ProfileView() {
     if (!currentProfileId || !id) return;
 
     try {
-      // First check if current user is an admin
+      // Fetch current user's admin + subscription flags straight from the DB.
+      // The client subscription context (isPremium/isPlatinum from useSubscription)
+      // races on load — RevenueCat init is deferred ~500ms and ProfileDataContext
+      // may not have resolved yet, so those can be transiently false right when this
+      // runs. checkIfMatched's effect never re-runs on that flip, so a paid user gets
+      // permanently (falsely) told "not matched". The server row is authoritative.
       const { data: adminCheck } = await supabase
         .from('profiles')
-        .select('is_admin')
+        .select('is_admin, is_premium, is_platinum')
         .eq('id', currentProfileId)
         .single();
 
       const isAdminUser = adminCheck?.is_admin === true;
+      // OR the DB flags with the context so we accept whichever source knows the user is paid.
+      const hasPaidAccess = isPremium || isPlatinum || adminCheck?.is_premium === true || adminCheck?.is_platinum === true;
       if (isAdminUser) {
         setIsAdmin(true);
       }
@@ -338,14 +345,14 @@ export default function ProfileView() {
         setMatchId(match.id);
         checkPhotoRevealStatus();
       } else {
-        // Check if the viewed profile has liked the current user
-        const { data: theirLikeId } = await supabase
-          .rpc('check_mutual_like', { p_target_profile_id: id });
-
-        // Allow viewing with like buttons if:
-        // 1. Premium/Platinum user viewing someone who liked them
-        // 2. Admin viewing someone who liked them (for testing)
-        if ((isPremium || isPlatinum || isAdminUser) && theirLikeId) {
+        // Paid users (premium/platinum) and admins can view any active profile
+        // with like/pass buttons — not only people who already liked them. The
+        // premium "Who Viewed You" and "Passed" surfaces link straight into this
+        // screen, and gating on a reciprocal like turned those taps into a false
+        // "You can only view full profiles of your matches" dead end. Incognito /
+        // inactive profiles are already excluded by RLS and bans are checked in
+        // loadProfile, so this exposes nothing discovery doesn't already show.
+        if (hasPaidAccess || isAdminUser) {
           setIsMatched(false); // Not matched yet, will show like/pass buttons
           setMatchId(null);
           return;
@@ -386,20 +393,24 @@ export default function ProfileView() {
         return;
       }
 
-      // Check if premium user viewing someone who liked them
-      if (isPremium || isPlatinum) {
+      // Paid users can view any active profile with like/pass buttons.
+      // Re-derive paid status from the DB (best effort) so a still-loading
+      // subscription context doesn't falsely block a paid user — same race as above.
+      let hasPaidAccess = isPremium || isPlatinum;
+      if (!hasPaidAccess && currentProfileId) {
         try {
-          const { data: theirLikeId } = await supabase
-            .rpc('check_mutual_like', { p_target_profile_id: id });
-
-          if (theirLikeId) {
-            setIsMatched(false);
-            setMatchId(null);
-            return;
-          }
-        } catch (likeCheckError) {
-          console.error('Error checking like status:', likeCheckError);
-        }
+          const { data: paidCheck } = await supabase
+            .from('profiles')
+            .select('is_premium, is_platinum')
+            .eq('id', currentProfileId)
+            .single();
+          hasPaidAccess = paidCheck?.is_premium === true || paidCheck?.is_platinum === true;
+        } catch {}
+      }
+      if (hasPaidAccess) {
+        setIsMatched(false);
+        setMatchId(null);
+        return;
       }
 
       // No match found and no permission - redirect back

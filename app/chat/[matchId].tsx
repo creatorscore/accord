@@ -52,6 +52,7 @@ import { useColorScheme } from '@/lib/useColorScheme';
 import { checkMessagingVersionRequirement, getCurrentVersion } from '@/lib/version-check';
 import * as Linking from 'expo-linking';
 import * as Clipboard from 'expo-clipboard';
+import { openExternalURL } from '@/lib/external-link';
 import { usePhotoBlur } from '@/hooks/usePhotoBlur';
 import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 import { getSignedUrl, getSignedUrls } from '@/lib/signed-urls';
@@ -2836,7 +2837,7 @@ export default function Chat() {
                   {/* Link Preview */}
                   {item.link_preview && (
                     <TouchableOpacity
-                      onPress={() => Linking.openURL(item.link_preview!.url)}
+                      onPress={() => { openExternalURL(item.link_preview!.url, () => showToast({ type: 'info', title: t('common.linkCopied'), message: item.link_preview!.url })); }}
                       activeOpacity={0.8}
                       style={styles.linkPreviewMine}
                     >
@@ -2881,7 +2882,7 @@ export default function Chat() {
                   {/* Link Preview */}
                   {item.link_preview && (
                     <TouchableOpacity
-                      onPress={() => Linking.openURL(item.link_preview!.url)}
+                      onPress={() => { openExternalURL(item.link_preview!.url, () => showToast({ type: 'info', title: t('common.linkCopied'), message: item.link_preview!.url })); }}
                       activeOpacity={0.8}
                       style={[styles.linkPreviewTheirs, { borderColor: colors.border }]}
                     >
