@@ -76,12 +76,18 @@ export interface OnboardingFormState {
   // Step 25 - Drugs
   doesDrugs: string;
   // Steps 26-28 (Photos, Prompts, Voice) manage their own state via supabase
-  // Step 29 - Matching Preferences
+  // Step 30 - Matching Preferences
   ageMin: number;
   ageMax: number;
   maxDistanceMiles: number;
   distanceUnit: 'miles' | 'km';
   willingToRelocate: boolean;
+  // Step 31 - Languages spoken (profiles.languages_spoken, max 5) — optional
+  languagesSpoken: string[];
+  // Step 32 - Must-haves (preferences.must_haves, max 10) — optional
+  mustHaves: string[];
+  // Step 33 - Dealbreakers (preferences.dealbreakers, max 10) — optional
+  dealbreakers: string[];
 
   // Field visibility toggles
   fieldVisibility: Record<string, boolean>;
@@ -148,6 +154,9 @@ const initialState: OnboardingFormState = {
   maxDistanceMiles: 50,
   distanceUnit: 'miles',
   willingToRelocate: false,
+  languagesSpoken: [],
+  mustHaves: [],
+  dealbreakers: [],
   fieldVisibility: {},
 };
 
@@ -254,6 +263,9 @@ export const useOnboardingStore = create<OnboardingStore>()(
         maxDistanceMiles: state.maxDistanceMiles,
         distanceUnit: state.distanceUnit,
         willingToRelocate: state.willingToRelocate,
+        languagesSpoken: state.languagesSpoken,
+        mustHaves: state.mustHaves,
+        dealbreakers: state.dealbreakers,
         fieldVisibility: state.fieldVisibility,
       }),
       // birthDate round-trips through JSON as an ISO string; rehydrate as a Date

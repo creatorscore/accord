@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
+import { useColorScheme } from '@/lib/useColorScheme';
 
 interface ProfileVoiceNoteProps {
   voiceUrl?: string | null;
@@ -22,6 +23,18 @@ export default function ProfileVoiceNote({
   const [isLoaded, setIsLoaded] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  // Theme-aware colors — the layout stays in StyleSheet; only the surface,
+  // text, and played-bar colors flip for dark mode so the player doesn't
+  // render light-on-dark inside a dark screen (e.g. Edit Profile).
+  const { isDarkColorScheme } = useColorScheme();
+  const c = {
+    text: isDarkColorScheme ? '#F5F5F7' : '#1F2937',
+    playerBg: isDarkColorScheme ? '#1C1C2E' : '#F5F5F5',
+    duration: isDarkColorScheme ? '#9CA3AF' : '#71717A',
+    playedBar: isDarkColorScheme ? '#C9B8E4' : '#4D3A6B',
+    unplayedBar: '#A08AB7',
+  };
 
   // Generate Instagram-style waveform bars based on voiceUrl
   const waveformBars = useMemo(() => {
@@ -145,8 +158,8 @@ export default function ProfileVoiceNote({
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.promptText}>{displayPrompt}</Text>
-        <View style={styles.playerContainer}>
+        <Text style={[styles.promptText, { color: c.text }]}>{displayPrompt}</Text>
+        <View style={[styles.playerContainer, { backgroundColor: c.playerBg }]}>
           <View style={[styles.playButton, { backgroundColor: '#D1D5DB' }]}>
             <MaterialCommunityIcons name="loading" size={20} color="white" />
           </View>
@@ -162,8 +175,8 @@ export default function ProfileVoiceNote({
   if (error) {
     return (
       <View style={styles.container}>
-        <Text style={styles.promptText}>{displayPrompt}</Text>
-        <View style={styles.playerContainer}>
+        <Text style={[styles.promptText, { color: c.text }]}>{displayPrompt}</Text>
+        <View style={[styles.playerContainer, { backgroundColor: c.playerBg }]}>
           <View style={[styles.playButton, { backgroundColor: '#D1D5DB' }]}>
             <MaterialCommunityIcons name="alert-circle" size={20} color="white" />
           </View>
@@ -204,7 +217,7 @@ export default function ProfileVoiceNote({
                     styles.bar,
                     {
                       height: 28 * barHeight,
-                      backgroundColor: isPlayedBar ? '#4D3A6B' : '#A08AB7',
+                      backgroundColor: isPlayedBar ? c.playedBar : c.unplayedBar,
                     },
                   ]}
                 />
@@ -213,7 +226,7 @@ export default function ProfileVoiceNote({
           </View>
         </View>
 
-        <Text style={styles.duration}>
+        <Text style={[styles.duration, { color: c.duration }]}>
           {formatTime(duration)}
         </Text>
       </View>

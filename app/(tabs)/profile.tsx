@@ -85,10 +85,21 @@ export default function Profile() {
   }, []);
 
   const handleActivityPress = useCallback(() => {
+    // Dismiss the "NEW" badge as soon as the row is tapped — for ALL users. This
+    // must run before the premium gate below; otherwise free users (who return
+    // early into the paywall) would never clear the badge and it'd stick forever.
     setShowActivityNewBadge(false);
     AsyncStorage.setItem('activity_center_seen', 'true');
+    // Activity Center is premium-only. Free users get the same PremiumPaywall
+    // modal that "Who Viewed Me" uses (below) — NOT a navigation to /activity,
+    // which would surface that screen's own inline upgrade gate (a different,
+    // inconsistent paywall routing to /settings/subscription).
+    if (!isPremium) {
+      setShowPaywall(true);
+      return;
+    }
     router.push('/activity');
-  }, []);
+  }, [isPremium]);
 
   // Load profile when user becomes available (handles initial mount + OAuth sign-in timing)
   useEffect(() => {
@@ -662,7 +673,16 @@ export default function Profile() {
 
             <TouchableOpacity
               style={[styles.menuItem, { backgroundColor: !isPremium ? '#F3F0F7' : colors.card, borderColor: !isPremium ? '#A08AB7' : colors.border, borderLeftWidth: !isPremium ? 4 : 0, borderLeftColor: '#A08AB7' }]}
-              onPress={() => router.push('/settings/subscription')}
+              onPress={() => {
+                // Free users: open the PremiumPaywall modal (consistent with
+                // Activity Center / Who Viewed Me). Premium users keep going to
+                // the subscription management screen ("Manage Subscription").
+                if (isPremium) {
+                  router.push('/settings/subscription');
+                } else {
+                  setShowPaywall(true);
+                }
+              }}
             >
               <View style={styles.menuItemLeft}>
                 <MaterialCommunityIcons

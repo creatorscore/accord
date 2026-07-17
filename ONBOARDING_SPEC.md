@@ -1,7 +1,7 @@
 # Accord Onboarding Specification
 
 > **Last updated:** 2026-04-20
-> **Status:** Active — this is the source of truth for the 31-step onboarding flow (indices 0–30).
+> **Status:** Active — this is the source of truth for the 34-step onboarding flow (indices 0–33).
 
 ## Design Principles
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Step-by-Step Flow (Steps 0–30)
+## Step-by-Step Flow (Steps 0–33)
 
 ### Section 1: Basics (Steps 0–3)
 
@@ -94,13 +94,18 @@
 
 ---
 
-### Section 7: Preferences (Step 30)
+### Section 7: Preferences (Steps 30–33)
 
 | Step | Key | Screen Title | Required | Skippable | Visibility Toggle | Input Type | Notes |
 |------|-----|-------------|----------|-----------|-------------------|------------|-------|
 | 30 | `matching_prefs` | Set your preferences | Yes | No | No | Sliders + toggle | Age range (18–80), Max distance (5–1000 mi/km), Willing to relocate toggle. Gender preference was already set in step 7. |
+| 31 | `languages` | What languages do you speak? | No | Yes | No | Chip multi-select | Optional. Select up to **5**. Writes to `profiles.languages_spoken` (TEXT[]). |
+| 32 | `must_haves` | What are your must-haves? | No | Yes | No | Chip multi-select | Optional. Select up to **10**. Writes to `preferences.must_haves` (TEXT[]). |
+| 33 | `dealbreakers` | Any dealbreakers? | No | Yes | No | Chip multi-select | Optional. Select up to **10**. Writes to `preferences.dealbreakers` (TEXT[]). Final step. Skipping it still completes the profile. |
 
-**Final save after step 30** — all data persisted, `profile_complete = true`, `onboarding_step = 31`.
+Steps 31–33 were appended to the **end** of the flow (never inserted mid-flow) so existing users' saved `onboarding_step` indices don't shift. All three are optional chip multi-selects (one question per screen); their values are committed by the final save.
+
+**Final save after step 33** — all data persisted, `profile_complete = true`, `onboarding_step = 34`.
 
 ---
 
@@ -113,7 +118,7 @@ In practice `saveCheckpoint` writes the *entire* accumulated store state on ever
 | 3 | name, birth_date, age, zodiac_sign, push_token, location (lat/lng/city/state/country) |
 | 14 | pronouns, gender, sexual_orientation, gender_preference, relationship_type, primary_reasons, height, ethnicity, wants_children, children_arrangement, pets |
 | 26 | hometown, occupation, education, education_level, religion, political_views, financial_arrangement, housing_preference, drinking, smoking, smokes_weed, does_drugs, field_visibility |
-| 30 (final) | age_min, age_max, max_distance_miles, willing_to_relocate, profile_complete=true |
+| 33 (final) | age_min, age_max, max_distance_miles, willing_to_relocate, languages_spoken, must_haves, dealbreakers, profile_complete=true |
 
 Between checkpoints the answers also survive an app-kill: the zustand store persists to `AsyncStorage` under the `accord-onboarding-draft` key, and the draft is cleared only on successful final save or sign-out.
 
@@ -185,6 +190,6 @@ Onboarding UI → onboardingStore (Zustand) → checkpoint save → Supabase pro
 
 - Form state is held in `stores/onboardingStore.ts` during the flow
 - At each checkpoint, accumulated state is batch-written to `profiles` and `preferences` tables
-- The final save also sets `profile_complete = true` and `onboarding_step = 30`
+- The final save also sets `profile_complete = true` and `onboarding_step = 34`
 - Visibility toggles are stored in `profiles.field_visibility` (JSONB)
 - Lifestyle fields (drinking, smoking, weed, drugs) are stored in `preferences.lifestyle_preferences` (JSONB)

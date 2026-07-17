@@ -1,5 +1,6 @@
 /**
- * Onboarding configuration — 31 steps (0-30), one question per screen. Pets added after family plans.
+ * Onboarding configuration — 34 steps (0-33), one question per screen. Pets added after family plans.
+ * Languages / must-haves / dealbreakers appended at the end (31-33) — all optional/skippable.
  * Each step defines its key, UI metadata, validation rules, and save behavior.
  */
 
@@ -67,7 +68,7 @@ export const ONBOARDING_STEPS: OnboardingStepConfig[] = [
   { key: 'pronouns', title: 'What are your pronouns?', subtitle: "This helps others know how to refer to you.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'identity' },
   { key: 'gender', title: 'Choose your gender', subtitle: "Pick the gender you identify as — trans women choose Woman, trans men choose Man.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'identity' },
   { key: 'sexuality', title: "What's your sexuality?", subtitle: "Pick the one that fits best.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'identity' },
-  { key: 'gender_pref', title: 'Who would you like to meet?', subtitle: "Pick Everyone, or any mix of the three.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'identity' },
+  { key: 'gender_pref', title: 'Who would you like to meet?', subtitle: "Pick any that apply — select all three to see everyone.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'identity' },
   // ── Goals (8-13) ──
   { key: 'relationship_type', title: 'What type of relationship are you looking for?', subtitle: "This helps us match you with compatible people.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'goals' },
   { key: 'intention', title: 'What brings you to Accord?', subtitle: "Pick the one that fits best.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'goals' },
@@ -94,11 +95,19 @@ export const ONBOARDING_STEPS: OnboardingStepConfig[] = [
   { key: 'photos', title: 'Add your photos', subtitle: "Add at least 3 photos. Your first photo is your main profile photo.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'profile' },
   { key: 'prompts', title: 'Answer some prompts', subtitle: "Choose at least 2 prompts to help others get to know you.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'profile' },
   { key: 'voice_note', title: 'Record a voice intro', subtitle: "Let others hear your voice. 30 seconds max.", skippable: true, previewAvailable: true, hasVisibility: false, section: 'profile' },
-  // ── Preferences (29) ──
+  // ── Preferences (30) ──
   { key: 'matching_prefs', title: 'Set your preferences', subtitle: "Set your age range and distance preferences.", skippable: false, previewAvailable: false, hasVisibility: false, section: 'preferences' },
+  // ── Preferences — optional extras (31-33) ──
+  // Appended at the END so existing users' saved `onboarding_step` indices
+  // never shift. All three are skippable multi-select chip steps that write
+  // to columns onboarding previously never collected (languages_spoken on
+  // profiles; must_haves + dealbreakers on preferences).
+  { key: 'languages', title: 'What languages do you speak?', subtitle: "Select up to 5.", skippable: true, previewAvailable: true, hasVisibility: false, section: 'preferences' },
+  { key: 'must_haves', title: 'What are your must-haves?', subtitle: "Pick what matters most — optional.", skippable: true, previewAvailable: true, hasVisibility: false, section: 'preferences' },
+  { key: 'dealbreakers', title: 'Any dealbreakers?', subtitle: "Pick what you can't accept — optional.", skippable: true, previewAvailable: true, hasVisibility: false, section: 'preferences' },
 ];
 
-export const TOTAL_ONBOARDING_STEPS = ONBOARDING_STEPS.length; // 31
+export const TOTAL_ONBOARDING_STEPS = ONBOARDING_STEPS.length; // 34
 
 /** Checkpoint steps where accumulated form state is saved to DB */
 export const SAVE_CHECKPOINTS = [3, 14, 26] as const;
@@ -126,7 +135,11 @@ export const ORIENTATIONS = [
   'Homoflexible', 'Prefer not to say', 'Other',
 ] as const;
 
-export const GENDER_PREF_OPTIONS = ['Men', 'Women', 'Non-binary', 'Everyone'] as const;
+// "Everyone" intentionally removed from onboarding — users pick specific
+// gender(s); selecting all three is equivalent to the old "Everyone". The
+// backward-compat handling of a stored "Everyone"/[] value still lives in
+// lib/gender-preferences.ts (expand/collapse) for existing users.
+export const GENDER_PREF_OPTIONS = ['Men', 'Women', 'Non-binary'] as const;
 
 export const ETHNICITIES = [
   'Asian', 'Black/African', 'Hispanic/Latinx', 'Indigenous/Native',
@@ -238,6 +251,27 @@ export const DRUG_OPTIONS = [
   { value: 'never', label: 'Never' },
   { value: 'socially', label: 'Socially' },
   { value: 'regularly', label: 'Regularly' },
+] as const;
+
+// Shared language list — used by both onboarding (languages step, cap 5) and
+// settings/edit-profile. Single source of truth so the two surfaces stay in sync.
+export const COMMON_LANGUAGES = [
+  'English', 'Spanish', 'Mandarin', 'French', 'German', 'Italian',
+  'Portuguese', 'Russian', 'Japanese', 'Korean', 'Arabic', 'Hindi', 'Other',
+] as const;
+
+export const DEALBREAKER_OPTIONS = [
+  'Smoking', 'Heavy drinking', 'Recreational drugs', 'Wants biological children',
+  'Does not want children', 'Not out publicly', 'Wants a romantic relationship',
+  'Long-distance only', 'Not verified', 'Different core values', 'Poor communication',
+  'Not financially stable',
+] as const;
+
+export const MUST_HAVE_OPTIONS = [
+  'Verified profile', 'Financial independence', 'Discretion & privacy',
+  'Shared family goals', 'Similar timeline', 'Lives nearby', 'Open to relocation',
+  'Prenup agreement', 'Separate finances', 'Honest communication', 'Mutual respect',
+  'Clear expectations',
 ] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

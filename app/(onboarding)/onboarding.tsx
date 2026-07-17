@@ -51,6 +51,9 @@ import {
   OrientationFieldStep,
   GenderPrefFieldStep,
   HometownFieldStep,
+  LanguagesFieldStep,
+  MustHavesFieldStep,
+  DealbreakersFieldStep,
 } from '@/components/onboarding/steps';
 
 // Lazy imports for heavy steps
@@ -165,7 +168,14 @@ export default function Onboarding() {
             pronouns: profile.pronouns || '',
             gender: profile.gender || [],
             sexualOrientation: profile.sexual_orientation || [],
-            genderPreference: collapseGenderPreference(prefs?.gender_preference || []),
+            // 'Everyone' is no longer a selectable chip. A returning user who
+            // picked it (stored []) collapses to ['Everyone'] — show that as all
+            // three selected so the step isn't blank; expandGenderPreference
+            // saves it back to [] (Everyone).
+            genderPreference: (() => {
+              const collapsed = collapseGenderPreference(prefs?.gender_preference || []);
+              return collapsed.includes('Everyone') ? ['Men', 'Women', 'Non-binary'] : collapsed;
+            })(),
             relationshipType: prefs?.relationship_type || '',
             primaryReasons: prefs?.primary_reasons || [],
             heightInches: profile.height_inches || null,
@@ -190,6 +200,9 @@ export default function Onboarding() {
             ageMax: prefs?.age_max || 45,
             maxDistanceMiles: prefs?.max_distance_miles || 50,
             willingToRelocate: prefs?.willing_to_relocate ?? false,
+            languagesSpoken: Array.isArray(profile.languages_spoken) ? profile.languages_spoken : [],
+            mustHaves: Array.isArray(prefs?.must_haves) ? prefs.must_haves : [],
+            dealbreakers: Array.isArray(prefs?.dealbreakers) ? prefs.dealbreakers : [],
             fieldVisibility: profile.field_visibility || {},
           });
 
@@ -328,6 +341,7 @@ export default function Onboarding() {
         education_level: state.educationLevel || null,
         religion: state.religion || null,
         political_views: state.politicalViews || null,
+        languages_spoken: state.languagesSpoken.length > 0 ? state.languagesSpoken : null,
         smokes_weed: state.smokesWeed || null,
         does_drugs: state.doesDrugs || null,
         field_visibility: state.fieldVisibility,
@@ -360,6 +374,8 @@ export default function Onboarding() {
         children_arrangement: state.childrenArrangement.length > 0 ? state.childrenArrangement : null,
         financial_arrangement: state.financialArrangement.length > 0 ? state.financialArrangement : null,
         housing_preference: state.housingPreference.length > 0 ? state.housingPreference : null,
+        must_haves: state.mustHaves.length > 0 ? state.mustHaves : null,
+        dealbreakers: state.dealbreakers.length > 0 ? state.dealbreakers : null,
         lifestyle_preferences: {
           pets: state.pets || null,
           drinking: state.drinking || null,
@@ -650,7 +666,12 @@ export default function Onboarding() {
     // reassures users that the app isn't frozen when the queue is stalled.
     let savingToastShown = false;
     let savingToastTimer: ReturnType<typeof setTimeout> | null = null;
-    const checkpoints = [3, 14, 26];
+    // Step 30 (matching_prefs) is a checkpoint: age range + max distance are HARD
+    // filters, and since the 3 new optional steps (languages/must-haves/deal-
+    // breakers) now follow it, without a save here a user who sets them then
+    // abandons on a new step — and later resumes from a cleared/other-device
+    // store — would land past matching_prefs and get default age/distance.
+    const checkpoints = [3, 14, 26, 30];
     if (checkpoints.includes(subStep)) {
       savingToastTimer = setTimeout(() => {
         savingToastShown = true;
@@ -673,14 +694,13 @@ export default function Onboarding() {
       }
     }
 
-    // After the last hard checkpoint (step 26 → 27), we still need to track
-    // where the user actually is so a closed/reopened app doesn't bounce
-    // them back to photos. Fire a lightweight onboarding_step-only update
-    // for transitions between steps 27, 28, 29 — non-blocking because the
-    // resume logic tolerates a slightly stale value, and we don't want to
-    // gate Continue on this network call. The full saveCheckpoint runs on
-    // step 30 (final) as before.
-    if (profileId && subStep >= 27 && subStep < TOTAL_ONBOARDING_STEPS - 1) {
+    // Between hard checkpoints, still track where the user actually is so a
+    // closed/reopened app doesn't bounce them back. Fire a lightweight
+    // onboarding_step-only update for the non-checkpoint transitions (27, 28,
+    // 29, 31, 32) — non-blocking because resume tolerates a slightly stale
+    // value. Checkpoint steps (incl. 30/matching_prefs) already persist the
+    // step via saveCheckpoint above, so skip them here to avoid a double write.
+    if (profileId && subStep >= 27 && subStep < TOTAL_ONBOARDING_STEPS - 1 && !checkpoints.includes(subStep)) {
       const targetStep = subStep + 1;
       supabase
         .from('profiles')
@@ -890,8 +910,14 @@ export default function Onboarding() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (subStep < TOTAL_ONBOARDING_STEPS - 1) {
       setSubStep(subStep + 1);
+    } else {
+      // Final step (dealbreakers) is skippable — skipping it means "finish
+      // without answering". Route through the same completion path as Continue
+      // (photo/location preflight + final saveCheckpoint) so the profile still
+      // completes; otherwise the Skip button would be a dead no-op here.
+      handleContinue();
     }
-  }, [subStep]);
+  }, [subStep, handleContinue]);
 
   // ── Preview mode (available after location, step 3) ──
   const currentRoute = stepConfig?.previewAvailable
@@ -935,6 +961,9 @@ export default function Onboarding() {
       case 28: return <Suspense fallback={<StepFallback />}><PromptsStep embedded onContinue={handleContinue} onBack={handleBack} /></Suspense>;
       case 29: return <Suspense fallback={<StepFallback />}><VoiceStep embedded onContinue={handleContinue} onBack={handleBack} /></Suspense>;
       case 30: return <MatchingPrefsStep />;
+      case 31: return <LanguagesFieldStep />;
+      case 32: return <MustHavesFieldStep />;
+      case 33: return <DealbreakersFieldStep />;
       default: return null;
     }
   };

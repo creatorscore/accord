@@ -535,6 +535,11 @@ const VitalsSection = React.memo(function VitalsSection({
   );
 });
 
+// Module-scoped so the rewind-button wiggle plays only ONCE per app session:
+// the card remounts on every swipe (key={profile.id}), so a per-instance guard
+// would replay it every card. First time a rewind is available, wiggle; then quiet.
+let rewindWiggleShownThisSession = false;
+
 const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfileViewProps>(({
   profile,
   preferences,
@@ -617,6 +622,23 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
       if (sound) sound.unloadAsync();
     };
   }, [sound]);
+
+  // Wiggle the rewind button once whenever a rewind becomes available, to draw
+  // attention to the feature (fires for free users too — tapping still shows the
+  // upgrade prompt via handleRewind).
+  const rewindWiggle = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!canRewind || rewindWiggleShownThisSession) return;
+    rewindWiggleShownThisSession = true;
+    rewindWiggle.setValue(0);
+    Animated.sequence([
+      Animated.timing(rewindWiggle, { toValue: 1, duration: 70, useNativeDriver: true }),
+      Animated.timing(rewindWiggle, { toValue: -1, duration: 130, useNativeDriver: true }),
+      Animated.timing(rewindWiggle, { toValue: 0.6, duration: 110, useNativeDriver: true }),
+      Animated.timing(rewindWiggle, { toValue: 0, duration: 90, useNativeDriver: true }),
+    ]).start();
+  }, [canRewind, rewindWiggle]);
+  const rewindRotate = rewindWiggle.interpolate({ inputRange: [-1, 1], outputRange: ['-15deg', '15deg'] });
 
   useEffect(() => {
     if (sound) {
@@ -799,11 +821,13 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                   style={[styles.headerButton, { backgroundColor: dark ? '#1C1C2E' : '#F3F4F6' }, !canRewind && styles.headerButtonDisabled]}
                   disabled={!canRewind}
                 >
-                  <MaterialCommunityIcons
-                    name="undo-variant"
-                    size={20}
-                    color={canRewind ? (dark ? '#9CA3AF' : '#6B7280') : (dark ? '#4B5563' : '#D1D5DB')}
-                  />
+                  <Animated.View style={{ transform: [{ rotate: rewindRotate }] }}>
+                    <MaterialCommunityIcons
+                      name="undo-variant"
+                      size={20}
+                      color={canRewind ? (dark ? '#9CA3AF' : '#6B7280') : (dark ? '#4B5563' : '#D1D5DB')}
+                    />
+                  </Animated.View>
                 </TouchableOpacity>
               )}
               <TouchableOpacity onPress={() => setShowActionSheet(true)} style={[styles.headerButton, { backgroundColor: dark ? '#1C1C2E' : '#F3F4F6' }]}>

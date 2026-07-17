@@ -5,8 +5,12 @@
  * which map to the 3 gender identity values (Man, Woman, Non-binary).
  */
 
-// Simplified UI options for matching preferences
-export const GENDER_PREF_OPTIONS = ['Men', 'Women', 'Non-binary', 'Everyone'] as const;
+// Simplified UI options for matching preferences.
+// "Everyone" was removed as a selectable option (users pick specific genders;
+// all three = everyone). It is intentionally still handled by
+// expandGenderPreference/collapseGenderPreference below so existing users who
+// stored "Everyone"/[] keep browsing all genders and are never silently wiped.
+export const GENDER_PREF_OPTIONS = ['Men', 'Women', 'Non-binary'] as const;
 
 // Which gender identities each simplified preference matches
 const MEN_IDENTITIES = ['Man'];
@@ -36,6 +40,13 @@ export function expandGenderPreference(input: string[]): string[] {
     else if (v === 'Women') result.add('Woman');
     else if (v) result.add(v); // canonical (Man/Woman/Non-binary) and any unknown values pass through
   }
+  // All three genders selected == "Everyone" == no gender filter. Store [] so
+  // the empty-array "skip filter" semantics are preserved (get_nearby_profiles
+  // treats [] as "any gender", which also includes the ~30k profiles with an
+  // empty gender array). Without this, a legacy "Everyone" user (stored []) who
+  // re-saves — or anyone who ticks all three — would switch to an overlap
+  // filter (`gender && {Man,Woman,Non-binary}`) that silently shrinks their pool.
+  if (result.has('Man') && result.has('Woman') && result.has('Non-binary')) return [];
   return Array.from(result);
 }
 
