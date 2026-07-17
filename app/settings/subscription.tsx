@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { restorePurchases, getCustomerInfo, getOfferings, purchasePackage, presentCodeRedemptionSheet, checkTrialEligibility, TrialInfo } from '@/lib/revenue-cat';
+import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 import { openExternalURL } from '@/lib/external-link';
 export default function SubscriptionManagement() {
@@ -171,6 +172,11 @@ export default function SubscriptionManagement() {
       const info = await purchasePackage(pkg);
 
       if (info) {
+        // Record the conversion (tier inferred from the product id) so purchases
+        // from the settings screen also land in the funnel.
+        const purchasedTier = (pkg.product.identifier || '').toLowerCase().includes('platinum') ? 'platinum' : 'premium';
+        trackUserAction.subscriptionStarted(purchasedTier, 'monthly');
+        trackFunnel.subscriptionCompleted(purchasedTier);
         // Sync purchase with database immediately
         await syncWithDatabase(info);
         await refreshSubscription();

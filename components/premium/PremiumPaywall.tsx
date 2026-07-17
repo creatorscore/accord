@@ -16,6 +16,7 @@ import { SafeAreaView, SafeAreaProvider, initialWindowMetrics } from 'react-nati
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import { getOfferings, purchasePackage } from '@/lib/revenue-cat';
+import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { openExternalURL } from '@/lib/external-link';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useTranslation } from 'react-i18next';
@@ -75,8 +76,14 @@ export default function PremiumPaywall({
 
   // Reset closing state when paywall opens
   useEffect(() => {
-    if (visible) setIsClosing(false);
-  }, [visible]);
+    if (visible) {
+      setIsClosing(false);
+      // Top of the conversion funnel. These events existed in lib/analytics.ts
+      // but were never fired anywhere, so paywall→purchase was unmeasurable.
+      trackUserAction.paywallViewed(feature);
+      trackFunnel.paywallViewed();
+    }
+  }, [visible, feature]);
 
   // Hide the Android navigation bar (gesture pill / 3-button bar) while
   // the paywall is open so the gray card visually claims the bottom of
@@ -324,6 +331,8 @@ export default function PremiumPaywall({
                 onPress: async () => {
                   const customerInfo = await purchasePackage(fallbackPkg);
                   if (customerInfo) {
+                    trackUserAction.subscriptionStarted(variant as 'premium' | 'platinum', selectedPlan as any);
+                    trackFunnel.subscriptionCompleted(variant);
                     await refreshSubscription();
                     await syncWithDatabase(customerInfo);
                     Alert.alert(t('premiumPaywall.alerts.successTitle'), t('premiumPaywall.alerts.welcomePremium'), [
@@ -344,6 +353,10 @@ export default function PremiumPaywall({
       const customerInfo = await purchasePackage(pkg);
 
       if (customerInfo) {
+        // Bottom of the funnel — records the conversion (tier + plan) so
+        // paywall_viewed → subscription_completed is finally measurable.
+        trackUserAction.subscriptionStarted(variant as 'premium' | 'platinum', selectedPlan as any);
+        trackFunnel.subscriptionCompleted(variant);
         // Purchase successful - sync to database and refresh
         await refreshSubscription();
         const synced = await syncWithDatabase(customerInfo);
