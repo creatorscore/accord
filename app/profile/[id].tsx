@@ -661,6 +661,13 @@ export default function ProfileView() {
           setIsLiked(false);
           setShowPaywall(true);
           return;
+        } else if (likeInsertError.code === 'P0001' && likeInsertError.message?.includes('approved photos')) {
+          setIsLiked(false);
+          Alert.alert(
+            t('discover.photosUnderReviewTitle', { defaultValue: 'Photos under review' }),
+            t('discover.photosUnderReviewMessage', { defaultValue: 'One of your photos is still being reviewed — this usually takes a minute. Please try again shortly.' })
+          );
+          return;
         } else {
           throw likeInsertError;
         }

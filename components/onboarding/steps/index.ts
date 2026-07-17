@@ -12,3 +12,6 @@ export { default as FieldTextStep } from './FieldTextStep';
 export { default as OrientationFieldStep } from './OrientationFieldStep';
 export { default as GenderPrefFieldStep } from './GenderPrefFieldStep';
 export { default as HometownFieldStep } from './HometownFieldStep';
+export { default as LanguagesFieldStep } from './LanguagesFieldStep';
+export { default as MustHavesFieldStep } from './MustHavesFieldStep';
+export { default as DealbreakersFieldStep } from './DealbreakersFieldStep';

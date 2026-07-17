@@ -28,6 +28,7 @@ import {
   sliderToDistance,
   DISTANCE_MAX,
   DistanceUnit,
+  milesToKm,
 } from '@/lib/distance-utils';
 import { GENDER_PREF_OPTIONS, expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
 import * as Haptics from 'expo-haptics';
@@ -208,8 +209,15 @@ export default function MatchingPreferences() {
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
+        // "Everyone" is no longer a selectable chip. Legacy users stored it as
+        // an empty array (collapse → ['Everyone']); show that as all three
+        // genders selected — functionally identical — so the Seeking section
+        // isn't blank. Saving then persists the explicit trio.
+        const collapsedGenderPref = collapseGenderPreference(data.gender_preference || []);
         setPreferences({
-          gender_preference: collapseGenderPreference(data.gender_preference || []),
+          gender_preference: collapsedGenderPref.includes('Everyone')
+            ? [...GENDER_PREF_OPTIONS]
+            : collapsedGenderPref,
           wants_children: data.wants_children,
           relationship_type: data.relationship_type || 'platonic',
           age_min: data.age_min || 18,
@@ -654,11 +662,20 @@ export default function MatchingPreferences() {
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
+              {/* Markers convert with the unit toggle — they were hardcoded in
+                  miles, so switching to km still showed "500+" when the real cap
+                  is ~805 km. Positions are unchanged (same physical distances);
+                  only the labels convert. */}
               <View style={styles.distanceMarkers}>
-                <Text style={styles.distanceMarkerText}>5 mi</Text>
-                <Text style={styles.distanceMarkerText}>25</Text>
-                <Text style={styles.distanceMarkerText}>100</Text>
-                <Text style={styles.distanceMarkerText}>500+</Text>
+                {[5, 25, 100, DISTANCE_MAX].map((mi, i) => {
+                  const isKm = preferences.distance_unit === 'km';
+                  const val = isKm ? Math.round(milesToKm(mi)) : mi;
+                  const isMax = mi >= DISTANCE_MAX;
+                  const label = i === 0
+                    ? `${val} ${isKm ? 'km' : 'mi'}`
+                    : isMax ? `${val}+` : `${val}`;
+                  return <Text key={mi} style={styles.distanceMarkerText}>{label}</Text>;
+                })}
               </View>
             </View>
 
@@ -680,7 +697,16 @@ export default function MatchingPreferences() {
               />
             </View>
 
-            <View style={styles.switchRow}>
+            {/* For non-premium users the whole row opens the paywall — the tap
+                target was previously just the tiny 24px lock icon, so taps
+                often missed and it felt unresponsive. Premium users keep the
+                Switch (native component captures its own touch; the row's
+                onPress is a guarded no-op for them). */}
+            <TouchableOpacity
+              style={styles.switchRow}
+              activeOpacity={isPremium ? 1 : 0.7}
+              onPress={() => { if (!isPremium) setShowPaywall(true); }}
+            >
               <View style={styles.switchContent}>
                 <MaterialCommunityIcons name="earth" size={20} color="#A08AB7" style={{ marginRight: 8 }} />
                 <View style={{ flex: 1 }}>
@@ -708,11 +734,9 @@ export default function MatchingPreferences() {
                   thumbColor={preferences.search_globally ? '#A08AB7' : '#F3F4F6'}
                 />
               ) : (
-                <TouchableOpacity onPress={() => setShowPaywall(true)}>
-                  <MaterialCommunityIcons name="lock" size={24} color="#A08AB7" />
-                </TouchableOpacity>
+                <MaterialCommunityIcons name="lock" size={24} color="#A08AB7" />
               )}
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 

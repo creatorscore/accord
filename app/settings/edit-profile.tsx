@@ -33,6 +33,10 @@ import { validateContent } from '@/lib/content-moderation';
 import { useTranslation } from 'react-i18next';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { PROMPT_KEYS } from '@/lib/prompt-options';
+import { EDUCATION_LEVELS, COMMON_LANGUAGES, POLITICAL_VIEWS } from '@/lib/onboarding-config';
+import Slider from '@react-native-community/slider';
+import { DISTANCE_MIN, DISTANCE_MAX, distanceToSlider, sliderToDistance, formatDistanceRangeLabel } from '@/lib/distance-utils';
+import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
 
 interface Photo {
   id?: string;
@@ -129,16 +133,9 @@ const RELIGIONS = [
   'Prefer not to say',
 ];
 
-const POLITICAL_VIEWS = [
-  'Very Liberal',
-  'Liberal',
-  'Moderate',
-  'Conservative',
-  'Very Conservative',
-  'Apolitical',
-  'Other',
-  'Prefer not to say',
-];
+// POLITICAL_VIEWS now imported from '@/lib/onboarding-config' so edit-profile
+// matches onboarding exactly (was a divergent list missing Progressive /
+// Socialist / Libertarian — ~3,959 users couldn't edit their political view).
 
 const VOICE_PROMPTS = [
   "A story I love to tell...",
@@ -151,21 +148,7 @@ const VOICE_PROMPTS = [
   "The best trip I ever took...",
 ];
 
-const COMMON_LANGUAGES = [
-  'English',
-  'Spanish',
-  'Mandarin',
-  'French',
-  'German',
-  'Italian',
-  'Portuguese',
-  'Russian',
-  'Japanese',
-  'Korean',
-  'Arabic',
-  'Hindi',
-  'Other',
-];
+// COMMON_LANGUAGES now imported from '@/lib/onboarding-config' (shared with onboarding)
 
 // Hobby options imported from shared config
 
@@ -1120,13 +1103,25 @@ export default function EditProfile() {
           // Run NSFW moderation check
           const signedUrl = signedData?.signedUrl || '';
           try {
-            const { data: moderationResult, error: moderationError } = await supabase.functions.invoke('moderate-photo', {
-              body: {
-                photo_url: signedUrl,
-                photo_id: photoData?.id,
-                profile_id: finalProfileId,
-              },
-            });
+            // Moderate on upload with one retry + pass storage_path (see
+            // photos.tsx) so a transient invoke failure doesn't strand the photo
+            // as 'pending' and block liking until the retry cron.
+            let moderationResult: any = null;
+            let moderationError: any = null;
+            for (let attempt = 0; attempt < 2; attempt++) {
+              const res = await supabase.functions.invoke('moderate-photo', {
+                body: {
+                  photo_url: signedUrl,
+                  storage_path: fileName,
+                  photo_id: photoData?.id,
+                  profile_id: finalProfileId,
+                },
+              });
+              moderationResult = res.data;
+              moderationError = res.error;
+              if (!moderationError && moderationResult) break;
+              if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
+            }
 
             if (moderationError) {
               console.error('Moderation service error:', moderationError);
@@ -1226,7 +1221,7 @@ export default function EditProfile() {
           lifestyle_preferences: Object.keys(lifestylePreferences).length > 0 ? lifestylePreferences : null,
           age_min: parseInt(ageMin) || 25,
           age_max: parseInt(ageMax) || 45,
-          max_distance_miles: parseInt(maxDistance) || 50,
+          max_distance_miles: Math.min(DISTANCE_MAX, Math.max(DISTANCE_MIN, parseInt(maxDistance) || 50)),
           willing_to_relocate: willingToRelocate,
           gender_preference: genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary'],
           dealbreakers: dealbreakers.length > 0 ? dealbreakers : null,
@@ -1575,19 +1570,22 @@ export default function EditProfile() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Education Level</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {['High School', "Associate's Degree", "Bachelor's Degree", "Master's Degree", 'Doctorate / PhD', 'Trade School', 'Self-Taught', 'Other'].map((level) => {
-                const value = level.toLowerCase().replace(/['\s\/]+/g, '_').replace(/_degree/g, 's');
-                const isSelected = educationLevel === value || educationLevel === level;
+              {/* Use the canonical EDUCATION_LEVELS from onboarding-config so the
+                  stored value (e.g. "masters") matches the chip exactly. The old
+                  inline regex derived "master_ss" and never matched what onboarding
+                  saved, so a filled-in education level rendered blank here. */}
+              {EDUCATION_LEVELS.map(({ value, label }) => {
+                const isSelected = educationLevel === value;
                 return (
                   <TouchableOpacity
-                    key={level}
+                    key={value}
                     style={[
                       styles.interestChip,
                       isSelected && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                     ]}
                     onPress={() => setEducationLevel(isSelected ? '' : value)}
                   >
-                    <Text style={[{ fontSize: 14, color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }, isSelected && { color: '#FFFFFF' }]}>{level}</Text>
+                    <Text style={[{ fontSize: 14, color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }, isSelected && { color: '#FFFFFF' }]}>{label}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -1824,7 +1822,14 @@ export default function EditProfile() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Political Views</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {POLITICAL_VIEWS.map((view) => (
+              {/* Include the user's stored value even if it's a retired option
+                  (e.g. legacy 'Very Liberal'/'Very Conservative') so it renders
+                  selected instead of blank — otherwise tapping any chip would
+                  silently overwrite their real value. */}
+              {(politicalViews && !(POLITICAL_VIEWS as readonly string[]).includes(politicalViews)
+                ? [...POLITICAL_VIEWS, politicalViews]
+                : POLITICAL_VIEWS
+              ).map((view) => (
                 <TouchableOpacity
                   key={view}
                   style={[
@@ -1951,6 +1956,20 @@ export default function EditProfile() {
             <View style={styles.voiceStatus}>
               <MaterialCommunityIcons name="check-circle" size={20} color="#10B981" />
               <Text style={styles.voiceStatusText}>Voice intro recorded</Text>
+            </View>
+          )}
+
+          {/* Let the user LISTEN to their current voice intro — previously the
+              section only offered re-recording with no way to hear the existing
+              one. Plays the signed URL (existing) or the freshly-recorded local
+              file. Renders nothing when there's no intro. */}
+          {voiceIntroUrl && !isRecording && (
+            <View style={{ marginTop: 12 }}>
+              <ProfileVoiceNote
+                voiceUrl={voiceIntroUrl}
+                duration={voiceDuration}
+                prompt={voiceIntroPrompt || 'Your voice intro'}
+              />
             </View>
           )}
 
@@ -2372,14 +2391,24 @@ export default function EditProfile() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Maximum Distance (miles)</Text>
-            <TextInput
-              style={styles.input}
-              value={maxDistance}
-              onChangeText={setMaxDistance}
-              placeholder="50"
-              keyboardType="number-pad"
-              placeholderTextColor="#9CA3AF"
+            {/* Bounded slider (5–500 mi) instead of a free number-pad field.
+                A raw TextInput let users type any value (e.g. 9999), which was
+                a way to bypass the 500-mile cap. The slider makes >500
+                unreachable; distance-utils maps position 0–1 to 5–500 mi. */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={styles.inputLabel}>Maximum Distance</Text>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#A08AB7' }}>
+                {formatDistanceRangeLabel(Math.min(DISTANCE_MAX, Math.max(DISTANCE_MIN, parseInt(maxDistance) || DISTANCE_MIN)))}
+              </Text>
+            </View>
+            <Slider
+              minimumValue={0}
+              maximumValue={1}
+              value={distanceToSlider(Math.min(DISTANCE_MAX, Math.max(DISTANCE_MIN, parseInt(maxDistance) || DISTANCE_MIN)))}
+              onValueChange={(v) => setMaxDistance(String(sliderToDistance(v)))}
+              minimumTrackTintColor="#A08AB7"
+              maximumTrackTintColor={isDarkColorScheme ? '#4B5563' : '#D1D5DB'}
+              thumbTintColor="#A08AB7"
             />
           </View>
 
@@ -2543,7 +2572,7 @@ export default function EditProfile() {
                 housing_preference: housingPreference,
                 age_min: parseInt(ageMin) || 25,
                 age_max: parseInt(ageMax) || 45,
-                max_distance_miles: parseInt(maxDistance) || 50,
+                max_distance_miles: Math.min(DISTANCE_MAX, Math.max(DISTANCE_MIN, parseInt(maxDistance) || 50)),
                 willing_to_relocate: willingToRelocate,
                 gender_preference: Array.isArray(genderPreference) && genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary'],
                 dealbreakers: Array.isArray(dealbreakers) ? dealbreakers : [],

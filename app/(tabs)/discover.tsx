@@ -156,6 +156,7 @@ export default function Discover() {
     maxDistance: 100,
     activeToday: false,
     showBlurredPhotos: true,
+    verifiedOnly: false,
     // Premium filters
     religion: [],
     politicalViews: [],
@@ -184,6 +185,34 @@ export default function Discover() {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
+  // One-time hint that the quick-filter bar scrolls horizontally.
+  const quickFilterScrollRef = useRef<ScrollView>(null);
+  const scrollHintScheduledRef = useRef(false);
+  // Many users didn't realize the top quick-filter bar scrolls. On the user's
+  // first discovery view (once profiles have loaded), nudge it right and back
+  // so the motion reveals there's more off-screen. Once only, then remembered.
+  useEffect(() => {
+    if (loading || profiles.length === 0 || scrollHintScheduledRef.current) return;
+    scrollHintScheduledRef.current = true;
+    (async () => {
+      try {
+        if (await AsyncStorage.getItem('discovery_scroll_hint_seen')) return;
+        setTimeout(() => {
+          const ref = quickFilterScrollRef.current;
+          if (!ref) {
+            // Bar not mounted yet — don't burn the one-time flag; allow a retry
+            // on the next load (e.g. when more profiles come in).
+            scrollHintScheduledRef.current = false;
+            return;
+          }
+          ref.scrollTo({ x: 72, animated: true });
+          setTimeout(() => quickFilterScrollRef.current?.scrollTo({ x: 0, animated: true }), 650);
+          // Mark seen only after the nudge actually fired.
+          AsyncStorage.setItem('discovery_scroll_hint_seen', 'true').catch(() => {});
+        }, 900);
+      } catch {}
+    })();
+  }, [loading, profiles.length]);
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('miles');
   const [heightUnit, setHeightUnit] = useState<HeightUnit>('imperial');
   const [showReportModal, setShowReportModal] = useState(false);
@@ -505,6 +534,7 @@ export default function Discover() {
       genderPreference: [...(f.genderPreference || [])].sort(),
       activeToday: f.activeToday,
       showBlurredPhotos: f.showBlurredPhotos,
+      verifiedOnly: f.verifiedOnly,
       religion: [...(f.religion || [])].sort(),
       politicalViews: [...(f.politicalViews || [])].sort(),
       ethnicity: [...(f.ethnicity || [])].sort(),
@@ -538,6 +568,7 @@ export default function Discover() {
         languagesSpoken: newFilters.languagesSpoken,
         activeToday: newFilters.activeToday,
         showBlurredPhotos: newFilters.showBlurredPhotos,
+        verifiedOnly: newFilters.verifiedOnly,
         smoking: newFilters.smoking,
         drinking: newFilters.drinking,
         pets: newFilters.pets,
@@ -678,6 +709,7 @@ export default function Discover() {
         maxDistance: userPreferences.max_distance_miles || 100,
         activeToday: df.activeToday || false,
         showBlurredPhotos: df.showBlurredPhotos !== undefined ? df.showBlurredPhotos : true,
+        verifiedOnly: df.verifiedOnly || false,
         // Gender preference is a true discovery filter (who you want to see)
         genderPreference: userPreferences.gender_preference || [],
         // All other premium filters: only load from discovery_filters JSONB
@@ -1339,6 +1371,29 @@ export default function Discover() {
           .gte('age', Math.max(18, effectiveFilters.ageMin))
           .lte('age', effectiveFilters.ageMax);
 
+        // HARD FILTER: distance in search mode too. Search previously skipped
+        // the distance bounding box server-side and relied only on a client-side
+        // filter — a tampered client could pull far profiles from the API. Bound
+        // the query to the user's max-distance box UNLESS they've paid for
+        // unlimited reach: global search, or premium + preferred cities. Those
+        // paid users intentionally see (and can like) people anywhere; the exact
+        // circular cut is still applied client-side for non-exempt users. The
+        // box mirrors get_nearby_profiles (latDelta = mi/69, lngDelta scaled by
+        // cos(lat), floored to avoid div-by-zero near the poles).
+        const searchDistanceExempt =
+          isSearchingGlobally ||
+          (isPremium && (currentUserData.preferences?.preferred_cities?.length ?? 0) > 0);
+        if (!searchDistanceExempt && currentUserData.latitude != null && currentUserData.longitude != null) {
+          const boundMiles = Math.min(effectiveFilters.maxDistance, 500);
+          const latDelta = boundMiles / 69.0;
+          const lngDelta = boundMiles / (Math.max(Math.cos((currentUserData.latitude * Math.PI) / 180), 0.01) * 69.0);
+          query = query
+            .gte('latitude', currentUserData.latitude - latDelta)
+            .lte('latitude', currentUserData.latitude + latDelta)
+            .gte('longitude', currentUserData.longitude - lngDelta)
+            .lte('longitude', currentUserData.longitude + lngDelta);
+        }
+
         // Gender preference is a hard filter — enforce in search mode too.
         // Use in-session effectiveFilters (not DB) so an in-session filter change takes
         // effect immediately even if the DB write is still in flight.
@@ -1845,6 +1900,13 @@ export default function Discover() {
 
               return false;
             }
+          }
+
+          // Verified-only filter (free) — show only profiles that carry a
+          // verification badge (photo-verified or identity-verified), matching
+          // the badge shown on the profile card.
+          if (effectiveFilters.verifiedOnly && !(profile.photo_verified || profile.is_verified)) {
+            return false;
           }
 
           // Show Blurred Photos filter - hide profiles with photo blur if disabled
@@ -2602,9 +2664,17 @@ export default function Discover() {
         } catch {}
         showToast({ type: 'info', title: t('discover.dailyLimitTitle'), message: t('discover.dailyLimitMessage') });
         setShowPaywall(true);
+      } else if (error?.code === 'P0001' && error?.message?.includes('approved photos')) {
+        // Friendlier than the raw "2 approved photos required" — the real cause
+        // is usually that a just-uploaded photo is still in moderation review.
+        showToast({
+          type: 'info',
+          title: t('discover.photosUnderReviewTitle', { defaultValue: 'Photos under review' }),
+          message: t('discover.photosUnderReviewMessage', { defaultValue: 'One of your photos is still being reviewed — this usually takes a minute. Please try again shortly.' }),
+        });
       } else if (error?.code === 'P0001' && error?.message) {
-        // Surface other server-side rejections (profile incomplete, photo count,
-        // premium required for super like, etc.) instead of silently returning.
+        // Surface other server-side rejections (profile incomplete, premium
+        // required for super like, etc.) instead of silently returning.
         showToast({ type: 'error', title: t('common.error'), message: error.message });
       } else if (isJwtExpired) {
         // Refresh was kicked off above; nudge the user to retry so the
@@ -2852,9 +2922,15 @@ export default function Discover() {
         );
       } else if (error?.code === 'P0001' && error?.message?.includes('Daily like limit')) {
         setShowPaywall(true);
+      } else if (error?.code === 'P0001' && error?.message?.includes('approved photos')) {
+        showToast({
+          type: 'info',
+          title: t('discover.photosUnderReviewTitle', { defaultValue: 'Photos under review' }),
+          message: t('discover.photosUnderReviewMessage', { defaultValue: 'One of your photos is still being reviewed — this usually takes a minute. Please try again shortly.' }),
+        });
       } else if (error?.code === 'P0001' && error?.message) {
-        // Surface any other server-side rejection (profile incomplete, photo
-        // count, etc.) instead of the generic superLikeError toast.
+        // Surface any other server-side rejection (profile incomplete, etc.)
+        // instead of the generic superLikeError toast.
         showToast({ type: 'error', title: t('common.error'), message: error.message });
       } else {
         showToast({ type: 'error', title: t('common.error'), message: t('toast.superLikeError') });
@@ -3237,6 +3313,7 @@ export default function Discover() {
           {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
           <View className="flex-row items-center mb-3">
             <ScrollView
+              ref={quickFilterScrollRef}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 6, paddingLeft: 12, paddingRight: 12, alignItems: 'center' }}
@@ -3263,16 +3340,22 @@ export default function Discover() {
                 <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
               </TouchableOpacity>
 
-              {/* Intention Quick Filter */}
+              {/* Verified-Only Quick Filter (free). Replaces the old "Dating
+                  Intentions" quick filter — intention stays available as the
+                  premium "Marriage Intentions" filter in the advanced menu, so
+                  it's no longer both free (here) and premium (there). */}
               <TouchableOpacity
-                style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                style={{ backgroundColor: filters.verifiedOnly ? '#A08AB7' : colors.card, borderWidth: 1, borderColor: filters.verifiedOnly ? '#A08AB7' : colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                 onPress={() => {
-                  setShowIntentionDropdown(!showIntentionDropdown);
+                  setShowIntentionDropdown(false);
                   setShowAgeSlider(false);
+                  const newFilters = { ...filters, verifiedOnly: !filters.verifiedOnly };
+                  setFilters(newFilters);
+                  loadProfiles(undefined, undefined, newFilters);
                 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.datingIntentions')}</Text>
-                <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
+                <MaterialCommunityIcons name="check-decagram" size={15} color={filters.verifiedOnly ? '#fff' : colors.foreground} style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 13, fontWeight: '500', color: filters.verifiedOnly ? '#fff' : colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.verifiedOnly', { defaultValue: 'Verified' })}</Text>
               </TouchableOpacity>
 
               {/* Active Today Toggle */}
@@ -4035,7 +4118,10 @@ export default function Discover() {
           onLike={(_likedContent, message, likedContentData) => handleSwipeRight(message, likedContentData)}
           onSuperLike={handleSwipeUp}
           onRewind={handleRewind}
-          canRewind={!!lastSwipe && isPremium}
+          // Light up rewind whenever an undo is available, even for free users, to
+          // advertise the feature; handleRewind still gates the actual rewind behind
+          // the paywall (free users get an upgrade prompt on tap).
+          canRewind={!!lastSwipe}
           isAdmin={isAdmin}
           superLikesRemaining={superLikesRemaining}
           likesRemaining={DAILY_LIKE_LIMIT - likeCount}
@@ -4050,6 +4136,7 @@ export default function Discover() {
                 {/* Quick Filters Row - Horizontal Scroll with Search/Refresh on right */}
                 <View className="flex-row items-center mb-3">
                   <ScrollView
+                    ref={quickFilterScrollRef}
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={{ gap: 6, paddingLeft: 12, paddingRight: 12, alignItems: 'center' }}
@@ -4076,16 +4163,21 @@ export default function Discover() {
                       <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
                     </TouchableOpacity>
 
-                    {/* Intention Quick Filter */}
+                    {/* Verified-Only Quick Filter (free) — mirrors the primary
+                        filter bar; intention moved to the premium "Marriage
+                        Intentions" filter in the advanced menu. */}
                     <TouchableOpacity
-                      style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
+                      style={{ backgroundColor: filters.verifiedOnly ? '#A08AB7' : colors.card, borderWidth: 1, borderColor: filters.verifiedOnly ? '#A08AB7' : colors.border, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
                       onPress={() => {
-                        setShowIntentionDropdown(!showIntentionDropdown);
+                        setShowIntentionDropdown(false);
                         setShowAgeSlider(false);
+                        const newFilters = { ...filters, verifiedOnly: !filters.verifiedOnly };
+                        setFilters(newFilters);
+                        loadProfiles(undefined, undefined, newFilters);
                       }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.datingIntentions')}</Text>
-                      <MaterialCommunityIcons name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: 4 }} />
+                      <MaterialCommunityIcons name="check-decagram" size={15} color={filters.verifiedOnly ? '#fff' : colors.foreground} style={{ marginRight: 4 }} />
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: filters.verifiedOnly ? '#fff' : colors.foreground, lineHeight: 14 }}>{t('discover.quickFilter.verifiedOnly', { defaultValue: 'Verified' })}</Text>
                     </TouchableOpacity>
 
                     {/* Active Today Toggle */}

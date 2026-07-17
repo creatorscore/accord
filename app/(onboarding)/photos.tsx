@@ -410,13 +410,28 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
               }
             } else {
               try {
-                const { data: moderationResult, error: moderationError } = await supabase.functions.invoke('moderate-photo', {
-                  body: {
-                    photo_url: signedUrl,
-                    photo_id: photoData?.id,
-                    profile_id: profileId,
-                  },
-                });
+                // Moderate on upload, with one retry. A transient invoke failure
+                // used to silently leave the photo 'pending' (not counting toward
+                // the 2-photo like minimum) until the retry cron swept it minutes
+                // later — the cause of the "need 2 approved photos" support
+                // tickets. Also pass storage_path so the function can mint a fresh
+                // signed URL if the passed one is stale.
+                let moderationResult: any = null;
+                let moderationError: any = null;
+                for (let attempt = 0; attempt < 2; attempt++) {
+                  const res = await supabase.functions.invoke('moderate-photo', {
+                    body: {
+                      photo_url: signedUrl,
+                      storage_path: fileName,
+                      photo_id: photoData?.id,
+                      profile_id: profileId,
+                    },
+                  });
+                  moderationResult = res.data;
+                  moderationError = res.error;
+                  if (!moderationError && moderationResult) break;
+                  if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
+                }
 
                 if (moderationError) {
                   console.error('Moderation service error:', moderationError);
