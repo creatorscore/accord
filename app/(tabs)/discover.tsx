@@ -1480,11 +1480,38 @@ export default function Discover() {
           }
         }
 
-        // Phase 1: ID-only fetch (uses idx_profiles_global_discovery)
-        const { data: idData, error: idError } = await query;
-        mark('globalIdQuery');
-        if (idError) throw idError;
-        const candidateIds = (idData ?? []).map((p: any) => p.id);
+        // Phase 1: ID-only fetch.
+        let candidateIds: string[];
+        if (effectiveSearchMode) {
+          // Search mode keeps the direct query (it intentionally INCLUDES
+          // already-swiped profiles + does keyword search on scalar fields).
+          const { data: idData, error: idError } = await query;
+          mark('globalIdQuery');
+          if (idError) throw idError;
+          candidateIds = (idData ?? []).map((p: any) => p.id);
+        } else {
+          // Normal global discovery: exclude swiped profiles SERVER-SIDE for ANY
+          // swipe count. The old path (the `query` built above) skipped the
+          // .not('id','in',...) exclusion whenever swipedIds > 150 (PostgREST
+          // URL-length cap), so global heavy swipers whose newest-200 were all
+          // already-seen got an EMPTY feed. get_global_discovery_ids excludes
+          // swiped/blocked/banned via NOT EXISTS anti-joins (no array, no URL
+          // ceiling) and enforces the age/gender + premium religion/political
+          // hard filters server-side, newest-first. ~320ms even for a user with
+          // 1,600+ swipes. The `query` object above is unused in this branch.
+          const { data: gIds, error: gErr } = await supabase.rpc('get_global_discovery_ids', {
+            p_user_profile_id: profileId,
+            p_min_age: Math.max(18, effectiveFilters.ageMin),
+            p_max_age: effectiveFilters.ageMax,
+            p_gender_prefs: (effectiveFilters.genderPreference || []).filter((g: string) => g !== 'Everyone'),
+            p_religions: (isPremium && effectiveFilters.religion.length > 0) ? effectiveFilters.religion : null,
+            p_political_views: (isPremium && effectiveFilters.politicalViews.length > 0) ? effectiveFilters.politicalViews : null,
+            p_result_limit: 200,
+          });
+          mark('globalIdQuery');
+          if (gErr) throw gErr;
+          candidateIds = (gIds ?? []).map((r: any) => r.id);
+        }
 
         // Phase 2: hydrate full profiles + photos
         // NOTE: Do NOT join preferences here. Preferences RLS blocks reads of
@@ -1535,7 +1562,8 @@ export default function Discover() {
         } else {
           data = [];
         }
-        error = idError;
+        // Errors in either phase-1 branch throw directly above; nothing to
+        // propagate here.
       }
 
       if (error) throw error;
