@@ -226,7 +226,7 @@ export default function Likes() {
   const { user } = useAuth();
   const profileDataContext = useProfileData();
   const { isPremium, isPlatinum } = useSubscription();
-  const { refreshUnreadLikeCount, setUnreadLikeCount } = useNotifications();
+  const { setUnreadLikeCount } = useNotifications();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -766,8 +766,13 @@ export default function Likes() {
       }
     }
 
-    // Optimistically remove from UI
+    // Optimistically remove from UI and keep the tab badge in sync with the
+    // VISIBLE list (see handlePass) — re-querying the RPC would leave a stale
+    // badge like "1" after liking back the last person.
+    const remainingAfterLikeBack = likes.filter(l => l.profile_id !== likeProfileId).length;
     setLikes(prev => prev.filter(l => l.profile_id !== likeProfileId));
+    setLikesCount(remainingAfterLikeBack);
+    setUnreadLikeCount(remainingAfterLikeBack);
 
     try {
       // Create a like back (use upsert to handle case where like already exists)
@@ -938,9 +943,7 @@ export default function Likes() {
       if (!isPremium && !isPlatinum) {
         await incrementDailyLikeCount();
       }
-
-      // Refresh the notification badge count
-      refreshUnreadLikeCount();
+      // (tab badge already synced to the visible list above)
     } catch (error: any) {
       console.error('Error creating match:', error);
       // Restore the like back to UI on error
@@ -956,8 +959,15 @@ export default function Likes() {
     const like = likes.find(l => l.id === likeId);
     if (!like) return;
 
-    // Optimistically remove from UI
+    // Optimistically remove from UI and keep the tab badge in sync with the
+    // VISIBLE list. loadLikes reconciles the badge to the filtered list (not the
+    // RPC, which uses different photo/eligibility criteria); re-querying the RPC
+    // here would re-add filtered-out likers and leave a stale badge (e.g. "1"
+    // after dismissing the last like).
+    const remainingAfterPass = likes.filter(l => l.id !== likeId).length;
     setLikes(prev => prev.filter(l => l.id !== likeId));
+    setLikesCount(remainingAfterPass);
+    setUnreadLikeCount(remainingAfterPass);
 
     try {
       // Create a pass record (so we remember this dismissal)
@@ -973,9 +983,7 @@ export default function Likes() {
         .from('likes')
         .delete()
         .eq('id', likeId);
-
-      // Refresh the notification badge count
-      refreshUnreadLikeCount();
+      // (tab badge already synced to the visible list above)
     } catch (error) {
       console.error('Error passing:', error);
       // Reload likes to restore state
