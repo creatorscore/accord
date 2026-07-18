@@ -14,7 +14,15 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const BATCH_SIZE = 100
 const MAX_NOTIFICATIONS = 2000
 const CONCURRENT_BATCHES = 3 // 3 concurrent batches * 100 = 300 per round, well under Expo's 600/sec limit
-const IN_BATCH_SIZE = 500 // For batching .in() calls to avoid URL length limits
+// For batching .in() calls to avoid URL length limits. MUST stay small: 500
+// UUIDs in an `id=in.(...)` GET query string is a ~18KB URL that exceeds the
+// gateway limit, so the whole batch request errored and the loops below did a
+// silent `continue` — dropping every recipient in that batch and marking their
+// notification "Profile not found". Per-event notifications (few recipients per
+// run) stayed under the limit, but the daily digest's large fan-out was failing
+// ~72% of its pushes in clean 500-row blocks. 100 UUIDs ≈ 4KB URL, safely under
+// the ~8KB gateway limit.
+const IN_BATCH_SIZE = 100
 
 interface NotificationQueueItem {
   id: string
