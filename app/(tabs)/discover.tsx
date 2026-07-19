@@ -270,6 +270,11 @@ export default function Discover() {
     profilesRef.current = profiles;
     currentIndexRef.current = currentIndex;
   }, [profiles, currentIndex]);
+  // Guards a background "load more" so it never runs concurrently with itself or
+  // a foreground load. Number of cards left before we silently prefetch+append
+  // the next batch (kept > the batch cadence so the stack never visibly drains).
+  const loadingMoreRef = useRef(false);
+  const PREFETCH_AHEAD = 6;
 
   // Safely advance to the next profile index, bounded by current profiles length
   const advanceIndex = useCallback(() => {
@@ -944,7 +949,7 @@ export default function Discover() {
     return Math.round(R * c);
   }, []);
 
-  const loadProfiles = async (searchModeOverride?: boolean, searchKeywordOverride?: string, filtersOverride?: Partial<FilterOptions>) => {
+  const loadProfiles = async (searchModeOverride?: boolean, searchKeywordOverride?: string, filtersOverride?: Partial<FilterOptions>, background: boolean = false) => {
     // Use override values if provided, otherwise fall back to state
     // This fixes the React state timing issue where state updates are async
     const effectiveSearchMode = searchModeOverride !== undefined ? searchModeOverride : isSearchMode;
@@ -973,7 +978,8 @@ export default function Discover() {
     const mark = (label: string) => { marks[label] = Date.now() - t0; };
 
     try {
-      setLoading(true);
+      // Background load-more appends silently — never flip the full-screen loader.
+      if (!background) setLoading(true);
 
       if (!profileId) return;
 
@@ -1178,6 +1184,9 @@ export default function Discover() {
 
       if (!isSearchingGlobally && !effectiveSearchMode && currentUserData.latitude && currentUserData.longitude) {
         const swipedSet = new Set(swipedIds);
+        // Background load-more: also exclude profiles already in the on-screen
+        // stack so the fetch returns the NEXT batch rather than the ones showing.
+        if (background) for (const sp of profilesRef.current) swipedSet.add(sp.id);
         let nearbyIds: string[] = [];
 
         // Is this load using filters that differ from the SAVED prefs the cache
@@ -1534,6 +1543,12 @@ export default function Discover() {
         // Postgres statement_timeout (JAVASCRIPT-REACT-93, "discovery_load"
         // globalFullFetch ~11s). Prefs are hydrated below via the
         // get_profile_preferences SECURITY DEFINER RPC instead.
+        // Background load-more: drop IDs already on-screen so we hydrate the NEXT
+        // batch (the RPC already excludes swiped, but not the current stack).
+        if (background) {
+          const onScreen = new Set(profilesRef.current.map((p: any) => p.id));
+          candidateIds = candidateIds.filter((id: string) => !onScreen.has(id));
+        }
         if (candidateIds.length > 0) {
           const { data: fullData, error: fullError } = await supabase
             .from('profiles')
@@ -2201,7 +2216,26 @@ export default function Discover() {
       // Add any remaining "liked you" profiles at the end (they'll still appear eventually)
       sortedProfiles = [...sortedProfiles, ...remainingLikedYou];
 
-
+      // BACKGROUND LOAD-MORE: sign + dedupe against the current stack and APPEND,
+      // with no loader and no index reset, so more cards flow in silently as the
+      // user swipes. Only declares the end when this fetch yields nothing new.
+      if (background) {
+        const onScreenIds = new Set(profilesRef.current.map((p: any) => p.id));
+        const freshOnes = sortedProfiles.filter((p: any) => !onScreenIds.has(p.id));
+        if (freshOnes.length > 0) {
+          const signedFresh = await signProfileMediaUrls(freshOnes);
+          setProfiles(prev => {
+            const have = new Set(prev.map((p: any) => p.id));
+            const toAppend = signedFresh.filter((p: any) => !have.has(p.id));
+            return toAppend.length > 0 ? [...prev, ...toAppend] : prev;
+          });
+          setNoMoreProfiles(false);
+        } else {
+          setNoMoreProfiles(true);
+        }
+        mark('total');
+        return; // skip the foreground replace/paint path
+      }
 
       // PERFORMANCE: Sign first few profiles immediately, show them, then sign rest in background.
       // This gets the first profile on screen 1-3 seconds faster than signing all 50 at once.
@@ -2279,10 +2313,16 @@ export default function Discover() {
         },
         [loadFingerprint],
       );
-      showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profilesLoadError') });
+      // A silent background load-more must never surface a toast — the current
+      // stack is still valid; we just didn't get more this time.
+      if (!background) {
+        showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profilesLoadError') });
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!background) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -3190,17 +3230,18 @@ export default function Discover() {
     }
   }, [currentProfileId, filters, isPremium, isPlatinum]);
 
-  // Auto-load the next batch when the (capped) stack is exhausted but more may
-  // still exist. The feed hydrates only DISCOVERY_HYDRATE_LIMIT profiles per load
-  // for speed, so exhaustion is normal — fetch the next batch instead of
-  // declaring the end. Stops only once a load returns empty (noMoreProfiles).
-  // loadProfiles sets loading=true, so the loader (not the "no more" page) fills
-  // the gap. loadProfiles intentionally omitted from deps (it's re-created each
-  // render and reads current values via refs) — same pattern as other callers.
+  // Silently prefetch + append the next batch as the user nears the end of the
+  // current (capped) stack, so profiles flow in with NO loader. The background
+  // load (4th arg) doesn't flip `loading`, excludes the on-screen stack, and
+  // appends its results. Guarded by loadingMoreRef so it can't stack up; stops
+  // once a background load returns nothing new (noMoreProfiles). loadProfiles
+  // omitted from deps (re-created each render, reads current values via refs).
   useEffect(() => {
-    if (hasInitiallyLoaded.current && currentIndex >= profiles.length && currentProfileId
-        && !loading && !refreshing && !isSearchMode && !noMoreProfiles) {
-      loadProfiles();
+    if (hasInitiallyLoaded.current && currentProfileId && !loading && !refreshing
+        && !isSearchMode && !noMoreProfiles && !loadingMoreRef.current
+        && profiles.length > 0 && (profiles.length - currentIndex) <= PREFETCH_AHEAD) {
+      loadingMoreRef.current = true;
+      loadProfiles(undefined, undefined, undefined, true).finally(() => { loadingMoreRef.current = false; });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, profiles.length, currentProfileId, loading, refreshing, isSearchMode, noMoreProfiles]);
