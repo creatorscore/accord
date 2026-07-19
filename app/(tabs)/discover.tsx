@@ -42,6 +42,15 @@ import PaymentFailedBanner from '@/components/premium/PaymentFailedBanner';
 import PremiumExpiringBanner from '@/components/premium/PremiumExpiringBanner';
 import LocationStaleBanner from '@/components/security/LocationStaleBanner';
 
+// Hydrate only the first N candidates per load. The feed shows one card at a
+// time and auto-reloads the next batch when the stack is exhausted (see the
+// `currentIndex >= profiles.length` effect), so fetching 50-100 full profiles +
+// photos up front was pure latency — the fullProfilesFetch stage (SELECT * +
+// photos) was the discovery load's bottleneck (~5-9s cold). The candidate IDs
+// are already ordered by priority (liked-you, distance), so the first slice is
+// the most relevant.
+const DISCOVERY_HYDRATE_LIMIT = 24;
+
 interface Profile {
   id: string;
   display_name: string;
@@ -1281,7 +1290,7 @@ export default function Discover() {
                   blur_data_uri
                 )
               `)
-              .in('id', nearbyIds)
+              .in('id', nearbyIds.slice(0, DISCOVERY_HYDRATE_LIMIT))
               .eq('is_active', true)
               .eq('profile_complete', true)
               .eq('incognito_mode', false)
@@ -1533,7 +1542,7 @@ export default function Discover() {
                 blur_data_uri
               )
             `)
-            .in('id', candidateIds);
+            .in('id', candidateIds.slice(0, DISCOVERY_HYDRATE_LIMIT));
           mark('globalFullFetch');
           if (fullError) throw fullError;
 
@@ -1549,7 +1558,7 @@ export default function Discover() {
           // the SECURITY DEFINER RPC to hydrate prefs (same pattern as the
           // local-search branch).
           if (data.length > 0) {
-            const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: candidateIds });
+            const { data: prefsData } = await supabase.rpc('get_profile_preferences', { p_profile_ids: data.map((p: any) => p.id) });
             mark('globalPrefsFetch');
             if (prefsData) {
               const prefsMap = new Map(prefsData.map((p: any) => [p.profile_id, p]));
