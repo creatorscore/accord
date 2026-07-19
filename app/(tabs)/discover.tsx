@@ -49,7 +49,7 @@ import LocationStaleBanner from '@/components/security/LocationStaleBanner';
 // photos) was the discovery load's bottleneck (~5-9s cold). The candidate IDs
 // are already ordered by priority (liked-you, distance), so the first slice is
 // the most relevant.
-const DISCOVERY_HYDRATE_LIMIT = 24;
+const DISCOVERY_HYDRATE_LIMIT = 12;
 
 interface Profile {
   id: string;
