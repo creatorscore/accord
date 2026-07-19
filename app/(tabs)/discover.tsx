@@ -147,6 +147,11 @@ export default function Discover() {
   const [loading, setLoading] = useState(true);
   const hasInitiallyLoaded = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
+  // True only when a load genuinely returned zero profiles. Gates the
+  // "no more profiles" empty state so it never shows just because the current
+  // (capped) batch was swiped through — the feed auto-loads the next batch on
+  // exhaustion and only declares the end when a fresh load comes back empty.
+  const [noMoreProfiles, setNoMoreProfiles] = useState(false);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedProfile, setMatchedProfile] = useState<Profile | null>(null);
   const [matchId, setMatchId] = useState<string | null>(null);
@@ -2212,6 +2217,10 @@ export default function Discover() {
       setProfiles([...signedFirst, ...restBatch]);
       setCurrentIndex(0);
       hasInitiallyLoaded.current = true;
+      // Genuinely out of profiles only when this load produced none. A non-empty
+      // load clears the flag so the auto-reload effect can fire again next time
+      // the (capped) stack is exhausted.
+      setNoMoreProfiles(sortedProfiles.length === 0);
       mark('total');
 
       // Prefetch images for the first few profiles for instant loading
@@ -3181,12 +3190,28 @@ export default function Discover() {
     }
   }, [currentProfileId, filters, isPremium, isPlatinum]);
 
-  // Calculate smart recommendations when empty state is shown (only after first load)
+  // Auto-load the next batch when the (capped) stack is exhausted but more may
+  // still exist. The feed hydrates only DISCOVERY_HYDRATE_LIMIT profiles per load
+  // for speed, so exhaustion is normal — fetch the next batch instead of
+  // declaring the end. Stops only once a load returns empty (noMoreProfiles).
+  // loadProfiles sets loading=true, so the loader (not the "no more" page) fills
+  // the gap. loadProfiles intentionally omitted from deps (it's re-created each
+  // render and reads current values via refs) — same pattern as other callers.
   useEffect(() => {
-    if (hasInitiallyLoaded.current && currentIndex >= profiles.length && currentProfileId && !loading && !isSearchMode) {
+    if (hasInitiallyLoaded.current && currentIndex >= profiles.length && currentProfileId
+        && !loading && !refreshing && !isSearchMode && !noMoreProfiles) {
+      loadProfiles();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, profiles.length, currentProfileId, loading, refreshing, isSearchMode, noMoreProfiles]);
+
+  // Calculate smart recommendations for the empty state — only once we've truly
+  // run out (noMoreProfiles), not during an inter-batch reload.
+  useEffect(() => {
+    if (hasInitiallyLoaded.current && currentIndex >= profiles.length && currentProfileId && !loading && !isSearchMode && noMoreProfiles) {
       calculateSmartRecommendations();
     }
-  }, [currentIndex, profiles.length, currentProfileId, loading, isSearchMode, calculateSmartRecommendations]);
+  }, [currentIndex, profiles.length, currentProfileId, loading, isSearchMode, noMoreProfiles, calculateSmartRecommendations]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -3341,8 +3366,19 @@ export default function Discover() {
     );
   }
 
-  // Empty state - no more profiles (only show after first load completes)
-  if (hasInitiallyLoaded.current && currentIndex >= profiles.length) {
+  // Exhausted the current (capped) batch but more may still exist — the
+  // auto-reload effect above is fetching the next batch. Show the loader, never
+  // the "no more profiles" page, until a load genuinely comes back empty.
+  if (hasInitiallyLoaded.current && currentIndex >= profiles.length && !noMoreProfiles) {
+    return (
+      <View className="flex-1 items-center justify-center overflow-hidden" style={{ backgroundColor: colors.background }}>
+        <HandshakeLoader />
+      </View>
+    );
+  }
+
+  // Empty state - genuinely no more profiles (only after a load returned empty)
+  if (hasInitiallyLoaded.current && currentIndex >= profiles.length && noMoreProfiles) {
     return (
       <View className="flex-1" style={{ backgroundColor: colors.background }}>
         {/* Header with Search/Filter Controls */}
