@@ -32,6 +32,19 @@ export const useActivityTracker = () => {
     }
   }, [profileId]);
 
+  // ANTI-SCAM (Phase 1): verify real location from the request IP on app open.
+  // The edge function throttles the actual paid IP lookup (5 days) and fails
+  // open, so calling it on each foreground is cheap and never blocks the user.
+  // Best-effort: never surface an error.
+  const verifyLocation = useCallback(async () => {
+    if (!profileId) return;
+    try {
+      await supabase.functions.invoke('verify-location', { body: {} });
+    } catch {
+      // silent — location verification is background/best-effort
+    }
+  }, [profileId]);
+
   useEffect(() => {
     if (!user || !profileId) return;
 
@@ -40,6 +53,7 @@ export const useActivityTracker = () => {
       // Additional delay to avoid impacting startup performance
       setTimeout(() => {
         updateLastActive();
+        verifyLocation();
       }, 5000); // 5 second delay after interactions complete
     });
 
@@ -57,6 +71,7 @@ export const useActivityTracker = () => {
       // Update when app comes to foreground
       if (nextAppState === 'active') {
         updateLastActive();
+        verifyLocation();
       }
     });
 
@@ -67,5 +82,5 @@ export const useActivityTracker = () => {
       }
       subscription.remove();
     };
-  }, [user, profileId, updateLastActive]);
+  }, [user, profileId, updateLastActive, verifyLocation]);
 };
