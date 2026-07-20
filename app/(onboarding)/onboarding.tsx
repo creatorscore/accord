@@ -327,7 +327,11 @@ export default function Onboarding() {
         // the staleness banner knows this profile has a fresh GPS read.
         // LocationStep is GPS-only (autocomplete removed), so lat/lng
         // being present at this step necessarily implies a GPS source.
-        ...(step === 4 && state.latitude != null && state.longitude != null ? { last_gps_at: new Date().toISOString() } : {}),
+        // ANTI-SCAM: tag location_source='gps' here too so the main onboarding
+        // flow's (majority) users read as trusted, not null/untrusted.
+        ...(step === 4 && state.latitude != null && state.longitude != null
+          ? { last_gps_at: new Date().toISOString(), location_source: 'gps' }
+          : {}),
         pronouns: state.pronouns || null,
         gender: state.gender,
         sexual_orientation: state.sexualOrientation,
