@@ -146,6 +146,21 @@ serve(async (req) => {
     if (priorIsJump && priorReason) reasonParts.push(priorReason);
     const flagReason = flagged ? reasonParts.join(' | ') : null;
 
+    // AUTOMATED ENFORCEMENT: only the high-confidence IP signals auto-suppress
+    // from discovery — the provider's own high fraud score, or a datacenter IP
+    // (real users aren't on datacenter IPs; that's bots/scrapers). VPN/proxy or a
+    // bare country/location mismatch stay flag-only (too many legit travelers /
+    // privacy users). We never CLEAR discovery_suppressed here, so a prior
+    // teleport suppression persists.
+    const strongIp = reasons.includes('high_fraud_score') || reasons.includes('datacenter_ip');
+    const suppressPatch = strongIp
+      ? {
+          discovery_suppressed: true,
+          discovery_suppressed_reason: 'ip_fraud',
+          discovery_suppressed_at: new Date().toISOString(),
+        }
+      : {};
+
     await admin.from('profiles').update({
       ip_country: ipCountry,
       ip_latitude: ipLat,
@@ -154,6 +169,7 @@ serve(async (req) => {
       location_flag_reason: flagReason,
       location_verified: !flagged,
       location_verified_at: new Date().toISOString(),
+      ...suppressPatch,
     }).eq('id', profile.id);
 
     return new Response(JSON.stringify({ verified: !flagged, flagged, reasons, preserved_jump_flag: priorIsJump }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });

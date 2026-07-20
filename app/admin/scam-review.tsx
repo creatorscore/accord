@@ -28,6 +28,9 @@ interface FlaggedUser {
   location_country?: string | null;
   ip_country?: string | null;
   location_updated_at?: string | null;
+  // enforcement
+  discovery_suppressed?: boolean;
+  discovery_suppressed_reason?: string | null;
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -74,6 +77,7 @@ export default function AdminScamReview() {
         .select(`id, display_name, is_active,
           scam_signal_count, scam_flag_categories, scam_flagged_at,
           location_flag_reason, location_source, location_city, location_country, ip_country, location_updated_at,
+          discovery_suppressed, discovery_suppressed_reason,
           photos (url, storage_path, is_primary, display_order, blur_data_uri)`);
 
       const query = which === 'scam'
@@ -217,6 +221,15 @@ export default function AdminScamReview() {
                   )}
                   <View style={styles.userDetails}>
                     <Text style={styles.userName}>{u.display_name}</Text>
+
+                    {u.discovery_suppressed && (
+                      <View style={styles.statusBadges}>
+                        <View style={[styles.badge, { backgroundColor: '#DC2626', flexDirection: 'row', alignItems: 'center' }]}>
+                          <MaterialCommunityIcons name="eye-off" size={11} color="white" />
+                          <Text style={[styles.badgeText, { marginLeft: 4 }]}>Auto-hidden from discovery</Text>
+                        </View>
+                      </View>
+                    )}
 
                     {tab === 'scam' ? (
                       <>
