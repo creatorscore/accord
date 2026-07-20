@@ -60,7 +60,7 @@ serve(async (req) => {
 
     const { data: profile } = await admin
       .from('profiles')
-      .select('id, latitude, longitude, location_country, location_verified_at')
+      .select('id, latitude, longitude, location_country, location_verified_at, location_flagged, location_flag_reason')
       .eq('user_id', user.id)
       .maybeSingle();
     if (!profile) {
@@ -128,19 +128,35 @@ serve(async (req) => {
       reasons.push('location_mismatch');
     }
 
-    const flagged = reasons.length > 0;
+    const ipFlagged = reasons.length > 0;
+
+    // COLLISION GUARD: the BEFORE-UPDATE trigger `guard_location_change` also
+    // writes location_flagged/location_flag_reason when it detects an impossible
+    // GPS "jump" (teleport). Those flags carry reasons like "Jump 4738 mi ...".
+    // A GPS-spoofing scammer can still connect from a clean residential IP, so
+    // the IP check alone would find nothing and MUST NOT erase an existing
+    // teleport flag. Preserve any prior non-IP (jump) flag and OR it with ours.
+    const priorReason: string | null = (profile as any).location_flag_reason ?? null;
+    const priorIsJump = (profile as any).location_flagged === true
+      && !!priorReason && /^Jump /.test(priorReason);
+
+    const flagged = ipFlagged || priorIsJump;
+    const reasonParts: string[] = [];
+    if (ipFlagged) reasonParts.push(reasons.join(','));
+    if (priorIsJump && priorReason) reasonParts.push(priorReason);
+    const flagReason = flagged ? reasonParts.join(' | ') : null;
 
     await admin.from('profiles').update({
       ip_country: ipCountry,
       ip_latitude: ipLat,
       ip_longitude: ipLon,
       location_flagged: flagged,
-      location_flag_reason: flagged ? reasons.join(',') : null,
+      location_flag_reason: flagReason,
       location_verified: !flagged,
       location_verified_at: new Date().toISOString(),
     }).eq('id', profile.id);
 
-    return new Response(JSON.stringify({ verified: !flagged, flagged, reasons }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
+    return new Response(JSON.stringify({ verified: !flagged, flagged, reasons, preserved_jump_flag: priorIsJump }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
   } catch (error: any) {
     console.error('[verify-location] unexpected (fail-open):', error?.message ?? error);
     // Fail open — never block a user on our error.
