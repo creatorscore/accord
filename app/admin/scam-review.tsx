@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { signPhotoUrls } from '@/lib/signed-urls';
+import { getSignedUrls } from '@/lib/signed-urls';
 import { formatDistanceToNow } from 'date-fns';
 
 type Tab = 'scam' | 'location';
@@ -76,36 +76,31 @@ export default function AdminScamReview() {
     try {
       setLoading(true);
       setLoadError(null);
-      const base = supabase
-        .from('profiles')
-        .select(`id, display_name, is_active,
-          scam_signal_count, scam_flag_categories, scam_flagged_at,
-          location_flag_reason, location_source, location_city, location_country, ip_country, location_updated_at,
-          discovery_suppressed, discovery_suppressed_reason,
-          photos (url, storage_path, is_primary, display_order, blur_data_uri)`);
 
-      const query = which === 'scam'
-        ? base.eq('scam_flagged', true).order('scam_flagged_at', { ascending: false, nullsFirst: false }).limit(100)
-        : base.eq('location_flagged', true).order('location_updated_at', { ascending: false, nullsFirst: false }).limit(100);
-
-      const { data, error } = await query;
+      // Admin-gated SECURITY DEFINER RPC. Bypasses per-row RLS, fetches only the
+      // primary photo's path (index-only, no fat blur_data_uri), and runs under a
+      // 15s statement timeout — the direct PostgREST query timed out (~5.5s cold)
+      // against the authenticated role's 8s limit.
+      const { data, error } = await supabase.rpc('admin_list_flagged', { p_kind: which, p_limit: 100 });
       if (error) throw error;
 
-      // Batch-sign every avatar across all rows in one RPC (private bucket).
-      const rows = (data || []) as FlaggedUser[];
-      const all: PhotoLite[] = [];
-      const offsets: number[] = [];
-      for (const r of rows) {
-        offsets.push(all.length);
-        if (r.photos?.length) all.push(...r.photos);
+      const raw = (data || []) as Array<Record<string, any>>;
+
+      // Batch-sign the primary photo paths (private bucket), one round-trip.
+      const paths = raw.map((r) => r.primary_photo_path).filter(Boolean) as string[];
+      const signedByPath = new Map<string, string>();
+      if (paths.length) {
+        const signed = await getSignedUrls('profile-photos', paths);
+        paths.forEach((p, i) => { if (signed[i]) signedByPath.set(p, signed[i]!); });
       }
-      if (all.length > 0) {
-        const signed = await signPhotoUrls(all) as PhotoLite[];
-        for (let i = 0; i < rows.length; i++) {
-          const count = rows[i].photos?.length || 0;
-          if (count > 0) rows[i] = { ...rows[i], photos: signed.slice(offsets[i], offsets[i] + count) };
-        }
-      }
+
+      const rows: FlaggedUser[] = raw.map((r) => {
+        const signedUrl = r.primary_photo_path ? signedByPath.get(r.primary_photo_path) : undefined;
+        return {
+          ...(r as FlaggedUser),
+          photos: signedUrl ? [{ url: signedUrl, is_primary: true, display_order: 0 }] : [],
+        };
+      });
       setUsers(rows);
     } catch (error: any) {
       console.error('Error loading flagged accounts:', error);
