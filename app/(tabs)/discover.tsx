@@ -2734,7 +2734,14 @@ export default function Discover() {
         // No fingerprint and no capture — handled below.
       }
 
-      if (!isNetwork) {
+      // Don't report EXPECTED rejections to Sentry:
+      //  - network errors (transient), and
+      //  - P0001 server rejections, which are intentional RAISEs from our
+      //    triggers (distance block, daily/weekly like caps, 2-approved-photos,
+      //    premium-required, profile-incomplete). These are business rules shown
+      //    to the user via toast below, not bugs — capturing them floods Sentry
+      //    (e.g. REACT-99, the anti-scam distance block firing correctly).
+      if (!isNetwork && code !== 'P0001') {
         captureException(
           error instanceof Error ? error : new Error(msg || 'Like recording failed'),
           { context: 'discovery_like', error_class: errorClass, error_code: code, has_user: !!user?.id },
