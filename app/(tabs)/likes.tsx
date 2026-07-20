@@ -376,13 +376,7 @@ export default function Likes() {
                 latitude,
                 longitude,
                 hide_distance,
-                photo_blur_enabled,
-                photos (
-                  url,
-                  storage_path,
-                  is_primary,
-                  blur_data_uri
-                )
+                photo_blur_enabled
               )
             `)
             .eq('liked_profile_id', myProfileId)
@@ -440,20 +434,40 @@ export default function Likes() {
           bansResult.data?.map(b => b.banned_profile_id).filter(Boolean) || []
         );
 
-        const formattedLikes: LikeProfile[] = (likesResult.data || [])
-          .filter(like => {
-            if (matchedProfileIds.has(like.liker_profile_id) ||
-                passedProfileIds.has(like.liker_profile_id) ||
-                blockedProfileIds.has(like.liker_profile_id) ||
-                bannedProfileIds.has(like.liker_profile_id)) {
-              return false;
+        // Exclusions first, then ONE photo per surviving liker via RPC — the
+        // inline photo embed timed out (~20s) for popular users. See loadLikes.
+        const candidateLikes = (likesResult.data || []).filter(like =>
+          !matchedProfileIds.has(like.liker_profile_id) &&
+          !passedProfileIds.has(like.liker_profile_id) &&
+          !blockedProfileIds.has(like.liker_profile_id) &&
+          !bannedProfileIds.has(like.liker_profile_id)
+        );
+
+        const likerIds = Array.from(new Set(candidateLikes.map(l => l.liker_profile_id)));
+        const photoByProfile = new Map<string, any>();
+        if (likerIds.length > 0) {
+          const { data: photoRows } = await supabase.rpc('get_liker_primary_photos', { p_profile_ids: likerIds });
+          for (const r of (photoRows || [])) {
+            if (r?.profile_id && !photoByProfile.has(r.profile_id)) {
+              photoByProfile.set(r.profile_id, {
+                url: r.url,
+                storage_path: r.storage_path,
+                is_primary: r.is_primary,
+                blur_data_uri: r.blur_data_uri,
+              });
             }
+          }
+        }
+        if (cancelled) return;
+
+        const formattedLikes: LikeProfile[] = candidateLikes
+          .filter(like => {
             const prof = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
-            if (!prof || !prof.photos || prof.photos.length === 0) return false;
-            return true;
+            return !!prof && photoByProfile.has(like.liker_profile_id);
           })
           .map(like => {
             const likerProfile = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
+            const photo = photoByProfile.get(like.liker_profile_id);
             const d = calculateDistance(
               profileDataContext?.profile?.latitude ?? null,
               profileDataContext?.profile?.longitude ?? null,
@@ -477,7 +491,7 @@ export default function Likes() {
                 hide_distance: likerProfile.hide_distance || false,
                 distance: d >= 999999 ? undefined : d,
                 photo_blur_enabled: likerProfile.photo_blur_enabled || false,
-                photos: likerProfile.photos || [],
+                photos: photo ? [photo] : [],
               },
             };
           });
@@ -587,13 +601,7 @@ export default function Likes() {
               latitude,
               longitude,
               hide_distance,
-              photo_blur_enabled,
-              photos (
-                url,
-                storage_path,
-                is_primary,
-                blur_data_uri
-              )
+              photo_blur_enabled
             )
           `)
           .eq('liked_profile_id', profileId)
@@ -647,22 +655,44 @@ export default function Likes() {
         bannedUsers?.map(b => b.banned_profile_id).filter(Boolean) || []
       );
 
-      const formattedLikes: LikeProfile[] = (likesData || [])
-        .filter(like => {
-          if (matchedProfileIds.has(like.liker_profile_id) ||
-              passedProfileIds.has(like.liker_profile_id) ||
-              blockedProfileIds.has(like.liker_profile_id) ||
-              bannedProfileIds.has(like.liker_profile_id)) {
-            return false;
+      // Apply the safety exclusions first, THEN fetch photos only for the
+      // survivors. The likes list used to embed every liker's full photo set
+      // (fat blur_data_uri rows, no limit) which took ~20s and hit the 8s
+      // statement timeout for popular users ("failed to load likes"). Instead
+      // fetch ONE photo per liker via get_liker_primary_photos (~0.7s for 127).
+      const candidateLikes = (likesData || []).filter(like =>
+        !matchedProfileIds.has(like.liker_profile_id) &&
+        !passedProfileIds.has(like.liker_profile_id) &&
+        !blockedProfileIds.has(like.liker_profile_id) &&
+        !bannedProfileIds.has(like.liker_profile_id)
+      );
+
+      const likerIds = Array.from(new Set(candidateLikes.map(l => l.liker_profile_id)));
+      const photoByProfile = new Map<string, any>();
+      if (likerIds.length > 0) {
+        const { data: photoRows } = await supabase.rpc('get_liker_primary_photos', { p_profile_ids: likerIds });
+        for (const r of (photoRows || [])) {
+          if (r?.profile_id && !photoByProfile.has(r.profile_id)) {
+            photoByProfile.set(r.profile_id, {
+              url: r.url,
+              storage_path: r.storage_path,
+              is_primary: r.is_primary,
+              blur_data_uri: r.blur_data_uri,
+            });
           }
-          // Exclude profiles with no approved photos
+        }
+      }
+
+      const formattedLikes: LikeProfile[] = candidateLikes
+        .filter(like => {
           const prof = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
-          if (!prof || !prof.photos || prof.photos.length === 0) return false;
-          return true;
+          // Exclude profiles we couldn't join or that have no visible photo.
+          return !!prof && photoByProfile.has(like.liker_profile_id);
         })
         .map(like => {
           // Supabase returns joined data as array, extract first element
           const likerProfile = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
+          const photo = photoByProfile.get(like.liker_profile_id);
           const d = calculateDistance(
             profileDataContext?.profile?.latitude ?? null,
             profileDataContext?.profile?.longitude ?? null,
@@ -686,7 +716,7 @@ export default function Likes() {
               hide_distance: likerProfile.hide_distance || false,
               distance: d >= 999999 ? undefined : d,
               photo_blur_enabled: likerProfile.photo_blur_enabled || false,
-              photos: likerProfile.photos || [],
+              photos: photo ? [photo] : [],
             },
           };
         });
