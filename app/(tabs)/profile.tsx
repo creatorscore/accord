@@ -810,6 +810,20 @@ export default function Profile() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#EDE9FE', borderColor: '#7C3AED', borderLeftWidth: 4, borderLeftColor: '#7C3AED' }]}
+                onPress={() => router.push('/admin/scam-review')}
+              >
+                <View style={styles.menuItemLeft}>
+                  <MaterialCommunityIcons name="shield-account" size={24} color="#7C3AED" />
+                  <View>
+                    <Text style={[styles.menuItemText, { color: '#5B21B6', fontWeight: '700' }]}>Anti-Scam Review</Text>
+                    <Text style={[styles.adminSubtext, { color: '#5B21B6' }]}>Scam signals & location flags</Text>
+                  </View>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#7C3AED" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={[styles.menuItem, { backgroundColor: '#F3F0F7', borderColor: '#A08AB7', borderLeftWidth: 4, borderLeftColor: '#A08AB7' }]}
                 onPress={() => router.push('/(onboarding)/welcome-info')}
               >
