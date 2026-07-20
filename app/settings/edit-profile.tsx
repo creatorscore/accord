@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -332,6 +332,11 @@ export default function EditProfile() {
   const [maxDistance, setMaxDistance] = useState('50');
   const [willingToRelocate, setWillingToRelocate] = useState(false);
   const [genderPreference, setGenderPreference] = useState<string[]>([]);
+  // Tracks whether the user's preferences row actually loaded. If the prefs
+  // fetch fails/races, the local pref state stays at its empty defaults — and we
+  // must NOT persist those, or a profile save would silently overwrite the
+  // user's real matching preferences (e.g. wipe gender_preference to "everyone").
+  const prefsLoadedRef = useRef(false);
   const [dealbreakers, setDealbreakers] = useState<string[]>([]);
   const [newDealbreaker, setNewDealbreaker] = useState('');
   const [mustHaves, setMustHaves] = useState<string[]>([]);
@@ -477,6 +482,7 @@ export default function EditProfile() {
             .single();
 
           if (prefsData) {
+            prefsLoadedRef.current = true;
             setPreferencesId(prefsData.id);
             // Prefer new primary_reasons column, fallback to legacy primary_reason
             if (prefsData.primary_reasons && Array.isArray(prefsData.primary_reasons)) {
@@ -1204,7 +1210,12 @@ export default function EditProfile() {
       }
 
       // Save preferences
-      if (finalProfileId) {
+      // GUARD: only persist preferences if the row actually loaded. Otherwise a
+      // failed/racy prefs fetch would make us write empty-state defaults over the
+      // user's real preferences — this is what was flipping gender_preference to
+      // "everyone" (multiple support tickets). With no loaded row there is also
+      // nothing for .update() to change, so skipping is safe either way.
+      if (finalProfileId && prefsLoadedRef.current) {
         // Build lifestyle preferences object
         const lifestylePreferences: any = {};
         if (smoking) lifestylePreferences.smoking = smoking;
@@ -1226,7 +1237,12 @@ export default function EditProfile() {
           age_max: parseInt(ageMax) || 45,
           max_distance_miles: Math.min(DISTANCE_MAX, Math.max(DISTANCE_MIN, parseInt(maxDistance) || 50)),
           willing_to_relocate: willingToRelocate,
-          gender_preference: genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary'],
+          // Empty selection = "Everyone" → store canonical [] (the whole app
+          // treats [] as the skip-gender-filter sentinel). Never write
+          // ['Man','Woman','Non-binary'] as a fallback: it reads as an explicit
+          // overlap filter that excludes empty-gender profiles and, crucially,
+          // silently overrode users who had picked a specific gender.
+          gender_preference: genderPreference.length > 0 ? genderPreference : [],
           dealbreakers: dealbreakers.length > 0 ? dealbreakers : null,
           must_haves: mustHaves.length > 0 ? mustHaves : null,
         };
@@ -2577,7 +2593,7 @@ export default function EditProfile() {
                 age_max: parseInt(ageMax) || 45,
                 max_distance_miles: Math.min(DISTANCE_MAX, Math.max(DISTANCE_MIN, parseInt(maxDistance) || 50)),
                 willing_to_relocate: willingToRelocate,
-                gender_preference: Array.isArray(genderPreference) && genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary'],
+                gender_preference: Array.isArray(genderPreference) ? genderPreference : [],
                 dealbreakers: Array.isArray(dealbreakers) ? dealbreakers : [],
                 must_haves: Array.isArray(mustHaves) ? mustHaves : [],
                 lifestyle_preferences: {
