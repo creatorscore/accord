@@ -840,6 +840,9 @@ export default function EditProfile() {
       const updateData: Record<string, any> = {
         latitude: location.latitude,
         longitude: location.longitude,
+        // ANTI-SCAM: this path is GPS-only (no manual entry), so mark the
+        // location as a trusted real-device fix.
+        location_source: 'gps',
       };
       if (location.city) updateData.location_city = location.city;
       if (location.state) updateData.location_state = location.state;

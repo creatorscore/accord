@@ -211,6 +211,10 @@ export default function BasicInfo() {
   const [locationState, setLocationState] = useState('');
   const [locationCountry, setLocationCountry] = useState('');
   const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  // ANTI-SCAM: track HOW the location was set so the server can trust GPS and
+  // treat a hand-picked city as unverified. 'gps' = real device fix; 'city' =
+  // manual autocomplete pick (spoofable — kept only as a GPS-failure fallback).
+  const [locationSource, setLocationSource] = useState<'gps' | 'city' | null>(null);
   const [locationSearch, setLocationSearch] = useState('');
   const [searchingLocation, setSearchingLocation] = useState(false);
   const [locationSuggestions, setLocationSuggestions] = useState<CityResult[]>([]);
@@ -255,7 +259,7 @@ export default function BasicInfo() {
 
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('display_name, birth_date, gender, pronouns, ethnicity, sexual_orientation, location_city, location_state, location_country, latitude, longitude, hide_distance, field_visibility, hometown, occupation, education')
+        .select('display_name, birth_date, gender, pronouns, ethnicity, sexual_orientation, location_city, location_state, location_country, latitude, longitude, location_source, hide_distance, field_visibility, hometown, occupation, education')
         .eq('user_id', currentUser.id)
         .single();
 
@@ -272,6 +276,7 @@ export default function BasicInfo() {
         if (profile.location_state) setLocationState(profile.location_state);
         if (profile.location_country) setLocationCountry(profile.location_country);
         if (profile.latitude && profile.longitude) setLocationCoords({ latitude: profile.latitude, longitude: profile.longitude });
+        if (profile.location_source === 'gps' || profile.location_source === 'city') setLocationSource(profile.location_source);
         if (profile.hometown) setHometown(profile.hometown);
         if (profile.occupation) setOccupation(profile.occupation);
         if (profile.education) setEducation(profile.education);
@@ -374,6 +379,7 @@ export default function BasicInfo() {
       }
 
       setLocationCoords({ latitude: location.coords.latitude, longitude: location.coords.longitude });
+      setLocationSource('gps'); // real device fix — trusted
       await new Promise(resolve => setTimeout(resolve, 50));
 
       const geocodeResult = await Promise.race([
@@ -439,6 +445,7 @@ export default function BasicInfo() {
     setLocationState(suggestion.state);
     setLocationCountry(suggestion.country);
     setLocationCoords({ latitude: suggestion.latitude, longitude: suggestion.longitude });
+    setLocationSource('city'); // hand-picked — untrusted, may be flagged/limited server-side
     setLocationSearch(`${suggestion.city}, ${suggestion.state}`);
     setShowSuggestions(false);
     setLocationSuggestions([]);
@@ -449,6 +456,7 @@ export default function BasicInfo() {
     setLocationState('');
     setLocationCountry('');
     setLocationCoords(null);
+    setLocationSource(null);
     setLocationSearch('');
     setShowManualEntry(false);
   };
@@ -619,6 +627,9 @@ export default function BasicInfo() {
           location_country: locationCountry || null,
           latitude: locationCoords?.latitude ?? null,
           longitude: locationCoords?.longitude ?? null,
+          // ANTI-SCAM: 'gps' (trusted) vs 'city' (hand-picked, untrusted). Null =
+          // legacy/unknown, same as before. Lets the server trust real GPS fixes.
+          location_source: locationSource,
           hide_distance: hideLocation,
           hometown: hometown.trim() || null,
           occupation: occupation.trim() || null,
