@@ -47,6 +47,9 @@ export default function AdminScamReview() {
   const [refreshing, setRefreshing] = useState(false);
   const [users, setUsers] = useState<FlaggedUser[]>([]);
   const [acting, setActing] = useState<string | null>(null);
+  // Distinguish a genuinely-empty result from a failed load so an error never
+  // masquerades as "Nothing flagged".
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => { checkAdminStatus(); }, []);
   useEffect(() => { if (isAdmin) load(tab); }, [isAdmin, tab]);
@@ -72,6 +75,7 @@ export default function AdminScamReview() {
   const load = useCallback(async (which: Tab) => {
     try {
       setLoading(true);
+      setLoadError(null);
       const base = supabase
         .from('profiles')
         .select(`id, display_name, is_active,
@@ -105,7 +109,7 @@ export default function AdminScamReview() {
       setUsers(rows);
     } catch (error: any) {
       console.error('Error loading flagged accounts:', error);
-      Alert.alert('Error', 'Failed to load flagged accounts.');
+      setLoadError(error?.message || 'Failed to load flagged accounts.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -202,7 +206,20 @@ export default function AdminScamReview() {
           style={styles.scrollView}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         >
-          {users.length === 0 ? (
+          {loadError ? (
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons name="alert-circle" size={64} color="#EF4444" />
+              <Text style={styles.emptyText}>Couldn’t load</Text>
+              <Text style={styles.emptySubtext}>{loadError}</Text>
+              <TouchableOpacity
+                style={[styles.dismissButton, { marginTop: 20, paddingHorizontal: 24, flex: 0 }]}
+                onPress={() => load(tab)}
+              >
+                <MaterialCommunityIcons name="refresh" size={20} color="white" />
+                <Text style={styles.dismissButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : users.length === 0 ? (
             <View style={styles.emptyContainer}>
               <MaterialCommunityIcons name="check-circle" size={64} color="#10B981" />
               <Text style={styles.emptyText}>Nothing flagged</Text>
