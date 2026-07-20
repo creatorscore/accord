@@ -46,6 +46,7 @@ import ReviewSubmissionModal from '@/components/reviews/ReviewSubmissionModal';
 import { useToast } from '@/contexts/ToastContext';
 import { validateMessage, containsContactInfo, validateContent } from '@/lib/content-moderation';
 import { encryptMessage, decryptMessage, getPrivateKey, getLegacyPrivateKey, ensurePrivateKey } from '@/lib/encryption';
+import { detectScamSignals, shouldReportSender } from '@/lib/scam-detection';
 import { getLastActiveText, isOnline, getOnlineStatusColor } from '@/lib/online-status';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { useColorScheme } from '@/lib/useColorScheme';
@@ -159,6 +160,11 @@ export default function Chat() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  // ANTI-SCAM (Phase 3): receiver-side scam detection on decrypted incoming
+  // messages. scannedScamIds prevents re-scanning/re-reporting the same message;
+  // scamWarnedRef shows the victim the safety tip at most once per open session.
+  const scannedScamIds = useRef<Set<string>>(new Set());
+  const scamWarnedRef = useRef(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
@@ -1489,6 +1495,59 @@ export default function Chat() {
       return { ...message, decrypted_content: t('chat.unableToDecrypt') };
     }
   };
+
+  // ANTI-SCAM (Phase 3): scan decrypted INCOMING messages for financial-scam /
+  // off-platform signals. Runs on every messages change, so it covers initial
+  // load, realtime inserts, and lazy-decrypt fill-in with one code path. For
+  // high-risk (crypto/investment/money) messages it reports the SENDER to the
+  // server (category only — never content, E2E preserved) and shows the victim
+  // a one-time safety tip. A bare off-platform mention (medium) only warns,
+  // because sharing contact info is allowed (see content-moderation.ts).
+  useEffect(() => {
+    const me = currentProfileIdRef.current || currentProfileId;
+    if (!me || !matchProfile?.id || messages.length === 0) return;
+
+    let sawHighRisk = false;
+    for (const m of messages) {
+      if (m.content_type !== 'text') continue;
+      // Only the recipient's own client scans/reports the sender's messages.
+      if (m.sender_profile_id === me) continue;
+      if (scannedScamIds.current.has(m.id)) continue;
+      const text = m.decrypted_content;
+      // Skip until decryption has actually resolved to real plaintext.
+      if (!text || text === t('chat.unableToDecrypt')) continue;
+      scannedScamIds.current.add(m.id);
+
+      const signal = detectScamSignals(text);
+      if (!signal) continue;
+      if (signal.risk === 'high') sawHighRisk = true;
+
+      if (shouldReportSender(signal)) {
+        // Report the sender once per category (server dedupes per day + requires
+        // an actual match). Best-effort — never block the UI.
+        for (const category of signal.categories) {
+          supabase.rpc('report_scam_signal', {
+            p_reported_profile_id: m.sender_profile_id,
+            p_category: category,
+            p_match_id: matchId,
+          }).then(({ error }) => {
+            if (error) console.warn('[scam] report failed:', error.message);
+          });
+        }
+      }
+    }
+
+    if (sawHighRisk && !scamWarnedRef.current) {
+      scamWarnedRef.current = true;
+      showToast({
+        type: 'info',
+        title: t('chat.safetyTip.title', { defaultValue: 'Safety tip' }),
+        message: t('chat.safetyTip.scamMessage', {
+          defaultValue: 'This chat mentions crypto, investments, or moving off Accord — common romance-scam signs. Never send money or move the conversation off the app.',
+        }),
+      });
+    }
+  }, [messages, currentProfileId, matchProfile?.id, matchId, t]);
 
   const handleSendMessage = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
