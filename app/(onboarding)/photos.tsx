@@ -338,6 +338,11 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
       // duplicate constraint or a redundant moderation call. Keyed by
       // contentHash because the local URI is the only stable per-photo id.
       const uploadedHashes: Set<string> = new Set();
+      // Photos moderation rejected THIS pass. Collected instead of thrown so a
+      // single bad photo can't abort the whole batch — we drop these from local
+      // state after the loop so the user can replace them and still finish,
+      // rather than being stuck re-uploading + re-rejecting the same image.
+      const rejectedHashes: Set<string> = new Set();
 
       if (newPhotos.length === 0) {
         setUploadProgress(100);
@@ -409,45 +414,49 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
                 throw new Error(`Failed to save photo ${i + 1}. Please try again.`);
               }
             } else {
-              try {
-                // Moderate on upload, with one retry. A transient invoke failure
-                // used to silently leave the photo 'pending' (not counting toward
-                // the 2-photo like minimum) until the retry cron swept it minutes
-                // later — the cause of the "need 2 approved photos" support
-                // tickets. Also pass storage_path so the function can mint a fresh
-                // signed URL if the passed one is stale.
-                let moderationResult: any = null;
-                let moderationError: any = null;
-                for (let attempt = 0; attempt < 2; attempt++) {
-                  const res = await supabase.functions.invoke('moderate-photo', {
-                    body: {
-                      photo_url: signedUrl,
-                      storage_path: fileName,
-                      photo_id: photoData?.id,
-                      profile_id: profileId,
-                    },
-                  });
-                  moderationResult = res.data;
-                  moderationError = res.error;
-                  if (!moderationError && moderationResult) break;
-                  if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
-                }
+              // Moderate on upload, with one retry. A transient invoke failure
+              // used to silently leave the photo 'pending' (not counting toward
+              // the 2-photo like minimum) until the retry cron swept it minutes
+              // later — the cause of the "need 2 approved photos" support
+              // tickets. Also pass storage_path so the function can mint a fresh
+              // signed URL if the passed one is stale.
+              let moderationResult: any = null;
+              let moderationError: any = null;
+              for (let attempt = 0; attempt < 2; attempt++) {
+                const res = await supabase.functions.invoke('moderate-photo', {
+                  body: {
+                    photo_url: signedUrl,
+                    storage_path: fileName,
+                    photo_id: photoData?.id,
+                    profile_id: profileId,
+                  },
+                });
+                moderationResult = res.data;
+                moderationError = res.error;
+                if (!moderationError && moderationResult) break;
+                if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
+              }
 
-                if (moderationError) {
-                  console.error('Moderation service error:', moderationError);
-                }
+              if (moderationError) {
+                // Transient moderation-service error: leave the row 'pending'
+                // (still counts as usable) — the retry cron re-checks it later.
+                console.error('Moderation service error:', moderationError);
+              }
 
-                if (moderationResult?.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
-                  throw new Error(t('onboardingPhotos.inappropriateContent'));
-                }
-                if (moderationResult?.approved === false && moderationResult.reason === 'contact_info') {
-                  throw new Error(t('onboardingPhotos.contactInfoDetected'));
-                }
-              } catch (moderationError: any) {
-                if (moderationError.message?.includes('inappropriate content') || moderationError.message?.includes('contact info')) {
-                  throw moderationError;
-                }
-                console.error('Moderation check failed:', moderationError);
+              // A hard rejection is permanent for THIS photo but must NOT abort
+              // the whole batch. Previously it threw, stranding the user in a
+              // retry loop that re-uploaded + re-rejected the same image forever
+              // (the step-27 drop-off). Record it and skip — it's dropped from
+              // local state after the loop so the user can replace it and finish.
+              const isRejected =
+                moderationResult?.approved === false &&
+                (moderationResult.reason === 'explicit_content' ||
+                  moderationResult.reason === 'needs_review' ||
+                  moderationResult.reason === 'contact_info');
+              if (isRejected) {
+                if (photo.contentHash) rejectedHashes.add(photo.contentHash);
+                setUploadProgress(Math.round(((i + 1) / newPhotos.length) * 100));
+                continue;
               }
             }
 
@@ -458,10 +467,58 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
             }
             setUploadProgress(Math.round(((i + 1) / newPhotos.length) * 100));
           } catch (photoError: any) {
+            // One photo failing (network blip, storage/DB error) must not throw
+            // away the photos that already uploaded this pass. Log and move on;
+            // the authoritative DB count after the loop decides whether we have
+            // enough usable photos to advance, and any un-uploaded photo stays
+            // in local state for a cheap retry.
             console.error(`Error processing photo ${i}:`, photoError);
-            throw photoError;
           }
         }
+      }
+
+      // Reconcile local state with what actually happened this pass: drop any
+      // photos moderation rejected (so a retry doesn't re-submit the same image
+      // and get stuck), and mark successfully-uploaded photos so a retry skips
+      // them (no re-upload, no flicker). The filter at the top of this handler
+      // checks both `uri` and `uploaded`.
+      if (isMounted.current && (rejectedHashes.size > 0 || uploadedHashes.size > 0)) {
+        setPhotos(prev => prev
+          .filter(p => !(p.contentHash && rejectedHashes.has(p.contentHash)))
+          .map(p => (p.contentHash && uploadedHashes.has(p.contentHash) ? { ...p, uploaded: true } : p))
+        );
+      }
+      if (rejectedHashes.size > 0 && isMounted.current) {
+        setRejectedCount(prev => prev + rejectedHashes.size);
+      }
+
+      // Authoritative advance gate: count the non-rejected rows actually in the
+      // DB (mirrors the final-step check_minimum_photos preflight). Local
+      // optimistic state can diverge from the DB on partial failures, so this —
+      // not photos.length — decides whether we can move on. Keep the user here
+      // with their uploaded photos intact and a clear message instead of the old
+      // all-or-nothing throw + stuck-loop.
+      let dbUsable = photos.length;
+      if (profileId) {
+        const { data: statusRows, error: statusErr } = await supabase
+          .from('photos')
+          .select('moderation_status')
+          .eq('profile_id', profileId);
+        if (!statusErr) {
+          dbUsable = (statusRows ?? []).filter((r) => r.moderation_status !== 'rejected').length;
+        }
+      }
+
+      if (dbUsable < 2) {
+        cleanupOptimizedImages().catch(() => {});
+        if (isMounted.current) {
+          setUploading(false);
+          setUploadProgress(0);
+          // The red rejection notice above the grid explains *why* photos are
+          // missing; this toast says what to do next.
+          showToast({ type: 'info', title: t('toast.morePhotosNeeded'), message: t('toast.morePhotosNeeded') });
+        }
+        return;
       }
 
       if (!embedded) {
@@ -482,16 +539,6 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
           .from('profiles')
           .update({ photo_blur_enabled: photoBlurEnabled })
           .eq('id', profileId);
-      }
-
-      // Mark uploaded photos in local state so a subsequent retry skips them
-      // (the filter at the top of this handler checks both `uri` and
-      // `uploaded`). Keeps the original local URI for rendering — no
-      // flicker on partial-failure retries.
-      if (uploadedHashes.size > 0 && isMounted.current) {
-        setPhotos(prev => prev.map(p =>
-          p.contentHash && uploadedHashes.has(p.contentHash) ? { ...p, uploaded: true } : p
-        ));
       }
 
       // Clean up persisted optimized images now that they're uploaded
