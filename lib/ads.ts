@@ -60,7 +60,7 @@ export async function initializeAds(): Promise<void> {
  * *attempt* the credit; the server is the source of truth. See the consuming
  * call site's TODO.
  */
-export function useRewardedAd() {
+export function useRewardedAd(enabled: boolean = true) {
   const [ready, setReady] = useState(false);
   const adRef = useRef<RewardedAd | null>(null);
   const earnedRef = useRef(false);
@@ -92,13 +92,18 @@ export function useRewardedAd() {
   }, []);
 
   useEffect(() => {
+    // The premium guarantee lives here: when disabled we never create, load, or
+    // show an ad. Callers pass
+    //   enabled = !isPremium && !isPlatinum && FeatureFlags.REWARDED_LIKES_ENABLED
+    // so premium/platinum users (and the flag-off state) never even preload one.
+    if (!enabled) return;
     const cleanup = load();
     return cleanup;
-  }, [load]);
+  }, [enabled, load]);
 
   const showAd = useCallback((): Promise<boolean> => {
     const ad = adRef.current;
-    if (!ad || !ready) return Promise.resolve(false);
+    if (!enabled || !ad || !ready) return Promise.resolve(false);
     return new Promise<boolean>((resolve) => {
       const unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
         unsubClosed();
@@ -115,7 +120,7 @@ export function useRewardedAd() {
         resolve(false);
       }
     });
-  }, [ready, load]);
+  }, [enabled, ready, load]);
 
-  return { ready, showAd };
+  return { ready: enabled && ready, showAd };
 }
