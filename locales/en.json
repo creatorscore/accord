@@ -1918,6 +1918,11 @@
       "noLikesRemaining": "No likes remaining today",
       "upgradeBanner": "Upgrade to reveal photos & get unlimited likes"
     },
+    "likeBackUpsell": {
+      "title": "They already like you 💜",
+      "message": "Upgrade to see who it is and match instantly — or keep going to match with their photo blurred.",
+      "cta": "See who it is"
+    },
     "likedYourPhoto": "Liked your photo"
   },
   "passed": {
