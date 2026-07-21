@@ -9,8 +9,10 @@
  */
 export const FeatureFlags = {
   /**
-   * Rewarded "watch an ad for +N likes" on the who-liked-you tab. Monetizes
-   * non-paying users (esp. low-payment-rail geos) without a card.
+   * Rewarded "watch an ad for +1 like" on the who-liked-you tab. Monetizes
+   * non-paying users (esp. low-payment-rail geos) without a card. Reward is
+   * exactly ONE like per completed ad view — maximizes ad impressions and keeps
+   * "unlimited likes" premium clearly better than the free-with-ads path.
    *
    * Requires ALL of the following before it can be turned on:
    *  1. A native build that includes the AdMob module (react-native-google-mobile-ads).
