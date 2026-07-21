@@ -48,7 +48,7 @@ const COUNTRY_TO_REGION = {
   'United States': 'US', 'Afghanistan': 'AF', 'Albania': 'AL', 'Algeria': 'DZ',
   'Angola': 'AO', 'Anguilla': 'AI', 'Antigua and Barbuda': 'AG', 'Argentina': 'AR',
   'Armenia': 'AM', 'Australia': 'AU', 'Austria': 'AT', 'Azerbaijan': 'AZ',
-  'Bahamas': 'BS', 'Bahrain': 'BH', 'Barbados': 'BB', 'Belarus': 'BY',
+  'Bahamas': 'BS', 'Bahrain': 'BH', 'Bangladesh': 'BD', 'Barbados': 'BB', 'Belarus': 'BY',
   'Belgium': 'BE', 'Belize': 'BZ', 'Benin': 'BJ', 'Bermuda': 'BM',
   'Bhutan': 'BT', 'Bolivia': 'BO', 'Bosnia and Herzegovina': 'BA', 'Botswana': 'BW',
   'Brazil': 'BR', 'British Virgin Islands': 'VG', 'Brunei': 'BN', 'Bulgaria': 'BG',
