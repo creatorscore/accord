@@ -6,6 +6,7 @@ import i18n from '@/lib/i18n';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
+import { nameHasContactInfo, NAME_CONTACT_INFO_MESSAGE } from '@/lib/content-moderation';
 import { captureException, addBreadcrumb } from '@/lib/sentry';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import {
@@ -656,6 +657,14 @@ export default function Onboarding() {
     console.log('[Onboarding] handleContinue isCurrentStepValid =', isCurrentStepValid);
     if (!isCurrentStepValid) {
       showToast({ type: 'info', title: 'Required', message: 'Please complete this step to continue.' });
+      return;
+    }
+
+    // Anti-scam: a name can't be a phone number / email / link / app handle
+    // (the profiles trigger enforces this server-side too). Block on the name
+    // step with a clear message instead of letting the save fail.
+    if (subStep === 0 && nameHasContactInfo(state.displayName)) {
+      showToast({ type: 'error', title: 'Invalid name', message: NAME_CONTACT_INFO_MESSAGE });
       return;
     }
 

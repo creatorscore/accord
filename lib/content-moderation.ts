@@ -263,6 +263,30 @@ export function validateDisplayName(displayName: string): ModerationResult {
 }
 
 /**
+ * Anti-scam: a display NAME must never be a phone number, email, link, or app
+ * handle — scammers use these to funnel victims off-platform. Mirrors the
+ * server-side guard `display_name_has_contact_info` (profiles trigger). Kept
+ * conservative to avoid flagging real names (a few digits/hyphens/accents pass).
+ * NOTE: this is names only — sharing contact info in CHAT is deliberately
+ * allowed (see containsContactInfo above).
+ */
+export function nameHasContactInfo(name: string): boolean {
+  if (!name) return false;
+  const n = name.trim();
+  return (
+    /@[A-Za-z0-9._-]+\.[A-Za-z]/.test(n) ||                                            // email
+    /[0-9]{7,}/.test(n) ||                                                             // 7+ consecutive digits
+    /(\+?[0-9][\s().-]*){8,}/.test(n) ||                                               // 8+ digits w/ separators (phone)
+    /(https?:\/\/|www\.[a-z]|\.com|\.net|\.org|\.xyz|t\.me\/|wa\.me\/|ngl\.link)/i.test(n) || // urls
+    /(whats\s?app|telegram|snapchat|\bskype\b|\bviber\b|\bkik\b)/i.test(n)             // platforms
+  );
+}
+
+/** User-facing message when a name contains contact info. */
+export const NAME_CONTACT_INFO_MESSAGE =
+  "Your name can't contain a phone number, email, link, or app handle. Please use your real name or a nickname.";
+
+/**
  * Validate prompt answer
  */
 export function validatePromptAnswer(answer: string): ModerationResult {
