@@ -238,6 +238,10 @@ export default function Likes() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  // Whether the peak-intent "they already like you — upgrade" prompt has been
+  // shown this session. Gated to once so like-back stays snappy after the first
+  // pitch (a ref, not state — it must not trigger re-renders).
+  const likeBackUpsellShownRef = useRef(false);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedProfile, setMatchedProfile] = useState<{
     display_name: string;
@@ -794,7 +798,31 @@ export default function Likes() {
         setShowPaywall(true);
         return;
       }
+
+      // Peak-intent upsell: this person ALREADY likes you, so liking back is a
+      // guaranteed match — the highest-intent moment to pitch Premium. Show it
+      // once per session so it lands without nagging. Dismissing STILL creates
+      // the match (keeps the marketplace liquid — matches are the scarce
+      // resource, so we don't suppress them to force a purchase).
+      if (!likeBackUpsellShownRef.current) {
+        likeBackUpsellShownRef.current = true;
+        Alert.alert(
+          t('likes.likeBackUpsell.title'),
+          t('likes.likeBackUpsell.message'),
+          [
+            { text: t('common.maybeLater'), style: 'cancel', onPress: () => { performLikeBack(likeProfileId); } },
+            { text: t('likes.likeBackUpsell.cta'), onPress: () => setShowPaywall(true) },
+          ]
+        );
+        return;
+      }
     }
+
+    performLikeBack(likeProfileId);
+  };
+
+  const performLikeBack = async (likeProfileId: string) => {
+    if (!currentProfileId) return;
 
     // Optimistically remove from UI and keep the tab badge in sync with the
     // VISIBLE list (see handlePass) — re-querying the RPC would leave a stale
