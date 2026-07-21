@@ -29,7 +29,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri, cleanupOptimizedImages } from '@/lib/image-optimization';
 import { HeightUnit, cmToInches, inchesToCm } from '@/lib/height-utils';
 import { openAppSettings } from '@/lib/open-settings';
-import { validateContent } from '@/lib/content-moderation';
+import { validateContent, nameHasContactInfo, NAME_CONTACT_INFO_MESSAGE } from '@/lib/content-moderation';
 import { useTranslation } from 'react-i18next';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { PROMPT_KEYS } from '@/lib/prompt-options';
@@ -876,6 +876,12 @@ export default function EditProfile() {
   const saveProfile = async (skipAlert = false) => {
     if (!displayName) {
       Alert.alert('Required Fields', 'Please fill in your name');
+      return false;
+    }
+
+    // Anti-scam: block phone/email/link/app-handle as a name (server enforces too).
+    if (nameHasContactInfo(displayName)) {
+      Alert.alert('Invalid name', NAME_CONTACT_INFO_MESSAGE);
       return false;
     }
 

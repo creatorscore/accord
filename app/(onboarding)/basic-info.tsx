@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import * as Location from 'expo-location';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { validateDisplayName, getModerationErrorMessage } from '@/lib/content-moderation';
+import { validateDisplayName, getModerationErrorMessage, nameHasContactInfo, NAME_CONTACT_INFO_MESSAGE } from '@/lib/content-moderation';
 import { initializeEncryption } from '@/lib/encryption';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { useTranslation } from 'react-i18next';
@@ -491,6 +491,11 @@ export default function BasicInfo() {
         const mod = validateDisplayName(displayName);
         if (!mod.isClean) {
           showToast({ type: 'error', title: t('onboarding.errors.inappropriateContent'), message: getModerationErrorMessage('display name') });
+          return false;
+        }
+        // Anti-scam: block phone/email/link/app-handle as a name (server enforces too).
+        if (nameHasContactInfo(displayName)) {
+          showToast({ type: 'error', title: 'Invalid name', message: NAME_CONTACT_INFO_MESSAGE });
           return false;
         }
         return true;
