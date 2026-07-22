@@ -14,7 +14,7 @@ import mobileAds, {
 // inventory during development (an AdMob policy strike risk).
 const REWARDED_UNIT_IDS: { ios?: string; android?: string } = {
   android: 'ca-app-pub-4165784296968148/3311792681', // Accord Rewarded – Likes (Android)
-  // ios: 'ca-app-pub-4165784296968148/xxxxxxxxxx',  // add when the iOS app + unit exist
+  ios: 'ca-app-pub-4165784296968148/8083742794',     // Accord Rewarded – Likes (iOS)
 };
 
 function rewardedUnitId(): string {
