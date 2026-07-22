@@ -145,11 +145,9 @@ module.exports = {
       [
         "react-native-google-mobile-ads",
         {
-          // Android = real AdMob App ID (pub-4165784296968148).
-          // iOS is still on Google's PUBLIC TEST App ID — swap iosAppId for the
-          // real one once the iOS app is created in AdMob, before an iOS store build.
+          // Real AdMob App IDs (pub-4165784296968148) for both platforms.
           androidAppId: "ca-app-pub-4165784296968148~1442243014",
-          iosAppId: "ca-app-pub-3940256099942544~1458002511"
+          iosAppId: "ca-app-pub-4165784296968148~9195544293"
         }
       ],
       "expo-font",
