@@ -357,8 +357,16 @@ export default function Onboarding() {
         // reach the right cohort.
         preferred_language: i18n.language || 'en',
         onboarding_step: step,
-        // Only set profile_complete on the final step
-        ...(step >= TOTAL_ONBOARDING_STEPS - 1 ? { profile_complete: true } : {}),
+        // Only set profile_complete on the final step — AND only when coords are
+        // present, so the location_required_when_complete CHECK can never throw
+        // (REACT-8R). The step-3 UI gate + final-step preflight normally guarantee
+        // coords, but a resumed/backfilled/older-client row can still reach here
+        // with null lat/lng; in that rare case we leave the profile incomplete
+        // (the app routes them back to finish location) instead of dead-ending on
+        // a raw constraint-error toast.
+        ...(step >= TOTAL_ONBOARDING_STEPS - 1 && state.latitude != null && state.longitude != null
+          ? { profile_complete: true }
+          : {}),
       };
 
       // Build the preferences payload up-front so we can fire profile + prefs
