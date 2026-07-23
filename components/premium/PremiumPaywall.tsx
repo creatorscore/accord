@@ -48,6 +48,14 @@ const PLATINUM_HIGHLIGHT_KEYS = [
   { icon: 'shield-check', titleKey: 'backgroundCheck' },
 ];
 
+// Weekly plan is RETIRED for new buyers (2026-07-23). It retained terribly
+// (4% vs monthly 25%, annual 74% — measured 2026-07-21): weekly buyers churn
+// after ~one cycle, so it dragged LTV without adding durable revenue. The
+// product stays live in the stores/RevenueCat so existing weekly subscribers
+// keep renewing (backward compatible), but the paywall no longer surfaces it.
+// Flip to true to bring the option back.
+const WEEKLY_PLAN_ENABLED = false;
+
 export default function PremiumPaywall({
   visible,
   onClose,
@@ -57,10 +65,17 @@ export default function PremiumPaywall({
   const { refreshSubscription, syncWithDatabase } = useSubscription();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('monthly'); // Default to monthly — weekly is shown as a low-commitment add-on for impulse buyers but should not be the recommended default (worse LTV)
+  // Default to ANNUAL: it retains dramatically better (74% vs monthly 25%,
+  // weekly 4% — measured 2026-07-21) and has the best per-month price, so it
+  // both lifts LTV and captures revenue up front before the ~40-day churn.
+  // Weekly is retired for new buyers (see WEEKLY_PLAN_ENABLED). The 'weekly'
+  // union member is retained only so existing weekly subscribers' state is
+  // still representable.
+  const [selectedPlan, setSelectedPlan] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('annual');
   // Flips to true only when RevenueCat actually returns a weekly
-  // package in the offering. The product is now live in both stores;
-  // visibility is purely data-driven.
+  // package in the offering. The product is still live in both stores
+  // (existing weekly subscribers keep renewing), but we no longer OFFER
+  // it to new buyers — see WEEKLY_PLAN_ENABLED below.
   const [hasWeeklyPackage, setHasWeeklyPackage] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -239,11 +254,11 @@ export default function PremiumPaywall({
   const annualPrice = getLivePrice(tier, 'annual', isPlatinum ? '$199.99' : '$119.99');
   const quarterlySavings = '22%';
   const annualSavings = '33%';
-  // Show weekly only for Premium (not Platinum) AND only when RevenueCat
-  // has actually returned a weekly package. This means the row stays
-  // hidden until you create the product in App Store Connect / Play
-  // Console / RevenueCat — no risk of users tapping a broken option.
-  const showWeekly = !isPlatinum && hasWeeklyPackage;
+  // Weekly is retired for new buyers (WEEKLY_PLAN_ENABLED === false), so this
+  // is always false in production. The !isPlatinum && hasWeeklyPackage guards
+  // remain so that flipping the flag back on restores the original
+  // data-driven behavior (Premium-only, only when RC returns the package).
+  const showWeekly = WEEKLY_PLAN_ENABLED && !isPlatinum && hasWeeklyPackage;
 
   const handlePurchase = async () => {
     try {
@@ -617,20 +632,20 @@ export default function PremiumPaywall({
           <View style={styles.bottomCard}>
             <View style={styles.planContainer}>
               {renderPlanCard(
-                'quarterly',
-                t('premiumPaywall.threeMonths'),
-                quarterlyPrice,
-                t('premiumPaywall.everyThreeMonths', 'every 3 months'),
-                quarterlyMonthlyEq,
-                t('premiumPaywall.perMonthLabel', 'per month'),
-                { label: t('premiumPaywall.bestOffer', 'BEST OFFER').toUpperCase(), type: 'best' },
-              )}
-              {renderPlanCard(
                 'annual',
                 t('premiumPaywall.annual'),
                 annualPrice,
                 t('premiumPaywall.everyYear', 'every year'),
                 annualMonthlyEq,
+                t('premiumPaywall.perMonthLabel', 'per month'),
+                { label: t('premiumPaywall.bestOffer', 'BEST OFFER').toUpperCase(), type: 'best' },
+              )}
+              {renderPlanCard(
+                'quarterly',
+                t('premiumPaywall.threeMonths'),
+                quarterlyPrice,
+                t('premiumPaywall.everyThreeMonths', 'every 3 months'),
+                quarterlyMonthlyEq,
                 t('premiumPaywall.perMonthLabel', 'per month'),
               )}
               {renderPlanCard(
