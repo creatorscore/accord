@@ -40,21 +40,25 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 });
     }
-    // Identify the caller from their token.
-    const asUser = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user }, error: userErr } = await asUser.auth.getUser();
+
+    const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+
+    // Identify the caller from their token. Pass the token EXPLICITLY to
+    // getUser() — a server-side client has no stored session, so the no-arg
+    // getUser() form returns "Auth session missing" and 401s every call (this
+    // is what silently broke IP verification for the entire user base). This
+    // matches the working pattern in admin-* functions.
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 });
     }
-
-    const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
     const { force, gps_lat, gps_lon } = await req.json().catch(() => ({} as any));
 
