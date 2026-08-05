@@ -322,8 +322,19 @@ export default function Onboarding() {
         location_city: state.locationCity,
         location_state: state.locationState,
         location_country: state.locationCountry,
-        latitude: state.latitude,
-        longitude: state.longitude,
+        // Only write coords when we actually have them. Writing null here
+        // clobbers good coords on a row that is ALREADY profile_complete=true
+        // (a user who finished earlier and re-entered onboarding, or a row
+        // completed by backfill-stuck-onboarding), which trips the
+        // location_required_when_complete CHECK — the constraint is
+        // re-evaluated on every UPDATE, not just the one that sets the flag.
+        // That's the remaining half of REACT-8R: the final-step guard below
+        // only covers saves that SET profile_complete, but these violations
+        // fire mid-flow (observed at step 27) where the flag isn't in the
+        // payload at all. Omitting the keys leaves the stored coords intact.
+        ...(state.latitude != null && state.longitude != null
+          ? { latitude: state.latitude, longitude: state.longitude }
+          : {}),
         // Stamp last_gps_at at the location checkpoint (step 3 → 4) so
         // the staleness banner knows this profile has a fresh GPS read.
         // LocationStep is GPS-only (autocomplete removed), so lat/lng
@@ -613,10 +624,34 @@ export default function Onboarding() {
         throw error; // Re-throw so the caller does NOT advance the step
       }
 
-      let ckptFingerprint = 'onboarding-checkpoint-other';
+      // Location CHECK constraint — same treatment as the photo-minimum case
+      // above: a recoverable user state, not an app bug. The payload no longer
+      // writes null coords, so this should only reach here on older bundles,
+      // but without this branch the user gets the raw Postgres string
+      // ("new row for relation \"profiles\" violates check constraint ...")
+      // as a toast with no way forward. Bounce to the location step instead.
+      // Observed as a retry loop: 5 failed saves in 13s from one user.
       if (ckptMsg.includes('location_required_when_complete')) {
-        ckptFingerprint = 'onboarding-checkpoint-location-required';
-      } else if (ckptCode === '23505') {
+        addBreadcrumb('onboarding', 'Checkpoint blocked by location CHECK constraint', {
+          step,
+          error_code: ckptCode,
+        });
+        captureException(
+          error instanceof Error ? error : new Error('Checkpoint blocked: location required'),
+          { step, context: 'onboarding_checkpoint', error_code: ckptCode },
+          ['onboarding-checkpoint-location-required'],
+        );
+        showToast({
+          type: 'error',
+          title: 'Add your location',
+          message: 'We need your location to save your profile. Please set it and try again.',
+        });
+        setSubStep(3);
+        throw error; // Re-throw so the caller does NOT advance the step
+      }
+
+      let ckptFingerprint = 'onboarding-checkpoint-other';
+      if (ckptCode === '23505') {
         ckptFingerprint = 'onboarding-checkpoint-duplicate';
       } else if (ckptCode === '23514') {
         ckptFingerprint = 'onboarding-checkpoint-check-constraint';
