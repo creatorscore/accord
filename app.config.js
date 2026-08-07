@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "Accord - Lavender Marriage",
     slug: "accord",
-    version: "2.0.5",
+    version: "2.0.6",
     orientation: "default",
     icon: "./assets/icon.png",
     userInterfaceStyle: "automatic",
@@ -18,7 +18,7 @@ module.exports = {
       deploymentTarget: "16.0",
       supportsTablet: true,
       bundleIdentifier: "com.privyreviews.accord",
-      buildNumber: "69",
+      buildNumber: "70",
       icon: "./assets/icon.png",
       infoPlist: {
         NSPhotoLibraryUsageDescription: "Accord needs access to your photos to upload profile pictures.",
@@ -71,7 +71,7 @@ module.exports = {
       },
       package: "com.privyreviews.accord",
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
-      versionCode: 62,
+      versionCode: 63,
       softwareKeyboardLayoutMode: "resize",
       permissions: [
         "android.permission.CAMERA",
@@ -175,6 +175,14 @@ module.exports = {
       postHogHost: process.env.EXPO_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com"
     },
     owner: "vfranz",
+    // DELIBERATELY held at "2.0.5" while app version moves to 2.0.6, so a single
+    // `eas update` still reaches BOTH the 2.0.5 and 2.0.6 binaries — the 2.0.5
+    // install base stays the majority for weeks after a store release, and
+    // splitting runtimes previously meant an update reaching only one platform.
+    // 2.0.6 adds no new native modules (only the AdMob iOS App ID string, which
+    // JS never reads — ads are behind a disabled flag), so JS stays compatible
+    // with both binaries. BUMP THIS the moment a real native module is added,
+    // or an OTA will crash 2.0.5 clients that lack the native code.
     runtimeVersion: "2.0.5",
     updates: {
       url: "https://u.expo.dev/71ca414e-ff65-488b-97f6-9150455475a0"
