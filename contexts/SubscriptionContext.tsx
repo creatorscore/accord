@@ -6,8 +6,6 @@ import {
   hasActiveSubscription,
   hasPremium,
   hasPlatinum,
-  getSubscriptionTier,
-  canUseFeature,
   isInTrialPeriod,
   getDaysRemaining,
   getSubscriptionExpirationDate,
@@ -135,12 +133,18 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         // Skip sync for admin accounts - they always keep their database premium status
         if (!isAdminUser) {
-          // If RevenueCat says no subscription but database says yes, fix it
-          if (!rcPremium && !rcPlatinum && (dbPremiumStatus || dbPlatinumStatus)) {
-            await syncWithDatabase(info);
-          }
-          // If RevenueCat says subscription but database doesn't match, sync it
-          else if ((rcPremium !== dbPremiumStatus) || (rcPlatinum !== dbPlatinumStatus)) {
+          // Sync ONLY when RevenueCat reports entitlements the DB is missing.
+          // That direction can only ever GRANT access, so it's safe as a
+          // missed-webhook safety net.
+          //
+          // Deliberately NOT syncing the reverse ("RC says nothing, DB says
+          // premium"): sync-subscription writes `is_premium: hasPremium ||
+          // hasPlatinum` and expires the subscription row, so that branch let a
+          // device-local RC failure trigger a real revocation of a paying user.
+          // An empty CustomerInfo is far more often a misconfigured app user ID
+          // than a genuine lapse, and genuine lapses are already handled
+          // server-side by the RevenueCat webhook, which is authoritative.
+          if ((rcPremium && !dbPremiumStatus) || (rcPlatinum && !dbPlatinumStatus)) {
             await syncWithDatabase(info);
           }
         }
@@ -195,51 +199,67 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [user]);
 
-  // In database-only mode (dev), use database status exclusively
-  // In production, RevenueCat is the SOURCE OF TRUTH
-  // Database is only used as a fallback when RevenueCat hasn't loaded yet
-  // Once RevenueCat loads, it takes precedence over database
-  // EXCEPTION: Admin accounts always use database status (they get free premium)
+  // ENTITLEMENT RESOLUTION — grant if EITHER source says paid.
+  //
+  // This used to be "RevenueCat overrides the DB once loaded". That locked out
+  // real paying subscribers: `Purchases.getCustomerInfo()` RESOLVES SUCCESSFULLY
+  // with an empty `entitlements.active` whenever the SDK is configured under the
+  // wrong app user ID (see initializeRevenueCat — the module-level `isInitialized`
+  // guard means a later call with a different userId is a no-op, and nothing ever
+  // calls Purchases.logIn/logOut). It only returns null on a *thrown* error, so
+  // that empty-but-valid object set hasRevenueCatLoaded = true and silently
+  // overrode a database that correctly said `is_premium`. Reported by multiple
+  // paying users 2026-08-07; both audited accounts had a healthy active
+  // subscription row while the app showed them the paywall.
+  //
+  // Safety of OR-ing: profiles.is_premium is written ONLY server-side, by the
+  // RevenueCat webhook and sync-subscription (service role, RC REST API as the
+  // authority). A 2026-08-07 audit found 126 active subscribers and ZERO drift
+  // in any direction, so the DB flag is not a weaker signal than the client SDK
+  // — it is the same signal, minus the device-local failure modes. Revocation
+  // still happens, but only from the server when the webhook says the sub
+  // lapsed; a flaky client can no longer take away access someone paid for.
+  //
+  // EXCEPTION: admin accounts always use database status (they get free premium).
   const hasRevenueCatLoaded = customerInfo !== null;
 
   const isSubscribed = isDatabaseOnlyMode || isAdmin
     ? (dbPremiumStatus || dbPlatinumStatus)
-    : hasRevenueCatLoaded
-      ? hasActiveSubscription(customerInfo) // RevenueCat is source of truth
-      : (dbPremiumStatus || dbPlatinumStatus); // Only use DB when RC hasn't loaded
+    : hasActiveSubscription(customerInfo) || dbPremiumStatus || dbPlatinumStatus;
 
   const isPremium = isDatabaseOnlyMode || isAdmin
     ? dbPremiumStatus
-    : hasRevenueCatLoaded
-      ? hasPremium(customerInfo) // RevenueCat is source of truth
-      : dbPremiumStatus; // Only use DB when RC hasn't loaded
+    : hasPremium(customerInfo) || dbPremiumStatus;
 
   const isPlatinum = isDatabaseOnlyMode || isAdmin
     ? dbPlatinumStatus
-    : hasRevenueCatLoaded
-      ? hasPlatinum(customerInfo) // RevenueCat is source of truth
-      : dbPlatinumStatus; // Only use DB when RC hasn't loaded
+    : hasPlatinum(customerInfo) || dbPlatinumStatus;
 
   const subscriptionTier = isDatabaseOnlyMode || isAdmin
     ? (dbPlatinumStatus ? 'platinum' : dbPremiumStatus ? 'premium' : null)
-    : hasRevenueCatLoaded
-      ? getSubscriptionTier(customerInfo) // RevenueCat is source of truth
-      : (dbPlatinumStatus ? 'platinum' : dbPremiumStatus ? 'premium' : null); // Only use DB when RC hasn't loaded
+    : (isPlatinum ? 'platinum' : isPremium ? 'premium' : null);
 
+  // Gate features off the RESOLVED tier above, not off customerInfo directly.
+  // canUseFeature() derives the tier from customerInfo alone, so reading it raw
+  // reintroduced the same lockout this file's entitlement block fixes: a paying
+  // user whose SDK returned an empty-but-valid CustomerInfo was denied every
+  // premium feature despite is_premium in the DB.
   const checkFeature = useCallback(
     (feature: string) => {
-      // If RevenueCat is not configured, allow basic features
-      if (!customerInfo) {
-        // Allow basic features in free mode
-        const freeFeatures = ['basic_swipes', 'basic_messaging', 'basic_profile'];
-        return freeFeatures.includes(feature);
-      }
-      return canUseFeature(
-        customerInfo,
-        feature as 'unlimited_swipes' | 'see_who_liked' | 'super_like' | 'voice_messages' | 'read_receipts' | 'advanced_filters' | 'rewind' | 'background_check' | 'legal_resources' | 'profile_boost'
-      );
+      const freeFeatures = ['basic_swipes', 'basic_messaging', 'basic_profile'];
+      if (freeFeatures.includes(feature)) return true;
+
+      const premiumFeatures = [
+        'unlimited_swipes', 'see_who_liked', 'super_like', 'voice_messages',
+        'read_receipts', 'advanced_filters', 'rewind',
+      ];
+      const platinumFeatures = ['background_check', 'legal_resources', 'profile_boost'];
+
+      if (premiumFeatures.includes(feature)) return isPremium || isPlatinum;
+      if (platinumFeatures.includes(feature)) return isPlatinum;
+      return false;
     },
-    [customerInfo]
+    [isPremium, isPlatinum]
   );
 
   // Trial status - only relevant when RevenueCat is loaded

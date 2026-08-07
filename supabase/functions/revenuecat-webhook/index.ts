@@ -112,9 +112,16 @@ serve(async (req) => {
 
     const { type, app_user_id, entitlement_ids, expiration_at_ms } = payload.event;
 
-    // Determine premium/platinum status based on entitlements
-    const hasPremium = entitlement_ids?.includes('premium') || false;
-    const hasPlatinum = entitlement_ids?.includes('platinum') || false;
+    // Determine premium/platinum status based on entitlements.
+    // Case-INSENSITIVE: RevenueCat entitlement ids have been configured with
+    // inconsistent casing across this project's history ("Premium" vs
+    // "premium"). An exact-match .includes('premium') misses a "Premium"
+    // subscriber, and this handler then clears their premium flag — revoking
+    // access someone is actively paying for. The client has matched
+    // case-insensitively for a while (lib/revenue-cat.ts); this path had not.
+    const entitlementIdsLower = (entitlement_ids ?? []).map((e) => e.toLowerCase());
+    const hasPremium = entitlementIdsLower.includes('premium');
+    const hasPlatinum = entitlementIdsLower.includes('platinum');
 
     // Check if subscription is active (not expired)
     // If no expiration date, treat as active (lifetime subscriptions have no expiry)
