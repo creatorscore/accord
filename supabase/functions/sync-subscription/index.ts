@@ -161,8 +161,20 @@ serve(async (req) => {
     const subs = rcData.subscriber.subscriptions ?? {};
 
     const now = new Date();
-    const premiumEnt = entitlements.premium;
-    const platinumEnt = entitlements.platinum;
+    // Match entitlement identifiers case-INSENSITIVELY. RevenueCat entitlement
+    // ids have been configured with inconsistent casing across this project's
+    // history ("Premium" vs "premium"); the client was fixed for this long ago
+    // (lib/revenue-cat.ts hasActiveEntitlement) but these server paths were not.
+    // A hardcoded `entitlements.premium` misses a subscriber whose id is
+    // "Premium" — and because this function then writes `is_premium: false` and
+    // expires their subscription row, that miss REVOKES a paying customer.
+    const findEnt = (name: string) => {
+      const target = name.toLowerCase();
+      const key = Object.keys(entitlements).find((k) => k.toLowerCase() === target);
+      return key ? entitlements[key] : undefined;
+    };
+    const premiumEnt = findEnt('premium');
+    const platinumEnt = findEnt('platinum');
 
     const hasPremium = !!premiumEnt &&
       (premiumEnt.expires_date === null || new Date(premiumEnt.expires_date) > now);

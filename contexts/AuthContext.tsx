@@ -385,6 +385,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const { useOnboardingStore } = await import('@/stores/onboardingStore');
       useOnboardingStore.getState().reset();
     } catch {}
+
+    // Release the RevenueCat identity. Without this the SDK stayed bound to the
+    // signed-out user, so the NEXT person to sign in on this device was served
+    // that user's entitlements — which for a paying subscriber meant being shown
+    // the paywall for something they'd already bought. Dynamic import keeps
+    // react-native-purchases off this module's eager dependency graph.
+    try {
+      const { logOutRevenueCat } = await import('@/lib/revenue-cat');
+      await logOutRevenueCat();
+    } catch {}
   };
 
   const sendPasswordResetEmail = async (email: string) => {
