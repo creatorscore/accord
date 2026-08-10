@@ -156,6 +156,30 @@ module.exports = {
       // To restore: re-add the dep + this plugin block, and recover lib/ads.ts
       // from commit 755b3bc. Pin play-services-ads to a Kotlin-2.1-compatible
       // release and solve the pod modular-headers issue at the same time.
+      [
+        // iOS pod install fails without this:
+        //   "The Swift pod `AppCheckCore` depends upon `GoogleUtilities` and
+        //    `RecaptchaInterop`, which do not define modules."
+        // AppCheckCore arrives transitively via @react-native-google-signin.
+        // ios/ is not checked in, so there's no Podfile.lock and pods re-resolve
+        // on every build — a newer GoogleSignIn started pulling AppCheckCore,
+        // which is why the May 2.0.5 build succeeded and 2.0.6 did not.
+        //
+        // Declaring the two offending pods with modular_headers generates the
+        // module maps Swift needs. Deliberately NOT using
+        // ios.useFrameworks:'static' — that is the broader documented fix, but it
+        // changes linkage for EVERY pod and risks breaking Sentry, Skia and
+        // quick-crypto. Escalate to it only if this proves insufficient.
+        "expo-build-properties",
+        {
+          ios: {
+            extraPods: [
+              { name: "GoogleUtilities", modular_headers: true },
+              { name: "RecaptchaInterop", modular_headers: true }
+            ]
+          }
+        }
+      ],
       "expo-font",
       "expo-localization",
       "expo-web-browser",
