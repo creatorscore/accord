@@ -68,3 +68,7 @@ verify_jwt = false
 # itself, so this is defence-in-depth, but don't rely on that alone.
 [functions.sync-subscription]
 verify_jwt = true
+
+# Weekly drift reconciliation against the RevenueCat API (cron-triggered).
+[functions.reconcile-subscriptions]
+verify_jwt = false
