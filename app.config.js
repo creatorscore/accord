@@ -142,14 +142,20 @@ module.exports = {
           iosUrlScheme: "com.googleusercontent.apps.609854216709-81grqvlc66iahvd56749ot511p9agh09"
         }
       ],
-      [
-        "react-native-google-mobile-ads",
-        {
-          // Real AdMob App IDs (pub-4165784296968148) for both platforms.
-          androidAppId: "ca-app-pub-4165784296968148~1442243014",
-          iosAppId: "ca-app-pub-4165784296968148~9195544293"
-        }
-      ],
+      // AdMob (react-native-google-mobile-ads) REMOVED 2026-08-10 — it broke the
+      // first native build it was ever included in, on BOTH platforms:
+      //   Android: play-services-ads 25.4.0 is built with Kotlin 2.3.0, but
+      //            Expo SDK 54 / RN 0.81 compiles with Kotlin 2.1.0.
+      //   iOS:     pod install fails — AppCheckCore depends on GoogleUtilities
+      //            and RecaptchaInterop, which don't define modules (needs
+      //            use_modular_headers! / static frameworks).
+      // It was added in July but never built, and rewarded ads can't ship
+      // regardless (see FeatureFlags.REWARDED_LIKES_ENABLED — no SSV, no consent
+      // flow). Rather than block a fix release on two speculative native fixes,
+      // it comes out until the ads workstream is actually picked up.
+      // To restore: re-add the dep + this plugin block, and recover lib/ads.ts
+      // from commit 755b3bc. Pin play-services-ads to a Kotlin-2.1-compatible
+      // release and solve the pod modular-headers issue at the same time.
       "expo-font",
       "expo-localization",
       "expo-web-browser",
