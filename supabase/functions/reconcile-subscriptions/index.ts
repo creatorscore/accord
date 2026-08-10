@@ -149,22 +149,37 @@ serve(async (req) => {
         }
 
         const rcData: RevenueCatSubscriber = await rcResponse.json();
-        const entitlements = rcData.subscriber.entitlements;
+        const entitlements = rcData.subscriber.entitlements ?? {};
+
+        // Match entitlement identifiers case-INSENSITIVELY. RevenueCat entitlement
+        // ids have been configured with inconsistent casing across this project's
+        // history ("Premium" vs "premium"). This function writes is_premium:false
+        // across EVERY subscription it walks, so an exact-match miss here doesn't
+        // just fail to grant — it mass-revokes people who are actively paying.
+        // The client has matched case-insensitively for a while
+        // (lib/revenue-cat.ts hasActiveEntitlement); this path had not.
+        const findEnt = (name: string) => {
+          const target = name.toLowerCase();
+          const key = Object.keys(entitlements).find((k) => k.toLowerCase() === target);
+          return key ? entitlements[key] : undefined;
+        };
+        const premiumEnt = findEnt('premium');
+        const platinumEnt = findEnt('platinum');
 
         // Check if they have active entitlements
         const now = new Date();
-        const hasPremium = entitlements.premium &&
-          (entitlements.premium.expires_date === null || new Date(entitlements.premium.expires_date) > now);
-        const hasPlatinum = entitlements.platinum &&
-          (entitlements.platinum.expires_date === null || new Date(entitlements.platinum.expires_date) > now);
+        const hasPremium = !!premiumEnt &&
+          (premiumEnt.expires_date === null || new Date(premiumEnt.expires_date) > now);
+        const hasPlatinum = !!platinumEnt &&
+          (platinumEnt.expires_date === null || new Date(platinumEnt.expires_date) > now);
         const rcIsActive = hasPremium || hasPlatinum;
         const rcTier = hasPlatinum ? 'platinum' : hasPremium ? 'premium' : null;
 
         // Get expiry date from RC
         const rcExpiry = hasPremium
-          ? entitlements.premium?.expires_date
+          ? premiumEnt?.expires_date
           : hasPlatinum
-            ? entitlements.platinum?.expires_date
+            ? platinumEnt?.expires_date
             : null;
 
         // Check for unsubscribe (cancelled but still active until expiry)

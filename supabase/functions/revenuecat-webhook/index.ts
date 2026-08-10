@@ -37,6 +37,11 @@ interface RevenueCatWebhookEvent {
 }
 
 serve(async (req) => {
+  // Hoisted so the catch can release the idempotency claim. See the dedup block
+  // below: the claim is written BEFORE the work, so if the work throws we must
+  // delete it or RevenueCat's retry is answered with "duplicate" forever and the
+  // purchase is lost permanently.
+  let eventDedupKey: string | null = null;
   try {
     // Only accept POST requests
     if (req.method !== 'POST') {
@@ -69,7 +74,7 @@ serve(async (req) => {
     // Idempotency: RC retries deliver the same event multiple times. Fall
     // back to a composite key if RC didn't provide event.id (older payloads).
     // Primary-key violation on insert = duplicate delivery → ack and exit.
-    const eventDedupKey = payload.event.id
+    eventDedupKey = payload.event.id
       ?? `${payload.event.type}:${payload.event.app_user_id}:${payload.event.purchased_at_ms}`;
     const { error: dedupError } = await supabase
       .from('revenuecat_webhook_events')
@@ -234,6 +239,19 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error processing webhook:', error);
+    // Release the idempotency claim so RevenueCat's retry actually reprocesses.
+    // The claim row is inserted BEFORE the work is done, so without this a single
+    // mid-processing failure marks the event permanently "handled": every retry
+    // hits the 23505 branch, returns 200 "duplicate_event", and the purchase is
+    // silently lost with no way to self-heal. We return 500 below specifically so
+    // RC retries — that retry is worthless while the claim is still there.
+    if (eventDedupKey) {
+      try {
+        await supabase.from('revenuecat_webhook_events').delete().eq('event_id', eventDedupKey);
+      } catch (releaseError) {
+        console.error('Failed to release dedup claim:', releaseError);
+      }
+    }
     // Best-effort dead-letter log — swallow any failure of the log itself.
     try {
       const bodyText = await req.clone().text().catch(() => '');
@@ -271,6 +289,46 @@ async function updateSubscriptionStatus(
   appUserId?: string
 ) {
   try {
+    // STALE-EVENT GUARD — must run BEFORE any write, because the profiles update
+    // below is what actually revokes access.
+    //
+    // RevenueCat can deliver events out of order, and some types (notably
+    // PRODUCT_CHANGE) carry the expiration of the OLD product. Applying one
+    // blindly downgrades a subscriber who is currently paid: observed 2026-08-08,
+    // where a RENEWAL landed and a PRODUCT_CHANGE arrived 54ms later carrying an
+    // already-past expiry, flipping a live 3-month subscriber back to expired and
+    // locking them out of the app they'd just paid for.
+    //
+    // Only honour a downgrade when this event is not older than what we already
+    // hold. If the stored expires_at is still in the future and later than this
+    // event's expiration, the event is stale — drop it entirely. A real lapse
+    // still arrives as an EXPIRATION whose expiration_at_ms is >= the stored
+    // value, so genuine downgrades are unaffected.
+    if (!isActive) {
+      const { data: existing } = await supabase
+        .from('subscriptions')
+        .select('expires_at')
+        .eq('profile_id', profileId)
+        .maybeSingle();
+
+      const storedExpiry = existing?.expires_at ? new Date(existing.expires_at).getTime() : null;
+      const eventExpiry = expirationMs ?? null;
+
+      if (
+        storedExpiry !== null &&
+        storedExpiry > Date.now() &&
+        eventExpiry !== null &&
+        eventExpiry < storedExpiry
+      ) {
+        console.warn('⏭️ Ignoring stale downgrade event', {
+          profileId,
+          storedExpiry: new Date(storedExpiry).toISOString(),
+          eventExpiry: new Date(eventExpiry).toISOString(),
+        });
+        return;
+      }
+    }
+
     // Update profiles table
     const { error: profileError } = await supabase
       .from('profiles')
@@ -309,6 +367,7 @@ async function updateSubscriptionStatus(
         throw subscriptionError;
       }
     } else if (!isActive) {
+      // Staleness already checked at the top of this function.
       // Mark subscription as expired and clear premium status
       const { error: subscriptionError } = await supabase
         .from('subscriptions')
