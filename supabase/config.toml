@@ -52,3 +52,19 @@ verify_jwt = false
 # Photo moderation (called by cron retry + user uploads with internal auth check)
 [functions.moderate-photo]
 verify_jwt = false
+
+# RevenueCat webhook (called by RevenueCat, which cannot send a Supabase JWT).
+# MUST stay false: the CLI defaults to verify_jwt = true when a function is not
+# declared here, so a deploy without this entry 401s every subscription event
+# and silently stops all purchase/renewal/expiry syncing.
+[functions.revenuecat-webhook]
+verify_jwt = false
+
+# Called by the app with the user's JWT (and by admin tooling with the service
+# role). Gateway JWT verification MUST stay on. Declared explicitly because the
+# CLI defaults verify_jwt to FALSE for any function not listed in this file — a
+# deploy without this entry silently downgraded it from true to false
+# (observed 2026-08-08). The function does validate the Authorization header
+# itself, so this is defence-in-depth, but don't rely on that alone.
+[functions.sync-subscription]
+verify_jwt = true
