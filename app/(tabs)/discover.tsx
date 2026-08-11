@@ -1215,7 +1215,15 @@ export default function Discover() {
           (effectiveFilters.primaryReason?.length || 0) > 0 ||
           (effectiveFilters.relationshipType?.length || 0) > 0 ||
           effectiveFilters.heightMin !== 48 || effectiveFilters.heightMax !== 84 ||
-          effectiveFilters.activeToday === true ||
+          // activeToday deliberately NOT included: neither the cache nor the live
+          // RPC filters by last-active server-side — it's applied client-side
+          // (below, in the FREE FILTERS block) on whichever candidate set we
+          // fetched. Including it here only bypassed the fast cache and forced
+          // the slow 9-exclusion-query live path, so users with the chip on got
+          // a multi-minute hang and then the SAME thin results ("all caught up"
+          // + one card). Support case 2026-08-11 (Amellusina): 50 cached
+          // candidates, activeToday cut them to 1, and every launch re-ran the
+          // slow path — experienced as "the app is frozen".
           effectiveFilters.wantsChildren !== null ||
           !!selectedIntentionRef.current;
 
