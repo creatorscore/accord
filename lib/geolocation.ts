@@ -2,6 +2,13 @@
  * Geolocation utilities for Accord
  * Privacy-conscious location handling for lavender marriage matching
  */
+// Platform MUST be a static named import. `await import('react-native')` builds
+// an ES-module namespace, which reads every export of react-native/index.js and
+// so fires its deprecated getters (ProgressBarAndroid, Clipboard,
+// PushNotificationIOS). PushNotificationIOS.js constructs a NativeEventEmitter
+// against a native module that isn't in our binary, throwing an Invariant
+// Violation that becomes a fatal JSI crash on iOS (Sentry REACT-76).
+import { Platform } from 'react-native';
 
 /**
  * Calculate distance between two coordinates using Haversine formula
@@ -185,7 +192,6 @@ export async function updateUserLocation(): Promise<{
 } | null> {
   try {
     const Location = await import('expo-location');
-    const { Platform } = await import('react-native');
 
     // Request permission
     const { status } = await Location.requestForegroundPermissionsAsync();
