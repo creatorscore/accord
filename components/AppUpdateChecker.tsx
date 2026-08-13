@@ -12,15 +12,19 @@ import {
 } from 'react-native';
 import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
-import i18n from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 
-// Native in-app updates - uses Google Play Core on Android, App Store on iOS
-// Only load on native platforms to avoid web bundling errors
+// Native in-app updates - uses Google Play Core on Android ONLY.
+// Do NOT load this on iOS: its iOS path pulls in react-native-siren →
+// react-native-device-info, which runs `new NativeEventEmitter(NativeModules.RNDeviceInfo)`
+// at module scope. RNDeviceInfo is a transitive dep so it's never autolinked into
+// our binary, and on iOS a null emitter argument throws an Invariant Violation
+// that escalates to a fatal JSI crash (Sentry REACT-76, 81 users). iOS uses the
+// fallback modal + App Store link below instead.
 let SpInAppUpdates: any = null;
 let IAUUpdateKind: any = null;
 
-if (Platform.OS !== 'web') {
+if (Platform.OS === 'android') {
   try {
     const inAppUpdatesModule = require('sp-react-native-in-app-updates');
     SpInAppUpdates = inAppUpdatesModule.default;
@@ -96,6 +100,7 @@ export default function AppUpdateChecker() {
   const [isAdminTest, setIsAdminTest] = useState(false);
   const appState = useRef<AppStateStatus>(AppState.currentState);
   const inAppUpdates = useRef<any>(null);
+  const softPromptShownRef = useRef(false);
 
   useEffect(() => {
     // Initialize native in-app updates
@@ -192,8 +197,11 @@ export default function AppUpdateChecker() {
         }
       }
 
-      // Show fallback modal for forced updates or admin test
-      if (isForcedUpdate) {
+      // No native flow handled it (iOS always lands here; Android only if Play
+      // Core failed) — show our own modal. Soft updates keep the "Not now"
+      // button and only prompt once per session; forced updates always show.
+      if (isForcedUpdate || !softPromptShownRef.current) {
+        softPromptShownRef.current = true;
         setShowFallbackModal(true);
       }
     } catch (error) {
@@ -213,26 +221,13 @@ export default function AppUpdateChecker() {
       });
 
       if (result.shouldUpdate) {
-        // Show native update dialog
-        if (Platform.OS === 'android') {
-          // Android: Use Google Play Core In-App Updates
-          // IMMEDIATE = full screen, blocks app until updated (for forced updates)
-          // FLEXIBLE = shows banner, allows user to continue using app
-          await inAppUpdates.current.startUpdate({
-            updateType: isForced ? IAUUpdateKind.IMMEDIATE : IAUUpdateKind.FLEXIBLE,
-          });
-        } else {
-          // iOS: Show App Store prompt
-          await inAppUpdates.current.startUpdate({
-            title: isForced ? i18n.t('common.update.nativeTitleRequired') : i18n.t('common.update.nativeTitleAvailable'),
-            message: isForced
-              ? i18n.t('common.update.nativeBodyRequired')
-              : i18n.t('common.update.nativeBodyAvailable'),
-            buttonUpgradeText: i18n.t('common.update.nativeUpdateNow'),
-            buttonCancelText: isForced ? undefined : i18n.t('common.update.nativeLater'),
-            forceUpgrade: isForced,
-          });
-        }
+        // Android only (the library is never loaded on iOS — see top of file):
+        // Google Play Core In-App Updates
+        // IMMEDIATE = full screen, blocks app until updated (for forced updates)
+        // FLEXIBLE = shows banner, allows user to continue using app
+        await inAppUpdates.current.startUpdate({
+          updateType: isForced ? IAUUpdateKind.IMMEDIATE : IAUUpdateKind.FLEXIBLE,
+        });
         return true;
       }
 
