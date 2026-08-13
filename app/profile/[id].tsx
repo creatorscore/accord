@@ -668,6 +668,24 @@ export default function ProfileView() {
             t('discover.photosUnderReviewMessage', { defaultValue: 'One of your photos is still being reviewed — this usually takes a minute. Please try again shortly.' })
           );
           return;
+        } else if (likeInsertError.code === 'P0001') {
+          // Other intentional server rejections (anti-scam distance block,
+          // premium-required, profile-incomplete) are business rules, not bugs —
+          // surface the server's message instead of the generic like error.
+          setIsLiked(false);
+          if (likeInsertError.message?.includes('within your area')) {
+            Alert.alert(
+              t('subscription.upgradeToPremium'),
+              likeInsertError.message,
+              [
+                { text: t('common.cancel'), style: 'cancel' },
+                { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
+              ]
+            );
+          } else {
+            Alert.alert(t('common.error'), likeInsertError.message);
+          }
+          return;
         } else {
           throw likeInsertError;
         }
