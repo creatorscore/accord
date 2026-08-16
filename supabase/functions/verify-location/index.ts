@@ -193,13 +193,26 @@ serve(async (req) => {
       ...suppressPatch,
     }).eq('id', profile.id);
 
-    // Self-heal: an ip_fraud suppression must lift once the connection reads
-    // clean, otherwise one bad reading hides a member permanently — that is how
-    // members ended up suppressed with no flag reason left on the row. Scoped by
-    // .eq('discovery_suppressed_reason','ip_fraud') so a teleport suppression,
-    // which this function does not own, is never touched.
+    // Self-heal: an ip_fraud suppression must lift as soon as the connection no
+    // longer shows a signal strong enough to suppress, otherwise one bad reading
+    // hides a member permanently — that is how members ended up suppressed with
+    // no flag reason left on the row.
+    //
+    // The condition is NOT `!flagged`, deliberately. A flag-only reason
+    // (country_mismatch / location_mismatch) never justifies suppression on its
+    // own, so gating the heal on an unflagged row left mismatch-flagged members
+    // hidden forever: the flag they carry was exactly what stopped the heal from
+    // running. Suppression and flagging are separate severities, and the heal
+    // must key off the suppression one.
+    //
+    // `priorIsJump` IS still excluded: a GPS teleport is the one genuine
+    // spoofing signal we have, and it is not ours to clear from an IP reading —
+    // only a new clean GPS history or an admin dismissal should lift it.
+    //
+    // Scoped by .eq('discovery_suppressed_reason','ip_fraud') so a teleport or
+    // scam-report suppression, which this function does not own, is untouched.
     let unsuppressed = false;
-    if (!strongIp && !flagged) {
+    if (!strongIp && !priorIsJump) {
       const { data: healed } = await admin
         .from('profiles')
         .update({
