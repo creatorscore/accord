@@ -19,6 +19,9 @@ const corsHeaders = {
  * these columns. Fails OPEN: any error (no key, IPQS down) leaves the account
  * unflagged so we never lock out a legit user on an infra hiccup.
  *
+ * VPN/proxy/Tor is NOT a fraud signal here and disables the other IP checks —
+ * our members use VPNs for personal safety. See the block around `onVpn`.
+ *
  * Throttle: skips the paid lookup if verified within THROTTLE_DAYS unless
  * force=true (location change), to stay inside the lookup quota.
  */
@@ -116,20 +119,34 @@ serve(async (req) => {
     const ipLat: number | null = typeof ipq.latitude === 'number' ? ipq.latitude : null;
     const ipLon: number | null = typeof ipq.longitude === 'number' ? ipq.longitude : null;
 
+    // A VPN/proxy/Tor exit makes EVERY other IP signal meaningless, so it is not
+    // itself a fraud signal and it suppresses the rest of the IP checks:
+    //   - the exit node's country/coords are the VPN's, not the user's, so
+    //     country_mismatch / location_mismatch would just be detecting the VPN;
+    //   - IPQS scores VPN ranges as high-risk by definition, so fraud_score
+    //     would be re-detecting the VPN too (this is what defeated the previous
+    //     "VPN stays flag-only" carve-out and auto-suppressed real members);
+    //   - commercial VPNs exit through datacenters, so datacenter_ip likewise.
+    // Our users are LGBTQ+ people in countries where a VPN is a safety measure.
+    // Penalising it is penalising exactly the protection this app exists to give.
+    // GPS spoofing is still caught by the `guard_location_change` teleport
+    // trigger, which is GPS-based and unaffected by any of this.
+    const onVpn = !!(ipq.vpn || ipq.proxy || ipq.tor || ipq.active_vpn || ipq.active_tor);
+
     const reasons: string[] = [];
-    // 1) Hiding behind VPN/proxy/Tor/datacenter — the classic scammer setup.
-    if (ipq.vpn || ipq.proxy || ipq.tor || ipq.active_vpn || ipq.active_tor) reasons.push('vpn_or_proxy');
-    if ((ipq.connection_type || '').toLowerCase() === 'data center') reasons.push('datacenter_ip');
-    // 2) High fraud score from the provider.
-    if (typeof ipq.fraud_score === 'number' && ipq.fraud_score >= FRAUD_SCORE_FLAG) reasons.push('high_fraud_score');
-    // 3) IP location doesn't match the stated location (country or >300mi apart).
-    const claimLat = typeof gps_lat === 'number' ? gps_lat : (profile.latitude != null ? Number(profile.latitude) : null);
-    const claimLon = typeof gps_lon === 'number' ? gps_lon : (profile.longitude != null ? Number(profile.longitude) : null);
-    if (ipCountry && profile.location_country && ipCountry.toUpperCase() !== String(profile.location_country).toUpperCase()) {
-      reasons.push('country_mismatch');
-    } else if (ipLat != null && ipLon != null && claimLat != null && claimLon != null
-               && milesBetween(ipLat, ipLon, claimLat, claimLon) > MISMATCH_MILES) {
-      reasons.push('location_mismatch');
+    if (!onVpn) {
+      // Real users aren't on datacenter IPs without a VPN — that's bots/scrapers.
+      if ((ipq.connection_type || '').toLowerCase() === 'data center') reasons.push('datacenter_ip');
+      if (typeof ipq.fraud_score === 'number' && ipq.fraud_score >= FRAUD_SCORE_FLAG) reasons.push('high_fraud_score');
+      // IP location doesn't match the stated location (country or >300mi apart).
+      const claimLat = typeof gps_lat === 'number' ? gps_lat : (profile.latitude != null ? Number(profile.latitude) : null);
+      const claimLon = typeof gps_lon === 'number' ? gps_lon : (profile.longitude != null ? Number(profile.longitude) : null);
+      if (ipCountry && profile.location_country && ipCountry.toUpperCase() !== String(profile.location_country).toUpperCase()) {
+        reasons.push('country_mismatch');
+      } else if (ipLat != null && ipLon != null && claimLat != null && claimLon != null
+                 && milesBetween(ipLat, ipLon, claimLat, claimLon) > MISMATCH_MILES) {
+        reasons.push('location_mismatch');
+      }
     }
 
     const ipFlagged = reasons.length > 0;
@@ -150,13 +167,13 @@ serve(async (req) => {
     if (priorIsJump && priorReason) reasonParts.push(priorReason);
     const flagReason = flagged ? reasonParts.join(' | ') : null;
 
-    // AUTOMATED ENFORCEMENT: only the high-confidence IP signals auto-suppress
-    // from discovery — the provider's own high fraud score, or a datacenter IP
-    // (real users aren't on datacenter IPs; that's bots/scrapers). VPN/proxy or a
-    // bare country/location mismatch stay flag-only (too many legit travelers /
-    // privacy users). We never CLEAR discovery_suppressed here, so a prior
-    // teleport suppression persists.
-    const strongIp = reasons.includes('high_fraud_score') || reasons.includes('datacenter_ip');
+    // AUTOMATED ENFORCEMENT: only high-confidence IP signals auto-suppress from
+    // discovery — the provider's high fraud score, or a datacenter IP. Both are
+    // only ever recorded for non-VPN connections (see above), so a member on a
+    // VPN can no longer be auto-suppressed. A bare country/location mismatch
+    // stays flag-only (legit travellers). A prior teleport suppression persists;
+    // only our own ip_fraud verdict is lifted, in the self-heal step below.
+    const strongIp = !onVpn && (reasons.includes('high_fraud_score') || reasons.includes('datacenter_ip'));
     const suppressPatch = strongIp
       ? {
           discovery_suppressed: true,
@@ -176,7 +193,27 @@ serve(async (req) => {
       ...suppressPatch,
     }).eq('id', profile.id);
 
-    return new Response(JSON.stringify({ verified: !flagged, flagged, reasons, preserved_jump_flag: priorIsJump }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
+    // Self-heal: an ip_fraud suppression must lift once the connection reads
+    // clean, otherwise one bad reading hides a member permanently — that is how
+    // members ended up suppressed with no flag reason left on the row. Scoped by
+    // .eq('discovery_suppressed_reason','ip_fraud') so a teleport suppression,
+    // which this function does not own, is never touched.
+    let unsuppressed = false;
+    if (!strongIp && !flagged) {
+      const { data: healed } = await admin
+        .from('profiles')
+        .update({
+          discovery_suppressed: false,
+          discovery_suppressed_reason: null,
+          discovery_suppressed_at: null,
+        })
+        .eq('id', profile.id)
+        .eq('discovery_suppressed_reason', 'ip_fraud')
+        .select('id');
+      unsuppressed = !!healed?.length;
+    }
+
+    return new Response(JSON.stringify({ verified: !flagged, flagged, reasons, on_vpn: onVpn, unsuppressed, preserved_jump_flag: priorIsJump }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
   } catch (error: any) {
     console.error('[verify-location] unexpected (fail-open):', error?.message ?? error);
     // Fail open — never block a user on our error.
