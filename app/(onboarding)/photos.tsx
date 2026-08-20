@@ -27,6 +27,18 @@ import * as Haptics from 'expo-haptics';
 import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
 import { toUserMessage } from '@/lib/error-messages';
 
+/**
+ * Minimum photos required to leave this step.
+ *
+ * Kept in sync with the `check_minimum_photos` trigger on profiles, which is
+ * the actual product rule and requires 2. The client asked for 3, so it was
+ * a third stricter than the standard we enforce — at the single biggest
+ * abandonment point in onboarding (175 users stalled here in 30 days, 149 of
+ * them with zero photos uploaded). For an app whose users are often not out,
+ * every extra photo demanded up front is a real cost.
+ */
+const MIN_PHOTOS = 2;
+
 interface Photo {
   uri: string;
   originalUri?: string; // Original source URI for re-optimization fallback
@@ -310,7 +322,7 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
 
   const handleContinue = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (photos.length < 3) {
+    if (photos.length < MIN_PHOTOS) {
       showToast({ type: 'info', title: t('toast.morePhotosNeeded'), message: t('toast.morePhotosNeeded') });
       return;
     }
@@ -566,8 +578,8 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
   const showSkeleton = initialLoading && photos.length === 0;
   const hintText = selectedPhotoIndex !== null
     ? 'Tap another photo to swap positions'
-    : photos.length < 3
-      ? `Add ${3 - photos.length} more — 3 required, up to 6. First photo is your primary.`
+    : photos.length < MIN_PHOTOS
+      ? `Add ${MIN_PHOTOS - photos.length} more — ${MIN_PHOTOS} required, up to 6. First photo is your primary.`
       : 'Tap a photo to reorder. First photo is your primary.';
 
   const content = (
@@ -743,7 +755,7 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
   );
 
   if (embedded) {
-    const continueDisabled = uploading || photos.length < 3;
+    const continueDisabled = uploading || photos.length < MIN_PHOTOS;
     return (
       <View style={{ flex: 1 }}>
         {/* Embedded title */}
@@ -790,7 +802,7 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
       subtitle={t('onboardingPhotos.subtitle')}
       onBack={() => goToPreviousOnboardingStep('/(onboarding)/photos')}
       onContinue={handleContinue}
-      continueDisabled={uploading || photos.length < 3}
+      continueDisabled={uploading || photos.length < MIN_PHOTOS}
       continueLabel={uploading ? t('onboardingPhotos.uploading', { progress: uploadProgress }) : t('common.continue')}
       noScroll
     >

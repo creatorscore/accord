@@ -372,10 +372,19 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     position: 'absolute',
-    right: 24,
-    bottom: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    right: 16,
+    bottom: -4,
+    // 20 of the 34 onboarding steps are skippable, but the control was a
+    // ~24pt target (16pt text + 4pt padding) — under the 44pt/48dp minimum
+    // both platforms recommend, and easy to miss entirely. Users therefore
+    // experienced an optional 34-step flow as a mandatory one. Widening the
+    // hit area (not the type) makes the skip actually reachable.
+    minHeight: 44,
+    minWidth: 64,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   skipText: {
     fontSize: 16,
