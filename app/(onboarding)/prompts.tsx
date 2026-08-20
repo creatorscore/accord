@@ -14,6 +14,7 @@ import { PROMPT_KEYS } from '@/lib/prompt-options';
 import * as Haptics from 'expo-haptics';
 import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
 import { useOnboardingDraft } from '@/hooks/useOnboardingDraft';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface PromptsDraft {
   selectedPrompts: PromptAnswer[];
@@ -202,7 +203,7 @@ export default function Prompts({ embedded, onContinue: parentContinue, onBack: 
         router.push('/(onboarding)/voice-intro');
       }
     } catch (error: any) {
-      Alert.alert(t('common.error'), error.message || t('onboarding.promptsStep.saveFailed'));
+      Alert.alert(t('common.error'), toUserMessage(error, t('onboarding.promptsStep.saveFailed')));
     } finally {
       setLoading(false);
     }

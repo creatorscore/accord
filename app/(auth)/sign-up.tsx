@@ -11,6 +11,7 @@ import { trackUserAction, identifyUser } from '@/lib/analytics';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/lib/useColorScheme';
+import { toUserMessage } from '@/lib/error-messages';
 
 export default function SignUp() {
   const translationHook = useTranslation();
@@ -255,7 +256,7 @@ export default function SignUp() {
       // null result means user cancelled or backgrounded — silently do nothing
     } catch (error: any) {
       if (error.message !== 'User cancelled') {
-        Alert.alert(t('common.error'), error.message || t('auth.signUp.failedSignUpGoogle'));
+        Alert.alert(t('common.error'), toUserMessage(error, t('auth.signUp.failedSignUpGoogle')));
       }
       console.error('Google sign-up error:', error);
     } finally {
@@ -290,7 +291,7 @@ export default function SignUp() {
         }, 500);
       }
     } catch (error: any) {
-      Alert.alert(t('common.error'), error.message || t('auth.signUp.failedSignUpApple'));
+      Alert.alert(t('common.error'), toUserMessage(error, t('auth.signUp.failedSignUpApple')));
     } finally {
       isSigningIn.current = false;
       setLoading(false);
@@ -334,7 +335,7 @@ export default function SignUp() {
       console.error('OTP verification error:', error);
       Alert.alert(
         t('common.error'),
-        error.message || t('auth.signUp.otpVerificationFailed', 'Invalid or expired code. Please try again.')
+        toUserMessage(error, t('auth.signUp.otpVerificationFailed', 'Invalid or expired code. Please try again.'))
       );
     } finally {
       setVerifyingOtp(false);

@@ -61,6 +61,7 @@ import {
 // Lazy imports for heavy steps
 import { lazy, Suspense } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { toUserMessage } from '@/lib/error-messages';
 const PhotosStep = lazy(() => import('@/app/(onboarding)/photos'));
 const PromptsStep = lazy(() => import('@/app/(onboarding)/prompts'));
 const VoiceStep = lazy(() => import('@/app/(onboarding)/voice-intro'));
@@ -766,7 +767,7 @@ export default function Onboarding() {
         { step, context: 'onboarding_checkpoint', error_code: ckptCode },
         [ckptFingerprint],
       );
-      showToast({ type: 'error', title: 'Error', message: error.message || 'Failed to save progress. Please try again.' });
+      showToast({ type: 'error', title: 'Error', message: toUserMessage(error, 'Failed to save progress. Please try again.') });
       throw error; // Re-throw so callers know the save failed
     } finally {
       setSaving(false);

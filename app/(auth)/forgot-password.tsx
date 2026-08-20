@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/lib/useColorScheme';
+import { toUserMessage } from '@/lib/error-messages';
 
 /**
  * Password reset via one-time-code (OTP), not a magic link.
@@ -69,7 +70,7 @@ export default function ForgotPassword() {
       console.error('Password reset OTP error:', error);
       Alert.alert(
         t('auth.forgotPassword.errorTitle'),
-        error.message || t('auth.forgotPassword.sendFailed')
+        toUserMessage(error, t('auth.forgotPassword.sendFailed'))
       );
     } finally {
       setLoading(false);
@@ -89,7 +90,7 @@ export default function ForgotPassword() {
     } catch (error: any) {
       Alert.alert(
         t('auth.forgotPassword.errorTitle'),
-        error.message || t('auth.forgotPassword.resendFailed')
+        toUserMessage(error, t('auth.forgotPassword.resendFailed'))
       );
     } finally {
       setLoading(false);
@@ -121,7 +122,7 @@ export default function ForgotPassword() {
     } catch (error: any) {
       Alert.alert(
         t('auth.forgotPassword.errorTitle'),
-        error.message || t('auth.forgotPassword.invalidOrExpiredCode', { defaultValue: 'That code is invalid or expired. Try again or resend.' })
+        toUserMessage(error, t('auth.forgotPassword.invalidOrExpiredCode', { defaultValue: 'That code is invalid or expired. Try again or resend.' }))
       );
     } finally {
       setVerifying(false);

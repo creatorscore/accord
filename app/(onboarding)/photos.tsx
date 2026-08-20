@@ -25,6 +25,7 @@ import { getGlobalStep } from '@/lib/onboarding-steps';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
 import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface Photo {
   uri: string;
@@ -555,7 +556,7 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
     } catch (error: any) {
       console.error('Upload failed:', error);
       if (isMounted.current) {
-        showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.uploadFailed') });
+        showToast({ type: 'error', title: t('common.error'), message: toUserMessage(error, t('toast.uploadFailed')) });
         setUploading(false);
         setUploadProgress(0);
       }

@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import Constants from 'expo-constants';
+import { toUserMessage } from '@/lib/error-messages';
 
 type TargetAudience = 'all' | 'premium' | 'free' | 'verified';
 
@@ -217,7 +218,7 @@ export default function AdminPushNotifications() {
               );
             } catch (error: any) {
               console.error('Error sending notification:', error);
-              Alert.alert('Error', error.message || 'Failed to send notification');
+              Alert.alert('Error', toUserMessage(error, 'Failed to send notification'));
             } finally {
               setSending(false);
             }

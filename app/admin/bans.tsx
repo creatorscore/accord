@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendBanNotification } from '@/lib/notifications';
 import { signPhotoUrls, getSignedUrls } from '@/lib/signed-urls';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface FlaggedPhoto {
   url: string;
@@ -325,7 +326,7 @@ export default function AdminBans() {
       loadBans();
     } catch (error: any) {
       console.error('Error unbanning:', error);
-      Alert.alert('Error', error.message || 'Failed to unban user.');
+      Alert.alert('Error', toUserMessage(error, 'Failed to unban user.'));
     } finally {
       setUnbanningId(null);
     }
@@ -359,7 +360,7 @@ export default function AdminBans() {
       setSearchResults(formattedResults);
     } catch (error: any) {
       console.error('❌ Error searching users:', error);
-      Alert.alert('Error', error.message || 'Failed to search users');
+      Alert.alert('Error', toUserMessage(error, 'Failed to search users'));
     } finally {
       setSearching(false);
     }
@@ -547,7 +548,7 @@ export default function AdminBans() {
       loadBans();
     } catch (error: any) {
       console.error('Error adding ban:', error);
-      Alert.alert('Error', error.message || 'Failed to add ban.');
+      Alert.alert('Error', toUserMessage(error, 'Failed to add ban.'));
     } finally {
       setAddingBan(false);
     }

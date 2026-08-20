@@ -15,6 +15,7 @@ import { openAppSettings } from '@/lib/open-settings';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
+import { toUserMessage } from '@/lib/error-messages';
 
 // Simple waveform visualization with playback progress
 const BAR_COUNT = 32;
@@ -218,7 +219,7 @@ export default function VoiceIntro({ embedded, onContinue: parentContinue, onBac
         });
       }, 1000);
     } catch (error: any) {
-      showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.recordingFailed') });
+      showToast({ type: 'error', title: t('common.error'), message: toUserMessage(error, t('toast.recordingFailed')) });
       setIsRecording(false);
     }
   };
@@ -246,7 +247,7 @@ export default function VoiceIntro({ embedded, onContinue: parentContinue, onBac
     } catch (error: any) {
       console.error('stopRecording error:', error);
       setIsRecording(false);
-      showToast({ type: 'error', title: t('common.error'), message: error?.message || t('toast.stopRecordingFailed') });
+      showToast({ type: 'error', title: t('common.error'), message: toUserMessage(error, t('toast.stopRecordingFailed')) });
     }
   };
 
@@ -395,7 +396,7 @@ export default function VoiceIntro({ embedded, onContinue: parentContinue, onBac
       }
     } catch (error: any) {
       console.error('Voice intro save error:', error, 'recordingUri:', recordingUri);
-      showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.voiceUploadFailed') });
+      showToast({ type: 'error', title: t('common.error'), message: toUserMessage(error, t('toast.voiceUploadFailed')) });
     } finally {
       setLoading(false);
     }

@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { signPhotoUrls } from '@/lib/signed-urls';
 import { formatDistanceToNow } from 'date-fns';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface PhotoReviewUser {
   id: string;
@@ -166,7 +167,7 @@ export default function AdminPhotoReviews() {
       loadPhotoReviewUsers();
     } catch (error: any) {
       console.error('Error clearing photo review:', error);
-      Alert.alert('Error', error.message || 'Failed to clear photo review.');
+      Alert.alert('Error', toUserMessage(error, 'Failed to clear photo review.'));
     } finally {
       setClearing(null);
     }

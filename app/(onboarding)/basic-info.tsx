@@ -20,6 +20,7 @@ import OnboardingChips from '@/components/onboarding/OnboardingChips';
 import VisibilityToggle from '@/components/onboarding/VisibilityToggle';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { useOnboardingDraft } from '@/hooks/useOnboardingDraft';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface BasicInfoDraft {
   displayName: string;
@@ -658,7 +659,7 @@ export default function BasicInfo() {
       trackFunnel.onboardingStep1_BasicInfo();
       router.push('/(onboarding)/photos');
     } catch (error: any) {
-      showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profileSaveError') });
+      showToast({ type: 'error', title: t('common.error'), message: toUserMessage(error, t('toast.profileSaveError')) });
     } finally {
       setLoading(false);
     }

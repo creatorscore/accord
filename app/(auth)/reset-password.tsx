@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/lib/useColorScheme';
+import { toUserMessage } from '@/lib/error-messages';
 
 export default function ResetPassword() {
   const { t } = useTranslation();
@@ -56,7 +57,7 @@ export default function ResetPassword() {
         ]
       );
     } catch (error: any) {
-      Alert.alert(t('auth.resetPassword.errorTitle'), error.message || t('auth.resetPassword.resetFailed'));
+      Alert.alert(t('auth.resetPassword.errorTitle'), toUserMessage(error, t('auth.resetPassword.resetFailed')));
     } finally {
       setLoading(false);
     }

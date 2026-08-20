@@ -12,6 +12,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useTranslation } from 'react-i18next';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface UnmatchModalProps {
   visible: boolean;
@@ -90,7 +91,7 @@ export default function UnmatchModal({
       console.error('Error unmatching:', error);
       Alert.alert(
         t('common.error'),
-        error.message || t('moderation.unmatch.errorMessage')
+        toUserMessage(error, t('moderation.unmatch.errorMessage'))
       );
     } finally {
       setLoading(false);

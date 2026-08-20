@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface VerificationUser {
   id: string;
@@ -138,7 +139,7 @@ export default function AdminVerification() {
       loadVerificationUsers();
     } catch (error: any) {
       console.error('Error resetting verification:', error);
-      Alert.alert('Error', error.message || 'Failed to reset verification.');
+      Alert.alert('Error', toUserMessage(error, 'Failed to reset verification.'));
     } finally {
       setResetting(null);
     }

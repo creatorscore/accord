@@ -41,6 +41,7 @@ import TrialExpirationBanner from '@/components/premium/TrialExpirationBanner';
 import PaymentFailedBanner from '@/components/premium/PaymentFailedBanner';
 import PremiumExpiringBanner from '@/components/premium/PremiumExpiringBanner';
 import LocationStaleBanner from '@/components/security/LocationStaleBanner';
+import { toUserMessage } from '@/lib/error-messages';
 
 // Hydrate only the first N candidates per load. The feed shows one card at a
 // time and auto-reloads the next batch when the stack is exhausted (see the
@@ -1368,7 +1369,7 @@ export default function Discover() {
         // Cap at 150 IDs to avoid PostgREST URL length limits (400 Bad Request)
         const searchExcludeIds = [...blockedIds, ...bannedProfileIds];
         if (searchExcludeIds.length > 0 && searchExcludeIds.length <= 150) {
-          query = query.not('id', 'in', `(${searchExcludeIds.join(',')})`);
+          query = query.not('id', 'in', `(${searchExcludeIds.join(',') })`);
         }
 
         // Add server-side search filter using ILIKE for scalar TEXT fields only
@@ -1476,7 +1477,7 @@ export default function Discover() {
         // Cap at 150 IDs to avoid PostgREST URL length limits (400 Bad Request)
         // When over 200, we filter client-side after the query
         if (swipedIds.length > 0 && swipedIds.length <= 150) {
-          query = query.not('id', 'in', `(${swipedIds.join(',')})`);
+          query = query.not('id', 'in', `(${swipedIds.join(',') })`);
         }
         // Apply strict age filters (no buffer - respect user preferences exactly)
         // Safety: Always enforce minimum age of 18
@@ -2324,7 +2325,7 @@ export default function Discover() {
       // A silent background load-more must never surface a toast — the current
       // stack is still valid; we just didn't get more this time.
       if (!background) {
-        showToast({ type: 'error', title: t('common.error'), message: error.message || t('toast.profilesLoadError') });
+        showToast({ type: 'error', title: t('common.error'), message: toUserMessage(error, t('toast.profilesLoadError')) });
       }
     } finally {
       if (!background) {

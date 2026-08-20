@@ -13,6 +13,7 @@ import { registerForPushNotifications, ensurePushTokenSaved } from '@/lib/notifi
 import { openAppSettings } from '@/lib/open-settings';
 import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
 import { usePreviewModeStore } from '@/stores/previewModeStore';
+import { toUserMessage } from '@/lib/error-messages';
 
 export default function Notifications() {
   const { t } = useTranslation();
@@ -205,7 +206,7 @@ export default function Notifications() {
       exitPreviewMode();
       router.replace('/(tabs)/discover');
     } catch (error: any) {
-      Alert.alert(t('common.error'), error.message || t('onboarding.notifications.completeError'));
+      Alert.alert(t('common.error'), toUserMessage(error, t('onboarding.notifications.completeError')));
     } finally {
       setLoading(false);
     }

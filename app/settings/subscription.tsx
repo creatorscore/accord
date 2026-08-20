@@ -10,6 +10,7 @@ import { restorePurchases, getCustomerInfo, getOfferings, purchasePackage, prese
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 import { openExternalURL } from '@/lib/external-link';
+import { toUserMessage } from '@/lib/error-messages';
 export default function SubscriptionManagement() {
   const router = useRouter();
   const { t } = useTranslation();
@@ -56,7 +57,7 @@ export default function SubscriptionManagement() {
       // Show user-friendly error message
       Alert.alert(
         t('subscriptionSettings.alerts.unableToLoadTitle'),
-        error.message || t('subscriptionSettings.alerts.unableToLoadMessage'),
+        toUserMessage(error, t('subscriptionSettings.alerts.unableToLoadMessage')),
         [
           { text: t('common.cancel'), style: 'cancel' },
           { text: t('subscriptionSettings.alerts.tryAgain'), onPress: loadOfferings }
@@ -159,7 +160,7 @@ export default function SubscriptionManagement() {
       console.error('Error presenting code redemption:', error);
       Alert.alert(
         t('common.error'),
-        error.message || t('subscriptionSettings.alerts.codeRedemptionFailed')
+        toUserMessage(error, t('subscriptionSettings.alerts.codeRedemptionFailed'))
       );
     } finally {
       setRedeeming(false);

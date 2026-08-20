@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface BanInfo {
   id: string;
@@ -172,7 +173,7 @@ export default function BannedScreen() {
       }
     } catch (error: any) {
       console.error('Error submitting appeal:', error);
-      Alert.alert('Error', error.message || 'Failed to submit appeal. Please try again.');
+      Alert.alert('Error', toUserMessage(error, 'Failed to submit appeal. Please try again.'));
     } finally {
       setSubmittingAppeal(false);
     }
