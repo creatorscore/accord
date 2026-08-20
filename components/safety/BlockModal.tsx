@@ -4,6 +4,7 @@ import {
   Text,
   Modal,
   TouchableOpacity,
+  ScrollView,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
@@ -53,7 +54,15 @@ export default function BlockModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
+      {/* Scrollable backdrop: the card is centred and has no height cap, so
+          on a short screen or at a large font scale it overflowed top and
+          bottom and the Cancel/Block buttons were unreachable. flexGrow: 1
+          keeps it visually centred whenever it fits. */}
+      <ScrollView
+        style={styles.overlayScroll}
+        contentContainerStyle={styles.overlay}
+        showsVerticalScrollIndicator={false}
+      >
         <MotiView
           from={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -117,15 +126,18 @@ export default function BlockModal({
             <MaterialCommunityIcons name="close" size={24} color="#9CA3AF" />
           </TouchableOpacity>
         </MotiView>
-      </View>
+      </ScrollView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  overlayScroll: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  overlay: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,

@@ -956,11 +956,17 @@ const styles = StyleSheet.create({
   },
   bottomLinksRow: {
     flexDirection: 'row',
+    // Wrap so the three links stack instead of running off both edges at
+    // large font scales — at font_scale 1.5 this rendered as "estore
+    // Purchases · Terms of Use · Privacy Polic". These are the App Store
+    // compliance links, so they have to stay fully readable.
+    flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
     marginTop: 4,
     marginBottom: 6,
+    paddingHorizontal: 8,
   },
   bottomLinkText: {
     fontSize: 12,
