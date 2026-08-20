@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  ScrollView,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
@@ -105,6 +106,15 @@ export default function UnmatchModal({
       animationType="fade"
       onRequestClose={onClose}
     >
+      {/* Scrollable backdrop — the centred card has no height cap, so at a
+          large font scale it overflowed and the Cancel/Unmatch buttons were
+          unreachable. The Pressable still fills the content area, so tapping
+          outside the card dismisses as before. */}
+      <ScrollView
+        style={styles.overlayScroll}
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+      >
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.modal} onPress={(e) => e.stopPropagation()}>
           {/* Icon */}
@@ -165,14 +175,18 @@ export default function UnmatchModal({
           </TouchableOpacity>
         </Pressable>
       </Pressable>
+      </ScrollView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  overlayScroll: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  overlay: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,

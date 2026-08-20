@@ -4,6 +4,7 @@ import {
   Text,
   Modal,
   TouchableOpacity,
+  ScrollView,
   StyleSheet,
   Linking,
   Platform,
@@ -64,7 +65,7 @@ export function UpdateModalPreview({ visible, onClose }: { visible: boolean; onC
   return (
     <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.screen}>
-        <View style={styles.content}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.dots}>
             <View style={[styles.dot, styles.dotSmall, { left: '15%', top: 0 }]} />
             <View style={[styles.dot, styles.dotMedium, { right: '20%', top: 20 }]} />
@@ -78,7 +79,7 @@ export function UpdateModalPreview({ visible, onClose }: { visible: boolean; onC
               v{CURRENT_VERSION}  →  v{mockInfo.latest_version}
             </Text>
           </View>
-        </View>
+        </ScrollView>
         <View style={styles.actions}>
           <TouchableOpacity style={styles.updateButton} onPress={onClose} activeOpacity={0.85}>
             <Text style={styles.updateButtonText}>{t('common.update.updateButton')}</Text>
@@ -262,7 +263,7 @@ export default function AppUpdateChecker() {
       statusBarTranslucent
     >
       <View style={styles.screen}>
-        <View style={styles.content}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           {/* Decorative dots */}
           <View style={styles.dots}>
             <View style={[styles.dot, styles.dotSmall, { left: '15%', top: 0 }]} />
@@ -295,7 +296,7 @@ export default function AppUpdateChecker() {
               v{CURRENT_VERSION}  →  v{updateInfo.latest_version}
             </Text>
           </View>
-        </View>
+        </ScrollView>
 
         {/* Bottom actions — anchored to bottom */}
         <View style={styles.actions}>
@@ -331,7 +332,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   content: {
-    flex: 1,
+    // Used as a ScrollView contentContainerStyle: flexGrow keeps the copy
+    // vertically centred while it fits, and lets it scroll when it doesn't.
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 36,

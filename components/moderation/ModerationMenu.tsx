@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Modal, TouchableOpacity, Text, Pressable } from 'react-native';
+import { View, StyleSheet, Modal, TouchableOpacity, Text, Pressable, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -87,7 +87,7 @@ export default function ModerationMenu({
             </View>
 
             {/* Actions */}
-            <View style={styles.actionsList}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={styles.actionsList} showsVerticalScrollIndicator={false}>
               <TouchableOpacity
                 style={styles.actionItem}
                 onPress={handleReport}
@@ -117,7 +117,7 @@ export default function ModerationMenu({
                 <Text style={[styles.actionText, styles.actionTextDanger]}>{t('moderation.menu.blockUser')}</Text>
                 <MaterialCommunityIcons name="chevron-right" size={20} color="#EF4444" />
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -167,6 +167,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    // Cap the sheet so it can never grow past the screen and push its own
+    // header off the top at large font scales. No effect while the sheet is
+    // short, which it is today (3 actions).
+    maxHeight: '85%',
   },
   actionSheetHeader: {
     flexDirection: 'row',

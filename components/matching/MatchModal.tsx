@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Dimensions, ScrollView } from 'react-native';
 import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -118,9 +118,17 @@ export default function MatchModal({
             <MaterialCommunityIcons name="close" size={22} color="white" />
           </TouchableOpacity>
 
-          {/* Main content */}
-          <Animated.View
-            style={[contentStyle, { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }]}
+          {/* Main content.
+              Scrollable because the celebration stack (42px headline, photos,
+              and both action buttons) has no height cap — at a large font
+              scale the "Play it cool for now" button fell off the bottom.
+              flexGrow + centring means it looks identical whenever it fits;
+              the animation stays on the wrapper so the entrance is unchanged. */}
+          <Animated.View style={[contentStyle, { flex: 1 }]}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, paddingVertical: 24 }}
+            showsVerticalScrollIndicator={false}
           >
             {/* The headline - fun & queer */}
             <Text style={{
@@ -288,6 +296,7 @@ export default function MatchModal({
                 Play it cool for now
               </Text>
             </TouchableOpacity>
+          </ScrollView>
           </Animated.View>
         </LinearGradient>
       </Animated.View>
