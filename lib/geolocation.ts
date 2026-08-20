@@ -11,6 +11,83 @@
 import { Platform } from 'react-native';
 
 /**
+ * Width of the length-bounded text columns on `profiles`, mirrored from the
+ * DB schema. Postgres rejects an over-long value outright (SQLSTATE 22001,
+ * "value too long for type character varying(N)") rather than truncating, so
+ * anything we write from an unbounded source has to be clamped client-side.
+ *
+ * The unbounded source that actually bit us is reverse geocoding: iOS returns
+ * localized, fully-spelled region names (Sentry REACT-8N — a user in Brussels
+ * on a ru_BE locale hard-blocked at onboarding step 4, retried 3x in 15s, then
+ * gave up). Longest region currently stored is 47 chars against a 50 cap, so
+ * the margin was effectively gone for non-US users.
+ */
+export const PROFILE_TEXT_LIMITS = {
+  location_city: 100,
+  location_state: 50,
+  location_country: 50,
+  display_name: 100,
+  pronouns: 50,
+  zodiac_sign: 50,
+  occupation: 100,
+  education: 100,
+  religion: 100,
+  political_views: 100,
+  hometown: 255,
+  preferred_language: 5,
+} as const;
+
+export type ProfileTextField = keyof typeof PROFILE_TEXT_LIMITS;
+
+/**
+ * Clamp a free-text value to a Postgres varchar(N) width.
+ *
+ * Prefers cutting on a word boundary so a truncated region reads as
+ * "Brussels-Capital" rather than "Brussels-Capital Reg", but only when the
+ * boundary is reasonably close to the limit — otherwise a single long token
+ * would collapse to almost nothing.
+ *
+ * Note on units: JS `.length` counts UTF-16 code units while Postgres counts
+ * characters, so for any non-BMP input this clamps *more* than strictly
+ * required. That's the safe direction (never under-clamps); we only guard
+ * against slicing a surrogate pair in half, which would produce invalid UTF-8.
+ *
+ * Returns undefined for empty/whitespace-only input so callers can omit the
+ * key rather than writing an empty string.
+ */
+export function clampText(value: string | null | undefined, max: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length <= max) return trimmed;
+
+  let cut = trimmed.slice(0, max);
+
+  // Don't leave a dangling high surrogate at the cut point.
+  const lastCode = cut.charCodeAt(cut.length - 1);
+  if (lastCode >= 0xd800 && lastCode <= 0xdbff) {
+    cut = cut.slice(0, -1);
+  }
+
+  const lastSpace = cut.lastIndexOf(' ');
+  if (lastSpace >= Math.floor(max * 0.6)) {
+    cut = cut.slice(0, lastSpace);
+  }
+
+  return cut.trim() || undefined;
+}
+
+/**
+ * Clamp a named `profiles` text field to its column width.
+ */
+export function clampProfileField(
+  field: ProfileTextField,
+  value: string | null | undefined,
+): string | undefined {
+  return clampText(value, PROFILE_TEXT_LIMITS[field]);
+}
+
+/**
  * Calculate distance between two coordinates using Haversine formula
  * Returns distance in miles
  */
@@ -233,11 +310,15 @@ export async function updateUserLocation(): Promise<{
         longitude: location.coords.longitude,
       });
 
+      // Clamp at the source: `address.city`/`address.region` come from the OS
+      // geocoder and are unbounded, but land in varchar(100)/varchar(50).
+      // Every caller of updateUserLocation() writes these straight to the
+      // profiles row, so clamping here fixes all of them at once.
       return {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
-        city: address.city || undefined,
-        state: address.region || undefined,
+        city: clampProfileField('location_city', address.city),
+        state: clampProfileField('location_state', address.region),
         accuracy: location.coords.accuracy ?? undefined,
       };
     } catch (geocodeError) {
