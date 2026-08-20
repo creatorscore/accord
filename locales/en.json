@@ -699,7 +699,7 @@
       "permissionDenied": "Permission Denied",
       "permissionDeniedMsg": "Please enable notifications in your device settings to receive match alerts.",
       "photosRequired": "Photos Required",
-      "photosRequiredMsg": "Please add at least 3 photos to complete your profile.",
+      "photosRequiredMsg": "Please add at least 2 photos to complete your profile.",
       "completeError": "Failed to complete onboarding"
     },
     "matchingPreferences": {
@@ -969,7 +969,7 @@
       },
       "photos": {
         "title": "Add your photos",
-        "subtitle": "Add at least 3 photos. Your first photo is your main profile photo."
+        "subtitle": "Add at least 2 photos. Your first photo is your main profile photo."
       },
       "prompts": {
         "title": "Answer some prompts",
@@ -2684,7 +2684,7 @@
     "photoLimitMessage": "You can upload up to 6 photos",
     "photoAlreadyAdded": "This photo is already in your profile",
     "photoProcessError": "Failed to process photo. Please try again.",
-    "morePhotosNeeded": "Please add at least 3 photos to continue",
+    "morePhotosNeeded": "Please add at least 2 photos to continue",
     "profileNotFound": "Profile not found. Please go back and try again.",
     "uploadFailed": "Failed to upload. Please try again.",
     "permissionDenied": "Permission Denied",

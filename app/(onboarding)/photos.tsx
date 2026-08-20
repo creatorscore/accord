@@ -26,18 +26,8 @@ import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
 import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
 import { toUserMessage } from '@/lib/error-messages';
+import { MIN_PHOTOS } from '@/lib/onboarding-config';
 
-/**
- * Minimum photos required to leave this step.
- *
- * Kept in sync with the `check_minimum_photos` trigger on profiles, which is
- * the actual product rule and requires 2. The client asked for 3, so it was
- * a third stricter than the standard we enforce — at the single biggest
- * abandonment point in onboarding (175 users stalled here in 30 days, 149 of
- * them with zero photos uploaded). For an app whose users are often not out,
- * every extra photo demanded up front is a real cost.
- */
-const MIN_PHOTOS = 2;
 
 interface Photo {
   uri: string;

@@ -33,7 +33,7 @@ import { validateContent, nameHasContactInfo, NAME_CONTACT_INFO_MESSAGE } from '
 import { useTranslation } from 'react-i18next';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { PROMPT_KEYS } from '@/lib/prompt-options';
-import { EDUCATION_LEVELS, COMMON_LANGUAGES, POLITICAL_VIEWS } from '@/lib/onboarding-config';
+import { EDUCATION_LEVELS, COMMON_LANGUAGES, POLITICAL_VIEWS, MIN_PHOTOS } from '@/lib/onboarding-config';
 import Slider from '@react-native-community/slider';
 import { DISTANCE_MIN, DISTANCE_MAX, distanceToSlider, sliderToDistance, formatDistanceRangeLabel } from '@/lib/distance-utils';
 import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
@@ -636,8 +636,8 @@ export default function EditProfile() {
   const removePhoto = (index: number) => {
     // Count current active photos (not marked for deletion)
     const currentActivePhotos = photos.filter(p => !p.to_delete);
-    if (currentActivePhotos.length <= 3) {
-      Alert.alert('Minimum Photos Required', 'Your profile must have at least 3 photos. Add another photo before removing this one.');
+    if (currentActivePhotos.length <= MIN_PHOTOS) {
+      Alert.alert('Minimum Photos Required', `Your profile must have at least ${MIN_PHOTOS} photos. Add another photo before removing this one.`);
       return;
     }
 
@@ -893,8 +893,8 @@ export default function EditProfile() {
 
     // Count active photos (not marked for deletion)
     const activePhotos = photos.filter(p => !p.to_delete);
-    if (activePhotos.length < 3) {
-      Alert.alert('More Photos Needed', 'Your profile must have at least 3 photos');
+    if (activePhotos.length < MIN_PHOTOS) {
+      Alert.alert('More Photos Needed', `Your profile must have at least ${MIN_PHOTOS} photos`);
       return false;
     }
 
