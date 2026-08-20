@@ -36,6 +36,7 @@ import {
 import { expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
 import { ensurePushTokenSaved, registerForPushNotifications } from '@/lib/notifications';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
+import { PROFILE_TEXT_LIMITS, clampText } from '@/lib/geolocation';
 import { trackUserAction, trackFunnel } from '@/lib/analytics';
 import { usePreviewModeStore } from '@/stores/previewModeStore';
 import * as Haptics from 'expo-haptics';
@@ -65,6 +66,60 @@ const PromptsStep = lazy(() => import('@/app/(onboarding)/prompts'));
 const VoiceStep = lazy(() => import('@/app/(onboarding)/voice-intro'));
 
 const StepFallback = () => <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="large" color="#A08AB7" /></View>;
+
+/**
+ * profiles column -> onboarding store field, for the length-bounded text
+ * columns the checkpoint writes. Used by clampProfilePayload to mirror a
+ * clamped value back into the store; without the mirror the UI would keep
+ * showing the long text and every later step would resend it.
+ *
+ * Only columns present in PROFILE_TEXT_LIMITS need an entry. `occupation`
+ * and `job_title` are both fed by `jobTitle`, and clamping to the narrower
+ * of the two (occupation, varchar(100)) keeps them consistent.
+ */
+const CHECKPOINT_COLUMN_TO_STORE_FIELD: Record<string, string> = {
+  display_name: 'displayName',
+  zodiac_sign: 'zodiacSign',
+  location_city: 'locationCity',
+  location_state: 'locationState',
+  location_country: 'locationCountry',
+  pronouns: 'pronouns',
+  occupation: 'jobTitle',
+  education: 'education',
+  religion: 'religion',
+  political_views: 'politicalViews',
+  hometown: 'hometown',
+};
+
+/**
+ * Clamp every length-bounded text column in a checkpoint payload to its
+ * column width, mutating the payload in place, and mirror the clamped values
+ * back into the onboarding store via `setFields`.
+ *
+ * Returns the list of columns that were actually shortened (empty in the
+ * overwhelming majority of saves), for breadcrumb/telemetry purposes.
+ */
+function clampProfilePayload(
+  payload: Record<string, any>,
+  setFields: (fields: Record<string, any>) => void,
+): string[] {
+  const storeFix: Record<string, string> = {};
+  const clamped: string[] = [];
+
+  for (const [column, max] of Object.entries(PROFILE_TEXT_LIMITS)) {
+    const value = payload[column];
+    if (typeof value === 'string' && value.length > max) {
+      const next = clampText(value, max) ?? '';
+      payload[column] = next || null;
+      clamped.push(column);
+      const storeField = CHECKPOINT_COLUMN_TO_STORE_FIELD[column];
+      if (storeField) storeFix[storeField] = next;
+    }
+  }
+
+  if (Object.keys(storeFix).length > 0) setFields(storeFix);
+  return clamped;
+}
 
 export default function Onboarding() {
   const { resumeStep } = useLocalSearchParams<{ resumeStep?: string }>();
@@ -380,6 +435,24 @@ export default function Onboarding() {
           : {}),
       };
 
+      // Guarantee no length-bounded column can overflow before the payload
+      // ever reaches Postgres. Clamping here rather than only reacting to the
+      // error matters: a 22001 thrown by the profile upsert aborts the whole
+      // checkpoint *before* the preferences upsert on the sequential path
+      // (new signup / final step), so a reactive retry would save the profile
+      // and silently drop preferences. Getting the write right the first time
+      // keeps the normal path intact.
+      //
+      // Values are mirrored back into the store so the shortened text is what
+      // the user sees and what later steps resend.
+      const clampedFields = clampProfilePayload(profileData, state.setFields);
+      if (clampedFields.length > 0) {
+        addBreadcrumb('onboarding', 'Clamped over-long profile fields before save', {
+          step,
+          fields: clampedFields.join(','),
+        });
+      }
+
       // Build the preferences payload up-front so we can fire profile + prefs
       // upserts concurrently when we already know the profile id.
       const buildPrefsData = (pid: string): Record<string, any> => ({
@@ -647,6 +720,34 @@ export default function Onboarding() {
           message: 'We need your location to save your profile. Please set it and try again.',
         });
         setSubStep(3);
+        throw error; // Re-throw so the caller does NOT advance the step
+      }
+
+      // String-too-long (SQLSTATE 22001). Postgres rejects rather than
+      // truncates, so a single over-long value — in practice a localized
+      // region name from reverse geocoding landing in location_state
+      // varchar(50) — hard-blocks the whole checkpoint. The user saw the raw
+      // "value too long for type character varying(50)" as a toast with no
+      // way forward and no field to edit, because the offending value was
+      // never something they typed (Sentry REACT-8N: 3 failed saves in 15s
+      // at step 4, then the user gave up).
+      //
+      // clampProfilePayload above should make this unreachable, so if we land
+      // here it means a bounded column we don't know about overflowed. Retrying
+      // with the same limits wouldn't help, so just make it diagnosable and
+      // don't show the user a raw Postgres string they can't act on.
+      if (ckptCode === '22001') {
+        addBreadcrumb('onboarding', 'Checkpoint blocked by 22001 despite payload clamp', { step });
+        captureException(
+          error instanceof Error ? error : new Error('Checkpoint value too long'),
+          { step, context: 'onboarding_checkpoint', error_code: ckptCode },
+          ['onboarding-checkpoint-value-too-long'],
+        );
+        showToast({
+          type: 'error',
+          title: 'Couldn’t save',
+          message: 'One of your entries was too long. Please shorten it and try again.',
+        });
         throw error; // Re-throw so the caller does NOT advance the step
       }
 

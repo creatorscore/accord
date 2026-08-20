@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { useOnboardingStore } from '@/stores/onboardingStore';
+import { clampProfileField } from '@/lib/geolocation';
 
 // GPS-only location capture. Manual city autocomplete was removed
 // 2026-05-28 because users were typing in fake cities to game the
@@ -121,14 +122,18 @@ export default function LocationStep() {
       console.log('[LocationStep] reverse geocode:', geoResults ? 'got' : 'timeout/error', '+', Date.now() - t0, 'ms');
       const geo = Array.isArray(geoResults) ? geoResults[0] : null;
 
-      const city = geo?.city || geo?.district || '';
-      const state = geo?.region || '';
+      // Clamp to the profiles column widths before these reach the store —
+      // the checkpoint save writes them verbatim, and an over-long localized
+      // region name (varchar(50)) hard-blocked users at this step with a raw
+      // Postgres 22001 toast and no way forward (Sentry REACT-8N).
+      const city = clampProfileField('location_city', geo?.city || geo?.district) || '';
+      const state = clampProfileField('location_state', geo?.region) || '';
       setFields({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
         locationCity: city,
         locationState: state,
-        locationCountry: geo?.isoCountryCode || 'US',
+        locationCountry: clampProfileField('location_country', geo?.isoCountryCode) || 'US',
       });
     } catch (error: any) {
       console.log('[LocationStep] GPS error:', error?.message, '+', Date.now() - t0, 'ms');
