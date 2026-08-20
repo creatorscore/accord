@@ -92,7 +92,7 @@ export const ONBOARDING_STEPS: OnboardingStepConfig[] = [
   { key: 'weed', title: 'Do you smoke weed?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'smokes_weed', section: 'lifestyle' },
   { key: 'drugs', title: 'Do you do drugs?', subtitle: "Optional — you can hide this from your profile.", skippable: true, previewAvailable: true, hasVisibility: true, visibilityKey: 'does_drugs', section: 'lifestyle' },
   // ── Profile (26-28) ──
-  { key: 'photos', title: 'Add your photos', subtitle: "Add at least 3 photos. Your first photo is your main profile photo.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'profile' },
+  { key: 'photos', title: 'Add your photos', subtitle: "Add at least 2 photos. Your first photo is your main profile photo.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'profile' },
   { key: 'prompts', title: 'Answer some prompts', subtitle: "Choose at least 2 prompts to help others get to know you.", skippable: false, previewAvailable: true, hasVisibility: false, section: 'profile' },
   { key: 'voice_note', title: 'Record a voice intro', subtitle: "Let others hear your voice. 30 seconds max.", skippable: true, previewAvailable: true, hasVisibility: false, section: 'profile' },
   // ── Preferences (30) ──
