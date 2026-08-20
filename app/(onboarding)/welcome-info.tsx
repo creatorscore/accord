@@ -189,7 +189,10 @@ export default function WelcomeInfo() {
       <View style={{
         gap: 12,
         paddingTop: 12,
-        paddingBottom: Math.max(insets.bottom, 16),
+        // Match OnboardingLayout's proven footer padding (min 20 + 16). The
+        // earlier Math.max(insets.bottom, 16) left the secondary button
+        // clipped under the Android gesture bar at large font scales.
+        paddingBottom: Math.max(insets.bottom, 20) + 16,
         borderTopWidth: 1,
         borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0EDF5',
       }}>
