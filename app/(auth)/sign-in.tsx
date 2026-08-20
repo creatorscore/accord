@@ -10,6 +10,7 @@ import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/lib/useColorScheme';
+import { toUserMessage } from '@/lib/error-messages';
 
 export default function SignIn() {
   const translationHook = useTranslation();
@@ -370,7 +371,7 @@ export default function SignIn() {
     } catch (error: any) {
       Alert.alert(
         t('common.error'),
-        error.message || t('auth.signIn.invalidOrExpiredCode')
+        toUserMessage(error, t('auth.signIn.invalidOrExpiredCode'))
       );
     } finally {
       setVerifyingOtp(false);

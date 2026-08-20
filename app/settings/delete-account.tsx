@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { supabase } from '@/lib/supabase';
+import { toUserMessage } from '@/lib/error-messages';
 
 export default function DeleteAccount() {
   const { t } = useTranslation();
@@ -111,7 +112,7 @@ export default function DeleteAccount() {
       console.error('Error deleting account:', error);
       Alert.alert(
         t('common.error'),
-        error.message || t('deleteAccount.alerts.errorMessage')
+        toUserMessage(error, t('deleteAccount.alerts.errorMessage'))
       );
     } finally {
       setDeleting(false);

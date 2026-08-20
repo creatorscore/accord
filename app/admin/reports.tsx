@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 import { sendReportActionNotification, sendBanNotification, sendPhotoReviewNotification, sendIdentityVerificationNotification } from '@/lib/notifications';
+import { toUserMessage } from '@/lib/error-messages';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -278,7 +279,7 @@ export default function AdminReports() {
       loadReports();
     } catch (error: any) {
       console.error('Error banning user:', error);
-      Alert.alert('Error', error.message || 'Failed to ban user. Please try again.');
+      Alert.alert('Error', toUserMessage(error, 'Failed to ban user. Please try again.'));
     } finally {
       setIsBanning(false);
     }
@@ -387,7 +388,7 @@ export default function AdminReports() {
       loadReports();
     } catch (error: any) {
       console.error('Error flagging profile for photo review:', error);
-      Alert.alert('Error', error.message || 'Failed to flag profile. Please try again.');
+      Alert.alert('Error', toUserMessage(error, 'Failed to flag profile. Please try again.'));
     }
   };
 
@@ -465,7 +466,7 @@ export default function AdminReports() {
       loadReports();
     } catch (error: any) {
       console.error('Error flagging profile for identity verification:', error);
-      Alert.alert('Error', error.message || 'Failed to require verification. Please try again.');
+      Alert.alert('Error', toUserMessage(error, 'Failed to require verification. Please try again.'));
     }
   };
 

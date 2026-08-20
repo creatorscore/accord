@@ -17,6 +17,7 @@ import Constants from 'expo-constants';
 import ReviewCategorySlider from './ReviewCategorySlider';
 import StarRating from './StarRating';
 import { supabase } from '@/lib/supabase';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface ReviewSubmissionModalProps {
   visible: boolean;
@@ -158,7 +159,7 @@ export default function ReviewSubmissionModal({
       );
     } catch (error: any) {
       console.error('Error submitting review:', error);
-      Alert.alert(t('common.error'), error.message || t('reviews.submitError'));
+      Alert.alert(t('common.error'), toUserMessage(error, t('reviews.submitError')));
     } finally {
       setIsSubmitting(false);
     }

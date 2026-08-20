@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getSignedUrls } from '@/lib/signed-urls';
 import { formatDistanceToNow } from 'date-fns';
+import { toUserMessage } from '@/lib/error-messages';
 
 type Tab = 'scam' | 'location';
 
@@ -104,7 +105,7 @@ export default function AdminScamReview() {
       setUsers(rows);
     } catch (error: any) {
       console.error('Error loading flagged accounts:', error);
-      setLoadError(error?.message || 'Failed to load flagged accounts.');
+      setLoadError(toUserMessage(error, 'Failed to load flagged accounts.'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -133,7 +134,7 @@ export default function AdminScamReview() {
       setUsers((prev) => prev.filter((x) => x.id !== u.id));
     } catch (error: any) {
       console.error('Error dismissing flag:', error);
-      Alert.alert('Error', error.message || 'Failed to dismiss flag.');
+      Alert.alert('Error', toUserMessage(error, 'Failed to dismiss flag.'));
     } finally {
       setActing(null);
     }

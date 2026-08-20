@@ -12,6 +12,7 @@ import * as Haptics from 'expo-haptics';
 import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
 import OnboardingChips from '@/components/onboarding/OnboardingChips';
 import { useOnboardingDraft } from '@/hooks/useOnboardingDraft';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface MarriagePrefsDraft {
   primaryReason: string[];
@@ -330,7 +331,7 @@ export default function MarriagePreferences() {
       await clearDraft();
       router.push('/(onboarding)/matching-preferences');
     } catch (error: any) {
-      Alert.alert(t('common.error'), error.message || t('onboarding.marriagePreferences.errors.saveFailed'));
+      Alert.alert(t('common.error'), toUserMessage(error, t('onboarding.marriagePreferences.errors.saveFailed')));
     } finally {
       setLoading(false);
     }

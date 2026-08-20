@@ -22,6 +22,7 @@ import { GENDER_PREF_OPTIONS, expandGenderPreference, collapseGenderPreference }
 import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
 import OnboardingChips from '@/components/onboarding/OnboardingChips';
 import { useOnboardingDraft } from '@/hooks/useOnboardingDraft';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface MatchingPrefsDraft {
   ageMin: number;
@@ -171,7 +172,7 @@ export default function MatchingPreferences() {
       await clearDraft();
       router.push('/(onboarding)/notifications');
     } catch (error: any) {
-      Alert.alert(t('common.error'), error.message || t('onboarding.matchingPreferences.saveError'));
+      Alert.alert(t('common.error'), toUserMessage(error, t('onboarding.matchingPreferences.saveError')));
     } finally {
       setLoading(false);
     }

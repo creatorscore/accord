@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trackEvent } from '@/lib/analytics';
+import { toUserMessage } from '@/lib/error-messages';
 
 export default function WelcomeInfo() {
   const router = useRouter();
@@ -62,7 +63,7 @@ export default function WelcomeInfo() {
                 setDeleting(false);
                 Alert.alert(
                   "Couldn't delete account",
-                  error.message || 'Please check your connection and try again.',
+                  toUserMessage(error, 'Please check your connection and try again.'),
                   [{ text: 'OK' }]
                 );
                 return;
@@ -89,21 +90,33 @@ export default function WelcomeInfo() {
       paddingHorizontal: 24,
     }}>
 
-      {/* Everything lives inside a ScrollView so the disclaimer + buttons stay
-          reachable on short screens / large system font scaling. Previously the
-          fixed space-between layout pushed the accept button off-screen with no
-          way to scroll, so users "saw the disclaimer but couldn't accept it".
-          flexGrow + space-between preserves the original spaced-out look when
-          the content fits, and simply scrolls when it doesn't. */}
+      {/* Only the *copy* scrolls; the action buttons are pinned below in a
+          fixed footer so they are on screen no matter how tall the disclaimer
+          renders.
+
+          Making the buttons part of the scrolled content (the previous
+          approach) still failed on short screens and at large system font
+          scales: with showsVerticalScrollIndicator={false} and a
+          space-between layout, the content filled the viewport edge-to-edge
+          and looked like a finished screen, so users never discovered there
+          was anything below to scroll to. This is the single largest funnel
+          drop — 893 of 2,687 signups in 30 days never got past this screen,
+          and 104 of them came back an hour or more later and still didn't,
+          which is not the behaviour of someone who simply lost interest. One
+          App Store reviewer described it exactly: "the app won't move beyond
+          the definition of lavender marriage".
+
+          The scroll indicator is on now too, so overflow is at least
+          discoverable. See CLAUDE.md Golden Rule #3. */}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: 'space-between',
           paddingTop: insets.top + 32,
-          paddingBottom: Math.max(insets.bottom, 16),
+          paddingBottom: 16,
         }}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
       >
 
       {/* Top Section */}
@@ -169,9 +182,17 @@ export default function WelcomeInfo() {
         </View>
       </View>
 
-      {/* Bottom action buttons — kept inside the ScrollView so they scroll into
-          reach when the disclaimer is taller than the viewport. */}
-      <View style={{ gap: 12, marginTop: 16 }}>
+      </ScrollView>
+
+      {/* Pinned footer — outside the ScrollView, so it can never be pushed
+          below the fold regardless of content height or font scale. */}
+      <View style={{
+        gap: 12,
+        paddingTop: 12,
+        paddingBottom: Math.max(insets.bottom, 16),
+        borderTopWidth: 1,
+        borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0EDF5',
+      }}>
         <TouchableOpacity
           onPress={handleProceed}
           style={{
@@ -205,7 +226,6 @@ export default function WelcomeInfo() {
           </Text>
         </TouchableOpacity>
       </View>
-      </ScrollView>
     </View>
   );
 }

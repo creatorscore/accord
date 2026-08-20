@@ -37,6 +37,7 @@ import { EDUCATION_LEVELS, COMMON_LANGUAGES, POLITICAL_VIEWS } from '@/lib/onboa
 import Slider from '@react-native-community/slider';
 import { DISTANCE_MIN, DISTANCE_MAX, distanceToSlider, sliderToDistance, formatDistanceRangeLabel } from '@/lib/distance-utils';
 import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface Photo {
   id?: string;
@@ -1292,7 +1293,7 @@ export default function EditProfile() {
     } catch (error: any) {
       console.error('Error saving profile:', error);
       captureException(error instanceof Error ? error : new Error(error?.message || 'Profile save failed'), { context: 'edit_profile' });
-      Alert.alert('Error', error.message || 'Failed to save profile');
+      Alert.alert('Error', toUserMessage(error, 'Failed to save profile'));
       return false;
     } finally {
       setSaving(false);

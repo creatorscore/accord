@@ -33,6 +33,7 @@ import {
 import { GENDER_PREF_OPTIONS, expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
 import * as Haptics from 'expo-haptics';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface MatchingPreferences {
   gender_preference: string[];
@@ -292,7 +293,7 @@ export default function MatchingPreferences() {
       // it comes back. The i18n key is the fallback when error has no body.
       Alert.alert(
         t('common.error'),
-        error?.message || t('settings.matchingPreferences.saveError')
+        toUserMessage(error, t('settings.matchingPreferences.saveError'))
       );
     } finally {
       setSaving(false);

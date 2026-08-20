@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '@/lib/supabase';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface ReviewSettings {
   reviews_enabled: boolean;
@@ -120,7 +121,7 @@ export default function ReviewSettingsScreen() {
       Alert.alert(t('common.success'), t('reviews.settingsSaved'));
     } catch (error: any) {
       console.error('Error saving settings:', error);
-      Alert.alert(t('common.error'), error.message || t('reviews.saveError'));
+      Alert.alert(t('common.error'), toUserMessage(error, t('reviews.saveError')));
     } finally {
       setSaving(false);
     }

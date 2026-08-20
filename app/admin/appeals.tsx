@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getSignedUrls } from '@/lib/signed-urls';
+import { toUserMessage } from '@/lib/error-messages';
 
 interface FlaggedPhoto {
   url: string;
@@ -273,7 +274,7 @@ export default function AdminAppeals() {
       loadAppeals();
     } catch (error: any) {
       console.error('Error responding to appeal:', error);
-      Alert.alert('Error', error.message || 'Failed to respond to appeal.');
+      Alert.alert('Error', toUserMessage(error, 'Failed to respond to appeal.'));
     } finally {
       setResponding(false);
     }
