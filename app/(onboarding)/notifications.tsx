@@ -14,6 +14,7 @@ import { openAppSettings } from '@/lib/open-settings';
 import OnboardingLayout from '@/components/onboarding/OnboardingLayout';
 import { usePreviewModeStore } from '@/stores/previewModeStore';
 import { toUserMessage } from '@/lib/error-messages';
+import { MIN_PHOTOS } from '@/lib/onboarding-config';
 
 export default function Notifications() {
   const { t } = useTranslation();
@@ -131,7 +132,7 @@ export default function Notifications() {
 
       if (photosError) throw photosError;
 
-      if (!photos || photos.length < 3) {
+      if (!photos || photos.length < MIN_PHOTOS) {
         Alert.alert(
           t('onboarding.notifications.photosRequired'),
           t('onboarding.notifications.photosRequiredMsg'),

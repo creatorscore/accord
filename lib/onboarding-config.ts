@@ -109,6 +109,19 @@ export const ONBOARDING_STEPS: OnboardingStepConfig[] = [
 
 export const TOTAL_ONBOARDING_STEPS = ONBOARDING_STEPS.length; // 34
 
+/**
+ * Minimum photos required to complete a profile or save profile edits.
+ *
+ * This is the single source of truth on the client and MUST match the
+ * `check_minimum_photos` trigger on profiles, which enforces 2. The client
+ * previously demanded 3 in four separate places while the database only ever
+ * required 2 — so we were a third stricter than our own rule at the biggest
+ * drop-off point in onboarding, and edit-profile refused to save ANY change
+ * for an existing member who had 2 photos.
+ */
+export const MIN_PHOTOS = 2;
+
+
 /** Checkpoint steps where accumulated form state is saved to DB */
 export const SAVE_CHECKPOINTS = [3, 14, 26] as const;
 
