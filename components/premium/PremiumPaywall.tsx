@@ -574,6 +574,26 @@ export default function PremiumPaywall({
           animated={true}
         />
 
+        {/* The card stack scrolls only when it doesn't fit.
+            Nothing here could scroll before, so on a short screen (or at a
+            large system font scale) the Subscribe button and the legal
+            links below it were simply unreachable — the user could see the
+            plans but had no way to get to the CTA. That is a hard stop on
+            the one screen that takes money.
+
+            flexGrow: 1 means the layout is byte-for-byte unchanged whenever
+            the content fits: the purple card still meets the gray card
+            flush and the CTA stays inside the gray card as designed. It
+            only becomes scrollable when it would otherwise overflow, and
+            the scroll indicator is left on so that overflow is visible —
+            the welcome screen taught us that a hidden indicator plus a
+            viewport-filling layout reads as "this screen is finished". */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={true}
+        >
+
         {/* TOP CARD — solid light purple, extends to the very top of the
             screen (behind the status bar). Inner SafeAreaView pushes the
             close button + content below the status bar so they're not
@@ -717,6 +737,8 @@ export default function PremiumPaywall({
             </Text>
           </View>
         </View>
+
+        </ScrollView>
       </SafeAreaView>
       </SafeAreaProvider>
     </Modal>
