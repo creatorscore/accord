@@ -7,6 +7,7 @@
 
 import { Linking, Platform } from 'react-native';
 import * as IntentLauncher from 'expo-intent-launcher';
+import * as Application from 'expo-application';
 
 /**
  * Opens the app's settings page in the device settings
@@ -22,10 +23,19 @@ export async function openAppSettings(): Promise<void> {
     } else {
       // Android: Use Intent to open app-specific settings
       try {
+        // Read the package at runtime rather than hardcoding it. This was
+        // pinned to 'com.accord.lavendermarriage', which is not our package
+        // (com.privyreviews.accord), so APPLICATION_DETAILS_SETTINGS pointed
+        // at an app that doesn't exist and every Android "Open Settings"
+        // silently fell through to the generic Settings root — leaving the
+        // user to find Accord themselves. That affects all 9 callers,
+        // including the location prompt in onboarding, where location is
+        // required and GPS-only.
+        const packageName = Application.applicationId ?? 'com.privyreviews.accord';
         await IntentLauncher.startActivityAsync(
           IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS,
           {
-            data: 'package:com.accord.lavendermarriage',
+            data: `package:${packageName}`,
           }
         );
       } catch (intentError) {

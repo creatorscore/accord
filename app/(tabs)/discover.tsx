@@ -42,6 +42,7 @@ import PaymentFailedBanner from '@/components/premium/PaymentFailedBanner';
 import PremiumExpiringBanner from '@/components/premium/PremiumExpiringBanner';
 import LocationStaleBanner from '@/components/security/LocationStaleBanner';
 import { toUserMessage } from '@/lib/error-messages';
+import { withSessionRetry } from '@/lib/session-recovery';
 
 // Hydrate only the first N candidates per load. The feed shows one card at a
 // time and auto-reloads the next batch when the stack is exhausted (see the
@@ -2578,13 +2579,21 @@ export default function Discover() {
         return true;
       }
 
-      // Insert like into database
-      const { error: likeError } = await supabase.from('likes').insert({
-        liker_profile_id: currentProfileId,
-        liked_profile_id: targetProfile.id,
-        message: message || null,
-        liked_content: likedContentData ? JSON.stringify(likedContentData) : null,
-      });
+      // Insert like into database.
+      // Wrapped in withSessionRetry: when the access token has lapsed the
+      // request goes out as `anon`, which only holds SELECT, so the insert
+      // came back as "permission denied for table likes" — nothing actually
+      // broken, just a dead session, and the user had no way forward. One
+      // silent refresh usually fixes it because the refresh token outlives
+      // the access token.
+      const { error: likeError } = await withSessionRetry(() =>
+        supabase.from('likes').insert({
+          liker_profile_id: currentProfileId,
+          liked_profile_id: targetProfile.id,
+          message: message || null,
+          liked_content: likedContentData ? JSON.stringify(likedContentData) : null,
+        }),
+      );
 
       if (likeError) {
         if (likeError.code === 'P0001' && likeError.message?.includes('Daily like limit')) {
