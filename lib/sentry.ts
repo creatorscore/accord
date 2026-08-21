@@ -395,11 +395,58 @@ export const initializeSentry = () => {
  * permission-denied, duplicate-key, network, and single-row failures
  * under one fingerprint and inflating the user count 100x.
  */
+/**
+ * Codes that represent an expected user state, never an app bug.
+ *
+ * Every deliberate user-facing rejection we raise from Postgres arrives as
+ * P0001 — both the triggers that set ERRCODE explicitly
+ * (enforce_like_distance, enforce_display_name_no_contact) and those using a
+ * bare RAISE EXCEPTION, which defaults to raise_exception/P0001 anyway
+ * (check_minimum_photos, prevent_photo_deletion_below_minimum,
+ * validate_incognito_premium). 23505 is a double-tap re-insert.
+ *
+ * The code is checked on the error itself AND on context.error_code, because
+ * most callers rebuild the error as `new Error(msg)`, which drops `.code`.
+ */
+const EXPECTED_USER_ERROR_CODES = new Set(['P0001', '23505']);
+
+const isExpectedUserState = (error: any, context?: Record<string, any>): boolean => {
+  const code = error?.code ?? context?.error_code;
+  return code != null && EXPECTED_USER_ERROR_CODES.has(String(code));
+};
+
+/**
+ * Report an exception to Sentry.
+ *
+ * Two whole classes of non-bug are filtered out centrally rather than at each
+ * call site, because relying on call sites to remember did not work: only 5 of
+ * them guarded with isTransientNetworkError, and JAVASCRIPT-REACT-71 grew to
+ * ~9,000 events made up largely of "Your name can't contain a phone number…",
+ * the anti-scam distance message, and dropped connections. That noise shared
+ * an anonymous `?anon_0_` fingerprint with four genuine bugs and made the
+ * issue's counts meaningless.
+ *
+ * Pass `{ force: true }` to record one anyway.
+ */
 export const captureException = (
   error: Error,
   context?: Record<string, any>,
   fingerprint?: string[],
+  options?: { force?: boolean },
 ) => {
+  if (!options?.force) {
+    // Expected user states: validation the user can act on, not a crash.
+    if (isExpectedUserState(error, context)) {
+      if (__DEV__) console.log('[sentry] skipped expected user state:', (error as any)?.message);
+      return;
+    }
+    // Mobile devices drop connections constantly.
+    if (isTransientNetworkError(error)) {
+      if (__DEV__) console.log('[sentry] skipped transient network error:', error?.message);
+      return;
+    }
+  }
+
   if (!SENTRY_DSN) {
     console.error('Exception (Sentry not configured):', error, context);
     return;
