@@ -371,7 +371,19 @@ export default function Onboarding() {
       // Profile data
       const profileData: Record<string, any> = {
         user_id: user.id,
-        display_name: state.displayName,
+        // Only write the name when we actually have one — same reasoning as the
+        // coords guard below. Every checkpoint rewrites the whole payload, so a
+        // store that hasn't hydrated (resumed session, cold start into a later
+        // step) would otherwise blank out a name that was already saved.
+        // display_name is NOT NULL, so this can only ever omit the key, never
+        // null it; and the first checkpoint runs after step 0, which requires a
+        // non-blank name, so the row always exists by the time this can skip.
+        // Observed: 12 profiles reached profile_complete=true with an empty
+        // name and are sitting in discovery as blank cards (first Aug 8, still
+        // happening). It also fires the app's own post-onboarding validation.
+        ...(state.displayName && state.displayName.trim()
+          ? { display_name: state.displayName.trim() }
+          : {}),
         birth_date: state.birthDate?.toISOString().split('T')[0] || null,
         age: state.age,
         zodiac_sign: state.zodiacSign,
