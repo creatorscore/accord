@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "Accord - Lavender Marriage",
     slug: "accord",
-    version: "2.0.6",
+    version: "2.0.7",
     orientation: "default",
     icon: "./assets/icon.png",
     userInterfaceStyle: "automatic",
@@ -18,7 +18,7 @@ module.exports = {
       deploymentTarget: "16.0",
       supportsTablet: true,
       bundleIdentifier: "com.privyreviews.accord",
-      buildNumber: "70",
+      buildNumber: "71",
       icon: "./assets/icon.png",
       infoPlist: {
         NSPhotoLibraryUsageDescription: "Accord needs access to your photos to upload profile pictures.",
@@ -71,7 +71,7 @@ module.exports = {
       },
       package: "com.privyreviews.accord",
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
-      versionCode: 63,
+      versionCode: 64,
       softwareKeyboardLayoutMode: "resize",
       permissions: [
         "android.permission.CAMERA",
