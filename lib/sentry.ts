@@ -45,7 +45,12 @@ export const initializeSentry = () => {
 
       // Set release version
       release: `accord@${Constants.expoConfig?.version || '1.0.0'}`,
-      dist: `${Platform.OS}-${Constants.expoConfig?.ios?.buildNumber || Constants.expoConfig?.android?.versionCode || '1'}`,
+      // Per-platform build id. The iOS-first fallback chain used here before
+      // labeled Android devices with the iOS buildNumber (e.g. "android-71"
+      // for versionCode 64), which breaks dist-based filtering in Sentry.
+      dist: Platform.OS === 'ios'
+        ? `ios-${Constants.expoConfig?.ios?.buildNumber || '1'}`
+        : `android-${Constants.expoConfig?.android?.versionCode || '1'}`,
 
       // Environment
       environment: __DEV__ ? 'development' : 'production',

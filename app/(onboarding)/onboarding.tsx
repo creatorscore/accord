@@ -368,22 +368,51 @@ export default function Onboarding() {
       const deviceFingerprint = await getDeviceFingerprint();
       console.log('[saveCheckpoint] got fingerprint');
 
+      // Resolve the name to write before building the payload. display_name is
+      // NOT NULL with no default, and PostgREST's upsert compiles to
+      // INSERT ... ON CONFLICT DO UPDATE — Postgres checks NOT NULL on the
+      // proposed insert tuple BEFORE conflict resolution, so a payload that
+      // omits the key throws 23502 even when the row already exists and would
+      // only have been updated (REACT-8N's second life: the "omit when empty"
+      // guard below traded blanked names for hard-failed checkpoints).
+      // An empty store name here means a resumed session that hasn't hydrated
+      // yet, or a row whose name an older 2.0.6 bundle already blanked —
+      // recover it from the DB, and when there is genuinely no name anywhere,
+      // collect one at step 0 instead of letting the write fail with a raw
+      // constraint string as a toast.
+      let displayName = state.displayName?.trim() || '';
+      if (!displayName) {
+        const nameLookup = await Promise.race([
+          supabase.from('profiles').select('display_name').eq('user_id', user.id).maybeSingle(),
+          new Promise<{ data: null; error: { code: 'TIMEOUT' } }>((resolve) =>
+            setTimeout(() => resolve({ data: null, error: { code: 'TIMEOUT' } }), 4000)),
+        ]);
+        const dbName = (((nameLookup as any).data?.display_name as string) || '').trim();
+        if (dbName) {
+          displayName = dbName;
+          setFields({ displayName: dbName });
+        } else if (!(nameLookup as any).error) {
+          // The lookup worked and found no name: the row is missing entirely,
+          // or its name is blank. Send the user to the name step — once they
+          // answer, every later checkpoint writes a valid name.
+          addBreadcrumb('onboarding', 'Checkpoint aborted: no display_name in store or DB', { step });
+          showToast({ type: 'error', title: 'What’s your name?', message: 'Please re-enter your name to keep going.' });
+          setSubStep(0);
+          const nameErr: any = new Error('Checkpoint aborted: display_name required');
+          nameErr.code = 'NEEDS_NAME';
+          throw nameErr;
+        }
+        // Lookup error/timeout: fall through with an empty name — the plain
+        // UPDATE fallback below leaves the stored name untouched.
+      }
+
       // Profile data
       const profileData: Record<string, any> = {
         user_id: user.id,
-        // Only write the name when we actually have one — same reasoning as the
-        // coords guard below. Every checkpoint rewrites the whole payload, so a
-        // store that hasn't hydrated (resumed session, cold start into a later
-        // step) would otherwise blank out a name that was already saved.
-        // display_name is NOT NULL, so this can only ever omit the key, never
-        // null it; and the first checkpoint runs after step 0, which requires a
-        // non-blank name, so the row always exists by the time this can skip.
         // Observed: 12 profiles reached profile_complete=true with an empty
-        // name and are sitting in discovery as blank cards (first Aug 8, still
-        // happening). It also fires the app's own post-onboarding validation.
-        ...(state.displayName && state.displayName.trim()
-          ? { display_name: state.displayName.trim() }
-          : {}),
+        // name and are sitting in discovery as blank cards (first Aug 8) —
+        // written by older bundles that sent the raw (empty) store value.
+        ...(displayName ? { display_name: displayName } : {}),
         birth_date: state.birthDate?.toISOString().split('T')[0] || null,
         age: state.age,
         zodiac_sign: state.zodiacSign,
@@ -511,11 +540,23 @@ export default function Onboarding() {
           ),
         ]);
 
-      const profileUpsert = supabase
-        .from('profiles')
-        .upsert(profileData, { onConflict: 'user_id' })
-        .select('id')
-        .single();
+      // No name even after the DB lookup (lookup error/timeout): a plain
+      // UPDATE keyed on user_id leaves omitted columns — the name included —
+      // untouched, and cannot trip the NOT NULL insert-tuple check the way
+      // upsert does. If no row exists it matches nothing, and the id lookup
+      // below comes back empty, same as a timed-out upsert.
+      const profileUpsert = displayName
+        ? supabase
+            .from('profiles')
+            .upsert(profileData, { onConflict: 'user_id' })
+            .select('id')
+            .single()
+        : supabase
+            .from('profiles')
+            .update(profileData)
+            .eq('user_id', user.id)
+            .select('id')
+            .maybeSingle();
 
       // Parallelize when we already know the profile id (returning user) AND
       // we're not on the final step. The final step flips profile_complete
@@ -605,6 +646,12 @@ export default function Onboarding() {
       }
       console.log('[saveCheckpoint] all done, returning');
     } catch (error: any) {
+      // Deliberate abort from the display_name preflight above — the toast and
+      // step-0 bounce already happened. Re-throw so the caller doesn't advance,
+      // without double-toasting or reporting an expected user state.
+      if ((error as any)?.code === 'NEEDS_NAME') {
+        throw error;
+      }
       // Orphaned-session recovery: if the auth user backing this session no
       // longer exists (account deleted out from under the device, server-side
       // wipe, etc.), every profile write fails the profiles_user_id_fkey
@@ -733,6 +780,22 @@ export default function Onboarding() {
           message: 'We need your location to save your profile. Please set it and try again.',
         });
         setSubStep(3);
+        throw error; // Re-throw so the caller does NOT advance the step
+      }
+
+      // display_name NOT NULL (23502) — should be unreachable now that the
+      // preflight above resolves a name or bounces to step 0 before the write,
+      // but keep a recovery path (and a distinct fingerprint to watch) in case
+      // another write path still produces it. Same UX as the preflight bounce.
+      if (ckptCode === '23502' && ckptMsg.includes('display_name')) {
+        addBreadcrumb('onboarding', 'Checkpoint hit display_name NOT NULL despite preflight', { step });
+        captureException(
+          error instanceof Error ? error : new Error('Checkpoint missing display_name'),
+          { step, context: 'onboarding_checkpoint', error_code: ckptCode },
+          ['onboarding-checkpoint-missing-name'],
+        );
+        showToast({ type: 'error', title: 'What’s your name?', message: 'Please re-enter your name to keep going.' });
+        setSubStep(0);
         throw error; // Re-throw so the caller does NOT advance the step
       }
 
