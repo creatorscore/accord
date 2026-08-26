@@ -256,8 +256,16 @@ export default function MatchingPreferences() {
       // Force search_globally off for non-premium users
       const basePrefs = isPremium ? preferences : { ...preferences, search_globally: false };
       // Expand simplified gender prefs (Men/Women/Non-binary/Everyone) back to full identity values for DB
+      // Normalize the age range at save time too: rows written before the
+      // slider clamps existed can load as inverted (80–45) or out-of-bounds
+      // values, and saving any other setting on this screen would re-persist
+      // them. Order the pair and clamp to the slider's 18–80 domain.
+      const rawMin = Math.max(18, Math.min(Math.round(basePrefs.age_min ?? 18), 80));
+      const rawMax = Math.max(18, Math.min(Math.round(basePrefs.age_max ?? 80), 80));
       const prefsToSave = {
         ...basePrefs,
+        age_min: Math.min(rawMin, rawMax),
+        age_max: Math.max(rawMin, rawMax),
         gender_preference: expandGenderPreference(basePrefs.gender_preference),
         gender_preference_confirmed_at: new Date().toISOString(),
       };
@@ -573,8 +581,13 @@ export default function MatchingPreferences() {
                 maximumValue={80}
                 step={1}
                 value={preferences.age_min}
+                // Clamp against the other handle (same as FilterModal). Without
+                // this, both sliders move independently and users end up saving
+                // inverted (80–45) or degenerate (80–80) ranges — age is a hard
+                // filter, so those users see an empty feed and zero matches
+                // (465 prod rows had age_min ≥ 70, incl. 17 inverted).
                 onValueChange={(value) =>
-                  setPreferences((prev) => ({ ...prev, age_min: value }))
+                  setPreferences((prev) => ({ ...prev, age_min: Math.min(Math.round(value), prev.age_max - 1) }))
                 }
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
@@ -587,7 +600,7 @@ export default function MatchingPreferences() {
                 step={1}
                 value={preferences.age_max}
                 onValueChange={(value) =>
-                  setPreferences((prev) => ({ ...prev, age_max: value }))
+                  setPreferences((prev) => ({ ...prev, age_max: Math.max(Math.round(value), prev.age_min + 1) }))
                 }
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
