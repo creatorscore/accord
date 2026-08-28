@@ -1222,7 +1222,13 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                   <Text style={[
                     styles.likeChoiceCountBadgeText,
                     superLikesRemaining === 0 && { color: '#9CA3AF' },
-                  ]}>{superLikesRemaining}</Text>
+                  ]}>{
+                    // Free users used to see the remaining count ("5") even
+                    // though tapping only opens the paywall — a lie that also
+                    // hid that this is a paid feature. Label it honestly; the
+                    // gold styling stays, so it still reads as aspirational.
+                    isPremium ? superLikesRemaining : t('common.premium')
+                  }</Text>
                 </View>
               </LinearGradient>
             </TouchableOpacity>

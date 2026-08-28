@@ -4370,7 +4370,39 @@ export default function Discover() {
                       );
                     })()}
 
-                    {isPlatinum && (
+                    {/* Likes-you teaser — the banner version below only renders in
+                        the empty state, so free users mid-feed (43% of whom have
+                        pending likes) never saw it. This chip keeps the nudge
+                        visible during normal swiping and routes to the Likes tab,
+                        whose blurred cards + upsells do the actual selling. */}
+                    {pendingLikesCount > 0 && !isPremium && !isPlatinum && (
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: '#A08AB7',
+                          paddingHorizontal: 14,
+                          height: 33,
+                          borderRadius: 999,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                        }}
+                        onPress={() => router.push('/(tabs)/likes')}
+                        activeOpacity={0.85}
+                      >
+                        <MaterialCommunityIcons name="heart-multiple" size={14} color="#FFD700" style={{ marginRight: 4 }} />
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff', lineHeight: 14 }}>
+                          {pendingLikesCount === 1
+                            ? t('likesTeaser.personLikesYou')
+                            : t('likesTeaser.peopleLikeYou', { count: pendingLikesCount })}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Boost is a paid entitlement server-side (boosts RLS allows
+                        is_premium OR is_platinum) and the subscription screen
+                        advertises it — but this chip was gated to isPlatinum only,
+                        a tier that isn't sold, so no one could ever boost. Premium
+                        is the only paid tier; show it to them. */}
+                    {(isPremium || isPlatinum) && (
                       <TouchableOpacity
                         className="rounded-full p-2.5"
                         style={{ backgroundColor: 'rgba(255, 215, 0, 0.3)' }}
@@ -4666,6 +4698,7 @@ export default function Discover() {
           visible={showBoostModal}
           onClose={() => setShowBoostModal(false)}
           profileId={currentProfileId}
+          isPremium={isPremium}
           isPlatinum={isPlatinum}
           onUpgrade={() => {
             setShowBoostModal(false);

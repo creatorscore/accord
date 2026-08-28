@@ -19,6 +19,7 @@ interface ProfileBoostModalProps {
   visible: boolean;
   onClose: () => void;
   profileId: string;
+  isPremium: boolean;
   isPlatinum: boolean;
   onUpgrade: () => void;
 }
@@ -27,9 +28,14 @@ export default function ProfileBoostModal({
   visible,
   onClose,
   profileId,
+  isPremium,
   isPlatinum,
   onUpgrade,
 }: ProfileBoostModalProps) {
+  // Boost is a paid entitlement, not Platinum-exclusive: the boosts RLS insert
+  // policy allows is_premium OR is_platinum, and Premium is the only tier we
+  // actually sell. Gating on isPlatinum alone locked every paying user out.
+  const entitled = isPremium || isPlatinum;
   const [loading, setLoading] = useState(false);
   const [hasActiveBoost, setHasActiveBoost] = useState(false);
   const [boostExpiresAt, setBoostExpiresAt] = useState<Date | null>(null);
@@ -88,11 +94,11 @@ export default function ProfileBoostModal({
   };
 
   const handleActivateBoost = async () => {
-    // Check if user is Platinum
-    if (!isPlatinum) {
+    // Check paid entitlement (matches the server-side boosts insert policy)
+    if (!entitled) {
       Alert.alert(
-        '👑 Upgrade to Platinum',
-        'Profile Boost is a Platinum-exclusive feature! Upgrade to get a weekly 30-minute visibility boost.',
+        '💎 Upgrade to Premium',
+        'Profile Boost is a Premium feature! Upgrade to get a weekly 30-minute visibility boost.',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Upgrade', onPress: onUpgrade },
@@ -258,11 +264,11 @@ export default function ProfileBoostModal({
               </View>
             )}
 
-            {!isPlatinum && (
+            {!entitled && (
               <View style={styles.upgradePrompt}>
                 <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
                 <Text style={styles.upgradeText}>
-                  Upgrade to Platinum to unlock Profile Boost
+                  Upgrade to Premium to unlock Profile Boost
                 </Text>
               </View>
             )}
@@ -271,10 +277,10 @@ export default function ProfileBoostModal({
             <TouchableOpacity
               style={[
                 styles.actionButton,
-                (hasActiveBoost || (!canBoostAgain && isPlatinum)) && styles.actionButtonDisabled,
+                (hasActiveBoost || (!canBoostAgain && entitled)) && styles.actionButtonDisabled,
               ]}
-              onPress={isPlatinum ? handleActivateBoost : onUpgrade}
-              disabled={loading || (hasActiveBoost || (!canBoostAgain && isPlatinum))}
+              onPress={entitled ? handleActivateBoost : onUpgrade}
+              disabled={loading || (hasActiveBoost || (!canBoostAgain && entitled))}
               activeOpacity={0.8}
             >
               {loading ? (
@@ -282,18 +288,18 @@ export default function ProfileBoostModal({
               ) : (
                 <>
                   <MaterialCommunityIcons
-                    name={isPlatinum ? 'rocket-launch' : 'crown'}
+                    name={entitled ? 'rocket-launch' : 'crown'}
                     size={24}
                     color="white"
                   />
                   <Text style={styles.actionButtonText}>
-                    {isPlatinum
+                    {entitled
                       ? hasActiveBoost
                         ? 'Boost Active'
                         : !canBoostAgain
                         ? 'Boost Used This Week'
                         : 'Activate Boost'
-                      : 'Upgrade to Platinum'}
+                      : 'Upgrade to Premium'}
                   </Text>
                 </>
               )}
