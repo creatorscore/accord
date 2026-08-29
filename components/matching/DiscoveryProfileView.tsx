@@ -598,6 +598,10 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
   const [pendingLikeContent, setPendingLikeContent] = useState<string | null>(null);
   const [pendingLikeContentData, setPendingLikeContentData] = useState<{ type: string; prompt?: string; answer?: string; index?: number } | null>(null);
   const [likeMessage, setLikeMessage] = useState('');
+  // True when the like sheet was opened from the floating super-like star
+  // rather than a content heart: the sheet then renders a single Obsessed
+  // confirm (message input hidden — supers don't carry messages today).
+  const [superMode, setSuperMode] = useState(false);
   const likeSheetRef = useRef<BottomSheetModal>(null);
 
   const renderLikeSheetBackdrop = useCallback(
@@ -754,7 +758,29 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
     setPendingLikeContent(null);
     setPendingLikeContentData(null);
     setLikeMessage('');
+    setSuperMode(false);
   };
+
+  // Floating star press. Super like used to be reachable only INSIDE the like
+  // sheet (two taps deep, below the primary button) — zero were ever sent.
+  // This gives it a first-class, always-visible entry, mirroring the pass
+  // button. Free users (and premium users at their weekly limit) route
+  // straight to the parent's onSuperLike, which shows the paywall / limit
+  // alert; entitled users get a one-decision confirm sheet — deliberate
+  // friction for a 5-per-week resource (the Hinge-rose pattern), never an
+  // accidental spend.
+  const handleSuperLikePress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!isPremium || superLikesRemaining === 0) {
+      onSuperLike?.();
+      return;
+    }
+    setSuperMode(true);
+    setPendingLikeContent(null);
+    setPendingLikeContentData(null);
+    setLikeMessage('');
+    likeSheetRef.current?.present();
+  }, [isPremium, superLikesRemaining, onSuperLike]);
 
   const handlePass = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1076,8 +1102,37 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
       {/* Floating Pass Button - Bottom Left */}
       {!hideActions && (
         <View style={[styles.floatingPassContainer, { bottom: insets.bottom + 20 }]}>
-          <TouchableOpacity onPress={handlePass} style={[styles.floatingPassButton, { backgroundColor: dark ? '#1C1C2E' : '#FFFFFF', borderColor: dark ? '#2C2C3E' : '#E5E7EB' }]} activeOpacity={0.9}>
+          <TouchableOpacity
+            onPress={handlePass}
+            style={[styles.floatingPassButton, { backgroundColor: dark ? '#1C1C2E' : '#FFFFFF', borderColor: dark ? '#2C2C3E' : '#E5E7EB' }]}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel={t('profileCard.pass', { defaultValue: 'Pass' })}
+          >
             <MaterialCommunityIcons name="close" size={34} color={dark ? '#F5F5F7' : '#000000'} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Floating Super Like (Obsessed) Star - Bottom Right, mirrors the pass
+          button so the two core decisions share one thumb-zone row. Gold marks
+          it as the special action; content hearts remain the ordinary like. */}
+      {!hideActions && (
+        <View style={[styles.floatingSuperContainer, { bottom: insets.bottom + 20 }]}>
+          <TouchableOpacity
+            onPress={handleSuperLikePress}
+            style={[styles.floatingSuperButton, { borderColor: dark ? '#3D3520' : '#FDE68A' }]}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel={t('discover.like.obsessed')}
+            accessibilityHint={t('common.premium')}
+          >
+            <LinearGradient
+              colors={dark ? ['#2E2610', '#3D3520'] : ['#FEF3C7', '#FDE68A']}
+              style={styles.floatingSuperGradient}
+            >
+              <MaterialCommunityIcons name="star" size={30} color="#D97706" />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       )}
@@ -1126,6 +1181,7 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
         ref={likeSheetRef}
         enableDynamicSizing
         enablePanDownToClose
+        onDismiss={() => setSuperMode(false)}
         backdropComponent={renderLikeSheetBackdrop}
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
@@ -1152,7 +1208,8 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
             </View>
           )}
 
-          {/* Message input */}
+          {/* Message input — hidden in super mode (supers don't carry messages) */}
+          {!superMode && (
           <View style={styles.likeChoiceInputContainer}>
             <BottomSheetTextInput
               style={[styles.likeChoiceInput, { backgroundColor: dark ? '#0F0F1A' : '#F9F7FC', borderColor: dark ? '#2C2C3E' : '#E8E0F0', color: dark ? '#F5F5F7' : '#1F2937' }]}
@@ -1174,9 +1231,35 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
               </View>
             )}
           </View>
+          )}
 
           {/* Action buttons */}
           <View style={styles.likeChoiceButtons}>
+            {superMode ? (
+              /* Super mode: a single gold confirm. One decision, count
+                 visible, no competing primary — the star already chose. */
+              <TouchableOpacity
+                style={styles.likeChoicePrimaryButton}
+                onPress={() => handleLikeChoice(true)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={t('discover.like.obsessed')}
+              >
+                <LinearGradient
+                  colors={['#FDE68A', '#F59E0B']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.likeChoicePrimaryGradient}
+                >
+                  <MaterialCommunityIcons name="star" size={20} color="#78350F" />
+                  <Text style={[styles.likeChoicePrimaryText, { color: '#78350F' }]}>{t('discover.like.obsessed')}</Text>
+                  <View style={styles.likeChoiceCountBadge}>
+                    <Text style={styles.likeChoiceCountBadgeText}>{superLikesRemaining}</Text>
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+            ) : (
+            <>
             <TouchableOpacity
               style={styles.likeChoicePrimaryButton}
               onPress={() => handleLikeChoice(false)}
@@ -1232,6 +1315,8 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                 </View>
               </LinearGradient>
             </TouchableOpacity>
+            </>
+            )}
           </View>
         </BottomSheetView>
       </BottomSheetModal>
@@ -2042,6 +2127,27 @@ const styles = StyleSheet.create({
     elevation: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  floatingSuperContainer: {
+    position: 'absolute',
+    right: 20,
+  },
+  floatingSuperButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+  },
+  floatingSuperGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   // Modal styles
   modalOverlay: {

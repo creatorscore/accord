@@ -4288,6 +4288,35 @@ export default function Discover() {
                       <MaterialCommunityIcons name="tune-vertical" size={24} color={colors.foreground} />
                     </TouchableOpacity>
 
+                    {/* Boost — FIRST chip so it's visible without scrolling the
+                        row (the old icon-only rocket sat at the far right end,
+                        off-screen on most devices: zero boosts ever activated).
+                        Labeled, because an unexplained rocket icon sells
+                        nothing. Premium-only: the server's boosts RLS entitles
+                        is_premium, and free users already have two upsell
+                        chips in this row. */}
+                    {(isPremium || isPlatinum) && (
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: 'rgba(255, 215, 0, 0.25)',
+                          paddingHorizontal: 14,
+                          height: 33,
+                          borderRadius: 999,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                        }}
+                        onPress={() => setShowBoostModal(true)}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('discover.quickFilter.boost', { defaultValue: 'Boost' })}
+                      >
+                        <MaterialCommunityIcons name="rocket" size={16} color="#D97706" style={{ marginRight: 4 }} />
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#D97706', lineHeight: 14 }}>
+                          {t('discover.quickFilter.boost', { defaultValue: 'Boost' })}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
                     {/* Age Quick Filter */}
                     <TouchableOpacity
                       style={{ backgroundColor: colors.card, borderWidth: 2, borderColor: colors.foreground, paddingHorizontal: 14, height: 33, borderRadius: 999, flexDirection: 'row', alignItems: 'center', }}
@@ -4397,20 +4426,6 @@ export default function Discover() {
                       </TouchableOpacity>
                     )}
 
-                    {/* Boost is a paid entitlement server-side (boosts RLS allows
-                        is_premium OR is_platinum) and the subscription screen
-                        advertises it — but this chip was gated to isPlatinum only,
-                        a tier that isn't sold, so no one could ever boost. Premium
-                        is the only paid tier; show it to them. */}
-                    {(isPremium || isPlatinum) && (
-                      <TouchableOpacity
-                        className="rounded-full p-2.5"
-                        style={{ backgroundColor: 'rgba(255, 215, 0, 0.3)' }}
-                        onPress={() => setShowBoostModal(true)}
-                      >
-                        <MaterialCommunityIcons name="rocket" size={20} color="#FFD700" />
-                      </TouchableOpacity>
-                    )}
                   </ScrollView>
                 </View>
 

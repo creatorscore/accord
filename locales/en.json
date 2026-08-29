@@ -361,7 +361,8 @@
       "datingIntentions": "Dating Intentions",
       "activeToday": "Active Today",
       "verifiedOnly": "Verified",
-      "search": "Search"
+      "search": "Search",
+      "boost": "Boost"
     },
     "ageSlider": {
       "ageRange": "Age Range: {{min}} - {{max}}",

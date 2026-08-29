@@ -27,6 +27,7 @@ import { signPhotoUrls, getSignedUrl } from '@/lib/signed-urls';
 import { useColorScheme } from '@/lib/useColorScheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PremiumPaywall from '@/components/premium/PremiumPaywall';
+import ProfileBoostModal from '@/components/premium/ProfileBoostModal';
 import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
 import { UpdateModalPreview } from '@/components/AppUpdateChecker';
 
@@ -70,6 +71,7 @@ export default function Profile() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showBoostModal, setShowBoostModal] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [preferences, setPreferences] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -389,6 +391,22 @@ export default function Profile() {
                 </View>
               ))}
             </View>
+
+            {/* Boost entry — the subscription pitch has always listed a weekly
+                boost, but the only activation point was a chip buried at the
+                end of discover's filter row. This puts the action where the
+                benefit is advertised. (White pill on the gradient reuses the
+                dormant platinum-CTA styling.) */}
+            <TouchableOpacity
+              style={styles.upgradeToPlatinum}
+              onPress={() => setShowBoostModal(true)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.weeklyProfileBoost')}
+            >
+              <MaterialCommunityIcons name="rocket" size={16} color="#D97706" />
+              <Text style={[styles.upgradeToPlatinumText, { color: '#D97706' }]}>{t('profile.weeklyProfileBoost')}</Text>
+            </TouchableOpacity>
 
             {/* TODO: Re-enable when Platinum launches */}
             {/* {!isPlatinum && (
@@ -916,6 +934,20 @@ export default function Profile() {
         onClose={() => setShowPaywall(false)}
         variant={isPremium ? 'platinum' : 'premium'}
       />
+
+      {profile?.id && (
+        <ProfileBoostModal
+          visible={showBoostModal}
+          onClose={() => setShowBoostModal(false)}
+          profileId={profile.id}
+          isPremium={isPremium}
+          isPlatinum={isPlatinum}
+          onUpgrade={() => {
+            setShowBoostModal(false);
+            setShowPaywall(true);
+          }}
+        />
+      )}
 
       {/* Force Update Modal Preview (admin only) */}
       <UpdateModalPreview
