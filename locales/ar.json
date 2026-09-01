@@ -96,9 +96,9 @@
     },
     "premium": {
       "upgradeTitle": "الترقية إلى Premium",
-      "superLikesMessage": "Super Likes هي ميزة Premium! قم بالترقية لإرسال 5 Super Likes أسبوعياً.",
-      "superLikeLimitTitle": "تم الوصول إلى حد Super Like",
-      "superLikeLimitMessage": "لقد استخدمت جميع الـ 5 Super Likes هذا الأسبوع. ستتجدد Super Likes يوم {{day}} القادم.",
+      "superLikesMessage": "الـ Lavender ميزة بريميوم! رقِّ اشتراكك لإرسال 5 Lavender أسبوعيًا.",
+      "superLikeLimitTitle": "نفدت الـ Lavender",
+      "superLikeLimitMessage": "أرسلت كل الـ 5 Lavender لهذا الأسبوع. ستحصل على 5 أخرى يوم {{day}} القادم.",
       "rewindMessage": "الترجيع ميزة Premium! قم بالترقية للتراجع عن آخر سوايب."
     },
     "intention": {
@@ -128,14 +128,17 @@
       "placeholder": "قل شيئاً لطيفاً...",
       "sendWithComment": "إرسال إعجاب مع تعليق",
       "sendLike": "إرسال إعجاب",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "تبقى {{count}} هذا الأسبوع",
+      "superLikesAvailable": "{{count}} متاحة"
     },
     "dailyLimitTitle": "تم الوصول للحد اليومي",
     "dailyLimitMessage": "لقد استخدمت جميع الإعجابات الخمسة اليوم. قم بالترقية للحصول على إعجابات غير محدودة!",
     "quickFilter": {
       "age": "العمر",
       "datingIntentions": "نوايا المواعدة",
-      "activeToday": "نشط اليوم"
+      "activeToday": "نشط اليوم",
+      "boost": "تعزيز"
     },
     "ageSlider": {
       "ageRange": "نطاق العمر: {{min}} - {{max}}",
@@ -198,6 +201,20 @@
       "bothLiked": "أنتما أعجبتما ببعضكما — أنت و{{name}}",
       "sendMessage": "أرسل رسالة",
       "keepBrowsing": "متابعة التصفح"
+    },
+    "superlike": {
+      "buyMessage": "يشمل بريميوم 5 Lavender أسبوعيًا — أو أرسل هذه فقط.",
+      "buyOne": "اشترِ 1 · {{price}}",
+      "readyTitle": "الـ Lavender جاهز!",
+      "readyMessage": "اضغط على Lavender مرة أخرى لإرساله.",
+      "pendingTitle": "تم استلام الشراء",
+      "pendingMessage": "سيظهر الـ Lavender خلال لحظات.",
+      "purchaseFailed": "لم تكتمل عملية الشراء. لم يُخصم منك شيء.",
+      "packsTitle": "احصل على Lavender",
+      "packsSubtitle": "تميّز أمام من يهمّك أمرهم.",
+      "packOption": "{{count}} Lavender",
+      "packOptionOne": "‏1 Lavender",
+      "bestValue": "الأفضل قيمة"
     }
   },
   "filters": {
@@ -1093,7 +1110,15 @@
     "matchCountTitle": "{{current}} من {{limit}} توافقات نشطة",
     "matchCountSubtitleFree": "الخطة المجانية",
     "matchCountSubtitleWarning": "تكاد تمتلئ — احصل على توافقات غير محدودة",
-    "matchCountSubtitleFull": "ألغِ توافقاً مع شخص ما أو ترقَّ للحصول على توافقات غير محدودة"
+    "matchCountSubtitleFull": "ألغِ توافقاً مع شخص ما أو ترقَّ للحصول على توافقات غير محدودة",
+    "newMatchesSection": "توافقات جديدة",
+    "messagesSection": "الرسائل",
+    "headerCountOne": "{{count}} توافق",
+    "headerCount": "{{count}} توافقات",
+    "sayHiHint": "اضغط على توافق جديد لعرض الملف وإلقاء التحية — تنتهي التوافقات بعد 7 أيام بدون رسائل.",
+    "expirationWarning": "{{count}} توافقات ستنتهي خلال {{timeframe}}. أرسل رسالة للحفاظ على التواصل!",
+    "timeframe24h": "24 ساعة",
+    "timeframe3d": "3 أيام"
   },
   "messages": {
     "title": "الرسائل",
@@ -2250,7 +2275,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "تعذّر إرسال الـ Lavender. حاول مرة أخرى.",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2276,9 +2301,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "تم إرسال Lavender!",
+    "obsessedWithRemaining": "سيرى {{name}} الـ Lavender الخاص بك.\n\nتبقى لديك {{remaining}} Lavender هذا الأسبوع.",
+    "obsessedBasic": "سيرى {{name}} الـ Lavender الخاص بك.",
     "tooFarTitle": "بعيد جداً",
     "tooFarMessage": "تفضيلات بحث هذا الشخص لا تشمل منطقتك.",
     "globalSearchPremiumTitle": "البحث العالمي أصبح ميزة Premium",
@@ -2502,9 +2527,9 @@
     "alreadyMatchedMsg": "أنت متطابق بالفعل مع {{name}}!",
     "likeError": "فشل الإعجاب بالملف الشخصي",
     "passError": "فشل تمرير الملف الشخصي",
-    "obsessed": "مُعجب جداً!",
-    "obsessedMsg": "سيتم إخطار {{name}} أنك مهتم!",
-    "superLikeError": "فشل إرسال Super Like",
+    "obsessed": "تم إرسال Lavender!",
+    "obsessedMsg": "سيرى {{name}} الـ Lavender الخاص بك!",
+    "superLikeError": "تعذّر إرسال الـ Lavender",
     "notFound": "لم يتم العثور على الملف الشخصي",
     "actions": {
       "pass": "تمرير",
@@ -2971,5 +2996,18 @@
       "bodySingular": "انضم {{count}} عضو متوافق جديد هذا الأسبوع. ألقِ نظرة.",
       "bodyPlural": "انضم {{count}} أعضاء متوافقون جدد هذا الأسبوع. ألقِ نظرة."
     }
+  },
+  "standouts": {
+    "title": "المميزون",
+    "subtitle": "أفضل الملفات في منطقتك، تتجدد كل 8 ساعات",
+    "refreshIn": "جديد خلال {{time}}",
+    "refreshSoon": "مميزون جدد قريبًا",
+    "sendLavender": "أرسل Lavender",
+    "lavenderSent": "تم إرسال Lavender",
+    "creditsReady": "الـ Lavender جاهزة للإرسال.",
+    "loadError": "تعذّر تحميل المميزين. اسحب لإعادة المحاولة.",
+    "emptyTitle": "لا يوجد مميزون حاليًا",
+    "emptyText": "المميزون أعضاء نشطون يطابقون تفضيلاتك. جرّب توسيع المسافة أو نطاق العمر.",
+    "adjustPreferences": "تعديل التفضيلات"
   }
 }

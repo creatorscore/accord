@@ -96,9 +96,9 @@
     },
     "premium": {
       "upgradeTitle": "Tingkatkan ke Premium",
-      "superLikesMessage": "Super Likes adalah fitur Premium! Tingkatkan untuk mengirim 5 Super Likes per minggu.",
-      "superLikeLimitTitle": "Batas Super Like Tercapai",
-      "superLikeLimitMessage": "Anda telah menggunakan semua 5 Super Likes minggu ini. Super Likes Anda akan disetel ulang pada {{day}} berikutnya.",
+      "superLikesMessage": "Lavender adalah fitur Premium! Upgrade untuk mengirim 5 Lavender per minggu.",
+      "superLikeLimitTitle": "Lavender habis",
+      "superLikeLimitMessage": "Kamu sudah mengirim 5 Lavender minggu ini. Kamu akan mendapat 5 lagi {{day}} depan.",
       "rewindMessage": "Putar Ulang adalah fitur Premium! Tingkatkan untuk membatalkan geseran terakhir Anda."
     },
     "intention": {
@@ -128,14 +128,17 @@
       "placeholder": "Katakan sesuatu yang baik...",
       "sendWithComment": "Kirim Suka dengan Komentar",
       "sendLike": "Kirim Suka",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "Sisa {{count}} minggu ini",
+      "superLikesAvailable": "{{count}} tersedia"
     },
     "dailyLimitTitle": "Batas harian tercapai",
     "dailyLimitMessage": "Anda telah menggunakan 5 like hari ini. Upgrade untuk like tanpa batas!",
     "quickFilter": {
       "age": "Usia",
       "datingIntentions": "Niat Kencan",
-      "activeToday": "Aktif Hari Ini"
+      "activeToday": "Aktif Hari Ini",
+      "boost": "Boost"
     },
     "ageSlider": {
       "ageRange": "Rentang Usia: {{min}} - {{max}}",
@@ -198,6 +201,20 @@
       "bothLiked": "Kamu dan {{name}} saling menyukai",
       "sendMessage": "Kirim Pesan",
       "keepBrowsing": "Lanjut Menjelajah"
+    },
+    "superlike": {
+      "buyMessage": "Premium termasuk 5 Lavender per minggu — atau kirim satu ini saja.",
+      "buyOne": "Beli 1 · {{price}}",
+      "readyTitle": "Lavender siap!",
+      "readyMessage": "Ketuk Lavender lagi untuk mengirim.",
+      "pendingTitle": "Pembelian diterima",
+      "pendingMessage": "Lavender-mu akan muncul sebentar lagi.",
+      "purchaseFailed": "Pembelian gagal. Kamu tidak dikenai biaya.",
+      "packsTitle": "Dapatkan Lavender",
+      "packsSubtitle": "Tampil menonjol di mata orang yang penting bagimu.",
+      "packOption": "{{count}} Lavender",
+      "packOptionOne": "1 Lavender",
+      "bestValue": "Paling hemat"
     }
   },
   "filters": {
@@ -1093,7 +1110,15 @@
     "matchCountTitle": "{{current}} dari {{limit}} kecocokan aktif",
     "matchCountSubtitleFree": "Paket gratis",
     "matchCountSubtitleWarning": "Hampir penuh — dapatkan kecocokan tanpa batas",
-    "matchCountSubtitleFull": "Batalkan kecocokan seseorang atau tingkatkan untuk tanpa batas"
+    "matchCountSubtitleFull": "Batalkan kecocokan seseorang atau tingkatkan untuk tanpa batas",
+    "newMatchesSection": "Kecocokan baru",
+    "messagesSection": "Pesan",
+    "headerCountOne": "{{count}} kecocokan",
+    "headerCount": "{{count}} kecocokan",
+    "sayHiHint": "Ketuk kecocokan baru untuk melihat profil dan menyapa — kecocokan kedaluwarsa setelah 7 hari tanpa pesan.",
+    "expirationWarning": "{{count}} kecocokan akan kedaluwarsa dalam {{timeframe}}. Kirim pesan untuk menjaga koneksi!",
+    "timeframe24h": "24 jam",
+    "timeframe3d": "3 hari"
   },
   "messages": {
     "title": "Pesan",
@@ -2313,7 +2338,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "Gagal mengirim Lavender. Coba lagi.",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2339,9 +2364,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "Lavender terkirim!",
+    "obsessedWithRemaining": "{{name}} akan melihat Lavender-mu.\n\nSisa {{remaining}} Lavender minggu ini.",
+    "obsessedBasic": "{{name}} akan melihat Lavender-mu.",
     "tooFarTitle": "Terlalu Jauh",
     "tooFarMessage": "Preferensi pencarian orang ini tidak mencakup area Anda.",
     "globalSearchPremiumTitle": "Pencarian Global Sekarang Premium",
@@ -2565,9 +2590,9 @@
     "alreadyMatchedMsg": "Anda sudah cocok dengan {{name}}!",
     "likeError": "Gagal menyukai profil",
     "passError": "Gagal melewati profil",
-    "obsessed": "Terpesona!",
-    "obsessedMsg": "{{name}} akan diberitahu bahwa Anda tertarik!",
-    "superLikeError": "Gagal mengirim Super Like",
+    "obsessed": "Lavender terkirim!",
+    "obsessedMsg": "{{name}} akan melihat Lavender-mu!",
+    "superLikeError": "Gagal mengirim Lavender",
     "notFound": "Profil tidak ditemukan",
     "actions": {
       "pass": "Lewati",
@@ -3034,5 +3059,18 @@
       "bodySingular": "Minggu ini {{count}} anggota cocok baru bergabung. Yuk, lihat.",
       "bodyPlural": "Minggu ini {{count}} anggota cocok baru bergabung. Yuk, lihat."
     }
+  },
+  "standouts": {
+    "title": "Unggulan",
+    "subtitle": "Profil terbaik di sekitarmu, diperbarui setiap 8 jam",
+    "refreshIn": "Baru dalam {{time}}",
+    "refreshSoon": "Unggulan baru segera hadir",
+    "sendLavender": "Kirim Lavender",
+    "lavenderSent": "Lavender terkirim",
+    "creditsReady": "Lavender-mu siap dikirim.",
+    "loadError": "Gagal memuat unggulan. Geser untuk mencoba lagi.",
+    "emptyTitle": "Belum ada unggulan",
+    "emptyText": "Unggulan adalah anggota aktif yang cocok dengan preferensimu. Coba perluas jarak atau rentang usia.",
+    "adjustPreferences": "Atur preferensi"
   }
 }

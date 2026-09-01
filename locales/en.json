@@ -1496,6 +1496,8 @@
     "headerCount": "{{count}} matches",
     "sayHiHint": "Tap a new match to view their profile and say hi — matches expire after 7 days without a message.",
     "expirationWarning": "{{count}} matches expire in {{timeframe}}. Send a message to keep the connection!",
+    "timeframe24h": "24 hours",
+    "timeframe3d": "3 days",
     "timeAgo": {
       "justNow": "Just now",
       "minutesAgo": "{{count}}m ago",
@@ -2734,7 +2736,7 @@
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
     "filtersSaveError": "Couldn't save your filters. Please try again.",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "Failed to send your Lavender. Please try again.",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",

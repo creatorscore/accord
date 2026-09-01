@@ -1119,7 +1119,9 @@ export default function Matches() {
 
     const isUrgent = urgent > 0;
     const count = urgent > 0 ? urgent : soon;
-    const timeframe = urgent > 0 ? '24 hours' : '3 days';
+    const timeframe = urgent > 0
+      ? t('matches.timeframe24h', { defaultValue: '24 hours' })
+      : t('matches.timeframe3d', { defaultValue: '3 days' });
 
     return (
       <View style={[styles.warningBanner, isUrgent && styles.warningUrgent]}>

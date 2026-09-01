@@ -175,9 +175,9 @@
     },
     "premium": {
       "upgradeTitle": "Ulepsz do Premium",
-      "superLikesMessage": "Super Like to funkcja Premium! Ulepsz, aby wysyłać 5 Super Like tygodniowo.",
-      "superLikeLimitTitle": "Limit Super Like osiągnięty",
-      "superLikeLimitMessage": "Wykorzystałeś/aś wszystkie 5 Super Like w tym tygodniu. Limit zostanie zresetowany w {{day}}.",
+      "superLikesMessage": "Lavendery to funkcja Premium! Przejdź na Premium i wysyłaj 5 Lavenderów tygodniowo.",
+      "superLikeLimitTitle": "Brak Lavenderów",
+      "superLikeLimitMessage": "W tym tygodniu wysłałeś(-aś) już 5 Lavenderów. Kolejne 5 otrzymasz w następny {{day}}.",
       "rewindMessage": "Cofnij to funkcja Premium! Ulepsz, aby cofnąć ostatnie przesunięcie."
     },
     "intention": {
@@ -207,14 +207,17 @@
       "placeholder": "Napisz coś miłego...",
       "sendWithComment": "Wyślij polubienie z komentarzem",
       "sendLike": "Wyślij polubienie",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "Pozostało {{count}} w tym tygodniu",
+      "superLikesAvailable": "Dostępne: {{count}}"
     },
     "dailyLimitTitle": "Dzienny limit osiągnięty",
     "dailyLimitMessage": "Wykorzystałeś wszystkie 5 polubień na dziś. Ulepsz, aby uzyskać nieograniczone!",
     "quickFilter": {
       "age": "Wiek",
       "datingIntentions": "Intencje randkowe",
-      "activeToday": "Aktywny dziś"
+      "activeToday": "Aktywny dziś",
+      "boost": "Boost"
     },
     "ageSlider": {
       "ageRange": "Przedział wiekowy: {{min}} - {{max}}",
@@ -277,6 +280,20 @@
       "bothLiked": "Ty i {{name}} polubiliście się nawzajem",
       "sendMessage": "Wyślij wiadomość",
       "keepBrowsing": "Przeglądaj dalej"
+    },
+    "superlike": {
+      "buyMessage": "Premium obejmuje 5 Lavenderów tygodniowo — albo wyślij tylko tego jednego.",
+      "buyOne": "Kup 1 · {{price}}",
+      "readyTitle": "Lavender gotowy!",
+      "readyMessage": "Dotknij Lavender ponownie, aby wysłać.",
+      "pendingTitle": "Zakup przyjęty",
+      "pendingMessage": "Twój Lavender pojawi się za chwilę.",
+      "purchaseFailed": "Zakup się nie powiódł. Nie pobrano opłaty.",
+      "packsTitle": "Zdobądź Lavendery",
+      "packsSubtitle": "Wyróżnij się wśród osób, na których Ci zależy.",
+      "packOption": "{{count}} Lavenderów",
+      "packOptionOne": "1 Lavender",
+      "bestValue": "Najlepsza oferta"
     }
   },
   "filters": {
@@ -1172,7 +1189,15 @@
     "matchCountTitle": "{{current}} z {{limit}} aktywnych dopasowań",
     "matchCountSubtitleFree": "Plan darmowy",
     "matchCountSubtitleWarning": "Prawie pełny — uzyskaj nieograniczone dopasowania",
-    "matchCountSubtitleFull": "Zakończ dopasowanie z kimś lub przejdź na nielimitowany plan"
+    "matchCountSubtitleFull": "Zakończ dopasowanie z kimś lub przejdź na nielimitowany plan",
+    "newMatchesSection": "Nowe dopasowania",
+    "messagesSection": "Wiadomości",
+    "headerCountOne": "{{count}} dopasowanie",
+    "headerCount": "{{count}} dopasowań",
+    "sayHiHint": "Dotknij nowego dopasowania, aby zobaczyć profil i się przywitać — dopasowania wygasają po 7 dniach bez wiadomości.",
+    "expirationWarning": "{{count}} dopasowań wygaśnie za {{timeframe}}. Wyślij wiadomość, aby utrzymać kontakt!",
+    "timeframe24h": "24 godziny",
+    "timeframe3d": "3 dni"
   },
   "messages": {
     "title": "Wiadomości",
@@ -2248,7 +2273,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "Nie udało się wysłać Lavendera. Spróbuj ponownie.",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2274,9 +2299,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "Lavender wysłany!",
+    "obsessedWithRemaining": "{{name}} zobaczy Twój Lavender.\n\nZostało Ci {{remaining}} Lavenderów w tym tygodniu.",
+    "obsessedBasic": "{{name}} zobaczy Twój Lavender.",
     "tooFarTitle": "Zbyt daleko",
     "tooFarMessage": "Preferencje wyszukiwania tej osoby nie obejmują Twojego obszaru.",
     "globalSearchPremiumTitle": "Wyszukiwanie globalne teraz Premium",
@@ -2500,9 +2525,9 @@
     "alreadyMatchedMsg": "Już jesteś dopasowany/a z {{name}}!",
     "likeError": "Nie udało się polubić profilu",
     "passError": "Nie udało się pominąć profilu",
-    "obsessed": "Zachwycony/a!",
-    "obsessedMsg": "{{name}} zostanie powiadomiony/a o Twoim zainteresowaniu!",
-    "superLikeError": "Nie udało się wysłać Super Like",
+    "obsessed": "Lavender wysłany!",
+    "obsessedMsg": "{{name}} zobaczy Twój Lavender!",
+    "superLikeError": "Nie udało się wysłać Lavendera",
     "notFound": "Profil nie został znaleziony",
     "actions": {
       "pass": "Pomiń",
@@ -2969,5 +2994,18 @@
       "bodySingular": "W tym tygodniu dołączył {{count}} nowy zgodny członek. Zajrzyj.",
       "bodyPlural": "W tym tygodniu dołączyło {{count}} nowych zgodnych członków. Zajrzyj."
     }
+  },
+  "standouts": {
+    "title": "Wyróżnieni",
+    "subtitle": "Najlepsze profile w Twojej okolicy, odświeżane co 8 godzin",
+    "refreshIn": "Nowe za {{time}}",
+    "refreshSoon": "Wkrótce nowi wyróżnieni",
+    "sendLavender": "Wyślij Lavender",
+    "lavenderSent": "Lavender wysłany",
+    "creditsReady": "Twoje Lavendery są gotowe do wysłania.",
+    "loadError": "Nie udało się wczytać wyróżnionych. Przesuń, aby spróbować ponownie.",
+    "emptyTitle": "Na razie brak wyróżnionych",
+    "emptyText": "Wyróżnieni to aktywni członkowie pasujący do Twoich preferencji. Spróbuj zwiększyć dystans lub przedział wieku.",
+    "adjustPreferences": "Dostosuj preferencje"
   }
 }

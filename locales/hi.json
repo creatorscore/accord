@@ -96,9 +96,9 @@
     },
     "premium": {
       "upgradeTitle": "Premium में अपग्रेड करें",
-      "superLikesMessage": "Super Likes एक Premium सुविधा है! प्रति सप्ताह 5 Super Likes भेजने के लिए अपग्रेड करें।",
-      "superLikeLimitTitle": "Super Like की सीमा पूरी",
-      "superLikeLimitMessage": "आपने इस सप्ताह अपने सभी 5 Super Likes उपयोग कर लिए हैं। आपके Super Likes अगले {{day}} को रीसेट होंगे।",
+      "superLikesMessage": "Lavender एक प्रीमियम सुविधा है! अपग्रेड करें और हर हफ़्ते 5 Lavender भेजें।",
+      "superLikeLimitTitle": "Lavender ख़त्म हो गए",
+      "superLikeLimitMessage": "आपने इस हफ़्ते के सभी 5 Lavender भेज दिए हैं। अगले {{day}} को 5 और मिलेंगे।",
       "rewindMessage": "रिवाइंड एक Premium सुविधा है! अपना आखिरी स्वाइप वापस लेने के लिए अपग्रेड करें।"
     },
     "intention": {
@@ -128,14 +128,17 @@
       "placeholder": "कुछ अच्छा कहें...",
       "sendWithComment": "कमेंट के साथ लाइक भेजें",
       "sendLike": "लाइक भेजें",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "इस हफ़्ते {{count}} बचे",
+      "superLikesAvailable": "{{count}} उपलब्ध"
     },
     "dailyLimitTitle": "दैनिक सीमा पूरी",
     "dailyLimitMessage": "आपने आज के 5 लाइक इस्तेमाल कर लिए हैं। अनलिमिटेड के लिए अपग्रेड करें!",
     "quickFilter": {
       "age": "उम्र",
       "datingIntentions": "डेटिंग इरादे",
-      "activeToday": "आज सक्रिय"
+      "activeToday": "आज सक्रिय",
+      "boost": "बूस्ट"
     },
     "ageSlider": {
       "ageRange": "उम्र सीमा: {{min}} - {{max}}",
@@ -198,6 +201,20 @@
       "bothLiked": "आपने और {{name}} ने एक-दूसरे को पसंद किया",
       "sendMessage": "संदेश भेजें",
       "keepBrowsing": "ब्राउज़िंग जारी रखें"
+    },
+    "superlike": {
+      "buyMessage": "प्रीमियम में हर हफ़्ते 5 Lavender मिलते हैं — या सिर्फ़ यही एक भेजें।",
+      "buyOne": "1 खरीदें · {{price}}",
+      "readyTitle": "Lavender तैयार है!",
+      "readyMessage": "भेजने के लिए Lavender पर फिर से टैप करें।",
+      "pendingTitle": "खरीदारी मिल गई",
+      "pendingMessage": "आपका Lavender बस आने ही वाला है।",
+      "purchaseFailed": "खरीदारी पूरी नहीं हुई। आपसे कोई शुल्क नहीं लिया गया।",
+      "packsTitle": "Lavender पाएँ",
+      "packsSubtitle": "उन लोगों की नज़र में आएँ जो मायने रखते हैं।",
+      "packOption": "{{count}} Lavender",
+      "packOptionOne": "1 Lavender",
+      "bestValue": "सबसे किफ़ायती"
     }
   },
   "filters": {
@@ -1093,7 +1110,15 @@
     "matchCountTitle": "{{limit}} में से {{current}} सक्रिय मैच",
     "matchCountSubtitleFree": "मुफ़्त योजना",
     "matchCountSubtitleWarning": "लगभग भर गया — असीमित मैच पाएं",
-    "matchCountSubtitleFull": "किसी को अनमैच करें या असीमित के लिए अपग्रेड करें"
+    "matchCountSubtitleFull": "किसी को अनमैच करें या असीमित के लिए अपग्रेड करें",
+    "newMatchesSection": "नए मैच",
+    "messagesSection": "संदेश",
+    "headerCountOne": "{{count}} मैच",
+    "headerCount": "{{count}} मैच",
+    "sayHiHint": "नए मैच पर टैप करके प्रोफ़ाइल देखें और हैलो कहें — बिना संदेश के मैच 7 दिन में समाप्त हो जाते हैं।",
+    "expirationWarning": "{{count}} मैच {{timeframe}} में समाप्त हो जाएँगे। जुड़ाव बनाए रखने के लिए संदेश भेजें!",
+    "timeframe24h": "24 घंटे",
+    "timeframe3d": "3 दिन"
   },
   "messages": {
     "title": "संदेश",
@@ -2250,7 +2275,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "Lavender नहीं भेजा जा सका। फिर से कोशिश करें।",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2276,9 +2301,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "Lavender भेज दिया गया!",
+    "obsessedWithRemaining": "{{name}} आपका Lavender देखेंगे।\n\nइस हफ़्ते {{remaining}} Lavender बचे हैं।",
+    "obsessedBasic": "{{name}} आपका Lavender देखेंगे।",
     "tooFarTitle": "बहुत दूर",
     "tooFarMessage": "इस व्यक्ति की खोज प्राथमिकताओं में आपका क्षेत्र शामिल नहीं है।",
     "globalSearchPremiumTitle": "वैश्विक खोज अब Premium है",
@@ -2502,9 +2527,9 @@
     "alreadyMatchedMsg": "आप पहले से {{name}} से मैच कर चुके हैं!",
     "likeError": "प्रोफाइल लाइक करने में विफल",
     "passError": "प्रोफाइल पास करने में विफल",
-    "obsessed": "दीवाना!",
-    "obsessedMsg": "{{name}} को सूचित किया जाएगा कि आप रुचि रखते हैं!",
-    "superLikeError": "Super Like भेजने में विफल",
+    "obsessed": "Lavender भेज दिया गया!",
+    "obsessedMsg": "{{name}} आपका Lavender देखेंगे!",
+    "superLikeError": "Lavender नहीं भेजा जा सका",
     "notFound": "प्रोफाइल नहीं मिली",
     "actions": {
       "pass": "पास",
@@ -2971,5 +2996,18 @@
       "bodySingular": "इस हफ़्ते {{count}} नया संगत सदस्य जुड़ा है। एक नज़र डालें।",
       "bodyPlural": "इस हफ़्ते {{count}} नए संगत सदस्य जुड़े हैं। एक नज़र डालें।"
     }
+  },
+  "standouts": {
+    "title": "चुनिंदा",
+    "subtitle": "आपके आस-पास के बेहतरीन प्रोफ़ाइल, हर 8 घंटे में नए",
+    "refreshIn": "{{time}} में नए",
+    "refreshSoon": "जल्द ही नए चुनिंदा प्रोफ़ाइल",
+    "sendLavender": "Lavender भेजें",
+    "lavenderSent": "Lavender भेज दिया गया",
+    "creditsReady": "आपके Lavender भेजने के लिए तैयार हैं।",
+    "loadError": "चुनिंदा प्रोफ़ाइल लोड नहीं हो सके। फिर से कोशिश करने के लिए स्वाइप करें।",
+    "emptyTitle": "अभी कोई चुनिंदा प्रोफ़ाइल नहीं",
+    "emptyText": "चुनिंदा प्रोफ़ाइल आपकी पसंद से मेल खाने वाले सक्रिय सदस्य होते हैं। दूरी या उम्र की सीमा बढ़ाकर देखें।",
+    "adjustPreferences": "पसंद बदलें"
   }
 }

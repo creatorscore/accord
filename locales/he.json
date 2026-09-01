@@ -96,9 +96,9 @@
     },
     "premium": {
       "upgradeTitle": "שדרג ל-Premium",
-      "superLikesMessage": "Super Likes זו תכונת Premium! שדרג כדי לשלוח 5 Super Likes בשבוע.",
-      "superLikeLimitTitle": "הגעת למגבלת Super Like",
-      "superLikeLimitMessage": "השתמשת בכל 5 ה-Super Likes השבוע. ה-Super Likes שלך יתחדשו ביום {{day}} הבא.",
+      "superLikesMessage": "Lavender הוא פיצ'ר פרימיום! שדרגו כדי לשלוח 5 Lavender בשבוע.",
+      "superLikeLimitTitle": "נגמרו ה-Lavender",
+      "superLikeLimitMessage": "שלחת את כל 5 ה-Lavender השבוע. תקבלו 5 נוספים ב{{day}} הבא.",
       "rewindMessage": "הרצה לאחור היא תכונת Premium! שדרג כדי לבטל את ההחלקה האחרונה."
     },
     "intention": {
@@ -128,14 +128,17 @@
       "placeholder": "אמור משהו נחמד...",
       "sendWithComment": "שלח לייק עם תגובה",
       "sendLike": "שלח לייק",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "נותרו {{count}} השבוע",
+      "superLikesAvailable": "{{count}} זמינים"
     },
     "dailyLimitTitle": "הגעת למגבלה היומית",
     "dailyLimitMessage": "השתמשת בכל 5 הלייקים להיום. שדרג ללייקים ללא הגבלה!",
     "quickFilter": {
       "age": "גיל",
       "datingIntentions": "כוונות היכרויות",
-      "activeToday": "פעיל היום"
+      "activeToday": "פעיל היום",
+      "boost": "בוסט"
     },
     "ageSlider": {
       "ageRange": "טווח גילאים: {{min}} - {{max}}",
@@ -198,6 +201,20 @@
       "bothLiked": "אתה ו{{name}} אהבתם זה את זה",
       "sendMessage": "שלח הודעה",
       "keepBrowsing": "המשך לגלוש"
+    },
+    "superlike": {
+      "buyMessage": "פרימיום כולל 5 Lavender בשבוע — או שלחו רק את זה.",
+      "buyOne": "קנו 1 · {{price}}",
+      "readyTitle": "ה-Lavender מוכן!",
+      "readyMessage": "הקישו שוב על Lavender כדי לשלוח.",
+      "pendingTitle": "הרכישה התקבלה",
+      "pendingMessage": "ה-Lavender שלך יופיע בעוד רגע.",
+      "purchaseFailed": "הרכישה לא הושלמה. לא חויבתם.",
+      "packsTitle": "השיגו Lavender",
+      "packsSubtitle": "תבלטו מול האנשים שחשובים לכם.",
+      "packOption": "{{count}} Lavender",
+      "packOptionOne": "‏1 Lavender",
+      "bestValue": "הכי משתלם"
     }
   },
   "filters": {
@@ -1093,7 +1110,15 @@
     "matchCountTitle": "{{current}} מתוך {{limit}} התאמות פעילות",
     "matchCountSubtitleFree": "תוכנית חינמית",
     "matchCountSubtitleWarning": "כמעט מלא — קבל התאמות ללא הגבלה",
-    "matchCountSubtitleFull": "בטל התאמה עם מישהו או שדרג לבלתי מוגבל"
+    "matchCountSubtitleFull": "בטל התאמה עם מישהו או שדרג לבלתי מוגבל",
+    "newMatchesSection": "התאמות חדשות",
+    "messagesSection": "הודעות",
+    "headerCountOne": "התאמה {{count}}",
+    "headerCount": "{{count}} התאמות",
+    "sayHiHint": "הקישו על התאמה חדשה כדי לצפות בפרופיל ולומר שלום — התאמות פגות אחרי 7 ימים ללא הודעה.",
+    "expirationWarning": "{{count}} התאמות יפוגו בעוד {{timeframe}}. שלחו הודעה כדי לשמור על הקשר!",
+    "timeframe24h": "24 שעות",
+    "timeframe3d": "3 ימים"
   },
   "messages": {
     "title": "הודעות",
@@ -2250,7 +2275,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "שליחת ה-Lavender נכשלה. נסו שוב.",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2276,9 +2301,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "Lavender נשלח!",
+    "obsessedWithRemaining": "{{name}} יראה את ה-Lavender שלך.\n\nנותרו לך {{remaining}} Lavender השבוע.",
+    "obsessedBasic": "{{name}} יראה את ה-Lavender שלך.",
     "tooFarTitle": "רחוק מדי",
     "tooFarMessage": "העדפות החיפוש של אדם זה אינן כוללות את האזור שלך.",
     "globalSearchPremiumTitle": "חיפוש גלובלי הוא עכשיו Premium",
@@ -2502,9 +2527,9 @@
     "alreadyMatchedMsg": "אתה כבר מותאם עם {{name}}!",
     "likeError": "לייק לפרופיל נכשל",
     "passError": "דילוג על הפרופיל נכשל",
-    "obsessed": "מאוהב!",
-    "obsessedMsg": "{{name}} יקבל הודעה שאתה מתעניין!",
-    "superLikeError": "שליחת Super Like נכשלה",
+    "obsessed": "Lavender נשלח!",
+    "obsessedMsg": "{{name}} יראה את ה-Lavender שלך!",
+    "superLikeError": "שליחת ה-Lavender נכשלה",
     "notFound": "הפרופיל לא נמצא",
     "actions": {
       "pass": "דלג",
@@ -2971,5 +2996,18 @@
       "bodySingular": "השבוע הצטרף {{count}} חבר מתאים חדש. בואו תראו.",
       "bodyPlural": "השבוע הצטרפו {{count}} חברים מתאימים חדשים. בואו תראו."
     }
+  },
+  "standouts": {
+    "title": "בולטים",
+    "subtitle": "הפרופילים המובילים באזורך, מתחדשים כל 8 שעות",
+    "refreshIn": "חדשים בעוד {{time}}",
+    "refreshSoon": "בקרוב בולטים חדשים",
+    "sendLavender": "שלחו Lavender",
+    "lavenderSent": "Lavender נשלח",
+    "creditsReady": "ה-Lavender שלך מוכנים לשליחה.",
+    "loadError": "טעינת הבולטים נכשלה. החליקו כדי לנסות שוב.",
+    "emptyTitle": "אין בולטים כרגע",
+    "emptyText": "הבולטים הם חברים פעילים שתואמים את ההעדפות שלך. נסו להרחיב את המרחק או טווח הגילאים.",
+    "adjustPreferences": "עדכון העדפות"
   }
 }

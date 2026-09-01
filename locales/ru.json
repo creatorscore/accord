@@ -96,9 +96,9 @@
     },
     "premium": {
       "upgradeTitle": "Улучшить до Premium",
-      "superLikesMessage": "Super Like — функция Premium! Улучшите подписку, чтобы отправлять 5 Super Like в неделю.",
-      "superLikeLimitTitle": "Лимит Super Like достигнут",
-      "superLikeLimitMessage": "Вы использовали все 5 Super Like на этой неделе. Лимит сбросится в {{day}}.",
+      "superLikesMessage": "Lavender — функция Premium! Оформите подписку и отправляйте 5 Lavender в неделю.",
+      "superLikeLimitTitle": "Lavender закончились",
+      "superLikeLimitMessage": "Вы отправили все 5 Lavender на этой неделе. Ещё 5 появятся в следующий {{day}}.",
       "rewindMessage": "Перемотка — функция Premium! Улучшите подписку, чтобы отменить последний свайп."
     },
     "intention": {
@@ -128,14 +128,17 @@
       "placeholder": "Напишите что-нибудь приятное...",
       "sendWithComment": "Отправить лайк с комментарием",
       "sendLike": "Отправить лайк",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "Осталось {{count}} на этой неделе",
+      "superLikesAvailable": "Доступно: {{count}}"
     },
     "dailyLimitTitle": "Дневной лимит исчерпан",
     "dailyLimitMessage": "Вы использовали все 5 лайков на сегодня. Обновите для безлимитных!",
     "quickFilter": {
       "age": "Возраст",
       "datingIntentions": "Намерения знакомства",
-      "activeToday": "Активен сегодня"
+      "activeToday": "Активен сегодня",
+      "boost": "Буст"
     },
     "ageSlider": {
       "ageRange": "Возрастной диапазон: {{min}} - {{max}}",
@@ -198,6 +201,20 @@
       "bothLiked": "Вы и {{name}} понравились друг другу",
       "sendMessage": "Отправить сообщение",
       "keepBrowsing": "Продолжить просмотр"
+    },
+    "superlike": {
+      "buyMessage": "Premium включает 5 Lavender в неделю — или отправьте только этот.",
+      "buyOne": "Купить 1 · {{price}}",
+      "readyTitle": "Lavender готов!",
+      "readyMessage": "Нажмите Lavender ещё раз, чтобы отправить.",
+      "pendingTitle": "Покупка получена",
+      "pendingMessage": "Ваш Lavender появится через мгновение.",
+      "purchaseFailed": "Покупка не прошла. Деньги не списаны.",
+      "packsTitle": "Получить Lavender",
+      "packsSubtitle": "Выделитесь среди тех, кто вам важен.",
+      "packOption": "Lavender: {{count}}",
+      "packOptionOne": "1 Lavender",
+      "bestValue": "Выгоднее всего"
     }
   },
   "filters": {
@@ -1093,7 +1110,15 @@
     "matchCountTitle": "{{current}} из {{limit}} активных совпадений",
     "matchCountSubtitleFree": "Бесплатный тариф",
     "matchCountSubtitleWarning": "Почти заполнено — получите безлимитные совпадения",
-    "matchCountSubtitleFull": "Отмените совпадение с кем-то или перейдите на безлимитный"
+    "matchCountSubtitleFull": "Отмените совпадение с кем-то или перейдите на безлимитный",
+    "newMatchesSection": "Новые пары",
+    "messagesSection": "Сообщения",
+    "headerCountOne": "{{count}} пара",
+    "headerCount": "Пар: {{count}}",
+    "sayHiHint": "Нажмите на новую пару, чтобы открыть профиль и поздороваться — пары истекают через 7 дней без сообщений.",
+    "expirationWarning": "Пары ({{count}}) истекают через {{timeframe}}. Отправьте сообщение, чтобы сохранить связь!",
+    "timeframe24h": "24 часа",
+    "timeframe3d": "3 дня"
   },
   "messages": {
     "title": "Сообщения",
@@ -2313,7 +2338,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "Не удалось отправить Lavender. Попробуйте ещё раз.",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2339,9 +2364,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "Lavender отправлен!",
+    "obsessedWithRemaining": "{{name}} увидит ваш Lavender.\n\nОсталось {{remaining}} Lavender на этой неделе.",
+    "obsessedBasic": "{{name}} увидит ваш Lavender.",
     "tooFarTitle": "Слишком далеко",
     "tooFarMessage": "Настройки поиска этого человека не включают вашу зону.",
     "globalSearchPremiumTitle": "Глобальный поиск теперь Premium",
@@ -2565,9 +2590,9 @@
     "alreadyMatchedMsg": "Вы уже совпали с {{name}}!",
     "likeError": "Не удалось лайкнуть профиль",
     "passError": "Не удалось пропустить профиль",
-    "obsessed": "Восхищён(а)!",
-    "obsessedMsg": "{{name}} будет уведомлён(а), что вы заинтересованы!",
-    "superLikeError": "Не удалось отправить Super Like",
+    "obsessed": "Lavender отправлен!",
+    "obsessedMsg": "{{name}} увидит ваш Lavender!",
+    "superLikeError": "Не удалось отправить Lavender",
     "notFound": "Профиль не найден",
     "actions": {
       "pass": "Пропустить",
@@ -3034,5 +3059,18 @@
       "bodySingular": "На этой неделе присоединился {{count}} новый подходящий участник. Загляните.",
       "bodyPlural": "На этой неделе присоединилось {{count}} новых подходящих участников. Загляните."
     }
+  },
+  "standouts": {
+    "title": "Лучшие",
+    "subtitle": "Лучшие профили рядом с вами, обновляются каждые 8 часов",
+    "refreshIn": "Новые через {{time}}",
+    "refreshSoon": "Скоро новые профили",
+    "sendLavender": "Отправить Lavender",
+    "lavenderSent": "Lavender отправлен",
+    "creditsReady": "Ваши Lavender готовы к отправке.",
+    "loadError": "Не удалось загрузить подборку. Проведите, чтобы повторить.",
+    "emptyTitle": "Пока нет подборки",
+    "emptyText": "Сюда попадают активные участники, соответствующие вашим предпочтениям. Попробуйте расширить дистанцию или возрастной диапазон.",
+    "adjustPreferences": "Настроить предпочтения"
   }
 }

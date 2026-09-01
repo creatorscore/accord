@@ -96,9 +96,9 @@
     },
     "premium": {
       "upgradeTitle": "升级至 Premium",
-      "superLikesMessage": "Super Likes 是 Premium 功能！升级后每周可发送 5 个 Super Likes。",
-      "superLikeLimitTitle": "Super Like 次数已用完",
-      "superLikeLimitMessage": "您本周已使用全部 5 个 Super Likes。您的 Super Likes 将在下个{{day}}重置。",
+      "superLikesMessage": "Lavender 是高级会员功能！升级后每周可发送 5 个 Lavender。",
+      "superLikeLimitTitle": "Lavender 已用完",
+      "superLikeLimitMessage": "本周的 5 个 Lavender 已全部送出，下{{day}}会再获得 5 个。",
       "rewindMessage": "回退是 Premium 功能！升级后可撤销上一次滑动。"
     },
     "intention": {
@@ -128,14 +128,17 @@
       "placeholder": "说点好听的...",
       "sendWithComment": "附评论发送喜欢",
       "sendLike": "发送喜欢",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "本周还剩 {{count}} 个",
+      "superLikesAvailable": "可用 {{count}} 个"
     },
     "dailyLimitTitle": "每日限额已达",
     "dailyLimitMessage": "您今天的5个喜欢已用完。升级获取无限喜欢！",
     "quickFilter": {
       "age": "年龄",
       "datingIntentions": "约会意图",
-      "activeToday": "今日活跃"
+      "activeToday": "今日活跃",
+      "boost": "加速"
     },
     "ageSlider": {
       "ageRange": "年龄范围：{{min}} - {{max}}",
@@ -198,6 +201,20 @@
       "bothLiked": "你和 {{name}} 互相喜欢",
       "sendMessage": "发送消息",
       "keepBrowsing": "继续浏览"
+    },
+    "superlike": {
+      "buyMessage": "高级会员每周含 5 个 Lavender——也可以只买这一个。",
+      "buyOne": "购买 1 个 · {{price}}",
+      "readyTitle": "Lavender 已就绪！",
+      "readyMessage": "再次点击 Lavender 即可送出。",
+      "pendingTitle": "已收到购买",
+      "pendingMessage": "你的 Lavender 马上就到。",
+      "purchaseFailed": "购买未完成，未产生扣款。",
+      "packsTitle": "获取 Lavender",
+      "packsSubtitle": "在你在意的人面前脱颖而出。",
+      "packOption": "{{count}} 个 Lavender",
+      "packOptionOne": "1 个 Lavender",
+      "bestValue": "最划算"
     }
   },
   "filters": {
@@ -1093,7 +1110,15 @@
     "matchCountTitle": "{{limit}} 个活跃匹配中的 {{current}} 个",
     "matchCountSubtitleFree": "免费方案",
     "matchCountSubtitleWarning": "快满了——获取无限匹配",
-    "matchCountSubtitleFull": "取消与某人的匹配，或升级以获得无限匹配"
+    "matchCountSubtitleFull": "取消与某人的匹配，或升级以获得无限匹配",
+    "newMatchesSection": "新配对",
+    "messagesSection": "消息",
+    "headerCountOne": "{{count}} 个配对",
+    "headerCount": "{{count}} 个配对",
+    "sayHiHint": "点击新配对即可查看资料并打招呼——7 天内没有消息的配对会过期。",
+    "expirationWarning": "{{count}} 个配对将在{{timeframe}}后过期。发条消息保住这段缘分吧！",
+    "timeframe24h": "24 小时",
+    "timeframe3d": "3 天"
   },
   "messages": {
     "title": "消息",
@@ -2313,7 +2338,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "Lavender 发送失败，请重试。",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2339,9 +2364,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "Lavender 已送出！",
+    "obsessedWithRemaining": "{{name}} 会看到你的 Lavender。\n\n本周还剩 {{remaining}} 个 Lavender。",
+    "obsessedBasic": "{{name}} 会看到你的 Lavender。",
     "tooFarTitle": "距离太远",
     "tooFarMessage": "此人的搜索偏好不包含你的地区。",
     "globalSearchPremiumTitle": "全球搜索现为 Premium 功能",
@@ -2565,9 +2590,9 @@
     "alreadyMatchedMsg": "你已经与 {{name}} 匹配了！",
     "likeError": "喜欢档案失败",
     "passError": "跳过档案失败",
-    "obsessed": "超喜欢！",
-    "obsessedMsg": "{{name}} 将收到你感兴趣的通知！",
-    "superLikeError": "发送 Super Like 失败",
+    "obsessed": "Lavender 已送出！",
+    "obsessedMsg": "{{name}} 会看到你的 Lavender！",
+    "superLikeError": "Lavender 发送失败",
     "notFound": "未找到档案",
     "actions": {
       "pass": "跳过",
@@ -3034,5 +3059,18 @@
       "bodySingular": "本周有 {{count}} 位新的合适会员加入。来看看吧。",
       "bodyPlural": "本周有 {{count}} 位新的合适会员加入。来看看吧。"
     }
+  },
+  "standouts": {
+    "title": "精选",
+    "subtitle": "你附近的优质资料，每 8 小时更新一次",
+    "refreshIn": "{{time}}后更新",
+    "refreshSoon": "即将推出新的精选",
+    "sendLavender": "送出 Lavender",
+    "lavenderSent": "Lavender 已送出",
+    "creditsReady": "你的 Lavender 已准备好。",
+    "loadError": "精选加载失败，滑动重试。",
+    "emptyTitle": "暂时没有精选",
+    "emptyText": "精选来自符合你偏好的活跃会员。试试扩大距离或年龄范围。",
+    "adjustPreferences": "调整偏好"
   }
 }

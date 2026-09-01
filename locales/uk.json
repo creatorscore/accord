@@ -175,9 +175,9 @@
     },
     "premium": {
       "upgradeTitle": "Покращити до Premium",
-      "superLikesMessage": "Super Like — функція Premium! Покращіть підписку, щоб надсилати 5 Super Like на тиждень.",
-      "superLikeLimitTitle": "Ліміт Super Like вичерпано",
-      "superLikeLimitMessage": "Ви використали всі 5 Super Like цього тижня. Ліміт скинеться у {{day}}.",
+      "superLikesMessage": "Lavender — це функція Premium! Оформіть підписку та надсилайте 5 Lavender на тиждень.",
+      "superLikeLimitTitle": "Lavender закінчилися",
+      "superLikeLimitMessage": "Ви надіслали всі 5 Lavender цього тижня. Ще 5 з'являться наступної {{day}}.",
       "rewindMessage": "Перемотка — функція Premium! Покращіть підписку, щоб скасувати останній свайп."
     },
     "intention": {
@@ -207,14 +207,17 @@
       "placeholder": "Напишіть щось приємне...",
       "sendWithComment": "Надіслати вподобання з коментарем",
       "sendLike": "Надіслати вподобання",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "Залишилось {{count}} цього тижня",
+      "superLikesAvailable": "Доступно: {{count}}"
     },
     "dailyLimitTitle": "Денний ліміт вичерпано",
     "dailyLimitMessage": "Ви використали всі 5 вподобань на сьогодні. Оновіть для необмежених!",
     "quickFilter": {
       "age": "Вік",
       "datingIntentions": "Наміри знайомства",
-      "activeToday": "Активний сьогодні"
+      "activeToday": "Активний сьогодні",
+      "boost": "Буст"
     },
     "ageSlider": {
       "ageRange": "Віковий діапазон: {{min}} - {{max}}",
@@ -277,6 +280,20 @@
       "bothLiked": "Ви та {{name}} сподобалися одне одному",
       "sendMessage": "Надіслати повідомлення",
       "keepBrowsing": "Продовжити перегляд"
+    },
+    "superlike": {
+      "buyMessage": "Premium включає 5 Lavender на тиждень — або надішліть лише цей.",
+      "buyOne": "Купити 1 · {{price}}",
+      "readyTitle": "Lavender готовий!",
+      "readyMessage": "Натисніть Lavender ще раз, щоб надіслати.",
+      "pendingTitle": "Покупку отримано",
+      "pendingMessage": "Ваш Lavender з'явиться за мить.",
+      "purchaseFailed": "Покупка не вдалася. Кошти не списано.",
+      "packsTitle": "Отримати Lavender",
+      "packsSubtitle": "Вирізняйтеся серед тих, хто вам важливий.",
+      "packOption": "Lavender: {{count}}",
+      "packOptionOne": "1 Lavender",
+      "bestValue": "Найвигідніше"
     }
   },
   "filters": {
@@ -1172,7 +1189,15 @@
     "matchCountTitle": "{{current}} із {{limit}} активних збігів",
     "matchCountSubtitleFree": "Безкоштовний тариф",
     "matchCountSubtitleWarning": "Майже заповнено — отримайте необмежені збіги",
-    "matchCountSubtitleFull": "Скасуйте збіг з кимось або перейдіть на необмежений тариф"
+    "matchCountSubtitleFull": "Скасуйте збіг з кимось або перейдіть на необмежений тариф",
+    "newMatchesSection": "Нові пари",
+    "messagesSection": "Повідомлення",
+    "headerCountOne": "{{count}} пара",
+    "headerCount": "Пар: {{count}}",
+    "sayHiHint": "Натисніть на нову пару, щоб відкрити профіль і привітатися — пари спливають через 7 днів без повідомлень.",
+    "expirationWarning": "Пари ({{count}}) спливають через {{timeframe}}. Надішліть повідомлення, щоб зберегти зв'язок!",
+    "timeframe24h": "24 години",
+    "timeframe3d": "3 дні"
   },
   "messages": {
     "title": "Повідомлення",
@@ -2248,7 +2273,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "Не вдалося надіслати Lavender. Спробуйте ще раз.",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2274,9 +2299,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "Lavender надіслано!",
+    "obsessedWithRemaining": "{{name}} побачить ваш Lavender.\n\nЗалишилось {{remaining}} Lavender цього тижня.",
+    "obsessedBasic": "{{name}} побачить ваш Lavender.",
     "tooFarTitle": "Занадто далеко",
     "tooFarMessage": "Налаштування пошуку цієї людини не включають вашу зону.",
     "globalSearchPremiumTitle": "Глобальний пошук тепер Premium",
@@ -2500,9 +2525,9 @@
     "alreadyMatchedMsg": "Ви вже збіглися з {{name}}!",
     "likeError": "Не вдалося вподобати профіль",
     "passError": "Не вдалося пропустити профіль",
-    "obsessed": "Захоплений(а)!",
-    "obsessedMsg": "{{name}} буде повідомлено, що ви зацікавлені!",
-    "superLikeError": "Не вдалося надіслати Super Like",
+    "obsessed": "Lavender надіслано!",
+    "obsessedMsg": "{{name}} побачить ваш Lavender!",
+    "superLikeError": "Не вдалося надіслати Lavender",
     "notFound": "Профіль не знайдено",
     "actions": {
       "pass": "Пропустити",
@@ -2969,5 +2994,18 @@
       "bodySingular": "Цього тижня приєднався {{count}} новий сумісний учасник. Зазирніть.",
       "bodyPlural": "Цього тижня приєдналося {{count}} нових сумісних учасників. Зазирніть."
     }
+  },
+  "standouts": {
+    "title": "Найкращі",
+    "subtitle": "Найкращі профілі поруч із вами, оновлюються кожні 8 годин",
+    "refreshIn": "Нові через {{time}}",
+    "refreshSoon": "Скоро нові профілі",
+    "sendLavender": "Надіслати Lavender",
+    "lavenderSent": "Lavender надіслано",
+    "creditsReady": "Ваші Lavender готові до надсилання.",
+    "loadError": "Не вдалося завантажити добірку. Проведіть, щоб повторити.",
+    "emptyTitle": "Поки що немає добірки",
+    "emptyText": "Сюди потрапляють активні учасники, що відповідають вашим уподобанням. Спробуйте розширити відстань або віковий діапазон.",
+    "adjustPreferences": "Налаштувати вподобання"
   }
 }

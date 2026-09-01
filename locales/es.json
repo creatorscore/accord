@@ -175,9 +175,9 @@
     },
     "premium": {
       "upgradeTitle": "Mejora a Premium",
-      "superLikesMessage": "¡Los Super Likes son una función Premium! Mejora para enviar 5 Super Likes por semana.",
-      "superLikeLimitTitle": "Límite de Super Like alcanzado",
-      "superLikeLimitMessage": "Has usado los 5 Super Likes de esta semana. Tus Super Likes se reiniciarán el próximo {{day}}.",
+      "superLikesMessage": "¡Los Lavenders son una función Premium! Mejora tu plan y envía 5 Lavenders por semana.",
+      "superLikeLimitTitle": "Sin Lavenders",
+      "superLikeLimitMessage": "Ya enviaste tus 5 Lavenders de esta semana. Recibirás 5 más el próximo {{day}}.",
       "rewindMessage": "¡Rebobinar es una función Premium! Mejora para deshacer tu último deslizamiento."
     },
     "intention": {
@@ -207,14 +207,17 @@
       "placeholder": "Di algo bonito...",
       "sendWithComment": "Enviar like con comentario",
       "sendLike": "Enviar like",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "{{count}} restantes esta semana",
+      "superLikesAvailable": "{{count}} disponibles"
     },
     "dailyLimitTitle": "Límite diario alcanzado",
     "dailyLimitMessage": "¡Has usado los 5 likes de hoy. Actualiza para likes ilimitados!",
     "quickFilter": {
       "age": "Edad",
       "datingIntentions": "Intenciones de citas",
-      "activeToday": "Activo hoy"
+      "activeToday": "Activo hoy",
+      "boost": "Boost"
     },
     "ageSlider": {
       "ageRange": "Rango de edad: {{min}} - {{max}}",
@@ -277,6 +280,20 @@
       "bothLiked": "A ti y a {{name}} os habéis gustado",
       "sendMessage": "Enviar mensaje",
       "keepBrowsing": "Seguir explorando"
+    },
+    "superlike": {
+      "buyMessage": "Premium incluye 5 Lavenders por semana — o envía solo este.",
+      "buyOne": "Comprar 1 · {{price}}",
+      "readyTitle": "¡Lavender listo!",
+      "readyMessage": "Toca Lavender otra vez para enviarlo.",
+      "pendingTitle": "Compra recibida",
+      "pendingMessage": "Tu Lavender aparecerá en un momento.",
+      "purchaseFailed": "La compra no se completó. No se te cobró nada.",
+      "packsTitle": "Conseguir Lavenders",
+      "packsSubtitle": "Destaca ante las personas que te importan.",
+      "packOption": "{{count}} Lavenders",
+      "packOptionOne": "1 Lavender",
+      "bestValue": "Mejor precio"
     }
   },
   "filters": {
@@ -1172,7 +1189,15 @@
     "matchCountTitle": "{{current}} de {{limit}} matches activos",
     "matchCountSubtitleFree": "Plan gratuito",
     "matchCountSubtitleWarning": "Casi lleno — obtén matches ilimitados",
-    "matchCountSubtitleFull": "Elimina un match o actualiza para tenerlos ilimitados"
+    "matchCountSubtitleFull": "Elimina un match o actualiza para tenerlos ilimitados",
+    "newMatchesSection": "Nuevos matches",
+    "messagesSection": "Mensajes",
+    "headerCountOne": "{{count}} match",
+    "headerCount": "{{count}} matches",
+    "sayHiHint": "Toca un nuevo match para ver su perfil y saludar — los matches caducan a los 7 días sin mensajes.",
+    "expirationWarning": "{{count}} matches caducan en {{timeframe}}. ¡Envía un mensaje para mantener la conexión!",
+    "timeframe24h": "24 horas",
+    "timeframe3d": "3 días"
   },
   "messages": {
     "title": "Mensajes",
@@ -2248,7 +2273,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "No se pudo enviar tu Lavender. Inténtalo de nuevo.",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2274,9 +2299,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "¡Lavender enviado!",
+    "obsessedWithRemaining": "{{name}} verá tu Lavender.\n\nTe quedan {{remaining}} Lavenders esta semana.",
+    "obsessedBasic": "{{name}} verá tu Lavender.",
     "tooFarTitle": "Demasiado lejos",
     "tooFarMessage": "Las preferencias de búsqueda de esta persona no incluyen tu área.",
     "globalSearchPremiumTitle": "Búsqueda global ahora es Premium",
@@ -2500,9 +2525,9 @@
     "alreadyMatchedMsg": "¡Ya tienes match con {{name}}!",
     "likeError": "No se pudo dar like al perfil",
     "passError": "No se pudo pasar el perfil",
-    "obsessed": "¡Obsesión!",
-    "obsessedMsg": "¡{{name}} será notificado/a de que estás interesado/a!",
-    "superLikeError": "No se pudo enviar el Super Like",
+    "obsessed": "¡Lavender enviado!",
+    "obsessedMsg": "¡{{name}} verá tu Lavender!",
+    "superLikeError": "No se pudo enviar tu Lavender",
     "notFound": "Perfil no encontrado",
     "actions": {
       "pass": "Pasar",
@@ -2969,5 +2994,18 @@
       "bodySingular": "{{count}} nuevo miembro compatible se unió esta semana. Echa un vistazo.",
       "bodyPlural": "{{count}} nuevos miembros compatibles se unieron esta semana. Echa un vistazo."
     }
+  },
+  "standouts": {
+    "title": "Destacados",
+    "subtitle": "Los mejores perfiles de tu zona, renovados cada 8 horas",
+    "refreshIn": "Nuevos en {{time}}",
+    "refreshSoon": "Pronto habrá nuevos destacados",
+    "sendLavender": "Enviar un Lavender",
+    "lavenderSent": "Lavender enviado",
+    "creditsReady": "Tus Lavenders están listos para enviar.",
+    "loadError": "No se pudieron cargar los destacados. Desliza para reintentar.",
+    "emptyTitle": "No hay destacados ahora",
+    "emptyText": "Los destacados son miembros activos que coinciden con tus preferencias. Prueba a ampliar tu distancia o rango de edad.",
+    "adjustPreferences": "Ajustar preferencias"
   }
 }

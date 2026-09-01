@@ -175,9 +175,9 @@
     },
     "premium": {
       "upgradeTitle": "განაახლეთ Premium-ზე",
-      "superLikesMessage": "Super Likes არის Premium ფუნქცია! განაახლეთ კვირაში 5 Super Like-ის გასაგზავნად.",
-      "superLikeLimitTitle": "Super Like-ის ლიმიტი ამოიწურა",
-      "superLikeLimitMessage": "თქვენ გამოიყენეთ ყველა 5 Super Like ამ კვირაში. თქვენი Super Likes განახლდება შემდეგ {{day}}-ს.",
+      "superLikesMessage": "Lavender პრემიუმ ფუნქციაა! გააქტიურეთ პრემიუმი და გააგზავნეთ კვირაში 5 Lavender.",
+      "superLikeLimitTitle": "Lavender-ები ამოიწურა",
+      "superLikeLimitMessage": "ამ კვირის ხუთივე Lavender გააგზავნეთ. კიდევ 5-ს მიიღებთ მომდევნო {{day}}.",
       "rewindMessage": "უკან დაბრუნება არის Premium ფუნქცია! განაახლეთ თქვენი ბოლო სვაიპის გასაუქმებლად."
     },
     "intention": {
@@ -207,14 +207,17 @@
       "placeholder": "თქვით რაიმე სასიამოვნო...",
       "sendWithComment": "გაგზავნეთ მოწონება კომენტარით",
       "sendLike": "მოწონების გაგზავნა",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "ამ კვირაში დარჩა {{count}}",
+      "superLikesAvailable": "ხელმისაწვდომია {{count}}"
     },
     "dailyLimitTitle": "დღიური ლიმიტი ამოიწურა",
     "dailyLimitMessage": "დღევანდელი 5 ლაიქი გამოყენებულია. განაახლეთ შეუზღუდავისთვის!",
     "quickFilter": {
       "age": "ასაკი",
       "datingIntentions": "გაცნობის მიზნები",
-      "activeToday": "დღეს აქტიური"
+      "activeToday": "დღეს აქტიური",
+      "boost": "ბუსტი"
     },
     "ageSlider": {
       "ageRange": "ასაკის დიაპაზონი: {{min}} - {{max}}",
@@ -277,6 +280,20 @@
       "bothLiked": "თქვენ და {{name}} მოეწონეთ ერთმანეთს",
       "sendMessage": "შეტყობინების გაგზავნა",
       "keepBrowsing": "დათვალიერების გაგრძელება"
+    },
+    "superlike": {
+      "buyMessage": "პრემიუმი მოიცავს კვირაში 5 Lavender-ს — ან გააგზავნეთ მხოლოდ ეს ერთი.",
+      "buyOne": "იყიდეთ 1 · {{price}}",
+      "readyTitle": "Lavender მზადაა!",
+      "readyMessage": "გასაგზავნად კვლავ შეეხეთ Lavender-ს.",
+      "pendingTitle": "შენაძენი მიღებულია",
+      "pendingMessage": "თქვენი Lavender ცოტა ხანში გამოჩნდება.",
+      "purchaseFailed": "შენაძენი ვერ შედგა. თანხა არ ჩამოგეჭრათ.",
+      "packsTitle": "მიიღეთ Lavender-ები",
+      "packsSubtitle": "გამოირჩიეთ მათთვის, ვინც თქვენთვის მნიშვნელოვანია.",
+      "packOption": "{{count}} Lavender",
+      "packOptionOne": "1 Lavender",
+      "bestValue": "საუკეთესო ფასი"
     }
   },
   "filters": {
@@ -1172,7 +1189,15 @@
     "matchCountTitle": "{{current}} {{limit}}-დან აქტიური დამთხვევა",
     "matchCountSubtitleFree": "უფასო გეგმა",
     "matchCountSubtitleWarning": "თითქმის სავსეა — მიიღეთ შეუზღუდავი დამთხვევები",
-    "matchCountSubtitleFull": "გააუქმეთ ვინმესთან დამთხვევა ან გადადით შეუზღუდავზე"
+    "matchCountSubtitleFull": "გააუქმეთ ვინმესთან დამთხვევა ან გადადით შეუზღუდავზე",
+    "newMatchesSection": "ახალი დამთხვევები",
+    "messagesSection": "შეტყობინებები",
+    "headerCountOne": "{{count}} დამთხვევა",
+    "headerCount": "{{count}} დამთხვევა",
+    "sayHiHint": "შეეხეთ ახალ დამთხვევას პროფილის სანახავად და მისალმებისთვის — შეტყობინების გარეშე დამთხვევები 7 დღეში იწურება.",
+    "expirationWarning": "{{count}} დამთხვევა იწურება {{timeframe}}-ში. გააგზავნეთ შეტყობინება კავშირის შესანარჩუნებლად!",
+    "timeframe24h": "24 საათი",
+    "timeframe3d": "3 დღე"
   },
   "messages": {
     "title": "შეტყობინებები",
@@ -2248,7 +2273,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "Lavender-ის გაგზავნა ვერ მოხერხდა. სცადეთ ხელახლა.",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2274,9 +2299,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "Lavender გაიგზავნა!",
+    "obsessedWithRemaining": "{{name}} დაინახავს თქვენს Lavender-ს.\n\nამ კვირაში დარჩა {{remaining}} Lavender.",
+    "obsessedBasic": "{{name}} დაინახავს თქვენს Lavender-ს.",
     "tooFarTitle": "ძალიან შორს",
     "tooFarMessage": "ამ ადამიანის ძიების პრეფერენციები არ მოიცავს თქვენს ტერიტორიას.",
     "globalSearchPremiumTitle": "გლობალური ძიება ახლა Premium-ია",
@@ -2500,9 +2525,9 @@
     "alreadyMatchedMsg": "თქვენ უკვე დამატჩებული ხართ {{name}}-თან!",
     "likeError": "პროფილის მოწონება ვერ მოხერხდა",
     "passError": "პროფილის გამოტოვება ვერ მოხერხდა",
-    "obsessed": "აღტაცებული!",
-    "obsessedMsg": "{{name}} შეტყობინებას მიიღებს, რომ დაინტერესებული ხართ!",
-    "superLikeError": "Super Like-ის გაგზავნა ვერ მოხერხდა",
+    "obsessed": "Lavender გაიგზავნა!",
+    "obsessedMsg": "{{name}} დაინახავს თქვენს Lavender-ს!",
+    "superLikeError": "Lavender-ის გაგზავნა ვერ მოხერხდა",
     "notFound": "პროფილი ვერ მოიძებნა",
     "actions": {
       "pass": "გამოტოვება",
@@ -2969,5 +2994,18 @@
       "bodySingular": "ამ კვირაში შემოუერთდა {{count}} ახალი თავსებადი წევრი. გადახედეთ.",
       "bodyPlural": "ამ კვირაში შემოუერთდა {{count}} ახალი თავსებადი წევრი. გადახედეთ."
     }
+  },
+  "standouts": {
+    "title": "გამორჩეულები",
+    "subtitle": "საუკეთესო პროფილები თქვენს არეალში, ახლდება ყოველ 8 საათში",
+    "refreshIn": "ახალი {{time}}-ში",
+    "refreshSoon": "მალე ახალი გამორჩეულები",
+    "sendLavender": "გააგზავნეთ Lavender",
+    "lavenderSent": "Lavender გაიგზავნა",
+    "creditsReady": "თქვენი Lavender-ები გასაგზავნად მზადაა.",
+    "loadError": "გამორჩეულების ჩატვირთვა ვერ მოხერხდა. გაასრიალეთ ხელახლა საცდელად.",
+    "emptyTitle": "ამჟამად გამორჩეულები არ არის",
+    "emptyText": "გამორჩეულები აქტიური წევრები არიან, რომლებიც თქვენს პრეფერენციებს ემთხვევა. სცადეთ მანძილის ან ასაკის დიაპაზონის გაფართოება.",
+    "adjustPreferences": "პრეფერენციების შეცვლა"
   }
 }

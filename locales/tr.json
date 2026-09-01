@@ -96,9 +96,9 @@
     },
     "premium": {
       "upgradeTitle": "Premium'a Yükselt",
-      "superLikesMessage": "Super Like bir Premium özelliğidir! Haftada 5 Super Like göndermek için yükseltin.",
-      "superLikeLimitTitle": "Super Like Limiti Doldu",
-      "superLikeLimitMessage": "Bu hafta 5 Super Like'ınızın hepsini kullandınız. Super Like'larınız {{day}} günü sıfırlanacak.",
+      "superLikesMessage": "Lavender bir Premium özelliğidir! Yükselt ve haftada 5 Lavender gönder.",
+      "superLikeLimitTitle": "Lavender kalmadı",
+      "superLikeLimitMessage": "Bu haftaki 5 Lavender'ının hepsini gönderdin. Önümüzdeki {{day}} 5 tane daha alacaksın.",
       "rewindMessage": "Geri Alma bir Premium özelliğidir! Son kaydırmanızı geri almak için yükseltin."
     },
     "intention": {
@@ -128,14 +128,17 @@
       "placeholder": "Güzel bir şey yazın...",
       "sendWithComment": "Yorumlu Beğeni Gönder",
       "sendLike": "Beğeni Gönder",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "Bu hafta {{count}} kaldı",
+      "superLikesAvailable": "{{count}} kullanılabilir"
     },
     "dailyLimitTitle": "Günlük limite ulaşıldı",
     "dailyLimitMessage": "Bugünkü 5 beğeniyi kullandınız. Sınırsız için yükseltin!",
     "quickFilter": {
       "age": "Yaş",
       "datingIntentions": "Tanışma Niyetleri",
-      "activeToday": "Bugün Aktif"
+      "activeToday": "Bugün Aktif",
+      "boost": "Boost"
     },
     "ageSlider": {
       "ageRange": "Yaş Aralığı: {{min}} - {{max}}",
@@ -198,6 +201,20 @@
       "bothLiked": "Sen ve {{name}} birbirinizi beğendiniz",
       "sendMessage": "Mesaj Gönder",
       "keepBrowsing": "Göz Atmaya Devam Et"
+    },
+    "superlike": {
+      "buyMessage": "Premium haftada 5 Lavender içerir — ya da sadece bunu gönder.",
+      "buyOne": "1 satın al · {{price}}",
+      "readyTitle": "Lavender hazır!",
+      "readyMessage": "Göndermek için Lavender'a tekrar dokun.",
+      "pendingTitle": "Satın alma alındı",
+      "pendingMessage": "Lavender'ın birazdan görünecek.",
+      "purchaseFailed": "Satın alma tamamlanamadı. Ücret alınmadı.",
+      "packsTitle": "Lavender edin",
+      "packsSubtitle": "Önemsediğin kişilerin gözüne çarp.",
+      "packOption": "{{count}} Lavender",
+      "packOptionOne": "1 Lavender",
+      "bestValue": "En avantajlı"
     }
   },
   "filters": {
@@ -1099,7 +1116,15 @@
     "matchCountTitle": "{{limit}} aktif eşleşmeden {{current}} tanesi",
     "matchCountSubtitleFree": "Ücretsiz plan",
     "matchCountSubtitleWarning": "Neredeyse dolu — sınırsız eşleşme al",
-    "matchCountSubtitleFull": "Birinin eşleşmesini kaldır veya sınırsıza yükselt"
+    "matchCountSubtitleFull": "Birinin eşleşmesini kaldır veya sınırsıza yükselt",
+    "newMatchesSection": "Yeni eşleşmeler",
+    "messagesSection": "Mesajlar",
+    "headerCountOne": "{{count}} eşleşme",
+    "headerCount": "{{count}} eşleşme",
+    "sayHiHint": "Profili görüntüleyip merhaba demek için yeni bir eşleşmeye dokun — eşleşmeler mesaj olmadan 7 gün sonra sona erer.",
+    "expirationWarning": "{{count}} eşleşme {{timeframe}} içinde sona erecek. Bağlantıyı korumak için bir mesaj gönder!",
+    "timeframe24h": "24 saat",
+    "timeframe3d": "3 gün"
   },
   "messages": {
     "title": "Mesajlar",
@@ -2319,7 +2344,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "Lavender gönderilemedi. Lütfen tekrar deneyin.",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2345,9 +2370,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "Lavender gönderildi!",
+    "obsessedWithRemaining": "{{name}} Lavender'ını görecek.\n\nBu hafta {{remaining}} Lavender kaldı.",
+    "obsessedBasic": "{{name}} Lavender'ını görecek.",
     "tooFarTitle": "Çok Uzak",
     "tooFarMessage": "Bu kişinin arama tercihleri bölgenizi kapsamıyor.",
     "globalSearchPremiumTitle": "Küresel Arama Artık Premium",
@@ -2571,9 +2596,9 @@
     "alreadyMatchedMsg": "{{name}} ile zaten eşleştiniz!",
     "likeError": "Profil beğenilemedi",
     "passError": "Profil geçilemedi",
-    "obsessed": "Hayranım!",
-    "obsessedMsg": "{{name}} ilginizi duyduğunuz konusunda bilgilendirilecek!",
-    "superLikeError": "Super Like gönderilemedi",
+    "obsessed": "Lavender gönderildi!",
+    "obsessedMsg": "{{name}} Lavender'ını görecek!",
+    "superLikeError": "Lavender gönderilemedi",
     "notFound": "Profil bulunamadı",
     "actions": {
       "pass": "Geç",
@@ -3040,5 +3065,18 @@
       "bodySingular": "Bu hafta {{count}} yeni uyumlu üye katıldı. Göz at.",
       "bodyPlural": "Bu hafta {{count}} yeni uyumlu üye katıldı. Göz at."
     }
+  },
+  "standouts": {
+    "title": "Öne Çıkanlar",
+    "subtitle": "Bölgendeki en iyi profiller, her 8 saatte bir yenilenir",
+    "refreshIn": "{{time}} içinde yenileri",
+    "refreshSoon": "Yakında yeni profiller",
+    "sendLavender": "Lavender gönder",
+    "lavenderSent": "Lavender gönderildi",
+    "creditsReady": "Lavender'ların göndermeye hazır.",
+    "loadError": "Öne çıkanlar yüklenemedi. Yenilemek için kaydır.",
+    "emptyTitle": "Şu anda öne çıkan yok",
+    "emptyText": "Öne çıkanlar, tercihlerinle eşleşen aktif üyelerdir. Mesafeni veya yaş aralığını genişletmeyi dene.",
+    "adjustPreferences": "Tercihleri düzenle"
   }
 }

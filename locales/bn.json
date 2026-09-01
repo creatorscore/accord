@@ -96,9 +96,9 @@
     },
     "premium": {
       "upgradeTitle": "Premium-এ আপগ্রেড করুন",
-      "superLikesMessage": "Super Likes একটি Premium ফিচার! প্রতি সপ্তাহে 5টি Super Like পাঠাতে আপগ্রেড করুন।",
-      "superLikeLimitTitle": "Super Like সীমায় পৌঁছেছে",
-      "superLikeLimitMessage": "আপনি এই সপ্তাহে সব 5টি Super Like ব্যবহার করেছেন। আপনার Super Like পরবর্তী {{day}} রিসেট হবে।",
+      "superLikesMessage": "Lavender একটি প্রিমিয়াম সুবিধা! আপগ্রেড করে সপ্তাহে ৫টি Lavender পাঠান।",
+      "superLikeLimitTitle": "Lavender শেষ",
+      "superLikeLimitMessage": "এই সপ্তাহের ৫টি Lavender-ই পাঠিয়ে ফেলেছেন। আগামী {{day}} আরও ৫টি পাবেন।",
       "rewindMessage": "রিওয়াইন্ড একটি Premium ফিচার! আপনার শেষ স্বাইপ পূর্বাবস্থায় ফেরাতে আপগ্রেড করুন।"
     },
     "intention": {
@@ -128,14 +128,17 @@
       "placeholder": "কিছু সুন্দর বলুন...",
       "sendWithComment": "মন্তব্য সহ লাইক পাঠান",
       "sendLike": "লাইক পাঠান",
-      "obsessed": "Lavender"
+      "obsessed": "Lavender",
+      "superLikesLeftWeek": "এই সপ্তাহে {{count}}টি বাকি",
+      "superLikesAvailable": "{{count}}টি ব্যবহারযোগ্য"
     },
     "dailyLimitTitle": "দৈনিক সীমা পৌঁছেছে",
     "dailyLimitMessage": "আজকের ৫টি লাইক শেষ হয়েছে। আনলিমিটেডের জন্য আপগ্রেড করুন!",
     "quickFilter": {
       "age": "বয়স",
       "datingIntentions": "ডেটিং উদ্দেশ্য",
-      "activeToday": "আজ সক্রিয়"
+      "activeToday": "আজ সক্রিয়",
+      "boost": "বুস্ট"
     },
     "ageSlider": {
       "ageRange": "বয়সের পরিসর: {{min}} - {{max}}",
@@ -198,6 +201,20 @@
       "bothLiked": "আপনি এবং {{name}} একে অপরকে পছন্দ করেছেন",
       "sendMessage": "একটি বার্তা পাঠান",
       "keepBrowsing": "ব্রাউজিং চালিয়ে যান"
+    },
+    "superlike": {
+      "buyMessage": "প্রিমিয়ামে সপ্তাহে ৫টি Lavender থাকে — অথবা শুধু এটিই পাঠান।",
+      "buyOne": "১টি কিনুন · {{price}}",
+      "readyTitle": "Lavender প্রস্তুত!",
+      "readyMessage": "পাঠাতে আবার Lavender-এ ট্যাপ করুন।",
+      "pendingTitle": "কেনাকাটা গৃহীত",
+      "pendingMessage": "আপনার Lavender একটু পরেই দেখা যাবে।",
+      "purchaseFailed": "কেনাকাটা সম্পন্ন হয়নি। কোনো টাকা কাটা হয়নি।",
+      "packsTitle": "Lavender নিন",
+      "packsSubtitle": "যাঁরা আপনার কাছে গুরুত্বপূর্ণ, তাঁদের নজরে আসুন।",
+      "packOption": "{{count}}টি Lavender",
+      "packOptionOne": "১টি Lavender",
+      "bestValue": "সেরা দাম"
     }
   },
   "filters": {
@@ -1093,7 +1110,15 @@
     "matchCountTitle": "{{limit}}-এর মধ্যে {{current}}টি সক্রিয় ম্যাচ",
     "matchCountSubtitleFree": "ফ্রি প্ল্যান",
     "matchCountSubtitleWarning": "প্রায় পূর্ণ — সীমাহীন ম্যাচ পান",
-    "matchCountSubtitleFull": "কাউকে আনম্যাচ করুন বা সীমাহীনের জন্য আপগ্রেড করুন"
+    "matchCountSubtitleFull": "কাউকে আনম্যাচ করুন বা সীমাহীনের জন্য আপগ্রেড করুন",
+    "newMatchesSection": "নতুন ম্যাচ",
+    "messagesSection": "বার্তা",
+    "headerCountOne": "{{count}}টি ম্যাচ",
+    "headerCount": "{{count}}টি ম্যাচ",
+    "sayHiHint": "নতুন ম্যাচে ট্যাপ করে প্রোফাইল দেখুন ও হাই বলুন — বার্তা ছাড়া ম্যাচ ৭ দিনে মেয়াদোত্তীর্ণ হয়।",
+    "expirationWarning": "{{count}}টি ম্যাচ {{timeframe}} পরে মেয়াদোত্তীর্ণ হবে। সংযোগ ধরে রাখতে একটি বার্তা পাঠান!",
+    "timeframe24h": "২৪ ঘণ্টা",
+    "timeframe3d": "৩ দিন"
   },
   "messages": {
     "title": "মেসেজসমূহ",
@@ -2313,7 +2338,7 @@
     "stopRecordingFailed": "Failed to stop recording",
     "profileLoadError": "Failed to load your profile",
     "profilesLoadError": "Failed to load profiles",
-    "superLikeError": "Failed to send super like. Please try again.",
+    "superLikeError": "Lavender পাঠানো যায়নি। আবার চেষ্টা করুন।",
     "noRecentSwipes": "There are no recent swipes to undo.",
     "swipeUndone": "Your last swipe has been undone.",
     "undoSwipeError": "Failed to undo swipe. Please try again.",
@@ -2339,9 +2364,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "Lavender পাঠানো হয়েছে!",
+    "obsessedWithRemaining": "{{name}} আপনার Lavender দেখতে পাবেন।\n\nএই সপ্তাহে {{remaining}}টি Lavender বাকি আছে।",
+    "obsessedBasic": "{{name}} আপনার Lavender দেখতে পাবেন।",
     "tooFarTitle": "অনেক দূরে",
     "tooFarMessage": "এই ব্যক্তির অনুসন্ধান পছন্দ আপনার এলাকা অন্তর্ভুক্ত করে না।",
     "globalSearchPremiumTitle": "গ্লোবাল সার্চ এখন Premium",
@@ -2565,9 +2590,9 @@
     "alreadyMatchedMsg": "আপনি ইতিমধ্যে {{name}}-এর সাথে ম্যাচ!",
     "likeError": "প্রোফাইল লাইক করতে ব্যর্থ",
     "passError": "প্রোফাইল পাস করতে ব্যর্থ",
-    "obsessed": "মুগ্ধ!",
-    "obsessedMsg": "{{name}}-কে জানানো হবে যে আপনি আগ্রহী!",
-    "superLikeError": "Super Like পাঠাতে ব্যর্থ",
+    "obsessed": "Lavender পাঠানো হয়েছে!",
+    "obsessedMsg": "{{name}} আপনার Lavender দেখতে পাবেন!",
+    "superLikeError": "Lavender পাঠানো যায়নি",
     "notFound": "প্রোফাইল পাওয়া যায়নি",
     "actions": {
       "pass": "পাস",
@@ -3034,5 +3059,18 @@
       "bodySingular": "এই সপ্তাহে {{count}} নতুন সামঞ্জস্যপূর্ণ সদস্য যোগ দিয়েছেন। একবার দেখুন।",
       "bodyPlural": "এই সপ্তাহে {{count}} নতুন সামঞ্জস্যপূর্ণ সদস্য যোগ দিয়েছেন। একবার দেখুন।"
     }
+  },
+  "standouts": {
+    "title": "সেরা প্রোফাইল",
+    "subtitle": "আপনার এলাকার সেরা প্রোফাইল, প্রতি ৮ ঘণ্টায় নতুন",
+    "refreshIn": "{{time}} পরে নতুন",
+    "refreshSoon": "শিগগিরই নতুন সেরা প্রোফাইল",
+    "sendLavender": "Lavender পাঠান",
+    "lavenderSent": "Lavender পাঠানো হয়েছে",
+    "creditsReady": "আপনার Lavender পাঠানোর জন্য প্রস্তুত।",
+    "loadError": "সেরা প্রোফাইল লোড করা যায়নি। আবার চেষ্টা করতে সোয়াইপ করুন।",
+    "emptyTitle": "এখন কোনো সেরা প্রোফাইল নেই",
+    "emptyText": "সেরা প্রোফাইল হলেন আপনার পছন্দের সাথে মেলা সক্রিয় সদস্যরা। দূরত্ব বা বয়সের পরিসর বাড়িয়ে দেখুন।",
+    "adjustPreferences": "পছন্দ পরিবর্তন করুন"
   }
 }
