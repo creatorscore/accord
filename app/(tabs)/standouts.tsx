@@ -18,6 +18,7 @@ import PremiumPaywall from '@/components/premium/PremiumPaywall';
 import LavenderPacksModal from '@/components/premium/LavenderPacksModal';
 import { getSuperLikePackage, getSuperLikePackages, getPriceString } from '@/lib/revenue-cat';
 import { sendSuperLike, purchaseSuperLikeCredits, WEEKLY_SUPER_LIKE_LIMIT } from '@/lib/super-like';
+import { getSignedUrls } from '@/lib/signed-urls';
 import { trackEvent } from '@/lib/analytics';
 import HandshakeLoader from '@/components/shared/HandshakeLoader';
 
@@ -42,6 +43,7 @@ interface Standout {
   photo_verified: boolean;
   distance_miles?: number | null;
   photo_url?: string | null;
+  photo_storage_path?: string | null;
   photo_blur_enabled: boolean;
   standout_position: number;
   computed_at: string;
@@ -240,7 +242,27 @@ export default function Standouts() {
         showToast({ type: 'error', title: t('common.error'), message: t('standouts.loadError', { defaultValue: 'Couldn’t load standouts. Pull to retry.' }) });
         return;
       }
-      setStandouts((data as Standout[]) || []);
+
+      // Raw photos.url is not reliable — re-sign storage paths in one batch,
+      // exactly like the matches/messages screens do.
+      const rows = (data as Standout[]) || [];
+      const photoPaths = rows.map((r) => r.photo_storage_path || r.photo_url || '');
+      const validIndices: number[] = [];
+      const validPaths: string[] = [];
+      photoPaths.forEach((p, i) => {
+        if (p) { validIndices.push(i); validPaths.push(p); }
+      });
+      if (validPaths.length > 0) {
+        try {
+          const signed = await getSignedUrls('profile-photos', validPaths);
+          for (let j = 0; j < signed.length; j++) {
+            if (signed[j]) rows[validIndices[j]] = { ...rows[validIndices[j]], photo_url: signed[j] };
+          }
+        } catch (e) {
+          console.error('Standouts photo signing failed:', e);
+        }
+      }
+      setStandouts(rows);
     } finally {
       setLoading(false);
       setRefreshing(false);
