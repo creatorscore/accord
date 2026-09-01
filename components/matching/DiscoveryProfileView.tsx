@@ -1254,7 +1254,14 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                   <MaterialCommunityIcons name="star" size={20} color="#78350F" />
                   <Text style={[styles.likeChoicePrimaryText, { color: '#78350F' }]}>{t('discover.like.obsessed')}</Text>
                   <View style={styles.likeChoiceCountBadge}>
-                    <Text style={styles.likeChoiceCountBadgeText}>{superLikesRemaining}</Text>
+                    {/* Labeled, not a bare number: a premium user read the
+                        bare "3" here as her remaining DAILY LIKES and filed a
+                        support ticket that premium wasn't giving her unlimited
+                        likes. Scarce-resource counters must say what they
+                        count. */}
+                    <Text style={styles.likeChoiceCountBadgeText}>
+                      {t('discover.like.superLikesLeftWeek', { count: superLikesRemaining, defaultValue: '{{count}} left this week' })}
+                    </Text>
                   </View>
                 </LinearGradient>
               </TouchableOpacity>

@@ -308,7 +308,7 @@ CREATE TABLE likes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   liker_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   liked_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  like_type VARCHAR DEFAULT 'standard', -- standard, super
+  like_type VARCHAR DEFAULT 'standard', -- standard, super_like (NOT 'super' — the client and enforce_like_limits both use 'super_like'; the activity-feed triggers still wrongly test 'super')
   message TEXT, -- Optional intro message for super likes
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(liker_profile_id, liked_profile_id)
