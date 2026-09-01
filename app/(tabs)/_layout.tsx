@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -63,6 +63,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="standouts"
+        options={{
+          title: t('tabs.standouts', { defaultValue: 'Standouts' }),
+          tabBarIcon: ({ focused }) => (
+            <MaterialCommunityIcons name="flower" size={24} color={focused ? ACTIVE_ICON : INACTIVE_ICON} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="likes"
         options={{
           title: t('tabs.likes'),
@@ -85,17 +94,8 @@ export default function TabsLayout() {
         options={{
           title: t('tabs.matches'),
           tabBarIcon: ({ focused }) => (
-            <FontAwesome5 name="heart" size={22} color={focused ? ACTIVE_ICON : INACTIVE_ICON} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="messages"
-        options={{
-          title: t('tabs.messages'),
-          tabBarIcon: ({ focused }) => (
             <View>
-              <FontAwesome5 name="comment-alt" size={22} color={focused ? ACTIVE_ICON : INACTIVE_ICON} />
+              <FontAwesome5 name="heart" size={22} color={focused ? ACTIVE_ICON : INACTIVE_ICON} />
               {unreadMessageCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
@@ -107,6 +107,8 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {/* Messages merged into Matches — route kept for deep links, tab hidden */}
+      <Tabs.Screen name="messages" options={{ href: null }} />
       <Tabs.Screen
         name="profile"
         options={{

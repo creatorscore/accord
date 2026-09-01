@@ -1,10 +1,24 @@
 {
   "tabs": {
     "discover": "Discover",
+    "standouts": "Standouts",
     "likes": "Likes",
     "matches": "Matches",
     "messages": "Messages",
     "profile": "Profile"
+  },
+  "standouts": {
+    "title": "Standouts",
+    "subtitle": "Top profiles in your area, refreshed every 8 hours",
+    "refreshIn": "New in {{time}}",
+    "refreshSoon": "New standouts soon",
+    "sendLavender": "Send a Lavender",
+    "lavenderSent": "Lavender sent",
+    "creditsReady": "Your Lavenders are ready to send.",
+    "loadError": "Couldn’t load standouts. Pull to retry.",
+    "emptyTitle": "No standouts right now",
+    "emptyText": "Standouts come from active members who match your preferences. Try widening your distance or age range.",
+    "adjustPreferences": "Adjust preferences"
   },
   "auth": {
     "welcome": {
@@ -1476,6 +1490,12 @@
     "upgradeToSee": "Upgrade to see",
     "sayHi": "Say hi! 👋",
     "youLabel": "You: ",
+    "newMatchesSection": "New matches",
+    "messagesSection": "Messages",
+    "headerCountOne": "{{count}} match",
+    "headerCount": "{{count}} matches",
+    "sayHiHint": "Tap a new match to view their profile and say hi — matches expire after 7 days without a message.",
+    "expirationWarning": "{{count}} matches expire in {{timeframe}}. Send a message to keep the connection!",
     "timeAgo": {
       "justNow": "Just now",
       "minutesAgo": "{{count}}m ago",
