@@ -189,7 +189,7 @@
     "swipe": {
       "like": "CURTIR",
       "nope": "NÃO",
-      "obsessed": "APAIXONADO"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% Match"
@@ -2506,7 +2506,7 @@
     "notFound": "Perfil não encontrado",
     "actions": {
       "pass": "Passar",
-      "obsessed": "Apaixonado",
+      "obsessed": "Lavender",
       "like": "Curtir",
       "blurPhotos": "Desfocar minhas fotos",
       "revealPhotos": "Revelar minhas fotos",

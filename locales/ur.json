@@ -110,7 +110,7 @@
     "swipe": {
       "like": "لائک",
       "nope": "نہیں",
-      "obsessed": "دیوانہ"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% میچ"
@@ -2514,7 +2514,7 @@
     "notFound": "پروفائل نہیں ملی",
     "actions": {
       "pass": "پاس",
-      "obsessed": "دیوانہ",
+      "obsessed": "Lavender",
       "like": "لائک",
       "blurPhotos": "میری تصاویر دھندلی کریں",
       "revealPhotos": "میری تصاویر دکھائیں",

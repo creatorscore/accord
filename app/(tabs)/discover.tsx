@@ -204,7 +204,7 @@ export default function Discover() {
           showToast({
             type: 'success',
             title: t('discover.superlike.readyTitle', { defaultValue: 'Super Like ready!' }),
-            message: t('discover.superlike.readyMessage', { defaultValue: 'Tap Obsessed again to send it.' }),
+            message: t('discover.superlike.readyMessage', { defaultValue: 'Tap Lavender again to send it.' }),
           });
           return;
         }

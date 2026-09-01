@@ -110,7 +110,7 @@
     "swipe": {
       "like": "লাইক",
       "nope": "না",
-      "obsessed": "মুগ্ধ"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% ম্যাচ"
@@ -2571,7 +2571,7 @@
     "notFound": "প্রোফাইল পাওয়া যায়নি",
     "actions": {
       "pass": "পাস",
-      "obsessed": "মুগ্ধ",
+      "obsessed": "Lavender",
       "like": "লাইক",
       "blurPhotos": "আমার ছবি ঝাপসা করুন",
       "revealPhotos": "আমার ছবি প্রকাশ করুন",

@@ -110,7 +110,7 @@
     "swipe": {
       "like": "喜欢",
       "nope": "跳过",
-      "obsessed": "超喜欢"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% 匹配"
@@ -2571,7 +2571,7 @@
     "notFound": "未找到档案",
     "actions": {
       "pass": "跳过",
-      "obsessed": "超喜欢",
+      "obsessed": "Lavender",
       "like": "喜欢",
       "blurPhotos": "模糊我的照片",
       "revealPhotos": "展示我的照片",

@@ -189,7 +189,7 @@
     "swipe": {
       "like": "ПОДОБАЄТЬСЯ",
       "nope": "ПРОПУСТИТИ",
-      "obsessed": "ЗАХОПЛЕНИЙ(А)"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% збіг"
@@ -2506,7 +2506,7 @@
     "notFound": "Профіль не знайдено",
     "actions": {
       "pass": "Пропустити",
-      "obsessed": "Захоплений(а)",
+      "obsessed": "Lavender",
       "like": "Вподобати",
       "blurPhotos": "Розмити мої фото",
       "revealPhotos": "Показати мої фото",

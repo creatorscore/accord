@@ -110,7 +110,7 @@
     "swipe": {
       "like": "SUKA",
       "nope": "TIDAK",
-      "obsessed": "TERPESONA"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% Cocok"
@@ -2571,7 +2571,7 @@
     "notFound": "Profil tidak ditemukan",
     "actions": {
       "pass": "Lewati",
-      "obsessed": "Terpesona",
+      "obsessed": "Lavender",
       "like": "Suka",
       "blurPhotos": "Buramkan Foto Saya",
       "revealPhotos": "Tampilkan Foto Saya",

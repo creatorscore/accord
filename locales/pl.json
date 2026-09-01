@@ -189,7 +189,7 @@
     "swipe": {
       "like": "LUBIĘ",
       "nope": "NIE",
-      "obsessed": "ZACHWYCONY/A"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% dopasowania"
@@ -2506,7 +2506,7 @@
     "notFound": "Profil nie został znaleziony",
     "actions": {
       "pass": "Pomiń",
-      "obsessed": "Zachwycony/a",
+      "obsessed": "Lavender",
       "like": "Polub",
       "blurPhotos": "Rozmyj moje zdjęcia",
       "revealPhotos": "Pokaż moje zdjęcia",

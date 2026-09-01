@@ -110,7 +110,7 @@
     "swipe": {
       "like": "إعجاب",
       "nope": "لا",
-      "obsessed": "مُعجب جداً"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% تطابق"
@@ -2508,7 +2508,7 @@
     "notFound": "لم يتم العثور على الملف الشخصي",
     "actions": {
       "pass": "تمرير",
-      "obsessed": "مُعجب جداً",
+      "obsessed": "Lavender",
       "like": "إعجاب",
       "blurPhotos": "تعتيم صوري",
       "revealPhotos": "كشف صوري",

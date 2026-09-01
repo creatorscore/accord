@@ -346,7 +346,7 @@
     "swipe": {
       "like": "LIKE",
       "nope": "NOPE",
-      "obsessed": "OBSESSED"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% Match"
@@ -2954,13 +2954,13 @@
     "alreadyMatchedMsg": "You're already matched with {{name}}!",
     "likeError": "Failed to like profile",
     "passError": "Failed to pass profile",
-    "obsessed": "Obsessed!",
-    "obsessedMsg": "{{name}} will be notified that you're interested!",
-    "superLikeError": "Failed to send super like",
+    "obsessed": "Lavender sent!",
+    "obsessedMsg": "{{name}} will see your Lavender!",
+    "superLikeError": "Failed to send your Lavender",
     "notFound": "Profile not found",
     "actions": {
       "pass": "Pass",
-      "obsessed": "Obsessed",
+      "obsessed": "Lavender",
       "like": "Like",
       "blurPhotos": "Blur My Photos",
       "revealPhotos": "Reveal My Photos",

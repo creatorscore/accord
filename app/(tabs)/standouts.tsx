@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Alert, RefreshControl, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Alert, StyleSheet, useWindowDimensions } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -59,12 +59,16 @@ function StandoutCard({
   onLavender,
   onOpenProfile,
   isDark,
+  cardWidth,
+  cardHeight,
 }: {
   standout: Standout;
   sent: boolean;
   onLavender: (s: Standout) => void;
   onOpenProfile: (s: Standout) => void;
   isDark: boolean;
+  cardWidth: number;
+  cardHeight: number;
 }) {
   const { t } = useTranslation();
   const { imageUri, blurRadius, onImageLoad, onImageError } = usePhotoBlur({
@@ -81,8 +85,8 @@ function StandoutCard({
   const place = [standout.location_city, standout.location_state].filter(Boolean).join(', ');
 
   return (
-    <View style={[styles.card, { backgroundColor: isDark ? '#1C1B22' : '#FFFFFF' }]}>
-      <TouchableOpacity activeOpacity={0.92} onPress={() => onOpenProfile(standout)}>
+    <View style={[styles.card, { backgroundColor: isDark ? '#1C1B22' : '#FFFFFF', width: cardWidth, height: cardHeight }]}>
+      <TouchableOpacity activeOpacity={0.92} onPress={() => onOpenProfile(standout)} style={{ flex: 1 }}>
         <View style={styles.photoWrap}>
           <SafeBlurImage
             source={{ uri: imageUri }}
@@ -440,7 +444,8 @@ export default function Standouts() {
   }, [entitled, superLikeCredits, superLikePackages, sending, offerLavenderPurchase, showToast, t]);
 
   const openProfile = useCallback((standout: Standout) => {
-    router.push(`/profile/${standout.candidate_id}`);
+    // standout=1 gatekeeps the profile view: its only action is a Lavender.
+    router.push(`/profile/${standout.candidate_id}?standout=1`);
   }, []);
 
   const lavendersLeft = entitled
@@ -448,6 +453,15 @@ export default function Standouts() {
     : superLikeCredits;
 
   const refreshChip = nextRefreshLabel();
+
+  // Horizontal slider geometry: one card per page with a peek of the next.
+  const { width: screenWidth } = useWindowDimensions();
+  const CARD_GAP = 12;
+  const H_PADDING = 24;
+  const cardWidth = screenWidth - H_PADDING * 2 - 24;
+  const snapInterval = cardWidth + CARD_GAP;
+  const [sliderHeight, setSliderHeight] = useState(0);
+  const [activeSlide, setActiveSlide] = useState(0);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
@@ -503,24 +517,54 @@ export default function Standouts() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={standouts}
-          keyExtractor={(item) => item.candidate_id}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => loadStandouts(true)} tintColor={LAVENDER} />
-          }
-          renderItem={({ item }) => (
-            <StandoutCard
-              standout={item}
-              sent={sentIds.has(item.candidate_id)}
-              onLavender={handleLavender}
-              onOpenProfile={openProfile}
-              isDark={isDark}
-            />
-          )}
-        />
+        <View style={{ flex: 1 }}>
+          <View
+            style={{ flex: 1 }}
+            onLayout={(e) => setSliderHeight(e.nativeEvent.layout.height)}
+          >
+            {sliderHeight > 0 && (
+              <FlatList
+                data={standouts}
+                keyExtractor={(item) => item.candidate_id}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={snapInterval}
+                snapToAlignment="start"
+                decelerationRate="fast"
+                disableIntervalMomentum
+                contentContainerStyle={{ paddingHorizontal: H_PADDING, gap: CARD_GAP, paddingBottom: 4 }}
+                onMomentumScrollEnd={(e) => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / snapInterval);
+                  setActiveSlide(Math.min(Math.max(idx, 0), standouts.length - 1));
+                }}
+                renderItem={({ item }) => (
+                  <StandoutCard
+                    standout={item}
+                    sent={sentIds.has(item.candidate_id)}
+                    onLavender={handleLavender}
+                    onOpenProfile={openProfile}
+                    isDark={isDark}
+                    cardWidth={cardWidth}
+                    cardHeight={sliderHeight - 8}
+                  />
+                )}
+              />
+            )}
+          </View>
+          {/* Page dots */}
+          <View style={styles.dotsRow}>
+            {standouts.map((s, i) => (
+              <View
+                key={s.candidate_id}
+                style={[
+                  styles.dot,
+                  { backgroundColor: i === activeSlide ? LAVENDER : (isDark ? 'rgba(255,255,255,0.25)' : '#E2D8EC') },
+                  i === activeSlide ? styles.dotActive : null,
+                ]}
+              />
+            ))}
+          </View>
+        </View>
       )}
 
       {/* Match modal */}
@@ -604,7 +648,6 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 20,
-    marginBottom: 16,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -614,7 +657,7 @@ const styles = StyleSheet.create({
   },
   photoWrap: {
     width: '100%',
-    aspectRatio: 4 / 5,
+    flex: 1,
     backgroundColor: '#111',
   },
   photo: {
@@ -688,6 +731,22 @@ const styles = StyleSheet.create({
   lavenderButtonText: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  dotActive: {
+    width: 16,
+    borderRadius: 3,
   },
   emptyWrap: {
     flex: 1,

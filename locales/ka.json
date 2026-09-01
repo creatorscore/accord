@@ -189,7 +189,7 @@
     "swipe": {
       "like": "მოწონება",
       "nope": "არა",
-      "obsessed": "აღტაცებული"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% მატჩი"
@@ -2506,7 +2506,7 @@
     "notFound": "პროფილი ვერ მოიძებნა",
     "actions": {
       "pass": "გამოტოვება",
-      "obsessed": "აღტაცებული",
+      "obsessed": "Lavender",
       "like": "მოწონება",
       "blurPhotos": "ჩემი ფოტოების დაბინდვა",
       "revealPhotos": "ჩემი ფოტოების გახსნა",

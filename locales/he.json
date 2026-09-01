@@ -110,7 +110,7 @@
     "swipe": {
       "like": "לייק",
       "nope": "לא",
-      "obsessed": "מאוהב"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% התאמה"
@@ -2508,7 +2508,7 @@
     "notFound": "הפרופיל לא נמצא",
     "actions": {
       "pass": "דלג",
-      "obsessed": "מאוהב",
+      "obsessed": "Lavender",
       "like": "לייק",
       "blurPhotos": "טשטש את התמונות שלי",
       "revealPhotos": "חשוף את התמונות שלי",

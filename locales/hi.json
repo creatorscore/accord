@@ -110,7 +110,7 @@
     "swipe": {
       "like": "लाइक",
       "nope": "नहीं",
-      "obsessed": "दीवाना"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% मैच"
@@ -2508,7 +2508,7 @@
     "notFound": "प्रोफाइल नहीं मिली",
     "actions": {
       "pass": "पास",
-      "obsessed": "दीवाना",
+      "obsessed": "Lavender",
       "like": "लाइक",
       "blurPhotos": "मेरी फ़ोटो ब्लर करें",
       "revealPhotos": "मेरी फ़ोटो दिखाएं",

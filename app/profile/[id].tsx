@@ -18,6 +18,10 @@ import { formatHeight, HeightUnit } from '@/lib/height-utils';
 import { translateProfileValue, translateProfileArray } from '@/lib/translate-profile-values';
 import DiscoveryProfileView from '@/components/matching/DiscoveryProfileView';
 import MatchModal from '@/components/matching/MatchModal';
+import LavenderPacksModal from '@/components/premium/LavenderPacksModal';
+import { sendSuperLike, purchaseSuperLikeCredits } from '@/lib/super-like';
+import { getSuperLikePackages, getPriceString } from '@/lib/revenue-cat';
+import { useColorScheme } from '@/lib/useColorScheme';
 import ModerationMenu from '@/components/moderation/ModerationMenu';
 import { useScreenCaptureProtection } from '@/hooks/useScreenCaptureProtection';
 import { ProfileSkeleton } from '@/components/shared/SkeletonScreens';
@@ -212,7 +216,10 @@ const bumpDailyLikeCounter = async () => {
 
 export default function ProfileView() {
   const { t } = useTranslation();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, standout } = useLocalSearchParams<{ id: string; standout?: string }>();
+  // Opened from the Standouts tab: gatekept — the ONLY action is a Lavender.
+  const isStandoutContext = standout === '1';
+  const { colors: paletteColors } = useColorScheme();
   const isValidUUID = id ? UUID_REGEX.test(id) : false;
   const { user } = useAuth();
   const { isPremium, isPlatinum } = useSubscription();
@@ -797,77 +804,126 @@ export default function ProfileView() {
     }
   };
 
-  const handleObsessed = async () => {
+  // Lavender (super like) — shared implementation from lib/super-like so this
+  // screen honors purchased credits exactly like discover and Standouts do
+  // (the old inline copy was premium-only and ignored credits).
+  const [superLikePackages, setSuperLikePackages] = useState<any[]>([]);
+  const [showLavenderPacks, setShowLavenderPacks] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getSuperLikePackages()
+      .then((pkgs) => { if (!cancelled) setSuperLikePackages(pkgs); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const purchasePack = async (pkg: any) => {
+    if (!currentProfileId) return;
+    const result = await purchaseSuperLikeCredits(pkg, currentProfileId);
+    if (result.status === 'granted') {
+      Alert.alert(
+        t('discover.superlike.readyTitle', { defaultValue: 'Lavender ready!' }),
+        t('standouts.creditsReady', { defaultValue: 'Your Lavenders are ready to send.' })
+      );
+    } else if (result.status === 'failed') {
+      Alert.alert(t('common.error'), t('discover.superlike.purchaseFailed', { defaultValue: 'Purchase didn’t go through. You were not charged.' }));
+    }
+  };
+
+  const offerLavenderPurchase = (pkgs: any[]) => {
+    if (pkgs.length > 1) {
+      Alert.alert(
+        t('discover.premium.upgradeTitle'),
+        t('discover.superlike.buyMessage', { defaultValue: 'Premium includes 5 Lavenders a week — or send just this one.' }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('discover.superlike.packsTitle', { defaultValue: 'Get Lavenders' }), onPress: () => setShowLavenderPacks(true) },
+          { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
+        ]
+      );
+    } else if (pkgs.length === 1) {
+      Alert.alert(
+        t('discover.premium.upgradeTitle'),
+        t('discover.superlike.buyMessage', { defaultValue: 'Premium includes 5 Lavenders a week — or send just this one.' }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('discover.superlike.buyOne', { price: getPriceString(pkgs[0]), defaultValue: 'Buy 1 · {{price}}' }), onPress: () => purchasePack(pkgs[0]) },
+          { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
+        ]
+      );
+    } else {
+      setShowPaywall(true);
+    }
+  };
+
+  const handleLavender = async () => {
     if (!currentProfileId || !id) return;
 
-    // Super likes are premium-only. Pre-check client-side so we can show paywall
-    // instead of a generic error toast when the server trigger rejects.
-    if (!isPremium && !isPlatinum) {
-      setShowPaywall(true);
+    // Server-authoritative credit balance (granted by the RevenueCat webhook,
+    // consumed by the like triggers).
+    const { data: me } = await supabase
+      .from('profiles')
+      .select('super_like_credits')
+      .eq('id', currentProfileId)
+      .maybeSingle();
+    const credits = (me as any)?.super_like_credits || 0;
+    const entitled = isPremium || isPlatinum;
+
+    if (!entitled && credits <= 0) {
+      offerLavenderPurchase(superLikePackages);
       return;
     }
 
     setIsSuperLiked(true);
 
-    try {
-      // Insert super like (explicit like_type so the server trigger routes to the
-      // super-like branch and applies the weekly budget check)
-      const { error: superLikeError } = await supabase.from('likes').insert({
-        liker_profile_id: currentProfileId,
-        liked_profile_id: id,
-        like_type: 'super_like',
-      });
+    const outcome = await sendSuperLike({
+      currentProfileId,
+      targetProfileId: id,
+      targetCompatibilityScore: profile?.compatibility_score || null,
+      isPremium: entitled,
+      superLikeCredits: credits,
+    });
 
-      if (superLikeError) {
-        if (superLikeError.code === 'P0001') {
-          setIsSuperLiked(false);
-          if (superLikeError.message?.includes('Premium subscription required')) {
-            setShowPaywall(true);
-          } else if (superLikeError.message?.includes('Weekly super like limit')) {
-            Alert.alert(t('discover.superLikeLimitTitle', { defaultValue: 'Super Like limit reached' }), t('discover.superLikeLimitMsg', { defaultValue: 'You have used all your super likes for this week. They reset every 7 days.' }));
-          } else {
-            Alert.alert(t('common.error'), superLikeError.message);
-          }
-          return;
+    switch (outcome.status) {
+      case 'sent':
+        if (outcome.matched && outcome.matchId) {
+          setMatchModalMatchId(outcome.matchId);
+          setTimeout(() => setShowMatchModal(true), 500);
+        } else {
+          setTimeout(() => {
+            Alert.alert(t('profileView.obsessed'), t('profileView.obsessedMsg', { name: profile?.display_name }), [
+              { text: t('common.ok'), onPress: () => router.back() }
+            ]);
+          }, 500);
         }
-        throw superLikeError;
-      }
-
-      // Check for mutual match
-      const { data: mutualLikeId } = await supabase
-        .rpc('check_mutual_like', { p_target_profile_id: id });
-
-      if (mutualLikeId) {
-        // It's a match!
-        const profile1Id = currentProfileId < id ? currentProfileId : id;
-        const profile2Id = currentProfileId < id ? id : currentProfileId;
-
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
-
-        const { data: newMatch, error: matchError } = await supabase.from('matches').insert({
-          profile1_id: profile1Id,
-          profile2_id: profile2Id,
-          initiated_by: currentProfileId,
-          compatibility_score: profile?.compatibility_score || null,
-          status: 'active',
-          expires_at: expiresAt.toISOString(),
-        }).select('id').single();
-
-        if (matchError) throw matchError;
-
-        setMatchModalMatchId(newMatch.id);
-        setTimeout(() => setShowMatchModal(true), 500);
-      } else {
-        setTimeout(() => {
-          Alert.alert(t('profileView.obsessed'), t('profileView.obsessedMsg', { name: profile?.display_name }), [
-            { text: t('common.ok'), onPress: () => router.back() }
-          ]);
-        }, 500);
-      }
-    } catch {
-      Alert.alert(t('common.error'), t('profileView.superLikeError'));
-      setIsSuperLiked(false);
+        break;
+      case 'weekly_limit':
+        setIsSuperLiked(false);
+        Alert.alert(
+          t('discover.superLikeLimitTitle', { defaultValue: 'Lavender limit reached' }),
+          t('discover.superLikeLimitMsg', { defaultValue: 'You have used all your Lavenders for this week. They reset every 7 days.' }),
+          superLikePackages.length > 0
+            ? [
+                { text: t('common.ok') },
+                { text: t('discover.superlike.packsTitle', { defaultValue: 'Get Lavenders' }), onPress: () => setShowLavenderPacks(true) },
+              ]
+            : [{ text: t('common.ok') }]
+        );
+        break;
+      case 'premium_required':
+        setIsSuperLiked(false);
+        offerLavenderPurchase(superLikePackages);
+        break;
+      case 'match_limit':
+        Alert.alert(t('likes.matchLimitTitle'), t('likes.matchLimitMessage'), [{ text: t('common.ok') }]);
+        break;
+      case 'server_rejected':
+        setIsSuperLiked(false);
+        Alert.alert(t('common.error'), outcome.message);
+        break;
+      default:
+        setIsSuperLiked(false);
+        Alert.alert(t('common.error'), t('profileView.superLikeError'));
     }
   };
 
@@ -1049,7 +1105,53 @@ export default function ProfileView() {
       />
 
       {/* Fixed Action Buttons with Animations */}
-      {!isMatched ? (
+      {!isMatched && isStandoutContext ? (
+        /* Standout profiles are gatekept: the ONLY action is sending a Lavender. */
+        <LinearGradient
+          colors={['transparent', 'rgba(255,255,255,0.9)', '#FFFFFF']}
+          className="absolute bottom-0 left-0 right-0 pt-8"
+          style={{ paddingBottom: Math.max(insets.bottom, 32) }}
+        >
+          <View className="px-6">
+            <MotiView
+              from={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', delay: 100 }}
+            >
+              <TouchableOpacity
+                onPress={handleLavender}
+                disabled={isSuperLiked}
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: isSuperLiked ? 'rgba(5,150,105,0.12)' : '#EDE9FE',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.12,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
+              >
+                <MaterialCommunityIcons
+                  name={isSuperLiked ? 'check' : 'flower'}
+                  size={24}
+                  color={isSuperLiked ? '#059669' : '#6D28D9'}
+                />
+                <Text style={{ fontSize: 17, fontWeight: '700', color: isSuperLiked ? '#059669' : '#6D28D9' }}>
+                  {isSuperLiked
+                    ? t('standouts.lavenderSent', { defaultValue: 'Lavender sent' })
+                    : t('standouts.sendLavender', { defaultValue: 'Send a Lavender' })}
+                </Text>
+              </TouchableOpacity>
+            </MotiView>
+          </View>
+        </LinearGradient>
+      ) : !isMatched ? (
         <LinearGradient
           colors={['transparent', 'rgba(255,255,255,0.9)', '#FFFFFF']}
           className="absolute bottom-0 left-0 right-0 pt-8"
@@ -1072,26 +1174,24 @@ export default function ProfileView() {
               </TouchableOpacity>
             </MotiView>
 
-            {/* Obsessed Button */}
+            {/* Lavender Button */}
             <MotiView
               from={{ scale: 0 }}
               animate={{ scale: isSuperLiked ? [1, 1.2, 1] : 1 }}
               transition={{ type: 'spring', delay: 200 }}
             >
               <TouchableOpacity
-                className={`rounded-full w-20 h-20 items-center justify-center shadow-xl ${
-                  isSuperLiked ? 'bg-yellow-400' : 'bg-gradient-to-br from-purple-500 to-pink-500'
-                }`}
-                onPress={handleObsessed}
+                className="rounded-full w-20 h-20 items-center justify-center shadow-xl"
+                onPress={handleLavender}
                 disabled={isLiked || isSuperLiked}
                 style={{
-                  backgroundColor: isSuperLiked ? '#FBBF24' : '#A08AB7',
+                  backgroundColor: isSuperLiked ? '#DDD6FE' : '#A08AB7',
                 }}
               >
                 <MaterialCommunityIcons
-                  name={isSuperLiked ? "star" : "star-outline"}
+                  name="flower"
                   size={36}
-                  color="white"
+                  color={isSuperLiked ? '#6D28D9' : 'white'}
                 />
               </TouchableOpacity>
             </MotiView>
@@ -1217,6 +1317,15 @@ export default function ProfileView() {
         visible={showPaywall}
         onClose={() => setShowPaywall(false)}
         feature="daily_like_limit"
+      />
+
+      <LavenderPacksModal
+        visible={showLavenderPacks}
+        onClose={() => setShowLavenderPacks(false)}
+        packages={superLikePackages}
+        onBuy={purchasePack}
+        cardColor={paletteColors.card}
+        textColor={paletteColors.foreground}
       />
     </View>
   );

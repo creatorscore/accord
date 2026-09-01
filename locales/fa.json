@@ -110,7 +110,7 @@
     "swipe": {
       "like": "لایک",
       "nope": "نه",
-      "obsessed": "شیفته"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "{{score}}% تطابق"
@@ -2508,7 +2508,7 @@
     "notFound": "پروفایل یافت نشد",
     "actions": {
       "pass": "رد",
-      "obsessed": "شیفته",
+      "obsessed": "Lavender",
       "like": "لایک",
       "blurPhotos": "تار کردن عکس‌هایم",
       "revealPhotos": "نمایش عکس‌هایم",

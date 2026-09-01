@@ -110,7 +110,7 @@
     "swipe": {
       "like": "BEĞENDİM",
       "nope": "GEÇ",
-      "obsessed": "HAYRANIM"
+      "obsessed": "LAVENDER"
     },
     "card": {
       "matchPercent": "%{{score}} Eşleşme"
@@ -2577,7 +2577,7 @@
     "notFound": "Profil bulunamadı",
     "actions": {
       "pass": "Geç",
-      "obsessed": "Hayranım",
+      "obsessed": "Lavender",
       "like": "Beğen",
       "blurPhotos": "Fotoğraflarımı Bulanıklaştır",
       "revealPhotos": "Fotoğraflarımı Göster",
