@@ -229,6 +229,36 @@ serve(async (req) => {
         });
         break;
 
+      case 'NON_RENEWING_PURCHASE': {
+        // Consumable super-like packs (pay-per-super-like for free users).
+        // Product id convention: contains "superlike" with an optional count
+        // suffix — accord_superlike_1, accord.superlike5, superlike_10 all
+        // parse; no suffix = 1 credit. PROMOTIONAL-store events are excluded:
+        // comp grants (e.g. rc_promo_premium_weekly) must never mint credits.
+        const productIdLower = (payload.event.product_id || '').toLowerCase();
+        const superlikeMatch = productIdLower.match(/superlike[_.-]?(\d+)?/);
+        if (superlikeMatch && payload.event.store !== 'PROMOTIONAL') {
+          const credits = Math.max(1, parseInt(superlikeMatch[1] || '1', 10));
+          const { data: newBalance, error: creditError } = await supabase.rpc('grant_super_like_credits', {
+            p_profile_id: profile.id,
+            p_credits: credits,
+          });
+          if (creditError) {
+            console.error('❌ Failed to grant super-like credits:', creditError);
+            throw creditError; // releases the dedup claim so RC retries
+          }
+          console.log('✅ Super-like credits granted:', {
+            userId: app_user_id,
+            product: payload.event.product_id,
+            credits,
+            newBalance,
+          });
+        } else {
+          console.log('Unhandled NON_RENEWING_PURCHASE product:', payload.event.product_id);
+        }
+        break;
+      }
+
       default:
         console.log('Unhandled event type:', type);
     }

@@ -508,6 +508,33 @@ export const checkTrialEligibility = async (
 };
 
 /**
+ * Find the consumable super-like package, if one is configured.
+ *
+ * Convention: any package (in any offering) whose product identifier contains
+ * "superlike" (case-insensitive) — e.g. accord_superlike_1. Returns null when
+ * RevenueCat isn't initialized or no such product exists yet, so callers can
+ * fall back to the plain premium paywall. This lets the client ship before
+ * the store products are created; the buy option simply appears once they are.
+ */
+export const getSuperLikePackage = async (): Promise<PurchasesPackage | null> => {
+  if (!isInitialized) return null;
+  try {
+    const offerings = await Purchases.getOfferings();
+    const candidates = [offerings.current, ...Object.values(offerings.all || {})];
+    for (const offering of candidates) {
+      if (!offering) continue;
+      const pkg = offering.availablePackages.find((p) =>
+        /superlike/i.test(p.product.identifier)
+      );
+      if (pkg) return pkg;
+    }
+  } catch (error) {
+    console.warn('getSuperLikePackage failed:', error);
+  }
+  return null;
+};
+
+/**
  * Check if RevenueCat is initialized
  */
 export const isRevenueCatInitialized = (): boolean => {

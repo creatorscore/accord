@@ -23,6 +23,7 @@ import ReportUserModal from '@/components/moderation/ReportUserModal';
 // Do NOT import or call sendMatchNotification/sendLikeNotification from client code
 import { calculateScoreAndBreakdown } from '@/lib/matching-algorithm';
 import { initializeTracking } from '@/lib/tracking-permissions';
+import { getSuperLikePackage, purchasePackage, getPriceString } from '@/lib/revenue-cat';
 import { DistanceUnit } from '@/lib/distance-utils';
 import { signProfileMediaUrls } from '@/lib/signed-urls';
 import { HeightUnit } from '@/lib/height-utils';
@@ -162,6 +163,60 @@ export default function Discover() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [likeCount, setLikeCount] = useState(0); // Daily likes used (5/day for free users)
   const [superLikesRemaining, setSuperLikesRemaining] = useState(5);
+  // Pay-per-super-like: purchased credits (server-authoritative, granted by the
+  // RevenueCat webhook, consumed by the like triggers) + the consumable package
+  // when one is configured in RevenueCat. Package resolution is lazy/optional —
+  // until the store products exist, every buy path falls back to the paywall.
+  const [superLikeCredits, setSuperLikeCredits] = useState(0);
+  const [superLikePackage, setSuperLikePackage] = useState<any>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSuperLikePackage()
+      .then((pkg) => { if (!cancelled && pkg) setSuperLikePackage(pkg); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  // Buy one super like, then wait for the RevenueCat webhook to land the
+  // credit in profiles.super_like_credits (usually 1-3s). The credit is
+  // granted server-side only — polling the profile is the source of truth.
+  const purchaseSuperLike = useCallback(async (pkg: any) => {
+    try {
+      const info = await purchasePackage(pkg);
+      if (!info) return; // user cancelled
+      for (let attempt = 0; attempt < 8; attempt++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const { data } = await supabase
+          .from('profiles')
+          .select('super_like_credits')
+          .eq('id', currentProfileIdRef.current || '')
+          .maybeSingle();
+        const credits = (data as any)?.super_like_credits || 0;
+        if (credits > 0) {
+          setSuperLikeCredits(credits);
+          showToast({
+            type: 'success',
+            title: t('discover.superlike.readyTitle', { defaultValue: 'Super Like ready!' }),
+            message: t('discover.superlike.readyMessage', { defaultValue: 'Tap Obsessed again to send it.' }),
+          });
+          return;
+        }
+      }
+      showToast({
+        type: 'info',
+        title: t('discover.superlike.pendingTitle', { defaultValue: 'Purchase received' }),
+        message: t('discover.superlike.pendingMessage', { defaultValue: 'Your Super Like will appear in a moment.' }),
+      });
+    } catch (e: any) {
+      console.error('Super-like purchase failed:', e);
+      showToast({
+        type: 'error',
+        title: t('common.error'),
+        message: t('discover.superlike.purchaseFailed', { defaultValue: 'Purchase didn’t go through. You were not charged.' }),
+      });
+    }
+  }, [showToast, t]);
   const [pendingLikesCount, setPendingLikesCount] = useState(0); // Likes received (for teaser banner)
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showConfirmGenderModal, setShowConfirmGenderModal] = useState(false);
@@ -659,6 +714,7 @@ export default function Discover() {
           profile_complete,
           super_likes_count,
           super_likes_reset_date,
+          super_like_credits,
           photos (
             url,
             storage_path,
@@ -818,6 +874,7 @@ export default function Discover() {
       } else {
         setSuperLikesRemaining(5 - (data.super_likes_count || 0));
       }
+      setSuperLikeCredits((data as any).super_like_credits || 0);
 
       // Call loadProfiles directly on initial load (avoid render-cycle waterfall)
       // loadProfiles uses currentProfileIdRef.current which is already set above
@@ -2828,17 +2885,36 @@ export default function Discover() {
     const targetProfile = profiles[currentIndex];
     if (!targetProfile) return false;
 
-    // Check premium status FIRST before any async operations
-    if (!isPremium) {
-      // Free users need to upgrade - show alert and return immediately
-      Alert.alert(
-        t('discover.premium.upgradeTitle'),
-        t('discover.premium.superLikesMessage'),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
-        ]
-      );
+    // Entitlement check FIRST before any async operations. A free user with
+    // purchased credits proceeds — the like trigger consumes a credit
+    // server-side. A free user without credits gets buy-one (when the
+    // consumable is configured in RevenueCat) alongside the upgrade path.
+    if (!isPremium && superLikeCredits <= 0) {
+      let pkg = superLikePackage;
+      if (!pkg) {
+        pkg = await getSuperLikePackage().catch(() => null);
+        if (pkg) setSuperLikePackage(pkg);
+      }
+      if (pkg) {
+        Alert.alert(
+          t('discover.premium.upgradeTitle'),
+          t('discover.superlike.buyMessage', { defaultValue: 'Premium includes 5 Super Likes a week — or send just this one.' }),
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('discover.superlike.buyOne', { price: getPriceString(pkg), defaultValue: 'Buy 1 · {{price}}' }), onPress: () => purchaseSuperLike(pkg) },
+            { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
+          ]
+        );
+      } else {
+        Alert.alert(
+          t('discover.premium.upgradeTitle'),
+          t('discover.premium.superLikesMessage'),
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
+          ]
+        );
+      }
       return false; // Don't proceed with the swipe
     }
 
@@ -2850,7 +2926,8 @@ export default function Discover() {
         .eq('id', currentProfileId)
         .single();
 
-      if (profileData) {
+      let usedWeeklyAllowance = false;
+      if (profileData && isPremium) {
         const resetDate = new Date(profileData.super_likes_reset_date);
         const now = new Date();
         const daysSinceReset = Math.floor((now.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -2872,15 +2949,30 @@ export default function Discover() {
         // Check limit for premium users (5 per week)
         const weeklyLimit = 5;
 
-        if (currentCount >= weeklyLimit) {
-          // Premium users hit their limit
+        if (currentCount < weeklyLimit) {
+          usedWeeklyAllowance = true;
+        } else if (superLikeCredits <= 0) {
+          // Weekly allowance gone and no purchased credits: offer a one-off
+          // buy when the consumable is configured, else the plain limit alert.
+          let pkg = superLikePackage;
+          if (!pkg) {
+            pkg = await getSuperLikePackage().catch(() => null);
+            if (pkg) setSuperLikePackage(pkg);
+          }
           Alert.alert(
             t('discover.premium.superLikeLimitTitle'),
             t('discover.premium.superLikeLimitMessage', { day: getDayName((resetDate.getDay() + 7) % 7) }),
-            [{ text: 'OK' }]
+            pkg
+              ? [
+                  { text: t('common.cancel'), style: 'cancel' },
+                  { text: t('discover.superlike.buyOne', { price: getPriceString(pkg), defaultValue: 'Buy 1 · {{price}}' }), onPress: () => purchaseSuperLike(pkg) },
+                ]
+              : [{ text: 'OK' }]
           );
           return false; // Don't proceed with the swipe
         }
+        // else: weekly allowance exhausted but purchased credits cover it —
+        // proceed; the like trigger consumes a credit server-side.
       }
 
       // Check if a like already exists
@@ -2989,8 +3081,13 @@ export default function Discover() {
       // Do NOT call sendLikeNotification here - it causes duplicate notifications
 
       // Update super likes counter
-      const remaining = 5 - ((profileData?.super_likes_count || 0) + 1);
-      setSuperLikesRemaining(remaining);
+      if (usedWeeklyAllowance) {
+        const remaining = 5 - ((profileData?.super_likes_count || 0) + 1);
+        setSuperLikesRemaining(remaining);
+      } else {
+        // A purchased credit was consumed by the like trigger
+        setSuperLikeCredits((c) => Math.max(0, c - 1));
+      }
 
       // Track last swipe for rewind
       setLastSwipe({
@@ -3003,8 +3100,8 @@ export default function Discover() {
       showToast({
         type: 'success',
         title: t('toast.obsessedTitle'),
-        message: isPremium
-          ? t('toast.obsessedWithRemaining', { name: targetProfile.display_name, remaining })
+        message: usedWeeklyAllowance
+          ? t('toast.obsessedWithRemaining', { name: targetProfile.display_name, remaining: 5 - ((profileData?.super_likes_count || 0) + 1) })
           : t('toast.obsessedBasic', { name: targetProfile.display_name })
       });
 
@@ -3048,7 +3145,7 @@ export default function Discover() {
       }
       return false;
     }
-  }, [currentProfileId, currentIndex, profiles, isPremium, isProfileComplete, returnRoute, exitPreviewMode]);
+  }, [currentProfileId, currentIndex, profiles, isPremium, isProfileComplete, returnRoute, exitPreviewMode, superLikeCredits, superLikePackage, purchaseSuperLike]);
 
   // Helper function to get day name
   const getDayName = (day: number) => {
@@ -4263,6 +4360,8 @@ export default function Discover() {
           canRewind={!!lastSwipe}
           isAdmin={isAdmin}
           superLikesRemaining={superLikesRemaining}
+          superLikeCredits={superLikeCredits}
+          superLikePriceString={superLikePackage ? getPriceString(superLikePackage) : undefined}
           likesRemaining={DAILY_LIKE_LIMIT - likeCount}
           dailyLikeLimit={DAILY_LIKE_LIMIT}
           isPremium={isPremium}

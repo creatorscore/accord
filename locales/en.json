@@ -351,7 +351,8 @@
       "sendWithComment": "Send Like with Comment",
       "sendLike": "Send Like",
       "obsessed": "Obsessed",
-      "superLikesLeftWeek": "{{count}} left this week"
+      "superLikesLeftWeek": "{{count}} left this week",
+      "superLikesAvailable": "{{count}} available"
     },
     "dailyLimitTitle": "Daily limit reached",
     "dailyLimitMessage": "You've used all 5 likes for today. Upgrade for unlimited!",
@@ -426,6 +427,15 @@
       "bothLiked": "You and {{name}} liked each other",
       "sendMessage": "Send a Message",
       "keepBrowsing": "Keep Browsing"
+    },
+    "superlike": {
+      "buyMessage": "Premium includes 5 Super Likes a week — or send just this one.",
+      "buyOne": "Buy 1 · {{price}}",
+      "readyTitle": "Super Like ready!",
+      "readyMessage": "Tap Obsessed again to send it.",
+      "pendingTitle": "Purchase received",
+      "pendingMessage": "Your Super Like will appear in a moment.",
+      "purchaseFailed": "Purchase didn’t go through. You were not charged."
     }
   },
   "filters": {
