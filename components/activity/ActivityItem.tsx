@@ -24,9 +24,9 @@ const ACTIVITY_STYLE: Record<
   { icon: string; color: string; bgColor: string }
 > = {
   like_received: { icon: 'heart', color: '#FF6B6B', bgColor: '#FFF0F0' },
-  super_like_received: { icon: 'star', color: '#FFD700', bgColor: '#FFFBEB' },
+  super_like_received: { icon: 'flower', color: '#6D28D9', bgColor: '#EDE9FE' },
   like_sent: { icon: 'heart-outline', color: '#F472B6', bgColor: '#FDF2F8' },
-  super_like_sent: { icon: 'star-outline', color: '#FBBF24', bgColor: '#FFFBEB' },
+  super_like_sent: { icon: 'flower-outline', color: '#8B6FA8', bgColor: '#EDE9FE' },
   match: { icon: 'heart-multiple', color: '#A08AB7', bgColor: '#F5F0FF' },
   message_received: { icon: 'message-text', color: '#4ECDC4', bgColor: '#E6FAF8' },
   review_received: { icon: 'star-circle', color: '#FF9F43', bgColor: '#FFF5EB' },

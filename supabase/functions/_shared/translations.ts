@@ -23,11 +23,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} likes you! 💜",
       premiumBody: "See who liked you and match instantly.",
-      premiumSuperTitle: "{{name}} super liked you! ⭐",
+      premiumSuperTitle: "{{name}} sent you a Lavender! 💜",
       premiumSuperBody: "They really want to connect with you!",
       freeTitle: "Someone likes you! 💜",
       freeBody: "Upgrade to Premium to see who liked you and match instantly.",
-      freeSuperTitle: "Someone super liked you! ⭐",
+      freeSuperTitle: "Someone sent you a Lavender! 💜",
       freeSuperBody: "Upgrade to Premium to see who really wants to match with you."
     },
     trialExpiration: {
@@ -40,7 +40,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "Your Premium Trial is Active!",
-      day1Body: "Unlock unlimited likes, see who liked you, send Super Likes, and more. Start exploring your premium features!",
+      day1Body: "Unlock unlimited likes, see who liked you, send Lavenders, and more. Start exploring your premium features!",
       day3TitleWithLikes: "{{count}} {{person}} liked you!",
       day3TitleNoLikes: "You're getting noticed!",
       day3BodyWithLikes: "Tap to see who they are - this is a Premium feature you can keep!",
@@ -65,8 +65,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "person",
       people: "people",
       seenLikes: "seen {{count}} who liked you",
-      sentSuperLikes: "sent {{count}} Super Like",
-      sentSuperLikesPlural: "sent {{count}} Super Likes",
+      sentSuperLikes: "sent {{count}} Lavender",
+      sentSuperLikesPlural: "sent {{count}} Lavenders",
       madeMatch: "made {{count}} match",
       madeMatchesPlural: "made {{count}} matches"
     },
@@ -91,11 +91,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "¡A {{name}} le gustas! 💜",
       premiumBody: "Ve quién te dio like y haz match al instante.",
-      premiumSuperTitle: "¡{{name}} te dio super like! ⭐",
+      premiumSuperTitle: "¡{{name}} te envió un Lavender! 💜",
       premiumSuperBody: "¡Realmente quieren conectar contigo!",
       freeTitle: "¡A alguien le gustas! 💜",
       freeBody: "Actualiza a Premium para ver quién te dio like y hacer match al instante.",
-      freeSuperTitle: "¡Alguien te dio super like! ⭐",
+      freeSuperTitle: "¡Alguien te envió un Lavender! 💜",
       freeSuperBody: "Actualiza a Premium para ver quién realmente quiere hacer match contigo."
     },
     trialExpiration: {
@@ -108,7 +108,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "¡Tu Prueba Premium está Activa!",
-      day1Body: "Desbloquea likes ilimitados, ve quién te dio like, envía Super Likes y más. ¡Comienza a explorar tus funciones premium!",
+      day1Body: "Desbloquea likes ilimitados, ve quién te dio like, envía Lavenders y más. ¡Comienza a explorar tus funciones premium!",
       day3TitleWithLikes: "¡{{count}} {{person}} te dieron like!",
       day3TitleNoLikes: "¡Te están notando!",
       day3BodyWithLikes: "Toca para ver quiénes son - ¡esta es una función Premium que puedes conservar!",
@@ -133,8 +133,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "persona",
       people: "personas",
       seenLikes: "visto {{count}} que te dieron like",
-      sentSuperLikes: "enviado {{count}} Super Like",
-      sentSuperLikesPlural: "enviado {{count}} Super Likes",
+      sentSuperLikes: "enviaste {{count}} Lavender",
+      sentSuperLikesPlural: "enviaste {{count}} Lavenders",
       madeMatch: "hecho {{count}} match",
       madeMatchesPlural: "hecho {{count}} matches"
     },
@@ -159,11 +159,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} t'aime bien ! 💜",
       premiumBody: "Vois qui t'a liké et matche instantanément.",
-      premiumSuperTitle: "{{name}} t'a super liké ! ⭐",
+      premiumSuperTitle: "{{name}} t'a envoyé un Lavender ! 💜",
       premiumSuperBody: "Cette personne veut vraiment se connecter avec toi !",
       freeTitle: "Quelqu'un t'aime bien ! 💜",
       freeBody: "Passe à Premium pour voir qui t'a liké et matcher instantanément.",
-      freeSuperTitle: "Quelqu'un t'a super liké ! ⭐",
+      freeSuperTitle: "Quelqu'un t'a envoyé un Lavender ! 💜",
       freeSuperBody: "Passe à Premium pour voir qui veut vraiment matcher avec toi."
     },
     trialExpiration: {
@@ -176,7 +176,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "Ton Essai Premium est Actif !",
-      day1Body: "Débloque les likes illimités, vois qui t'a liké, envoie des Super Likes et plus. Commence à explorer tes fonctionnalités premium !",
+      day1Body: "Débloque les likes illimités, vois qui t'a liké, envoie des Lavenders et plus. Commence à explorer tes fonctionnalités premium !",
       day3TitleWithLikes: "{{count}} {{person}} t'ont liké !",
       day3TitleNoLikes: "Tu te fais remarquer !",
       day3BodyWithLikes: "Appuie pour voir qui c'est - c'est une fonctionnalité Premium que tu peux garder !",
@@ -201,8 +201,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "personne",
       people: "personnes",
       seenLikes: "vu {{count}} qui t'ont liké",
-      sentSuperLikes: "envoyé {{count}} Super Like",
-      sentSuperLikesPlural: "envoyé {{count}} Super Likes",
+      sentSuperLikes: "envoyé {{count}} Lavender",
+      sentSuperLikesPlural: "envoyé {{count}} Lavenders",
       madeMatch: "fait {{count}} match",
       madeMatchesPlural: "fait {{count}} matchs"
     },
@@ -227,11 +227,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} mag dich! 💜",
       premiumBody: "Sieh wer dich geliked hat und matche sofort.",
-      premiumSuperTitle: "{{name}} hat dich super geliked! ⭐",
+      premiumSuperTitle: "{{name}} hat dir einen Lavender geschickt! 💜",
       premiumSuperBody: "Diese Person möchte sich unbedingt mit dir verbinden!",
       freeTitle: "Jemand mag dich! 💜",
       freeBody: "Upgrade auf Premium um zu sehen wer dich geliked hat und sofort zu matchen.",
-      freeSuperTitle: "Jemand hat dich super geliked! ⭐",
+      freeSuperTitle: "Jemand hat dir einen Lavender geschickt! 💜",
       freeSuperBody: "Upgrade auf Premium um zu sehen wer wirklich mit dir matchen möchte."
     },
     trialExpiration: {
@@ -244,7 +244,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "Deine Premium-Testphase ist Aktiv!",
-      day1Body: "Entsperre unbegrenzte Likes, sieh wer dich geliked hat, sende Super Likes und mehr. Beginne deine Premium-Funktionen zu erkunden!",
+      day1Body: "Entsperre unbegrenzte Likes, sieh wer dich geliked hat, sende Lavender und mehr. Beginne deine Premium-Funktionen zu erkunden!",
       day3TitleWithLikes: "{{count}} {{person}} haben dich geliked!",
       day3TitleNoLikes: "Du wirst bemerkt!",
       day3BodyWithLikes: "Tippe um zu sehen wer es ist - das ist eine Premium-Funktion die du behalten kannst!",
@@ -269,8 +269,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "Person",
       people: "Personen",
       seenLikes: "{{count}} gesehen die dich geliked haben",
-      sentSuperLikes: "{{count}} Super Like gesendet",
-      sentSuperLikesPlural: "{{count}} Super Likes gesendet",
+      sentSuperLikes: "{{count}} Lavender gesendet",
+      sentSuperLikesPlural: "{{count}} Lavender gesendet",
       madeMatch: "{{count}} Match gemacht",
       madeMatchesPlural: "{{count}} Matches gemacht"
     },
@@ -295,11 +295,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} أعجب بك! 💜",
       premiumBody: "شاهد من أعجب بك وتطابق فوراً.",
-      premiumSuperTitle: "{{name}} أعجب بك بشدة! ⭐",
+      premiumSuperTitle: "{{name}} أرسل لك Lavender! 💜",
       premiumSuperBody: "يريدون حقاً التواصل معك!",
       freeTitle: "شخص ما أعجب بك! 💜",
       freeBody: "قم بالترقية إلى بريميوم لترى من أعجب بك وتطابق فوراً.",
-      freeSuperTitle: "شخص ما أعجب بك بشدة! ⭐",
+      freeSuperTitle: "شخص ما أرسل لك Lavender! 💜",
       freeSuperBody: "قم بالترقية إلى بريميوم لترى من يريد حقاً التطابق معك."
     },
     trialExpiration: {
@@ -312,7 +312,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "فترتك التجريبية المميزة نشطة!",
-      day1Body: "افتح الإعجابات غير المحدودة، شاهد من أعجب بك، أرسل إعجابات فائقة والمزيد. ابدأ باستكشاف ميزاتك المميزة!",
+      day1Body: "افتح الإعجابات غير المحدودة، شاهد من أعجب بك، أرسل Lavender والمزيد. ابدأ باستكشاف ميزاتك المميزة!",
       day3TitleWithLikes: "{{count}} {{person}} أعجبوا بك!",
       day3TitleNoLikes: "أنت تلفت الانتباه!",
       day3BodyWithLikes: "اضغط لترى من هم - هذه ميزة بريميوم يمكنك الاحتفاظ بها!",
@@ -337,8 +337,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "شخص",
       people: "أشخاص",
       seenLikes: "شاهدت {{count}} أعجبوا بك",
-      sentSuperLikes: "أرسلت {{count}} إعجاب فائق",
-      sentSuperLikesPlural: "أرسلت {{count}} إعجابات فائقة",
+      sentSuperLikes: "أرسلت {{count}} Lavender",
+      sentSuperLikesPlural: "أرسلت {{count}} Lavender",
       madeMatch: "حققت {{count}} تطابق",
       madeMatchesPlural: "حققت {{count}} تطابقات"
     },
@@ -363,11 +363,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} को आप पसंद हैं! 💜",
       premiumBody: "देखें किसने आपको पसंद किया और तुरंत मैच करें।",
-      premiumSuperTitle: "{{name}} ने आपको सुपर लाइक किया! ⭐",
+      premiumSuperTitle: "{{name}} ने आपको Lavender भेजा! 💜",
       premiumSuperBody: "वे वाकई आपसे जुड़ना चाहते हैं!",
       freeTitle: "किसी को आप पसंद हैं! 💜",
       freeBody: "प्रीमियम में अपग्रेड करें और देखें किसने आपको पसंद किया।",
-      freeSuperTitle: "किसी ने आपको सुपर लाइक किया! ⭐",
+      freeSuperTitle: "किसी ने आपको Lavender भेजा! 💜",
       freeSuperBody: "प्रीमियम में अपग्रेड करें और देखें कौन वाकई आपसे मैच करना चाहता है।"
     },
     trialExpiration: {
@@ -380,7 +380,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "आपका प्रीमियम ट्रायल एक्टिव है!",
-      day1Body: "अनलिमिटेड लाइक्स, देखें किसने आपको लाइक किया, सुपर लाइक्स भेजें। प्रीमियम फीचर्स एक्सप्लोर करें!",
+      day1Body: "अनलिमिटेड लाइक्स, देखें किसने आपको लाइक किया, Lavender भेजें। प्रीमियम फीचर्स एक्सप्लोर करें!",
       day3TitleWithLikes: "{{count}} {{person}} ने आपको लाइक किया!",
       day3TitleNoLikes: "आप नोटिस हो रहे हैं!",
       day3BodyWithLikes: "देखें कौन हैं वे - यह प्रीमियम फीचर है जो आप रख सकते हैं!",
@@ -405,8 +405,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "व्यक्ति",
       people: "लोग",
       seenLikes: "{{count}} को देखा जिन्होंने आपको लाइक किया",
-      sentSuperLikes: "{{count}} सुपर लाइक भेजा",
-      sentSuperLikesPlural: "{{count}} सुपर लाइक्स भेजे",
+      sentSuperLikes: "{{count}} Lavender भेजा",
+      sentSuperLikesPlural: "{{count}} Lavender भेजे",
       madeMatch: "{{count}} मैच किया",
       madeMatchesPlural: "{{count}} मैच किए"
     },
@@ -431,11 +431,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} gostou de você! 💜",
       premiumBody: "Veja quem curtiu você e dê match instantaneamente.",
-      premiumSuperTitle: "{{name}} te deu super like! ⭐",
+      premiumSuperTitle: "{{name}} te enviou um Lavender! 💜",
       premiumSuperBody: "Essa pessoa quer muito se conectar com você!",
       freeTitle: "Alguém gostou de você! 💜",
       freeBody: "Atualize para Premium para ver quem curtiu você e dar match instantaneamente.",
-      freeSuperTitle: "Alguém te deu super like! ⭐",
+      freeSuperTitle: "Alguém te enviou um Lavender! 💜",
       freeSuperBody: "Atualize para Premium para ver quem realmente quer dar match com você."
     },
     trialExpiration: {
@@ -448,7 +448,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "Seu Teste Premium está Ativo!",
-      day1Body: "Desbloqueie curtidas ilimitadas, veja quem curtiu você, envie Super Likes e muito mais. Comece a explorar seus recursos premium!",
+      day1Body: "Desbloqueie curtidas ilimitadas, veja quem curtiu você, envie Lavenders e muito mais. Comece a explorar seus recursos premium!",
       day3TitleWithLikes: "{{count}} {{person}} curtiram você!",
       day3TitleNoLikes: "Você está sendo notado!",
       day3BodyWithLikes: "Toque para ver quem são - este é um recurso Premium que você pode manter!",
@@ -473,8 +473,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "pessoa",
       people: "pessoas",
       seenLikes: "viu {{count}} que curtiram você",
-      sentSuperLikes: "enviou {{count}} Super Like",
-      sentSuperLikesPlural: "enviou {{count}} Super Likes",
+      sentSuperLikes: "enviou {{count}} Lavender",
+      sentSuperLikesPlural: "enviou {{count}} Lavenders",
       madeMatch: "fez {{count}} match",
       madeMatchesPlural: "fez {{count}} matches"
     },
@@ -499,11 +499,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "Вы понравились {{name}}! 💜",
       premiumBody: "Посмотрите, кто вас лайкнул, и совпадите мгновенно.",
-      premiumSuperTitle: "{{name}} поставил(а) вам супер-лайк! ⭐",
+      premiumSuperTitle: "{{name}} отправил(а) вам Lavender! 💜",
       premiumSuperBody: "Этот человек очень хочет с вами познакомиться!",
       freeTitle: "Вы кому-то понравились! 💜",
       freeBody: "Перейдите на Премиум, чтобы увидеть, кто вас лайкнул.",
-      freeSuperTitle: "Кто-то поставил вам супер-лайк! ⭐",
+      freeSuperTitle: "Кто-то отправил вам Lavender! 💜",
       freeSuperBody: "Перейдите на Премиум, чтобы увидеть, кто хочет с вами совпасть."
     },
     trialExpiration: {
@@ -516,7 +516,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "Ваш Премиум-пробный период активен!",
-      day1Body: "Разблокируйте безлимитные лайки, смотрите кто вас лайкнул, отправляйте Супер-лайки и многое другое!",
+      day1Body: "Разблокируйте безлимитные лайки, смотрите кто вас лайкнул, отправляйте Lavender и многое другое!",
       day3TitleWithLikes: "{{count}} {{person}} лайкнули вас!",
       day3TitleNoLikes: "Вас замечают!",
       day3BodyWithLikes: "Нажмите, чтобы увидеть кто - это премиум-функция, которую вы можете сохранить!",
@@ -541,8 +541,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "человек",
       people: "человек",
       seenLikes: "увидели {{count}}, кто вас лайкнул",
-      sentSuperLikes: "отправили {{count}} Супер-лайк",
-      sentSuperLikesPlural: "отправили {{count}} Супер-лайков",
+      sentSuperLikes: "отправили {{count}} Lavender",
+      sentSuperLikesPlural: "отправили {{count}} Lavender",
       madeMatch: "совпали {{count}} раз",
       madeMatchesPlural: "совпали {{count}} раз"
     },
@@ -567,11 +567,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} 喜欢你！💜",
       premiumBody: "查看谁喜欢了你，立即配对。",
-      premiumSuperTitle: "{{name}} 超级喜欢你！⭐",
+      premiumSuperTitle: "{{name}} 向你送出了 Lavender！💜",
       premiumSuperBody: "他们真的很想和你联系！",
       freeTitle: "有人喜欢你！💜",
       freeBody: "升级到高级版，查看谁喜欢了你并立即配对。",
-      freeSuperTitle: "有人超级喜欢你！⭐",
+      freeSuperTitle: "有人向你送出了 Lavender！💜",
       freeSuperBody: "升级到高级版，看看谁真的想和你配对。"
     },
     trialExpiration: {
@@ -584,7 +584,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "你的高级试用已激活！",
-      day1Body: "解锁无限喜欢，查看谁喜欢了你，发送超级喜欢等等。开始探索你的高级功能！",
+      day1Body: "解锁无限喜欢，查看谁喜欢了你，发送 Lavender 等等。开始探索你的高级功能！",
       day3TitleWithLikes: "{{count}}{{person}}喜欢了你！",
       day3TitleNoLikes: "你正在被注意到！",
       day3BodyWithLikes: "点击查看他们是谁 - 这是你可以保留的高级功能！",
@@ -609,8 +609,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "人",
       people: "人",
       seenLikes: "看到了{{count}}个喜欢你的人",
-      sentSuperLikes: "发送了{{count}}个超级喜欢",
-      sentSuperLikesPlural: "发送了{{count}}个超级喜欢",
+      sentSuperLikes: "发送了{{count}}个 Lavender",
+      sentSuperLikesPlural: "发送了{{count}}个 Lavender",
       madeMatch: "配对了{{count}}次",
       madeMatchesPlural: "配对了{{count}}次"
     },
@@ -635,11 +635,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} seni beğendi! 💜",
       premiumBody: "Seni kimin beğendiğini gör ve anında eşleş.",
-      premiumSuperTitle: "{{name}} seni süper beğendi! ⭐",
+      premiumSuperTitle: "{{name}} sana Lavender gönderdi! 💜",
       premiumSuperBody: "Seninle gerçekten bağlantı kurmak istiyorlar!",
       freeTitle: "Biri seni beğendi! 💜",
       freeBody: "Premium'a yükselt ve seni kimin beğendiğini gör.",
-      freeSuperTitle: "Biri seni süper beğendi! ⭐",
+      freeSuperTitle: "Biri sana Lavender gönderdi! 💜",
       freeSuperBody: "Premium'a yükselt ve seninle eşleşmek isteyeni gör."
     },
     trialExpiration: {
@@ -652,7 +652,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "Premium Denemen Aktif!",
-      day1Body: "Sınırsız beğenileri aç, seni kimin beğendiğini gör, Süper Beğeni gönder ve daha fazlası!",
+      day1Body: "Sınırsız beğenileri aç, seni kimin beğendiğini gör, Lavender gönder ve daha fazlası!",
       day3TitleWithLikes: "{{count}} {{person}} seni beğendi!",
       day3TitleNoLikes: "Fark ediliyorsun!",
       day3BodyWithLikes: "Kim olduklarını görmek için dokun - bu koruyabileceğin bir Premium özellik!",
@@ -677,8 +677,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "kişi",
       people: "kişi",
       seenLikes: "seni beğenen {{count}} kişiyi gördün",
-      sentSuperLikes: "{{count}} Süper Beğeni gönderdin",
-      sentSuperLikesPlural: "{{count}} Süper Beğeni gönderdin",
+      sentSuperLikes: "{{count}} Lavender gönderdin",
+      sentSuperLikesPlural: "{{count}} Lavender gönderdin",
       madeMatch: "{{count}} eşleşme yaptın",
       madeMatchesPlural: "{{count}} eşleşme yaptın"
     },
@@ -703,11 +703,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "Piaci a {{name}}! 💜",
       premiumBody: "Scopri chi ti ha messo like e fai match istantaneamente.",
-      premiumSuperTitle: "{{name}} ti ha messo super like! ⭐",
+      premiumSuperTitle: "{{name}} ti ha inviato un Lavender! 💜",
       premiumSuperBody: "Vuole davvero connettersi con te!",
       freeTitle: "Piaci a qualcuno! 💜",
       freeBody: "Passa a Premium per vedere chi ti ha messo like e fare match istantaneamente.",
-      freeSuperTitle: "Qualcuno ti ha messo super like! ⭐",
+      freeSuperTitle: "Qualcuno ti ha inviato un Lavender! 💜",
       freeSuperBody: "Passa a Premium per vedere chi vuole davvero fare match con te."
     },
     trialExpiration: {
@@ -720,7 +720,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "La Tua Prova Premium è Attiva!",
-      day1Body: "Sblocca like illimitati, scopri chi ti ha messo like, invia Super Like e altro ancora!",
+      day1Body: "Sblocca like illimitati, scopri chi ti ha messo like, invia Lavender e altro ancora!",
       day3TitleWithLikes: "{{count}} {{person}} ti hanno messo like!",
       day3TitleNoLikes: "Ti stanno notando!",
       day3BodyWithLikes: "Tocca per vedere chi sono - è una funzionalità Premium che puoi mantenere!",
@@ -745,8 +745,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "persona",
       people: "persone",
       seenLikes: "visto {{count}} che ti hanno messo like",
-      sentSuperLikes: "inviato {{count}} Super Like",
-      sentSuperLikesPlural: "inviato {{count}} Super Like",
+      sentSuperLikes: "inviato {{count}} Lavender",
+      sentSuperLikesPlural: "inviato {{count}} Lavender",
       madeMatch: "fatto {{count}} match",
       madeMatchesPlural: "fatto {{count}} match"
     },
@@ -771,11 +771,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} cię lubi! 💜",
       premiumBody: "Zobacz, kto cię polubił i dopasuj się natychmiast.",
-      premiumSuperTitle: "{{name}} dał(a) ci super like! ⭐",
+      premiumSuperTitle: "{{name}} wysłał(a) ci Lavender! 💜",
       premiumSuperBody: "Naprawdę chcą się z tobą połączyć!",
       freeTitle: "Ktoś cię lubi! 💜",
       freeBody: "Przejdź na Premium, aby zobaczyć kto cię polubił.",
-      freeSuperTitle: "Ktoś dał ci super like! ⭐",
+      freeSuperTitle: "Ktoś wysłał ci Lavender! 💜",
       freeSuperBody: "Przejdź na Premium, aby zobaczyć kto naprawdę chce się z tobą dopasować."
     },
     trialExpiration: {
@@ -788,7 +788,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "Twój Okres Próbny Premium jest Aktywny!",
-      day1Body: "Odblokuj nieograniczone polubienia, zobacz kto cię polubił, wysyłaj Super Like i więcej!",
+      day1Body: "Odblokuj nieograniczone polubienia, zobacz kto cię polubił, wysyłaj Lavendery i więcej!",
       day3TitleWithLikes: "{{count}} {{person}} polubiło cię!",
       day3TitleNoLikes: "Zauważają cię!",
       day3BodyWithLikes: "Dotknij, aby zobaczyć kto - to funkcja Premium, którą możesz zachować!",
@@ -813,8 +813,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "osoba",
       people: "osób",
       seenLikes: "zobaczyłeś {{count}}, którzy cię polubili",
-      sentSuperLikes: "wysłałeś {{count}} Super Like",
-      sentSuperLikesPlural: "wysłałeś {{count}} Super Like'ów",
+      sentSuperLikes: "wysłałeś {{count}} Lavender",
+      sentSuperLikesPlural: "wysłałeś {{count}} Lavenderów",
       madeMatch: "dopasowałeś się {{count}} raz",
       madeMatchesPlural: "dopasowałeś się {{count}} razy"
     },
@@ -839,11 +839,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} вподобав(ла) вас! 💜",
       premiumBody: "Подивіться, хто вас вподобав, і збігніться миттєво.",
-      premiumSuperTitle: "{{name}} супер вподобав(ла) вас! ⭐",
+      premiumSuperTitle: "{{name}} надіслав(ла) вам Lavender! 💜",
       premiumSuperBody: "Вони дуже хочуть з вами зв'язатися!",
       freeTitle: "Хтось вас вподобав! 💜",
       freeBody: "Оновіться до Преміум, щоб побачити, хто вас вподобав.",
-      freeSuperTitle: "Хтось супер вподобав вас! ⭐",
+      freeSuperTitle: "Хтось надіслав вам Lavender! 💜",
       freeSuperBody: "Оновіться до Преміум, щоб побачити, хто хоче з вами збігтися."
     },
     trialExpiration: {
@@ -856,7 +856,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "Ваш Преміум Пробний Період Активний!",
-      day1Body: "Розблокуйте необмежені вподобання, дивіться хто вас вподобав, надсилайте Супер Лайки і більше!",
+      day1Body: "Розблокуйте необмежені вподобання, дивіться хто вас вподобав, надсилайте Lavender і більше!",
       day3TitleWithLikes: "{{count}} {{person}} вподобали вас!",
       day3TitleNoLikes: "Вас помічають!",
       day3BodyWithLikes: "Натисніть, щоб побачити хто - це преміум-функція, яку ви можете зберегти!",
@@ -881,8 +881,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "людина",
       people: "людей",
       seenLikes: "побачили {{count}}, хто вас вподобав",
-      sentSuperLikes: "надіслали {{count}} Супер Лайк",
-      sentSuperLikesPlural: "надіслали {{count}} Супер Лайків",
+      sentSuperLikes: "надіслали {{count}} Lavender",
+      sentSuperLikesPlural: "надіслали {{count}} Lavender",
       madeMatch: "збіглися {{count}} раз",
       madeMatchesPlural: "збіглися {{count}} разів"
     },
@@ -907,11 +907,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} אוהב אותך! 💜",
       premiumBody: "ראה מי אהב אותך ועשה התאמה מיידית.",
-      premiumSuperTitle: "{{name}} סופר אהב אותך! ⭐",
+      premiumSuperTitle: "{{name}} שלח לך Lavender! 💜",
       premiumSuperBody: "הם באמת רוצים להתחבר איתך!",
       freeTitle: "מישהו אוהב אותך! 💜",
       freeBody: "שדרג לפרימיום כדי לראות מי אהב אותך.",
-      freeSuperTitle: "מישהו סופר אהב אותך! ⭐",
+      freeSuperTitle: "מישהו שלח לך Lavender! 💜",
       freeSuperBody: "שדרג לפרימיום כדי לראות מי באמת רוצה להתאים איתך."
     },
     trialExpiration: {
@@ -924,7 +924,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "תקופת הניסיון הפרימיום שלך פעילה!",
-      day1Body: "פתח לייקים ללא הגבלה, ראה מי אהב אותך, שלח סופר לייקים ועוד!",
+      day1Body: "פתח לייקים ללא הגבלה, ראה מי אהב אותך, שלח Lavender ועוד!",
       day3TitleWithLikes: "{{count}} {{person}} אהבו אותך!",
       day3TitleNoLikes: "אתה מקבל תשומת לב!",
       day3BodyWithLikes: "הקש לראות מי הם - זו תכונת פרימיום שתוכל לשמור!",
@@ -949,8 +949,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "אדם",
       people: "אנשים",
       seenLikes: "ראית {{count}} שאהבו אותך",
-      sentSuperLikes: "שלחת {{count}} סופר לייק",
-      sentSuperLikesPlural: "שלחת {{count}} סופר לייקים",
+      sentSuperLikes: "שלחת {{count}} Lavender",
+      sentSuperLikesPlural: "שלחת {{count}} Lavender",
       madeMatch: "עשית {{count}} התאמה",
       madeMatchesPlural: "עשית {{count}} התאמות"
     },
@@ -975,11 +975,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} تو را لایک کرد! 💜",
       premiumBody: "ببین کی تو را لایک کرده و فوراً مچ شو.",
-      premiumSuperTitle: "{{name}} تو را سوپر لایک کرد! ⭐",
+      premiumSuperTitle: "{{name}} برای تو Lavender فرستاد! 💜",
       premiumSuperBody: "آنها واقعاً می‌خواهند با تو ارتباط برقرار کنند!",
       freeTitle: "کسی تو را لایک کرد! 💜",
       freeBody: "به پرمیوم ارتقا بده تا ببینی کی تو را لایک کرده.",
-      freeSuperTitle: "کسی تو را سوپر لایک کرد! ⭐",
+      freeSuperTitle: "کسی برای تو Lavender فرستاد! 💜",
       freeSuperBody: "به پرمیوم ارتقا بده تا ببینی کی واقعاً می‌خواهد با تو مچ شود."
     },
     trialExpiration: {
@@ -992,7 +992,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "دوره آزمایشی پرمیوم شما فعال است!",
-      day1Body: "لایک‌های نامحدود، ببینید کی شما را لایک کرده، سوپر لایک بفرستید و بیشتر!",
+      day1Body: "لایک‌های نامحدود، ببینید کی شما را لایک کرده، Lavender بفرستید و بیشتر!",
       day3TitleWithLikes: "{{count}} {{person}} شما را لایک کردند!",
       day3TitleNoLikes: "شما مورد توجه هستید!",
       day3BodyWithLikes: "ضربه بزنید تا ببینید چه کسانی هستند - این یک ویژگی پرمیوم است که می‌توانید نگه دارید!",
@@ -1017,8 +1017,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "نفر",
       people: "نفر",
       seenLikes: "{{count}} نفر که شما را لایک کردند دیدید",
-      sentSuperLikes: "{{count}} سوپر لایک فرستادید",
-      sentSuperLikesPlural: "{{count}} سوپر لایک فرستادید",
+      sentSuperLikes: "{{count}} Lavender فرستادید",
+      sentSuperLikesPlural: "{{count}} Lavender فرستادید",
       madeMatch: "{{count}} مچ کردید",
       madeMatchesPlural: "{{count}} مچ کردید"
     },
@@ -1043,11 +1043,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} آپ کو پسند کرتے ہیں! 💜",
       premiumBody: "دیکھیں کس نے آپ کو لائک کیا اور فوری میچ کریں۔",
-      premiumSuperTitle: "{{name}} نے آپ کو سپر لائک کیا! ⭐",
+      premiumSuperTitle: "{{name}} نے آپ کو Lavender بھیجا! 💜",
       premiumSuperBody: "وہ واقعی آپ سے جڑنا چاہتے ہیں!",
       freeTitle: "کسی نے آپ کو پسند کیا! 💜",
       freeBody: "پریمیم میں اپگریڈ کریں اور دیکھیں کس نے آپ کو لائک کیا۔",
-      freeSuperTitle: "کسی نے آپ کو سپر لائک کیا! ⭐",
+      freeSuperTitle: "کسی نے آپ کو Lavender بھیجا! 💜",
       freeSuperBody: "پریمیم میں اپگریڈ کریں اور دیکھیں کون آپ سے میچ کرنا چاہتا ہے۔"
     },
     trialExpiration: {
@@ -1060,7 +1060,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "آپ کا پریمیم ٹرائل ایکٹو ہے!",
-      day1Body: "لامحدود لائکس، دیکھیں کس نے آپ کو لائک کیا، سپر لائکس بھیجیں اور مزید!",
+      day1Body: "لامحدود لائکس، دیکھیں کس نے آپ کو لائک کیا، Lavender بھیجیں اور مزید!",
       day3TitleWithLikes: "{{count}} {{person}} نے آپ کو لائک کیا!",
       day3TitleNoLikes: "آپ نوٹس ہو رہے ہیں!",
       day3BodyWithLikes: "دیکھنے کے لیے ٹیپ کریں کون ہیں - یہ پریمیم فیچر ہے جو آپ رکھ سکتے ہیں!",
@@ -1085,8 +1085,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "شخص",
       people: "لوگ",
       seenLikes: "{{count}} کو دیکھا جنہوں نے آپ کو لائک کیا",
-      sentSuperLikes: "{{count}} سپر لائک بھیجا",
-      sentSuperLikesPlural: "{{count}} سپر لائکس بھیجے",
+      sentSuperLikes: "{{count}} Lavender بھیجا",
+      sentSuperLikesPlural: "{{count}} Lavender بھیجے",
       madeMatch: "{{count}} میچ کیا",
       madeMatchesPlural: "{{count}} میچز کیے"
     },
@@ -1111,11 +1111,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} আপনাকে পছন্দ করেছে! 💜",
       premiumBody: "দেখুন কে আপনাকে লাইক করেছে এবং তাৎক্ষণিক ম্যাচ করুন।",
-      premiumSuperTitle: "{{name}} আপনাকে সুপার লাইক করেছে! ⭐",
+      premiumSuperTitle: "{{name}} আপনাকে একটি Lavender পাঠিয়েছে! 💜",
       premiumSuperBody: "তারা সত্যিই আপনার সাথে সংযোগ করতে চায়!",
       freeTitle: "কেউ আপনাকে পছন্দ করেছে! 💜",
       freeBody: "প্রিমিয়ামে আপগ্রেড করুন এবং দেখুন কে আপনাকে লাইক করেছে।",
-      freeSuperTitle: "কেউ আপনাকে সুপার লাইক করেছে! ⭐",
+      freeSuperTitle: "কেউ আপনাকে একটি Lavender পাঠিয়েছে! 💜",
       freeSuperBody: "প্রিমিয়ামে আপগ্রেড করুন এবং দেখুন কে সত্যিই আপনার সাথে ম্যাচ করতে চায়।"
     },
     trialExpiration: {
@@ -1128,7 +1128,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "আপনার প্রিমিয়াম ট্রায়াল সক্রিয়!",
-      day1Body: "সীমাহীন লাইক, দেখুন কে আপনাকে লাইক করেছে, সুপার লাইক পাঠান এবং আরও অনেক কিছু!",
+      day1Body: "সীমাহীন লাইক, দেখুন কে আপনাকে লাইক করেছে, Lavender পাঠান এবং আরও অনেক কিছু!",
       day3TitleWithLikes: "{{count}} {{person}} আপনাকে লাইক করেছে!",
       day3TitleNoLikes: "আপনি লক্ষ্য করা হচ্ছেন!",
       day3BodyWithLikes: "দেখতে ট্যাপ করুন তারা কে - এটি একটি প্রিমিয়াম ফিচার যা আপনি রাখতে পারেন!",
@@ -1153,8 +1153,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "জন",
       people: "জন",
       seenLikes: "{{count}} জনকে দেখেছেন যারা আপনাকে লাইক করেছে",
-      sentSuperLikes: "{{count}}টি সুপার লাইক পাঠিয়েছেন",
-      sentSuperLikesPlural: "{{count}}টি সুপার লাইক পাঠিয়েছেন",
+      sentSuperLikes: "{{count}}টি Lavender পাঠিয়েছেন",
+      sentSuperLikesPlural: "{{count}}টি Lavender পাঠিয়েছেন",
       madeMatch: "{{count}}টি ম্যাচ করেছেন",
       madeMatchesPlural: "{{count}}টি ম্যাচ করেছেন"
     },
@@ -1179,11 +1179,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}} menyukaimu! 💜",
       premiumBody: "Lihat siapa yang menyukaimu dan cocokkan langsung.",
-      premiumSuperTitle: "{{name}} sangat menyukaimu! ⭐",
+      premiumSuperTitle: "{{name}} mengirimimu Lavender! 💜",
       premiumSuperBody: "Mereka sangat ingin terhubung denganmu!",
       freeTitle: "Seseorang menyukaimu! 💜",
       freeBody: "Upgrade ke Premium untuk melihat siapa yang menyukaimu.",
-      freeSuperTitle: "Seseorang sangat menyukaimu! ⭐",
+      freeSuperTitle: "Seseorang mengirimimu Lavender! 💜",
       freeSuperBody: "Upgrade ke Premium untuk melihat siapa yang ingin cocok denganmu."
     },
     trialExpiration: {
@@ -1196,7 +1196,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "Uji Coba Premium Aktif!",
-      day1Body: "Buka like tak terbatas, lihat siapa yang menyukaimu, kirim Super Like dan lainnya!",
+      day1Body: "Buka like tak terbatas, lihat siapa yang menyukaimu, kirim Lavender dan lainnya!",
       day3TitleWithLikes: "{{count}} {{person}} menyukaimu!",
       day3TitleNoLikes: "Kamu diperhatikan!",
       day3BodyWithLikes: "Ketuk untuk melihat siapa mereka - ini fitur Premium yang bisa kamu simpan!",
@@ -1221,8 +1221,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "orang",
       people: "orang",
       seenLikes: "melihat {{count}} yang menyukaimu",
-      sentSuperLikes: "mengirim {{count}} Super Like",
-      sentSuperLikesPlural: "mengirim {{count}} Super Like",
+      sentSuperLikes: "mengirim {{count}} Lavender",
+      sentSuperLikesPlural: "mengirim {{count}} Lavender",
       madeMatch: "membuat {{count}} cocok",
       madeMatchesPlural: "membuat {{count}} cocok"
     },
@@ -1247,11 +1247,11 @@ const translations: Record<string, Record<string, any>> = {
     like: {
       premiumTitle: "{{name}}-ს მოეწონეთ! 💜",
       premiumBody: "ნახეთ ვინ მოგეწონათ და დაემთხვიეთ მყისიერად.",
-      premiumSuperTitle: "{{name}}-მ სუპერ მოიწონა! ⭐",
+      premiumSuperTitle: "{{name}}-მ გამოგიგზავნათ Lavender! 💜",
       premiumSuperBody: "მათ ნამდვილად სურთ თქვენთან დაკავშირება!",
       freeTitle: "ვინმეს მოეწონეთ! 💜",
       freeBody: "განაახლეთ პრემიუმზე რომ ნახოთ ვინ მოგეწონათ.",
-      freeSuperTitle: "ვინმემ სუპერ მოიწონა! ⭐",
+      freeSuperTitle: "ვინმემ გამოგიგზავნათ Lavender! 💜",
       freeSuperBody: "განაახლეთ პრემიუმზე რომ ნახოთ ვის სურს თქვენთან შესაბამისობა."
     },
     trialExpiration: {
@@ -1264,7 +1264,7 @@ const translations: Record<string, Record<string, any>> = {
     },
     trialEngagement: {
       day1Title: "თქვენი პრემიუმ საცდელი პერიოდი აქტიურია!",
-      day1Body: "გახსენით შეუზღუდავი მოწონებები, ნახეთ ვინ მოგეწონათ, გაგზავნეთ სუპერ მოწონებები და მეტი!",
+      day1Body: "გახსენით შეუზღუდავი მოწონებები, ნახეთ ვინ მოგეწონათ, გაგზავნეთ Lavender და მეტი!",
       day3TitleWithLikes: "{{count}} {{person}} მოგეწონათ!",
       day3TitleNoLikes: "თქვენ შენიშნავენ!",
       day3BodyWithLikes: "შეეხეთ რომ ნახოთ ვინ არიან - ეს პრემიუმ ფუნქციაა რომელიც შეგიძლიათ შეინახოთ!",
@@ -1289,8 +1289,8 @@ const translations: Record<string, Record<string, any>> = {
       person: "ადამიანი",
       people: "ადამიანი",
       seenLikes: "ნახეთ {{count}} ვინც მოგეწონათ",
-      sentSuperLikes: "გაგზავნეთ {{count}} სუპერ მოწონება",
-      sentSuperLikesPlural: "გაგზავნეთ {{count}} სუპერ მოწონება",
+      sentSuperLikes: "გაგზავნეთ {{count}} Lavender",
+      sentSuperLikesPlural: "გაგზავნეთ {{count}} Lavender",
       madeMatch: "დაემთხვიეთ {{count}} ჯერ",
       madeMatchesPlural: "დაემთხვიეთ {{count}} ჯერ"
     },
