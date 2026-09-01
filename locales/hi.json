@@ -127,7 +127,7 @@
       "placeholder": "कुछ अच्छा कहें...",
       "sendWithComment": "कमेंट के साथ लाइक भेजें",
       "sendLike": "लाइक भेजें",
-      "obsessed": "दीवाना"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "दैनिक सीमा पूरी",
     "dailyLimitMessage": "आपने आज के 5 लाइक इस्तेमाल कर लिए हैं। अनलिमिटेड के लिए अपग्रेड करें!",
@@ -1582,7 +1582,8 @@
       "noLikesRemaining": "आज कोई लाइक्स शेष नहीं",
       "upgradeBanner": "फ़ोटो दिखाने और अनलिमिटेड लाइक्स पाने के लिए अपग्रेड करें"
     },
-    "likedYourPhoto": "आपकी फ़ोटो लाइक की"
+    "likedYourPhoto": "आपकी फ़ोटो लाइक की",
+    "superLike": "Lavender"
   },
   "activity": {
     "title": "गतिविधि",

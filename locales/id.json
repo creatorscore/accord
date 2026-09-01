@@ -127,7 +127,7 @@
       "placeholder": "Katakan sesuatu yang baik...",
       "sendWithComment": "Kirim Suka dengan Komentar",
       "sendLike": "Kirim Suka",
-      "obsessed": "Terpesona"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "Batas harian tercapai",
     "dailyLimitMessage": "Anda telah menggunakan 5 like hari ini. Upgrade untuk like tanpa batas!",
@@ -1508,7 +1508,8 @@
       "noLikesRemaining": "Tidak ada suka tersisa hari ini",
       "upgradeBanner": "Tingkatkan untuk menampilkan foto & dapatkan suka tanpa batas"
     },
-    "likedYourPhoto": "Menyukai foto Anda"
+    "likedYourPhoto": "Menyukai foto Anda",
+    "superLike": "Lavender"
   },
   "contactBlocking": {
     "title": "Blokir Kontak",

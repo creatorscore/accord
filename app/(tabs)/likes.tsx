@@ -78,7 +78,7 @@ const LikeCard = React.memo(({ like, onPass, onLikeBack, isAdmin }: {
             <SafeBlurImage source={{ uri: imageUri }} className="w-full h-full" resizeMode="cover" blurRadius={blurRadius} onLoad={onImageLoad} onError={onImageError} />
             {like.like_type === 'super_like' && (
               <View style={styles.superLikeBadge}>
-                <MaterialCommunityIcons name="star" size={14} color="#FFD700" />
+                <MaterialCommunityIcons name="flower" size={14} color="#DDD6FE" />
                 <Text style={styles.superLikeBadgeText}>{t('likes.superLike', { defaultValue: 'Super Like' })}</Text>
               </View>
             )}
@@ -162,7 +162,7 @@ const FreeLikeCard = React.memo(({ like, onPass, onLikeBack, onUpgrade }: {
           <SafeBlurImage source={{ uri: imageUri }} className="w-full h-full" resizeMode="cover" blurRadius={privacyBlurRadius} onLoad={onImageLoad} onError={onImageError} />
           {like.like_type === 'super_like' && (
             <View style={styles.superLikeBadge}>
-              <MaterialCommunityIcons name="star" size={14} color="#FFD700" />
+              <MaterialCommunityIcons name="flower" size={14} color="#DDD6FE" />
               <Text style={styles.superLikeBadgeText}>{t('likes.superLike', { defaultValue: 'Super Like' })}</Text>
             </View>
           )}

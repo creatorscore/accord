@@ -127,7 +127,7 @@
       "placeholder": "قل شيئاً لطيفاً...",
       "sendWithComment": "إرسال إعجاب مع تعليق",
       "sendLike": "إرسال إعجاب",
-      "obsessed": "مُعجب جداً"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "تم الوصول للحد اليومي",
     "dailyLimitMessage": "لقد استخدمت جميع الإعجابات الخمسة اليوم. قم بالترقية للحصول على إعجابات غير محدودة!",
@@ -1582,7 +1582,8 @@
       "noLikesRemaining": "لا توجد إعجابات متبقية اليوم",
       "upgradeBanner": "قم بالترقية لكشف الصور والحصول على إعجابات غير محدودة"
     },
-    "likedYourPhoto": "أعجب بصورتك"
+    "likedYourPhoto": "أعجب بصورتك",
+    "superLike": "Lavender"
   },
   "activity": {
     "title": "النشاط",

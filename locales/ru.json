@@ -127,7 +127,7 @@
       "placeholder": "Напишите что-нибудь приятное...",
       "sendWithComment": "Отправить лайк с комментарием",
       "sendLike": "Отправить лайк",
-      "obsessed": "Восхищён(а)"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "Дневной лимит исчерпан",
     "dailyLimitMessage": "Вы использовали все 5 лайков на сегодня. Обновите для безлимитных!",
@@ -1508,7 +1508,8 @@
       "noLikesRemaining": "Лайков на сегодня не осталось",
       "upgradeBanner": "Улучшите для раскрытия фото и безлимитных лайков"
     },
-    "likedYourPhoto": "Понравилось ваше фото"
+    "likedYourPhoto": "Понравилось ваше фото",
+    "superLike": "Lavender"
   },
   "contactBlocking": {
     "title": "Блокировка контактов",

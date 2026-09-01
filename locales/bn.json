@@ -127,7 +127,7 @@
       "placeholder": "কিছু সুন্দর বলুন...",
       "sendWithComment": "মন্তব্য সহ লাইক পাঠান",
       "sendLike": "লাইক পাঠান",
-      "obsessed": "মুগ্ধ"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "দৈনিক সীমা পৌঁছেছে",
     "dailyLimitMessage": "আজকের ৫টি লাইক শেষ হয়েছে। আনলিমিটেডের জন্য আপগ্রেড করুন!",
@@ -1508,7 +1508,8 @@
       "noLikesRemaining": "আজ কোনো লাইক বাকি নেই",
       "upgradeBanner": "ছবি প্রকাশ ও সীমাহীন লাইকের জন্য আপগ্রেড করুন"
     },
-    "likedYourPhoto": "আপনার ছবি পছন্দ করেছে"
+    "likedYourPhoto": "আপনার ছবি পছন্দ করেছে",
+    "superLike": "Lavender"
   },
   "contactBlocking": {
     "title": "পরিচিতি ব্লক করা",

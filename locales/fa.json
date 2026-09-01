@@ -127,7 +127,7 @@
       "placeholder": "چیز خوبی بگویید...",
       "sendWithComment": "ارسال لایک با نظر",
       "sendLike": "ارسال لایک",
-      "obsessed": "شیفته"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "به حد روزانه رسیدید",
     "dailyLimitMessage": "شما هر ۵ لایک امروز را استفاده کرده‌اید. برای نامحدود ارتقا دهید!",
@@ -1582,7 +1582,8 @@
       "noLikesRemaining": "لایکی برای امروز باقی نمانده",
       "upgradeBanner": "برای نمایش عکس‌ها و لایک‌های نامحدود ارتقا دهید"
     },
-    "likedYourPhoto": "عکس شما را لایک کرد"
+    "likedYourPhoto": "عکس شما را لایک کرد",
+    "superLike": "Lavender"
   },
   "activity": {
     "title": "فعالیت",

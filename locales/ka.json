@@ -206,7 +206,7 @@
       "placeholder": "თქვით რაიმე სასიამოვნო...",
       "sendWithComment": "გაგზავნეთ მოწონება კომენტარით",
       "sendLike": "მოწონების გაგზავნა",
-      "obsessed": "აღტაცებული"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "დღიური ლიმიტი ამოიწურა",
     "dailyLimitMessage": "დღევანდელი 5 ლაიქი გამოყენებულია. განაახლეთ შეუზღუდავისთვის!",
@@ -1580,7 +1580,8 @@
       "noLikesRemaining": "დღეს მოწონებები აღარ დარჩა",
       "upgradeBanner": "განაახლეთ ფოტოების გასახსნელად და შეუზღუდავი მოწონებებისთვის"
     },
-    "likedYourPhoto": "მოიწონა თქვენი ფოტო"
+    "likedYourPhoto": "მოიწონა თქვენი ფოტო",
+    "superLike": "Lavender"
   },
   "activity": {
     "title": "აქტივობა",

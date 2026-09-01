@@ -206,7 +206,7 @@
       "placeholder": "Schreiben Sie etwas Nettes...",
       "sendWithComment": "Like mit Kommentar senden",
       "sendLike": "Like senden",
-      "obsessed": "Begeistert"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "Tageslimit erreicht",
     "dailyLimitMessage": "Du hast alle 5 Likes für heute aufgebraucht. Upgrade für unbegrenzte!",
@@ -1580,7 +1580,8 @@
       "noLikesRemaining": "Keine Likes mehr heute",
       "upgradeBanner": "Upgraden Sie, um Fotos zu enthüllen & unbegrenzte Likes zu erhalten"
     },
-    "likedYourPhoto": "Hat Ihr Foto geliked"
+    "likedYourPhoto": "Hat Ihr Foto geliked",
+    "superLike": "Lavender"
   },
   "activity": {
     "title": "Aktivität",

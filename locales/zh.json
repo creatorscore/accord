@@ -127,7 +127,7 @@
       "placeholder": "说点好听的...",
       "sendWithComment": "附评论发送喜欢",
       "sendLike": "发送喜欢",
-      "obsessed": "超喜欢"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "每日限额已达",
     "dailyLimitMessage": "您今天的5个喜欢已用完。升级获取无限喜欢！",
@@ -1508,7 +1508,8 @@
       "noLikesRemaining": "今天没有剩余喜欢",
       "upgradeBanner": "升级以查看照片并获取无限喜欢"
     },
-    "likedYourPhoto": "喜欢了你的照片"
+    "likedYourPhoto": "喜欢了你的照片",
+    "superLike": "Lavender"
   },
   "contactBlocking": {
     "title": "屏蔽联系人",

@@ -1235,14 +1235,17 @@ const DiscoveryProfileView = forwardRef<DiscoveryProfileViewRef, DiscoveryProfil
                   accessibilityLabel={t('discover.like.obsessed')}
                   accessibilityHint={badgeLabel}
                 >
+                  {/* "Lavender" — the brand's rose. Pale lavender field with a
+                      deep-purple flower keeps it visually distinct from the
+                      solid-purple Send Like primary. */}
                   <LinearGradient
-                    colors={['#FEF3C7', '#FDE68A']}
+                    colors={['#EDE9FE', '#DDD6FE']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.likeChoiceSecondaryGradient}
                   >
-                    <MaterialCommunityIcons name="star" size={20} color="#D97706" />
-                    <Text style={styles.likeChoiceSecondaryText}>{t('discover.like.obsessed')}</Text>
+                    <MaterialCommunityIcons name="flower" size={20} color="#6D28D9" />
+                    <Text style={[styles.likeChoiceSecondaryText, { color: '#6D28D9' }]}>{t('discover.like.obsessed')}</Text>
                     <View style={styles.likeChoiceCountBadge}>
                       <Text style={styles.likeChoiceCountBadgeText}>{badgeLabel}</Text>
                     </View>

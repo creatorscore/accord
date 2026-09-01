@@ -206,7 +206,7 @@
       "placeholder": "Napisz coś miłego...",
       "sendWithComment": "Wyślij polubienie z komentarzem",
       "sendLike": "Wyślij polubienie",
-      "obsessed": "Zachwycony/a"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "Dzienny limit osiągnięty",
     "dailyLimitMessage": "Wykorzystałeś wszystkie 5 polubień na dziś. Ulepsz, aby uzyskać nieograniczone!",
@@ -1580,7 +1580,8 @@
       "noLikesRemaining": "Brak polubień na dzisiaj",
       "upgradeBanner": "Ulepsz, aby odsłonić zdjęcia i uzyskać nielimitowane polubienia"
     },
-    "likedYourPhoto": "Polubił/a Twoje zdjęcie"
+    "likedYourPhoto": "Polubił/a Twoje zdjęcie",
+    "superLike": "Lavender"
   },
   "activity": {
     "title": "Aktywność",

@@ -127,7 +127,7 @@
       "placeholder": "کچھ اچھا کہیں...",
       "sendWithComment": "تبصرے کے ساتھ لائک بھیجیں",
       "sendLike": "لائک بھیجیں",
-      "obsessed": "دیوانہ"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "روزانہ حد تک پہنچ گئے",
     "dailyLimitMessage": "آپ نے آج کی 5 لائکس استعمال کر لی ہیں۔ لامحدود کے لیے اپ گریڈ کریں!",
@@ -1588,7 +1588,8 @@
       "noLikesRemaining": "آج کوئی لائک باقی نہیں",
       "upgradeBanner": "تصاویر دکھانے اور لامحدود لائکس کے لیے اپ گریڈ کریں"
     },
-    "likedYourPhoto": "آپ کی تصویر پسند کی"
+    "likedYourPhoto": "آپ کی تصویر پسند کی",
+    "superLike": "Lavender"
   },
   "activity": {
     "title": "سرگرمی",

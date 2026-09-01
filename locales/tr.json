@@ -127,7 +127,7 @@
       "placeholder": "Güzel bir şey yazın...",
       "sendWithComment": "Yorumlu Beğeni Gönder",
       "sendLike": "Beğeni Gönder",
-      "obsessed": "Hayranım"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "Günlük limite ulaşıldı",
     "dailyLimitMessage": "Bugünkü 5 beğeniyi kullandınız. Sınırsız için yükseltin!",
@@ -1514,7 +1514,8 @@
       "noLikesRemaining": "Bugün beğeni kalmadı",
       "upgradeBanner": "Fotoğrafları görmek ve sınırsız beğeni almak için yükseltin"
     },
-    "likedYourPhoto": "Fotoğrafınızı beğendi"
+    "likedYourPhoto": "Fotoğrafınızı beğendi",
+    "superLike": "Lavender"
   },
   "contactBlocking": {
     "title": "Kişi Engelleme",

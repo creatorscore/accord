@@ -23,7 +23,7 @@ import ReportUserModal from '@/components/moderation/ReportUserModal';
 // Do NOT import or call sendMatchNotification/sendLikeNotification from client code
 import { calculateScoreAndBreakdown } from '@/lib/matching-algorithm';
 import { initializeTracking } from '@/lib/tracking-permissions';
-import { getSuperLikePackage, purchasePackage, getPriceString } from '@/lib/revenue-cat';
+import { getSuperLikePackage, getSuperLikePackages, getSuperLikeCreditCount, purchasePackage, getPriceString } from '@/lib/revenue-cat';
 import { DistanceUnit } from '@/lib/distance-utils';
 import { signProfileMediaUrls } from '@/lib/signed-urls';
 import { HeightUnit } from '@/lib/height-utils';
@@ -169,11 +169,17 @@ export default function Discover() {
   // until the store products exist, every buy path falls back to the paywall.
   const [superLikeCredits, setSuperLikeCredits] = useState(0);
   const [superLikePackage, setSuperLikePackage] = useState<any>(null);
+  const [superLikePackages, setSuperLikePackages] = useState<any[]>([]);
+  const [showLavenderPacks, setShowLavenderPacks] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    getSuperLikePackage()
-      .then((pkg) => { if (!cancelled && pkg) setSuperLikePackage(pkg); })
+    getSuperLikePackages()
+      .then((pkgs) => {
+        if (cancelled || pkgs.length === 0) return;
+        setSuperLikePackages(pkgs);
+        setSuperLikePackage(pkgs[0]);
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -2895,10 +2901,20 @@ export default function Discover() {
         pkg = await getSuperLikePackage().catch(() => null);
         if (pkg) setSuperLikePackage(pkg);
       }
-      if (pkg) {
+      if (superLikePackages.length > 1) {
         Alert.alert(
           t('discover.premium.upgradeTitle'),
-          t('discover.superlike.buyMessage', { defaultValue: 'Premium includes 5 Super Likes a week — or send just this one.' }),
+          t('discover.superlike.buyMessage', { defaultValue: 'Premium includes 5 Lavenders a week — or send just this one.' }),
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('discover.superlike.packsTitle', { defaultValue: 'Get Lavenders' }), onPress: () => setShowLavenderPacks(true) },
+            { text: t('common.upgrade'), onPress: () => setShowPaywall(true) },
+          ]
+        );
+      } else if (pkg) {
+        Alert.alert(
+          t('discover.premium.upgradeTitle'),
+          t('discover.superlike.buyMessage', { defaultValue: 'Premium includes 5 Lavenders a week — or send just this one.' }),
           [
             { text: t('common.cancel'), style: 'cancel' },
             { text: t('discover.superlike.buyOne', { price: getPriceString(pkg), defaultValue: 'Buy 1 · {{price}}' }), onPress: () => purchaseSuperLike(pkg) },
@@ -2962,12 +2978,17 @@ export default function Discover() {
           Alert.alert(
             t('discover.premium.superLikeLimitTitle'),
             t('discover.premium.superLikeLimitMessage', { day: getDayName((resetDate.getDay() + 7) % 7) }),
-            pkg
+            superLikePackages.length > 1
               ? [
                   { text: t('common.cancel'), style: 'cancel' },
-                  { text: t('discover.superlike.buyOne', { price: getPriceString(pkg), defaultValue: 'Buy 1 · {{price}}' }), onPress: () => purchaseSuperLike(pkg) },
+                  { text: t('discover.superlike.packsTitle', { defaultValue: 'Get Lavenders' }), onPress: () => setShowLavenderPacks(true) },
                 ]
-              : [{ text: 'OK' }]
+              : pkg
+                ? [
+                    { text: t('common.cancel'), style: 'cancel' },
+                    { text: t('discover.superlike.buyOne', { price: getPriceString(pkg), defaultValue: 'Buy 1 · {{price}}' }), onPress: () => purchaseSuperLike(pkg) },
+                  ]
+                : [{ text: 'OK' }]
           );
           return false; // Don't proceed with the swipe
         }
@@ -3145,7 +3166,7 @@ export default function Discover() {
       }
       return false;
     }
-  }, [currentProfileId, currentIndex, profiles, isPremium, isProfileComplete, returnRoute, exitPreviewMode, superLikeCredits, superLikePackage, purchaseSuperLike]);
+  }, [currentProfileId, currentIndex, profiles, isPremium, isProfileComplete, returnRoute, exitPreviewMode, superLikeCredits, superLikePackage, superLikePackages, purchaseSuperLike]);
 
   // Helper function to get day name
   const getDayName = (day: number) => {
@@ -4806,8 +4827,70 @@ export default function Discover() {
         )}
       </Modal>
 
-      {/* Profile Boost Modal */}
+      {/* Profile Boost Modal + Lavender packs picker */}
       {currentProfileId && (
+        <>
+        <Modal
+          visible={showLavenderPacks}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowLavenderPacks(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setShowLavenderPacks(false)}
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              style={{ backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}
+            >
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <MaterialCommunityIcons name="flower" size={40} color="#8B6FA8" />
+                <Text style={{ fontSize: 20, fontWeight: '700', color: colors.foreground, marginTop: 8 }}>
+                  {t('discover.superlike.packsTitle', { defaultValue: 'Get Lavenders' })}
+                </Text>
+                <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 4 }}>
+                  {t('discover.superlike.packsSubtitle', { defaultValue: 'Stand out to the people who matter.' })}
+                </Text>
+              </View>
+              {superLikePackages.map((pkg: any, i: number) => {
+                const count = getSuperLikeCreditCount(pkg);
+                const best = superLikePackages.length > 1 && i === superLikePackages.length - 1;
+                return (
+                  <TouchableOpacity
+                    key={pkg.product.identifier}
+                    onPress={() => { setShowLavenderPacks(false); purchaseSuperLike(pkg); }}
+                    activeOpacity={0.85}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      borderWidth: 2, borderColor: best ? '#8B6FA8' : '#E5E7EB', borderRadius: 16,
+                      paddingVertical: 14, paddingHorizontal: 16, marginBottom: 10,
+                      backgroundColor: best ? 'rgba(139, 111, 168, 0.08)' : 'transparent',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: best ? '#6D28D9' : colors.foreground }}>
+                        {count === 1
+                          ? t('discover.superlike.packOptionOne', { defaultValue: '1 Lavender' })
+                          : t('discover.superlike.packOption', { count, defaultValue: '{{count}} Lavenders' })}
+                      </Text>
+                      {best && (
+                        <View style={{ backgroundColor: '#8B6FA8', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>
+                            {t('discover.superlike.bestValue', { defaultValue: 'Best value' })}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: colors.foreground }}>{getPriceString(pkg)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
         <ProfileBoostModal
           visible={showBoostModal}
           onClose={() => setShowBoostModal(false)}
@@ -4819,6 +4902,7 @@ export default function Discover() {
             setShowPaywall(true);
           }}
         />
+        </>
       )}
 
       {/* Filter Modal */}

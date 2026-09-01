@@ -517,21 +517,45 @@ export const checkTrialEligibility = async (
  * the store products are created; the buy option simply appears once they are.
  */
 export const getSuperLikePackage = async (): Promise<PurchasesPackage | null> => {
-  if (!isInitialized) return null;
+  const packages = await getSuperLikePackages();
+  return packages[0] ?? null;
+};
+
+/**
+ * Credits granted by a super-like ("Lavender") package, parsed from the
+ * product id's count suffix (accord_superlike_3 → 3). No suffix → 1.
+ * Must stay in sync with the same parse in the revenuecat-webhook.
+ */
+export const getSuperLikeCreditCount = (pkg: PurchasesPackage): number => {
+  const match = pkg.product.identifier.match(/superlike[_.-]?(\d+)/i);
+  return Math.max(1, parseInt(match?.[1] || '1', 10));
+};
+
+/**
+ * All configured super-like ("Lavender") packages, smallest pack first —
+ * e.g. accord_superlike_1 / _3 / _12. Empty until the store products exist.
+ */
+export const getSuperLikePackages = async (): Promise<PurchasesPackage[]> => {
+  if (!isInitialized) return [];
   try {
     const offerings = await Purchases.getOfferings();
     const candidates = [offerings.current, ...Object.values(offerings.all || {})];
+    const byProduct = new Map<string, PurchasesPackage>();
     for (const offering of candidates) {
       if (!offering) continue;
-      const pkg = offering.availablePackages.find((p) =>
-        /superlike/i.test(p.product.identifier)
-      );
-      if (pkg) return pkg;
+      for (const pkg of offering.availablePackages) {
+        if (/superlike/i.test(pkg.product.identifier) && !byProduct.has(pkg.product.identifier)) {
+          byProduct.set(pkg.product.identifier, pkg);
+        }
+      }
     }
+    return [...byProduct.values()].sort(
+      (a, b) => getSuperLikeCreditCount(a) - getSuperLikeCreditCount(b)
+    );
   } catch (error) {
-    console.warn('getSuperLikePackage failed:', error);
+    console.warn('getSuperLikePackages failed:', error);
+    return [];
   }
-  return null;
 };
 
 /**

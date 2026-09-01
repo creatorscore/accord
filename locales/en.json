@@ -318,9 +318,9 @@
     },
     "premium": {
       "upgradeTitle": "Upgrade to Premium",
-      "superLikesMessage": "Super likes are a Premium feature! Upgrade to send 5 super likes per week.",
-      "superLikeLimitTitle": "Super Like Limit Reached",
-      "superLikeLimitMessage": "You've used all 5 super likes this week. Your super likes will reset next {{day}}.",
+      "superLikesMessage": "Lavenders are a Premium feature! Upgrade to send 5 Lavenders per week.",
+      "superLikeLimitTitle": "Out of Lavenders",
+      "superLikeLimitMessage": "You've sent all 5 Lavenders this week. You'll get 5 more next {{day}}.",
       "rewindMessage": "Rewind is a Premium feature! Upgrade to undo your last swipe."
     },
     "intention": {
@@ -350,7 +350,7 @@
       "placeholder": "Say something nice...",
       "sendWithComment": "Send Like with Comment",
       "sendLike": "Send Like",
-      "obsessed": "Obsessed",
+      "obsessed": "Lavender",
       "superLikesLeftWeek": "{{count}} left this week",
       "superLikesAvailable": "{{count}} available"
     },
@@ -429,13 +429,18 @@
       "keepBrowsing": "Keep Browsing"
     },
     "superlike": {
-      "buyMessage": "Premium includes 5 Super Likes a week — or send just this one.",
+      "buyMessage": "Premium includes 5 Lavenders a week — or send just this one.",
       "buyOne": "Buy 1 · {{price}}",
-      "readyTitle": "Super Like ready!",
-      "readyMessage": "Tap Obsessed again to send it.",
+      "readyTitle": "Lavender ready!",
+      "readyMessage": "Tap Lavender again to send it.",
       "pendingTitle": "Purchase received",
-      "pendingMessage": "Your Super Like will appear in a moment.",
-      "purchaseFailed": "Purchase didn’t go through. You were not charged."
+      "pendingMessage": "Your Lavender will appear in a moment.",
+      "purchaseFailed": "Purchase didn’t go through. You were not charged.",
+      "packsTitle": "Get Lavenders",
+      "packsSubtitle": "Stand out to the people who matter.",
+      "packOption": "{{count}} Lavenders",
+      "packOptionOne": "1 Lavender",
+      "bestValue": "Best value"
     }
   },
   "filters": {
@@ -1935,7 +1940,8 @@
       "message": "Upgrade to see who it is and match instantly — or keep going to match with their photo blurred.",
       "cta": "See who it is"
     },
-    "likedYourPhoto": "Liked your photo"
+    "likedYourPhoto": "Liked your photo",
+    "superLike": "Lavender"
   },
   "passed": {
     "title": "Passed Profiles",
@@ -2734,9 +2740,9 @@
     "voiceUploadFailed": "Failed to save voice intro",
     "alreadyMatched": "You're already matched with {{name}}. Check your matches tab!",
     "alreadyLiked": "You've already liked {{name}}. You'll match if they like you back!",
-    "obsessedTitle": "Obsessed!",
-    "obsessedWithRemaining": "{{name}} will be notified that you're obsessed!\n\n{{remaining}} super likes remaining this week.",
-    "obsessedBasic": "{{name}} will be notified that you're obsessed!",
+    "obsessedTitle": "Lavender sent!",
+    "obsessedWithRemaining": "{{name}} will see your Lavender.\n\n{{remaining}} Lavenders left this week.",
+    "obsessedBasic": "{{name}} will see your Lavender.",
     "tooFarTitle": "Too Far Away",
     "tooFarMessage": "This person's search preferences don't include your area.",
     "globalSearchPremiumTitle": "Search Globally is Now Premium",

@@ -127,7 +127,7 @@
       "placeholder": "אמור משהו נחמד...",
       "sendWithComment": "שלח לייק עם תגובה",
       "sendLike": "שלח לייק",
-      "obsessed": "מאוהב"
+      "obsessed": "Lavender"
     },
     "dailyLimitTitle": "הגעת למגבלה היומית",
     "dailyLimitMessage": "השתמשת בכל 5 הלייקים להיום. שדרג ללייקים ללא הגבלה!",
@@ -1582,7 +1582,8 @@
       "noLikesRemaining": "לא נותרו לייקים להיום",
       "upgradeBanner": "שדרג כדי לחשוף תמונות ולקבל לייקים ללא הגבלה"
     },
-    "likedYourPhoto": "אהב את התמונה שלך"
+    "likedYourPhoto": "אהב את התמונה שלך",
+    "superLike": "Lavender"
   },
   "activity": {
     "title": "פעילות",
