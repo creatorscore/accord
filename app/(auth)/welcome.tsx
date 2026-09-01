@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Animated, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -53,17 +53,36 @@ export default function Welcome() {
       colors={gradientColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={[styles.container, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 10 }]}
+      style={styles.container}
     >
       <StatusBar style="light" />
+
+      {/* The whole screen lives in a ScrollView with natural section heights.
+          The previous fixed flex ratios (hero 1.2 / props 0.8 / CTA minHeight)
+          shrank the CONTAINERS on short or font-scaled screens while their
+          text kept its size — RN doesn't clip, so the subtitle overprinted
+          the icon row and the trust badge slid under Get Started. With
+          flexGrow on the content the layout is pixel-identical whenever
+          everything fits, and scrolls instead of overlapping when it
+          doesn't. */}
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 16 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
 
       {/* Hero Section */}
       <View style={styles.heroSection}>
         <MaterialCommunityIcons name="heart" size={56} color="#FFFFFF" style={styles.heroIcon} />
-        <Text style={styles.title}>
+        {/* Display-size text: cap accessibility scaling at 1.2x (40pt/24pt
+            have headroom already); body text below scales freely. */}
+        <Text style={styles.title} maxFontSizeMultiplier={1.2}>
           {t('auth.welcome.title')}
         </Text>
-        <Text style={styles.tagline}>
+        <Text style={styles.tagline} maxFontSizeMultiplier={1.2}>
           {t('auth.welcome.tagline')}
         </Text>
         <Text style={styles.subtitle}>
@@ -135,6 +154,7 @@ export default function Welcome() {
           {t('auth.welcome.footer')}
         </Text>
       </View>
+      </ScrollView>
     </LinearGradient>
   );
 }
@@ -142,13 +162,16 @@ export default function Welcome() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 24,
   },
   heroSection: {
-    flex: 1.2,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 160,
+    paddingVertical: 16,
   },
   heroIcon: {
     marginBottom: 16,
@@ -178,13 +201,11 @@ const styles = StyleSheet.create({
   },
   valuePropsContainer: {
     marginBottom: 24,
-    flex: 0.8,
-    justifyContent: 'center',
   },
   valuePropsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   valueProp: {
     alignItems: 'center',
@@ -221,8 +242,6 @@ const styles = StyleSheet.create({
   },
   ctaContainer: {
     paddingBottom: 8,
-    minHeight: 200,
-    justifyContent: 'flex-end',
   },
   primaryButton: {
     backgroundColor: '#FFFFFF',
