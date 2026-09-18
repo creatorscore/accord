@@ -465,6 +465,7 @@ async function main() {
   const isDryRun = args.includes('--dry-run');
   const applyChanges = args.includes('--apply');
   const singleCountry = args.find(a => a.startsWith('--country='))?.split('=')[1];
+  const singleType = args.find(a => a.startsWith('--type='))?.split('=')[1];
 
   console.log('='.repeat(70));
   console.log('App Store Connect Subscription Price Updater v2 (FIXED)');
@@ -477,6 +478,7 @@ async function main() {
     console.log('  --dry-run              Preview all changes without applying');
     console.log('  --apply                Actually apply the price changes');
     console.log('  --country=TERRITORY    Only update specific territory (e.g., --country=USA)');
+    console.log('  --type=TYPE            Only update one billing type: weekly|monthly|threeMonth|annual');
     console.log('');
     console.log('Run with --dry-run first to preview changes.');
     process.exit(0);
@@ -484,6 +486,7 @@ async function main() {
 
   console.log(`Mode: ${isDryRun ? 'DRY RUN (preview only)' : 'APPLYING CHANGES'}`);
   if (singleCountry) console.log(`Filtering to territory: ${singleCountry}`);
+  if (singleType) console.log(`Filtering to billing type: ${singleType}`);
   console.log('');
 
   const keyId = process.env.APP_STORE_KEY_ID;
@@ -545,6 +548,14 @@ async function main() {
       }
 
       const subType = getSubscriptionType(subName);
+
+      // Optional surgical filter: only touch one billing type (e.g. --type=weekly
+      // to apply the newly-added Weekly tier without re-writing the already-live
+      // monthly/3-month/annual prices).
+      if (singleType && subType !== singleType) {
+        console.log(`\nSkipping: ${subName} (${subType}) - filtered out by --type=${singleType}`);
+        continue;
+      }
 
       console.log(`\n${'='.repeat(70)}`);
       console.log(`SUBSCRIPTION: ${subName} (${subType})`);

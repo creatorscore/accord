@@ -27,6 +27,7 @@ export interface FilterOptions {
   maxDistance: number;
   activeToday: boolean;
   showBlurredPhotos: boolean;
+  verifiedOnly: boolean;
 
   // Premium filters (existing)
   religion: string[];
@@ -210,6 +211,7 @@ export default function FilterModal({
       maxDistance: 100,
       activeToday: false,
       showBlurredPhotos: true,
+      verifiedOnly: false,
       // Premium filters
       religion: [],
       politicalViews: [],

@@ -19,6 +19,7 @@ import Slider from '@react-native-community/slider';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/lib/supabase';
 import {
   formatDistanceSlider,
@@ -27,6 +28,7 @@ import {
   sliderToDistance,
   DISTANCE_MAX,
   DistanceUnit,
+  milesToKm,
 } from '@/lib/distance-utils';
 import { GENDER_PREF_OPTIONS, expandGenderPreference, collapseGenderPreference } from '@/lib/gender-preferences';
 import * as Haptics from 'expo-haptics';
@@ -118,6 +120,13 @@ const MAJOR_CITIES = [
 export default function MatchingPreferences() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  // Premium status MUST come from the subscription source of truth (RevenueCat
+  // via SubscriptionContext), NOT profiles.is_premium. The DB column lags behind
+  // RevenueCat whenever the sync webhook misses, which left active subscribers
+  // locked out of Global Search and told to upgrade despite paying. The context
+  // falls back to the DB flag only until RevenueCat finishes loading.
+  const { isPremium: subIsPremium, isPlatinum } = useSubscription();
+  const isPremium = subIsPremium || isPlatinum;
   const insets = useSafeAreaInsets();
 
   const RELATIONSHIP_TYPES: Record<string, string> = {
@@ -153,7 +162,6 @@ export default function MatchingPreferences() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
-  const [isPremium, setIsPremium] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [newCity, setNewCity] = useState('');
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
@@ -189,7 +197,6 @@ export default function MatchingPreferences() {
       if (!profileData) throw new Error('Profile not found');
 
       setProfileId(profileData.id);
-      setIsPremium(profileData.is_premium || profileData.is_platinum || false);
 
       // Then get preferences using profile_id
       const { data, error } = await supabase
@@ -202,8 +209,15 @@ export default function MatchingPreferences() {
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
+        // "Everyone" is no longer a selectable chip. Legacy users stored it as
+        // an empty array (collapse → ['Everyone']); show that as all three
+        // genders selected — functionally identical — so the Seeking section
+        // isn't blank. Saving then persists the explicit trio.
+        const collapsedGenderPref = collapseGenderPreference(data.gender_preference || []);
         setPreferences({
-          gender_preference: collapseGenderPreference(data.gender_preference || []),
+          gender_preference: collapsedGenderPref.includes('Everyone')
+            ? [...GENDER_PREF_OPTIONS]
+            : collapsedGenderPref,
           wants_children: data.wants_children,
           relationship_type: data.relationship_type || 'platonic',
           age_min: data.age_min || 18,
@@ -244,6 +258,7 @@ export default function MatchingPreferences() {
       const prefsToSave = {
         ...basePrefs,
         gender_preference: expandGenderPreference(basePrefs.gender_preference),
+        gender_preference_confirmed_at: new Date().toISOString(),
       };
 
       // Use .update() instead of .upsert() to only modify fields managed by this page.
@@ -647,11 +662,20 @@ export default function MatchingPreferences() {
                 minimumTrackTintColor="#A08AB7"
                 maximumTrackTintColor="#E5E7EB"
               />
+              {/* Markers convert with the unit toggle — they were hardcoded in
+                  miles, so switching to km still showed "500+" when the real cap
+                  is ~805 km. Positions are unchanged (same physical distances);
+                  only the labels convert. */}
               <View style={styles.distanceMarkers}>
-                <Text style={styles.distanceMarkerText}>5 mi</Text>
-                <Text style={styles.distanceMarkerText}>25</Text>
-                <Text style={styles.distanceMarkerText}>100</Text>
-                <Text style={styles.distanceMarkerText}>500+</Text>
+                {[5, 25, 100, DISTANCE_MAX].map((mi, i) => {
+                  const isKm = preferences.distance_unit === 'km';
+                  const val = isKm ? Math.round(milesToKm(mi)) : mi;
+                  const isMax = mi >= DISTANCE_MAX;
+                  const label = i === 0
+                    ? `${val} ${isKm ? 'km' : 'mi'}`
+                    : isMax ? `${val}+` : `${val}`;
+                  return <Text key={mi} style={styles.distanceMarkerText}>{label}</Text>;
+                })}
               </View>
             </View>
 
@@ -673,7 +697,16 @@ export default function MatchingPreferences() {
               />
             </View>
 
-            <View style={styles.switchRow}>
+            {/* For non-premium users the whole row opens the paywall — the tap
+                target was previously just the tiny 24px lock icon, so taps
+                often missed and it felt unresponsive. Premium users keep the
+                Switch (native component captures its own touch; the row's
+                onPress is a guarded no-op for them). */}
+            <TouchableOpacity
+              style={styles.switchRow}
+              activeOpacity={isPremium ? 1 : 0.7}
+              onPress={() => { if (!isPremium) setShowPaywall(true); }}
+            >
               <View style={styles.switchContent}>
                 <MaterialCommunityIcons name="earth" size={20} color="#A08AB7" style={{ marginRight: 8 }} />
                 <View style={{ flex: 1 }}>
@@ -701,15 +734,19 @@ export default function MatchingPreferences() {
                   thumbColor={preferences.search_globally ? '#A08AB7' : '#F3F4F6'}
                 />
               ) : (
-                <TouchableOpacity onPress={() => setShowPaywall(true)}>
-                  <MaterialCommunityIcons name="lock" size={24} color="#A08AB7" />
-                </TouchableOpacity>
+                <MaterialCommunityIcons name="lock" size={24} color="#A08AB7" />
               )}
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Preferred Cities - Now free for all users */}
+        {/* Preferred Cities — premium feature. Free users see the card title
+            with a Premium badge + locked input that opens the paywall when
+            tapped. Existing city chips stay visible (so a former-premium
+            user can see what they had + remove them), but new adds are
+            gated. The discovery feed enforces the same gate server-side
+            so a non-premium user can't keep the broader feed by toggling
+            their entitlement. */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings.matchingPreferences.locationPreferences')}</Text>
           <View style={styles.card}>
@@ -718,34 +755,61 @@ export default function MatchingPreferences() {
                 <MaterialCommunityIcons name="city-variant" size={24} color="#A08AB7" />
               </View>
               <View style={styles.cardHeaderText}>
-                <Text style={styles.cardTitle}>{t('settings.matchingPreferences.preferredCities')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.cardTitle}>{t('settings.matchingPreferences.preferredCities')}</Text>
+                  {!isPremium && (
+                    <View style={{ backgroundColor: '#A08AB7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{t('common.premium').toUpperCase()}</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={styles.cardDescription}>
                   {t('settings.matchingPreferences.preferredCitiesDesc')}
                 </Text>
               </View>
             </View>
 
-            {/* City Input with Autocomplete */}
+            {/* City Input with Autocomplete (premium-only) */}
             <View>
-              <View style={styles.cityInputContainer}>
-                <TextInput
-                  style={styles.cityInput}
-                  placeholder={t('settings.matchingPreferences.searchCitiesPlaceholder')}
-                  value={newCity}
-                  onChangeText={handleCitySearch}
-                  onSubmitEditing={addCity}
-                  returnKeyType="done"
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                />
+              {isPremium ? (
+                <View style={styles.cityInputContainer}>
+                  <TextInput
+                    style={styles.cityInput}
+                    placeholder={t('settings.matchingPreferences.searchCitiesPlaceholder')}
+                    value={newCity}
+                    onChangeText={handleCitySearch}
+                    onSubmitEditing={addCity}
+                    returnKeyType="done"
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity
+                    style={[styles.addCityButton, (!newCity.trim() || preferences.preferred_cities.length >= 2) && styles.addCityButtonDisabled]}
+                    onPress={addCity}
+                    disabled={!newCity.trim() || preferences.preferred_cities.length >= 2}
+                  >
+                    <MaterialCommunityIcons name="plus" size={20} color={newCity.trim() && preferences.preferred_cities.length < 2 ? '#fff' : '#9CA3AF'} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
                 <TouchableOpacity
-                  style={[styles.addCityButton, (!newCity.trim() || preferences.preferred_cities.length >= 2) && styles.addCityButtonDisabled]}
-                  onPress={addCity}
-                  disabled={!newCity.trim() || preferences.preferred_cities.length >= 2}
+                  onPress={() => setShowPaywall(true)}
+                  activeOpacity={0.7}
+                  style={[styles.cityInputContainer, { backgroundColor: '#F5F3F8', borderColor: '#E8E3F0' }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Preferred cities — Premium feature. Tap to upgrade."
                 >
-                  <MaterialCommunityIcons name="plus" size={20} color={newCity.trim() && preferences.preferred_cities.length < 2 ? '#fff' : '#9CA3AF'} />
+                  <View style={[styles.cityInput, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+                    <MaterialCommunityIcons name="lock" size={18} color="#A08AB7" />
+                    <Text style={{ color: '#6B7280', fontSize: 14 }}>
+                      {t('settings.matchingPreferences.preferredCitiesPremium', 'Unlock with Premium')}
+                    </Text>
+                  </View>
+                  <View style={[styles.addCityButton, styles.addCityButtonDisabled]}>
+                    <MaterialCommunityIcons name="plus" size={20} color="#9CA3AF" />
+                  </View>
                 </TouchableOpacity>
-              </View>
+              )}
               <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>
                 {t('settings.matchingPreferences.citiesAdded', { count: preferences.preferred_cities.length })}
               </Text>

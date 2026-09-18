@@ -44,18 +44,59 @@ function formatCity(city: City): string {
   return `${city.name}, ${city.country}`;
 }
 
+// Pre-built first-letter index of citiesData. Real-device 2026-05-29
+// report: the hometown step "froze" on low-end Android because every
+// keystroke linear-scanned the entire ~50k-entry cities array (700KB
+// data file) with .includes() comparisons. Multi-hundred-ms JS-thread
+// block per stroke = unresponsive input.
+//
+// Indexing by first letter of every word in the name cuts the scan
+// to the relevant bucket (~2k items on average). "New York" goes into
+// both 'n' (first word) and 'y' (second word) buckets so typing
+// either first letter still finds it. Built lazily on first search
+// so module load stays fast.
+let firstLetterIndex: Map<string, number[]> | null = null;
+
+function buildIndex(): Map<string, number[]> {
+  if (firstLetterIndex) return firstLetterIndex;
+  const idx = new Map<string, number[]>();
+  for (let i = 0; i < citiesData.length; i++) {
+    const t = citiesData[i] as CityTuple;
+    const name = t[0];
+    // Index every word's first letter — handles "New York" via 'n' AND 'y'.
+    let prev = ' ';
+    for (let j = 0; j < name.length; j++) {
+      const ch = name[j];
+      if (prev === ' ' && ch !== ' ') {
+        const first = ch.toLowerCase();
+        const bucket = idx.get(first);
+        if (bucket) bucket.push(i);
+        else idx.set(first, [i]);
+      }
+      prev = ch;
+    }
+  }
+  firstLetterIndex = idx;
+  return idx;
+}
+
 function searchCities(text: string): City[] {
   if (text.length < 2) return [];
 
   const lower = text.toLowerCase();
+  const firstChar = lower[0];
+  const index = buildIndex();
+  const bucket = index.get(firstChar);
+  if (!bucket || bucket.length === 0) return [];
+
   const startsWith: City[] = [];
   const contains: City[] = [];
   const seen = new Set<string>();
 
-  for (let i = 0; i < citiesData.length; i++) {
+  for (let bi = 0; bi < bucket.length; bi++) {
     if (startsWith.length >= 20 && contains.length >= 5) break;
 
-    const t = citiesData[i] as CityTuple;
+    const t = citiesData[bucket[bi]] as CityTuple;
     const nameLower = t[0].toLowerCase();
     const regionLower = t[2].toLowerCase();
     const fullLower = `${nameLower}, ${regionLower}`;
@@ -135,6 +176,28 @@ export default function CityAutocompleteStep({
 
   return (
     <View style={styles.container}>
+      {/* Inline Skip — rendered ABOVE the input so it's visible before the
+          keyboard pops up and pushes the bottom action area off-screen. The
+          header's small Skip link wasn't getting tapped on this step (508
+          users stuck at hometown in 14d cohort); users see only the search
+          field once focus + keyboard kick in. */}
+      {onSkip && (
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            Keyboard.dismiss();
+            onSkip();
+          }}
+          style={styles.topSkipButton}
+          accessibilityRole="button"
+          accessibilityLabel="Skip this step"
+        >
+          <Text style={[styles.topSkipText, { color: isDark ? '#A08AB7' : '#8B72A8' }]}>
+            Skip for now
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Input */}
       <View style={[styles.inputRow, {
         borderColor: showResults ? '#A08AB7' : (isDark ? '#374151' : '#E4E4E7'),
@@ -237,25 +300,6 @@ export default function CityAutocompleteStep({
         </View>
       )}
 
-      {/* Inline skip — only rendered when the parent passes onSkip. The
-          corner Skip in OnboardingLayout is too small for a text-input
-          step where the user is staring at the keyboard. */}
-      {onSkip && (
-        <TouchableOpacity
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            Keyboard.dismiss();
-            onSkip();
-          }}
-          style={styles.inlineSkipButton}
-          accessibilityRole="button"
-          accessibilityLabel="Skip this step"
-        >
-          <Text style={[styles.inlineSkipText, { color: isDark ? '#A08AB7' : '#8B72A8' }]}>
-            Skip for now
-          </Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -329,14 +373,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  inlineSkipButton: {
-    alignSelf: 'center',
-    marginTop: 24,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+  topSkipButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
-  inlineSkipText: {
-    fontSize: 16,
+  topSkipText: {
+    fontSize: 15,
     fontWeight: '600',
     textDecorationLine: 'underline',
   },

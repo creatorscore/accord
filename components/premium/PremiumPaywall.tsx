@@ -12,10 +12,12 @@ import {
   Platform,
   Linking,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeBlurView } from '@/components/shared/SafeBlurView';
 import { getOfferings, purchasePackage } from '@/lib/revenue-cat';
+import { trackUserAction, trackFunnel } from '@/lib/analytics';
+import { openExternalURL } from '@/lib/external-link';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useTranslation } from 'react-i18next';
 
@@ -46,6 +48,14 @@ const PLATINUM_HIGHLIGHT_KEYS = [
   { icon: 'shield-check', titleKey: 'backgroundCheck' },
 ];
 
+// Weekly plan is RETIRED for new buyers (2026-07-23). It retained terribly
+// (4% vs monthly 25%, annual 74% — measured 2026-07-21): weekly buyers churn
+// after ~one cycle, so it dragged LTV without adding durable revenue. The
+// product stays live in the stores/RevenueCat so existing weekly subscribers
+// keep renewing (backward compatible), but the paywall no longer surfaces it.
+// Flip to true to bring the option back.
+const WEEKLY_PLAN_ENABLED = false;
+
 export default function PremiumPaywall({
   visible,
   onClose,
@@ -55,10 +65,17 @@ export default function PremiumPaywall({
   const { refreshSubscription, syncWithDatabase } = useSubscription();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('monthly'); // Default to monthly — weekly is shown as a low-commitment add-on for impulse buyers but should not be the recommended default (worse LTV)
+  // Default to ANNUAL: it retains dramatically better (74% vs monthly 25%,
+  // weekly 4% — measured 2026-07-21) and has the best per-month price, so it
+  // both lifts LTV and captures revenue up front before the ~40-day churn.
+  // Weekly is retired for new buyers (see WEEKLY_PLAN_ENABLED). The 'weekly'
+  // union member is retained only so existing weekly subscribers' state is
+  // still representable.
+  const [selectedPlan, setSelectedPlan] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('annual');
   // Flips to true only when RevenueCat actually returns a weekly
-  // package in the offering. The product is now live in both stores;
-  // visibility is purely data-driven.
+  // package in the offering. The product is still live in both stores
+  // (existing weekly subscribers keep renewing), but we no longer OFFER
+  // it to new buyers — see WEEKLY_PLAN_ENABLED below.
   const [hasWeeklyPackage, setHasWeeklyPackage] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -74,8 +91,14 @@ export default function PremiumPaywall({
 
   // Reset closing state when paywall opens
   useEffect(() => {
-    if (visible) setIsClosing(false);
-  }, [visible]);
+    if (visible) {
+      setIsClosing(false);
+      // Top of the conversion funnel. These events existed in lib/analytics.ts
+      // but were never fired anywhere, so paywall→purchase was unmeasurable.
+      trackUserAction.paywallViewed(feature);
+      trackFunnel.paywallViewed();
+    }
+  }, [visible, feature]);
 
   // Hide the Android navigation bar (gesture pill / 3-button bar) while
   // the paywall is open so the gray card visually claims the bottom of
@@ -91,7 +114,12 @@ export default function PremiumPaywall({
         if (cancelled) return;
         if (visible) {
           await NavigationBar.setVisibilityAsync('hidden');
-          await NavigationBar.setBehaviorAsync('overlay-swipe');
+          // setBehaviorAsync('overlay-swipe') was used here to let the user
+          // swipe to reveal the nav bar while hidden. It's deprecated/
+          // unsupported on Android 15+ with edge-to-edge layout (Expo SDK
+          // 54 default) and emits a WARN per open. The OS already handles
+          // swipe-to-reveal on edge-to-edge, so dropping the call is a
+          // no-op behaviorally and just silences the warning.
         } else {
           await NavigationBar.setVisibilityAsync('visible');
         }
@@ -114,8 +142,16 @@ export default function PremiumPaywall({
   // about package metadata (price + currency + which periods are
   // available) — there are no trials configured on any plan, so we
   // skip the trial-eligibility check entirely.
+  //
+  // Previously this effect bailed early under __DEV__ to avoid hitting
+  // RC in development. The side-effect was that hasWeeklyPackage stayed
+  // false for every dev build, which meant the weekly plan was
+  // invisible during local testing — a real-device walk-through on
+  // 2026-05-28 surfaced this as "weekly subscription plan is missing"
+  // without anyone realizing the dev skip was responsible. RC is
+  // internet-accessible from dev too; let it run.
   useEffect(() => {
-    if (!visible || __DEV__) return;
+    if (!visible) return;
 
     let cancelled = false;
 
@@ -125,6 +161,10 @@ export default function PremiumPaywall({
         if (!offerings || cancelled) return;
         const packages: Record<string, { priceString: string; price: number; currencyCode: string }> = {};
         let weeklyFound = false;
+        // Log the raw RC offering so we can debug "weekly is missing"
+        // reports without having to attach a debugger. The output is
+        // small (a few entries) and only fires when the paywall opens.
+        const debugSummary: { product: string; package: string; period: string | undefined }[] = [];
         for (const pkg of offerings.availablePackages) {
           const id = pkg.product.identifier.toLowerCase();
           const pkgId = pkg.identifier.toLowerCase();
@@ -133,6 +173,7 @@ export default function PremiumPaywall({
             price: pkg.product.price,
             currencyCode: pkg.product.currencyCode,
           };
+          debugSummary.push({ product: pkg.product.identifier, package: pkg.identifier, period: (pkg.product as any).subscriptionPeriod });
           // Detect a weekly package across the common naming schemes:
           //   accord_premium_weekly, $rc_weekly, premium_1w, weekly, etc.
           if ((id.includes('week') || id.includes('1w') || pkgId.includes('week') || pkgId === '$rc_weekly') &&
@@ -140,10 +181,11 @@ export default function PremiumPaywall({
             weeklyFound = true;
           }
         }
+        console.log('[Paywall] RC offerings:', debugSummary, 'weeklyFound =', weeklyFound);
         setLivePackages(packages);
         setHasWeeklyPackage(weeklyFound);
       } catch (error) {
-        console.warn('⚠️ Failed to fetch RC offerings:', error);
+        console.warn('[Paywall] Failed to fetch RC offerings:', error);
       }
     };
 
@@ -212,11 +254,11 @@ export default function PremiumPaywall({
   const annualPrice = getLivePrice(tier, 'annual', isPlatinum ? '$199.99' : '$119.99');
   const quarterlySavings = '22%';
   const annualSavings = '33%';
-  // Show weekly only for Premium (not Platinum) AND only when RevenueCat
-  // has actually returned a weekly package. This means the row stays
-  // hidden until you create the product in App Store Connect / Play
-  // Console / RevenueCat — no risk of users tapping a broken option.
-  const showWeekly = !isPlatinum && hasWeeklyPackage;
+  // Weekly is retired for new buyers (WEEKLY_PLAN_ENABLED === false), so this
+  // is always false in production. The !isPlatinum && hasWeeklyPackage guards
+  // remain so that flipping the flag back on restores the original
+  // data-driven behavior (Premium-only, only when RC returns the package).
+  const showWeekly = WEEKLY_PLAN_ENABLED && !isPlatinum && hasWeeklyPackage;
 
   const handlePurchase = async () => {
     try {
@@ -304,6 +346,8 @@ export default function PremiumPaywall({
                 onPress: async () => {
                   const customerInfo = await purchasePackage(fallbackPkg);
                   if (customerInfo) {
+                    trackUserAction.subscriptionStarted(variant as 'premium' | 'platinum', selectedPlan as any);
+                    trackFunnel.subscriptionCompleted(variant);
                     await refreshSubscription();
                     await syncWithDatabase(customerInfo);
                     Alert.alert(t('premiumPaywall.alerts.successTitle'), t('premiumPaywall.alerts.welcomePremium'), [
@@ -324,6 +368,10 @@ export default function PremiumPaywall({
       const customerInfo = await purchasePackage(pkg);
 
       if (customerInfo) {
+        // Bottom of the funnel — records the conversion (tier + plan) so
+        // paywall_viewed → subscription_completed is finally measurable.
+        trackUserAction.subscriptionStarted(variant as 'premium' | 'platinum', selectedPlan as any);
+        trackFunnel.subscriptionCompleted(variant);
         // Purchase successful - sync to database and refresh
         await refreshSubscription();
         const synced = await syncWithDatabase(customerInfo);
@@ -510,6 +558,14 @@ export default function PremiumPaywall({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+      {/* A React Native Modal renders in a separate native root that is
+          outside the app's SafeAreaProvider, so SafeAreaView insets resolve
+          to 0 inside it — which left the close "X" flush against the top edge
+          (under the status bar) and untappable, most visibly on iPad. Adding
+          a SafeAreaProvider here gives the inner SafeAreaViews real insets;
+          initialWindowMetrics seeds them synchronously to avoid a layout
+          flicker on open. */}
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
         <StatusBar
           barStyle="dark-content"
@@ -576,20 +632,20 @@ export default function PremiumPaywall({
           <View style={styles.bottomCard}>
             <View style={styles.planContainer}>
               {renderPlanCard(
-                'quarterly',
-                t('premiumPaywall.threeMonths'),
-                quarterlyPrice,
-                t('premiumPaywall.everyThreeMonths', 'every 3 months'),
-                quarterlyMonthlyEq,
-                t('premiumPaywall.perMonthLabel', 'per month'),
-                { label: t('premiumPaywall.bestOffer', 'BEST OFFER').toUpperCase(), type: 'best' },
-              )}
-              {renderPlanCard(
                 'annual',
                 t('premiumPaywall.annual'),
                 annualPrice,
                 t('premiumPaywall.everyYear', 'every year'),
                 annualMonthlyEq,
+                t('premiumPaywall.perMonthLabel', 'per month'),
+                { label: t('premiumPaywall.bestOffer', 'BEST OFFER').toUpperCase(), type: 'best' },
+              )}
+              {renderPlanCard(
+                'quarterly',
+                t('premiumPaywall.threeMonths'),
+                quarterlyPrice,
+                t('premiumPaywall.everyThreeMonths', 'every 3 months'),
+                quarterlyMonthlyEq,
                 t('premiumPaywall.perMonthLabel', 'per month'),
               )}
               {renderPlanCard(
@@ -643,11 +699,11 @@ export default function PremiumPaywall({
                 <Text style={styles.bottomLinkText}>{t('premiumPaywall.restorePurchases')}</Text>
               </TouchableOpacity>
               <Text style={styles.legalLinkSeparator}>·</Text>
-              <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/terms').catch(() => {})}>
+              <TouchableOpacity onPress={() => openExternalURL('https://joinaccord.app/terms')}>
                 <Text style={styles.bottomLinkText}>{t('premiumPaywall.termsOfUse')}</Text>
               </TouchableOpacity>
               <Text style={styles.legalLinkSeparator}>·</Text>
-              <TouchableOpacity onPress={() => Linking.openURL('https://joinaccord.app/privacy').catch(() => {})}>
+              <TouchableOpacity onPress={() => openExternalURL('https://joinaccord.app/privacy')}>
                 <Text style={styles.bottomLinkText}>{t('premiumPaywall.privacyPolicy')}</Text>
               </TouchableOpacity>
             </View>
@@ -662,6 +718,7 @@ export default function PremiumPaywall({
           </View>
         </View>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

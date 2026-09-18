@@ -6,6 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { supabase } from '@/lib/supabase';
+import { captureException } from '@/lib/sentry';
 import { goToPreviousOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { registerForPushNotifications, ensurePushTokenSaved } from '@/lib/notifications';
@@ -51,11 +52,15 @@ export default function Notifications() {
     })();
   }, []);
 
+  // Wait for auth to hydrate before querying. Previous empty-deps useEffect
+  // silently no-op'd if user wasn't ready, leaving profileId=null and
+  // surfacing "Profile not found" on Finish.
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (user?.id) loadProfile();
+  }, [user?.id]);
 
   const loadProfile = async () => {
+    console.log('[legacy-notifications.loadProfile] user?.id =', user?.id);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -64,9 +69,23 @@ export default function Notifications() {
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
-      if (data) setProfileId(data.id);
+      if (data) {
+        console.log('[legacy-notifications.loadProfile] got profileId =', data.id);
+        setProfileId(data.id);
+      } else {
+        console.warn('[legacy-notifications.loadProfile] PGRST116 — no profile row for user', user?.id);
+        captureException(new Error('legacy-notifications: no profile row for user'), {
+          context: 'legacy_notifications_no_profile',
+          userId: user?.id,
+        });
+      }
     } catch (error: any) {
-      console.error('Error loading profile:', error);
+      console.error('[legacy-notifications.loadProfile] failed:', error?.code, error?.message);
+      captureException(error instanceof Error ? error : new Error(error?.message || 'legacy-notifications loadProfile failed'), {
+        context: 'legacy_notifications_loadProfile',
+        code: error?.code,
+        userId: user?.id,
+      });
     }
   };
 
@@ -157,7 +176,10 @@ export default function Notifications() {
         .from('profiles')
         .update({
           profile_complete: true,
-          onboarding_step: 9,
+          // Final step is 31 per current ONBOARDING_SPEC. Legacy 9-step flow
+          // used to write 9 here, which caused 1,549 completed profiles to be
+          // mislabeled in funnel reporting (looked stuck at intention step).
+          onboarding_step: 31,
         })
         .eq('id', profileId);
 

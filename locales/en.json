@@ -199,6 +199,7 @@
     "loading": "Loading...",
     "error": "Error",
     "success": "Success",
+    "linkCopied": "Link copied to clipboard",
     "day": "day",
     "days": {
       "sunday": "Sunday",
@@ -266,7 +267,17 @@
     "loseVoiceMessages": "Voice messages",
     "keepPremium": "Keep Premium",
     "upgradeToPremium": "Upgrade to Premium",
-    "upgradeToPremiumSubtitle": "Get unlimited likes, see who liked you, and more."
+    "upgradeToPremiumSubtitle": "Get unlimited likes, see who liked you, and more.",
+    "paymentFailedTitle": "Your payment was declined",
+    "paymentFailedBody": "Your Premium subscription paused because your card was declined. Update payment to resume.",
+    "updatePaymentMethod": "Update Payment",
+    "expiringToday": "Your Premium ends today",
+    "expiringTomorrow": "Your Premium ends tomorrow",
+    "expiringInDays": "Your Premium ends in {{count}} days",
+    "expiringBody": "Auto-renew is off. Tap to keep your Premium features going.",
+    "locationStaleTitle": "Verify your location",
+    "locationStaleBody": "We haven't seen a location update in a while. Grant location access to keep your matches accurate.",
+    "openSettings": "Open Settings"
   },
   "trialValue": {
     "title": "Your Trial Stats",
@@ -343,10 +354,13 @@
     },
     "dailyLimitTitle": "Daily limit reached",
     "dailyLimitMessage": "You've used all 5 likes for today. Upgrade for unlimited!",
+    "photosUnderReviewTitle": "Photos under review",
+    "photosUnderReviewMessage": "One of your photos is still being reviewed — this usually takes a minute. Please try again shortly.",
     "quickFilter": {
       "age": "Age",
       "datingIntentions": "Dating Intentions",
       "activeToday": "Active Today",
+      "verifiedOnly": "Verified",
       "search": "Search"
     },
     "ageSlider": {
@@ -875,7 +889,7 @@
       },
       "gender_pref": {
         "title": "Who would you like to meet?",
-        "subtitle": "Pick Everyone, or any mix of the three."
+        "subtitle": "Pick any that apply — select all three to see everyone."
       },
       "relationship_type": {
         "title": "What type of relationship are you looking for?",
@@ -968,6 +982,18 @@
       "matching_prefs": {
         "title": "Set your preferences",
         "subtitle": "Set your age range and distance preferences."
+      },
+      "languages": {
+        "title": "What languages do you speak?",
+        "subtitle": "Select up to 5."
+      },
+      "must_haves": {
+        "title": "What are your must-haves?",
+        "subtitle": "Pick what matters most — optional."
+      },
+      "dealbreakers": {
+        "title": "Any dealbreakers?",
+        "subtitle": "Pick what you can’t accept — optional."
       }
     },
     "sections": {
@@ -1143,6 +1169,49 @@
         "never": "Never",
         "socially": "Socially",
         "regularly": "Regularly"
+      },
+      "languages": {
+        "english": "English",
+        "spanish": "Spanish",
+        "mandarin": "Mandarin",
+        "french": "French",
+        "german": "German",
+        "italian": "Italian",
+        "portuguese": "Portuguese",
+        "russian": "Russian",
+        "japanese": "Japanese",
+        "korean": "Korean",
+        "arabic": "Arabic",
+        "hindi": "Hindi",
+        "other": "Other"
+      },
+      "mustHaves": {
+        "verified_profile": "Verified profile",
+        "financial_independence": "Financial independence",
+        "discretion_privacy": "Discretion & privacy",
+        "shared_family_goals": "Shared family goals",
+        "similar_timeline": "Similar timeline",
+        "lives_nearby": "Lives nearby",
+        "open_to_relocation": "Open to relocation",
+        "prenup_agreement": "Prenup agreement",
+        "separate_finances": "Separate finances",
+        "honest_communication": "Honest communication",
+        "mutual_respect": "Mutual respect",
+        "clear_expectations": "Clear expectations"
+      },
+      "dealbreakers": {
+        "smoking": "Smoking",
+        "heavy_drinking": "Heavy drinking",
+        "recreational_drugs": "Recreational drugs",
+        "wants_biological_children": "Wants biological children",
+        "does_not_want_children": "Does not want children",
+        "not_out_publicly": "Not out publicly",
+        "wants_a_romantic_relationship": "Wants a romantic relationship",
+        "long_distance_only": "Long-distance only",
+        "not_verified": "Not verified",
+        "different_core_values": "Different core values",
+        "poor_communication": "Poor communication",
+        "not_financially_stable": "Not financially stable"
       }
     }
   },
@@ -1237,6 +1306,7 @@
       "locationPreferences": "Location Preferences",
       "preferredCities": "Preferred Cities",
       "preferredCitiesDesc": "Add cities you're interested in...",
+      "preferredCitiesPremium": "Unlock with Premium",
       "searchCitiesPlaceholder": "Search cities (e.g., Tokyo, Mumbai, NYC)",
       "citiesAdded": "{{count}}/2 cities added",
       "noCitiesEmpty": "No preferred cities yet. Add cities where you'd like to find matches!",
@@ -1847,6 +1917,11 @@
       "likesRemaining": "{{count}} like(s) remaining today",
       "noLikesRemaining": "No likes remaining today",
       "upgradeBanner": "Upgrade to reveal photos & get unlimited likes"
+    },
+    "likeBackUpsell": {
+      "title": "They already like you 💜",
+      "message": "Upgrade to see who it is and match instantly — or keep going to match with their photo blurred.",
+      "cta": "See who it is"
     },
     "likedYourPhoto": "Liked your photo"
   },

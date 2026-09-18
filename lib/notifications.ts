@@ -1,6 +1,7 @@
 import { Platform, LogBox } from 'react-native';
 import { supabase } from './supabase';
 import Constants from 'expo-constants';
+import { isTransientNetworkError } from './sentry';
 /**
  * Obfuscate a UUID for push notification payloads.
  * Push payloads can be intercepted on the device; base64-encoding IDs
@@ -752,9 +753,26 @@ export function addPushTokenChangeListener(
     return { remove: () => {} }; // Return mock subscription
   }
 
+  // Throttle: expo-notifications retries device-token registration internally
+  // when the network is flaky, and every retry that the native side eventually
+  // succeeds at fires this listener. Without throttling, a real-device walk-
+  // through on 2026-05-28 produced hundreds of "[Push] Error getting Expo
+  // token" logs per minute under intermittent Wi-Fi, eating UI thread (each
+  // console.error serializes the Error across the bridge) and contributing to
+  // perceived onboarding lag. 5s between fires is enough to let the network
+  // recover; if it still fails we'll retry on the next legitimate change.
+  let lastListenerFiredAt = 0;
+  const THROTTLE_MS = 5000;
+
   return Notifications.addPushTokenListener((tokenData: any) => {
 
     if (tokenData?.data) {
+      const now = Date.now();
+      if (now - lastListenerFiredAt < THROTTLE_MS) {
+        return;
+      }
+      lastListenerFiredAt = now;
+
       // The listener gives us the raw FCM/APNs token, but we need Expo token
       // We'll re-fetch the Expo push token to ensure consistency
       (async () => {
@@ -770,7 +788,12 @@ export function addPushTokenChangeListener(
             onTokenChange(expoPushToken.data);
           }
         } catch (error) {
-          console.error('[Push] Error getting Expo token after device token change:', error);
+          // Silently swallow transient network failures. expo-notifications
+          // is already retrying internally; logging here just floods the
+          // console (and Sentry's beforeSend already drops these in prod).
+          if (!isTransientNetworkError(error)) {
+            console.error('[Push] Error getting Expo token after device token change:', error);
+          }
         }
       })();
     }

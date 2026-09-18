@@ -8,6 +8,10 @@ const REVENUECAT_API_KEY_ANDROID = Constants.expoConfig?.extra?.revenueCatGoogle
 
 // Track if RevenueCat is initialized
 let isInitialized = false;
+// App user ID the SDK is currently identified as, so we can detect an account
+// switch and re-identify via logIn() instead of silently serving the previous
+// user's entitlements.
+let configuredAppUserId: string | null = null;
 
 export const SUBSCRIPTION_TIERS = {
   PREMIUM: 'premium',
@@ -22,7 +26,24 @@ export type SubscriptionTier = typeof SUBSCRIPTION_TIERS[keyof typeof SUBSCRIPTI
  */
 export const initializeRevenueCat = async (userId?: string) => {
   try {
-    if (isInitialized) return;
+    // Already configured: `Purchases.configure` must not be called twice, but we
+    // DO have to re-identify when the signed-in user changed. Previously this
+    // returned unconditionally, so after an account switch within one JS session
+    // the SDK stayed bound to the PREVIOUS app user ID and getCustomerInfo()
+    // resolved successfully with that user's (empty) entitlements — locking a
+    // paying subscriber out of everything they bought. logOut() is also never
+    // called on sign-out, which made the stale binding stick. Use logIn() to
+    // re-identify, which is the supported way to switch users post-configure.
+    if (isInitialized) {
+      if (!userId || userId === configuredAppUserId) return;
+      try {
+        await Purchases.logIn(userId);
+        configuredAppUserId = userId;
+      } catch (error) {
+        console.error('❌ RevenueCat logIn (user switch) failed:', error);
+      }
+      return;
+    }
 
     const apiKey = Platform.OS === 'ios' ? REVENUECAT_API_KEY_IOS : REVENUECAT_API_KEY_ANDROID;
 
@@ -33,6 +54,7 @@ export const initializeRevenueCat = async (userId?: string) => {
     }
 
     Purchases.configure({ apiKey, appUserID: userId });
+    configuredAppUserId = userId ?? null;
 
     // Only show warnings and errors from RevenueCat
     Purchases.setLogLevel(__DEV__ ? Purchases.LOG_LEVEL.WARN : Purchases.LOG_LEVEL.ERROR);
@@ -150,6 +172,25 @@ export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
 };
 
 /**
+ * Look up an active entitlement by identifier, case-insensitively.
+ *
+ * RevenueCat entitlement identifiers have been configured with inconsistent
+ * casing across this project's history ("Premium" vs "premium", "Platinum" vs
+ * "platinum"). A hardcoded lowercase key lookup (active['premium']) silently
+ * misses a subscriber whose active entitlement id is "Premium" — they get told
+ * they need Premium despite an active subscription. Match case-insensitively so
+ * the entitlement is detected regardless of how it was cased when the product
+ * was mapped in the RevenueCat dashboard.
+ */
+const hasActiveEntitlement = (customerInfo: CustomerInfo | null, identifier: string): boolean => {
+  if (!customerInfo) return false;
+  const target = identifier.toLowerCase();
+  return Object.keys(customerInfo.entitlements.active).some(
+    (key) => key.toLowerCase() === target
+  );
+};
+
+/**
  * Check if user has an active subscription
  */
 export const hasActiveSubscription = (customerInfo: CustomerInfo | null): boolean => {
@@ -166,8 +207,8 @@ export const hasPremium = (customerInfo: CustomerInfo | null): boolean => {
   if (!customerInfo) return false;
 
   return (
-    customerInfo.entitlements.active['premium'] !== undefined ||
-    customerInfo.entitlements.active['platinum'] !== undefined
+    hasActiveEntitlement(customerInfo, 'premium') ||
+    hasActiveEntitlement(customerInfo, 'platinum')
   );
 };
 
@@ -177,7 +218,7 @@ export const hasPremium = (customerInfo: CustomerInfo | null): boolean => {
 export const hasPlatinum = (customerInfo: CustomerInfo | null): boolean => {
   if (!customerInfo) return false;
 
-  return customerInfo.entitlements.active['platinum'] !== undefined;
+  return hasActiveEntitlement(customerInfo, 'platinum');
 };
 
 /**
@@ -255,7 +296,12 @@ export const setUserAttributes = async (attributes: { [key: string]: string | nu
 export const logOutRevenueCat = async () => {
   try {
     await Purchases.logOut();
+    // Drop the remembered identity too, so the next sign-in is treated as a
+    // user switch and re-identifies via logIn() rather than reusing this one.
+    configuredAppUserId = null;
   } catch (error) {
+    // logOut() throws if the current user is already anonymous — harmless.
+    configuredAppUserId = null;
     console.error('Error logging out from RevenueCat:', error);
   }
 };

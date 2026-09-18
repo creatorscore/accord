@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { captureException } from '@/lib/sentry';
 import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { useTranslation } from 'react-i18next';
@@ -189,11 +190,15 @@ export default function MarriagePreferences() {
 
   const { loadDraft, saveDraft, clearDraft } = useOnboardingDraft<MarriagePrefsDraft>(user?.id, 'marriage-preferences');
 
+  // Wait for auth to hydrate before querying. Previous empty-deps useEffect
+  // silently no-op'd if user wasn't ready, leaving profileId=null and
+  // surfacing "Profile not found" on save.
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (user?.id) loadProfile();
+  }, [user?.id]);
 
   const loadProfile = async () => {
+    console.log('[legacy-marriage.loadProfile] user?.id =', user?.id);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -201,7 +206,22 @@ export default function MarriagePreferences() {
         .eq('user_id', user?.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error && error.code !== 'PGRST116') {
+        const e: any = error;
+        captureException(new Error(e?.message || 'legacy-marriage loadProfile failed'), {
+          context: 'legacy_marriage_loadProfile',
+          code: e?.code,
+          userId: user?.id,
+        });
+        throw error;
+      }
+      if (!data) {
+        console.warn('[legacy-marriage.loadProfile] PGRST116 — no profile row for user', user?.id);
+        captureException(new Error('legacy-marriage: no profile row for user'), {
+          context: 'legacy_marriage_no_profile',
+          userId: user?.id,
+        });
+      }
 
       if (data) {
         setProfileId(data.id);

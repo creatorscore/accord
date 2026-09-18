@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "Accord - Lavender Marriage",
     slug: "accord",
-    version: "2.0.4",
+    version: "2.0.6",
     orientation: "default",
     icon: "./assets/icon.png",
     userInterfaceStyle: "automatic",
@@ -18,7 +18,7 @@ module.exports = {
       deploymentTarget: "16.0",
       supportsTablet: true,
       bundleIdentifier: "com.privyreviews.accord",
-      buildNumber: "68",
+      buildNumber: "70",
       icon: "./assets/icon.png",
       infoPlist: {
         NSPhotoLibraryUsageDescription: "Accord needs access to your photos to upload profile pictures.",
@@ -71,7 +71,7 @@ module.exports = {
       },
       package: "com.privyreviews.accord",
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
-      versionCode: 61,
+      versionCode: 63,
       softwareKeyboardLayoutMode: "resize",
       permissions: [
         "android.permission.CAMERA",
@@ -142,6 +142,44 @@ module.exports = {
           iosUrlScheme: "com.googleusercontent.apps.609854216709-81grqvlc66iahvd56749ot511p9agh09"
         }
       ],
+      // AdMob (react-native-google-mobile-ads) REMOVED 2026-08-10 — it broke the
+      // first native build it was ever included in, on BOTH platforms:
+      //   Android: play-services-ads 25.4.0 is built with Kotlin 2.3.0, but
+      //            Expo SDK 54 / RN 0.81 compiles with Kotlin 2.1.0.
+      //   iOS:     pod install fails — AppCheckCore depends on GoogleUtilities
+      //            and RecaptchaInterop, which don't define modules (needs
+      //            use_modular_headers! / static frameworks).
+      // It was added in July but never built, and rewarded ads can't ship
+      // regardless (see FeatureFlags.REWARDED_LIKES_ENABLED — no SSV, no consent
+      // flow). Rather than block a fix release on two speculative native fixes,
+      // it comes out until the ads workstream is actually picked up.
+      // To restore: re-add the dep + this plugin block, and recover lib/ads.ts
+      // from commit 755b3bc. Pin play-services-ads to a Kotlin-2.1-compatible
+      // release and solve the pod modular-headers issue at the same time.
+      [
+        // iOS pod install fails without this:
+        //   "The Swift pod `AppCheckCore` depends upon `GoogleUtilities` and
+        //    `RecaptchaInterop`, which do not define modules."
+        // AppCheckCore arrives transitively via @react-native-google-signin.
+        // ios/ is not checked in, so there's no Podfile.lock and pods re-resolve
+        // on every build — a newer GoogleSignIn started pulling AppCheckCore,
+        // which is why the May 2.0.5 build succeeded and 2.0.6 did not.
+        //
+        // Declaring the two offending pods with modular_headers generates the
+        // module maps Swift needs. Deliberately NOT using
+        // ios.useFrameworks:'static' — that is the broader documented fix, but it
+        // changes linkage for EVERY pod and risks breaking Sentry, Skia and
+        // quick-crypto. Escalate to it only if this proves insufficient.
+        "expo-build-properties",
+        {
+          ios: {
+            extraPods: [
+              { name: "GoogleUtilities", modular_headers: true },
+              { name: "RecaptchaInterop", modular_headers: true }
+            ]
+          }
+        }
+      ],
       "expo-font",
       "expo-localization",
       "expo-web-browser",
@@ -167,7 +205,15 @@ module.exports = {
       postHogHost: process.env.EXPO_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com"
     },
     owner: "vfranz",
-    runtimeVersion: "2.0.4",
+    // DELIBERATELY held at "2.0.5" while app version moves to 2.0.6, so a single
+    // `eas update` still reaches BOTH the 2.0.5 and 2.0.6 binaries — the 2.0.5
+    // install base stays the majority for weeks after a store release, and
+    // splitting runtimes previously meant an update reaching only one platform.
+    // 2.0.6 adds no new native modules (only the AdMob iOS App ID string, which
+    // JS never reads — ads are behind a disabled flag), so JS stays compatible
+    // with both binaries. BUMP THIS the moment a real native module is added,
+    // or an OTA will crash 2.0.5 clients that lack the native code.
+    runtimeVersion: "2.0.5",
     updates: {
       url: "https://u.expo.dev/71ca414e-ff65-488b-97f6-9150455475a0"
     }

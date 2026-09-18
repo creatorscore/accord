@@ -18,6 +18,8 @@ import { calculateCompatibilityScore } from '@/lib/matching-algorithm';
 import { usePhotoBlur } from '@/hooks/usePhotoBlur';
 import { SafeBlurImage } from '@/components/shared/SafeBlurImage';
 import { signProfileMediaUrls } from '@/lib/signed-urls';
+import { calculateDistance } from '@/lib/geolocation';
+import { formatDistance } from '@/lib/distance-utils';
 
 interface LikeProfile {
   id: string;
@@ -31,6 +33,10 @@ interface LikeProfile {
     age: number;
     location_city?: string;
     location_state?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    hide_distance?: boolean;
+    distance?: number;
     photo_blur_enabled?: boolean;
     photos: { url: string; storage_path?: string; is_primary: boolean; blur_data_uri?: string | null }[];
     compatibility_score?: number;
@@ -80,11 +86,21 @@ const LikeCard = React.memo(({ like, onPass, onLikeBack, isAdmin }: {
               <Text className="text-white font-sans-bold text-body-lg">
                 {like.profile.display_name}{like.profile.age ? `, ${like.profile.age}` : ''}
               </Text>
-              {(like.profile.location_city || like.profile.location_state) && (
-                <Text className="text-white/80 font-sans text-body-sm mt-0.5">
-                  {[like.profile.location_city, like.profile.location_state].filter(Boolean).join(', ')}
-                </Text>
-              )}
+              {(() => {
+                // Current city + distance — NOT hometown. A liker can reach you
+                // from up to your 500mi cap (or further via premium global
+                // search), so surfacing how far away they actually are lets you
+                // judge proximity at a glance instead of mistaking their
+                // hometown for where they live.
+                const loc = [like.profile.location_city, like.profile.location_state].filter(Boolean).join(', ');
+                const dist = typeof like.profile.distance === 'number'
+                  ? formatDistance(like.profile.distance, 'miles', like.profile.hide_distance)
+                  : '';
+                const line = [loc, dist].filter(Boolean).join(' · ');
+                return line ? (
+                  <Text className="text-white/80 font-sans text-body-sm mt-0.5">{line}</Text>
+                ) : null;
+              })()}
             </View>
           </View>
           <LikedContentSection parsedContent={parsedContent} message={like.message} />
@@ -210,7 +226,7 @@ export default function Likes() {
   const { user } = useAuth();
   const profileDataContext = useProfileData();
   const { isPremium, isPlatinum } = useSubscription();
-  const { refreshUnreadLikeCount, setUnreadLikeCount } = useNotifications();
+  const { setUnreadLikeCount } = useNotifications();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -222,6 +238,10 @@ export default function Likes() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  // Whether the peak-intent "they already like you — upgrade" prompt has been
+  // shown this session. Gated to once so like-back stays snappy after the first
+  // pitch (a ref, not state — it must not trigger re-renders).
+  const likeBackUpsellShownRef = useRef(false);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedProfile, setMatchedProfile] = useState<{
     display_name: string;
@@ -357,13 +377,10 @@ export default function Likes() {
                 age,
                 location_city,
                 location_state,
-                photo_blur_enabled,
-                photos (
-                  url,
-                  storage_path,
-                  is_primary,
-                  blur_data_uri
-                )
+                latitude,
+                longitude,
+                hide_distance,
+                photo_blur_enabled
               )
             `)
             .eq('liked_profile_id', myProfileId)
@@ -421,20 +438,46 @@ export default function Likes() {
           bansResult.data?.map(b => b.banned_profile_id).filter(Boolean) || []
         );
 
-        const formattedLikes: LikeProfile[] = (likesResult.data || [])
-          .filter(like => {
-            if (matchedProfileIds.has(like.liker_profile_id) ||
-                passedProfileIds.has(like.liker_profile_id) ||
-                blockedProfileIds.has(like.liker_profile_id) ||
-                bannedProfileIds.has(like.liker_profile_id)) {
-              return false;
+        // Exclusions first, then ONE photo per surviving liker via RPC — the
+        // inline photo embed timed out (~20s) for popular users. See loadLikes.
+        const candidateLikes = (likesResult.data || []).filter(like =>
+          !matchedProfileIds.has(like.liker_profile_id) &&
+          !passedProfileIds.has(like.liker_profile_id) &&
+          !blockedProfileIds.has(like.liker_profile_id) &&
+          !bannedProfileIds.has(like.liker_profile_id)
+        );
+
+        const likerIds = Array.from(new Set(candidateLikes.map(l => l.liker_profile_id)));
+        const photoByProfile = new Map<string, any>();
+        if (likerIds.length > 0) {
+          const { data: photoRows } = await supabase.rpc('get_liker_primary_photos', { p_profile_ids: likerIds });
+          for (const r of (photoRows || [])) {
+            if (r?.profile_id && !photoByProfile.has(r.profile_id)) {
+              photoByProfile.set(r.profile_id, {
+                url: r.url,
+                storage_path: r.storage_path,
+                is_primary: r.is_primary,
+                blur_data_uri: r.blur_data_uri,
+              });
             }
+          }
+        }
+        if (cancelled) return;
+
+        const formattedLikes: LikeProfile[] = candidateLikes
+          .filter(like => {
             const prof = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
-            if (!prof || !prof.photos || prof.photos.length === 0) return false;
-            return true;
+            return !!prof && photoByProfile.has(like.liker_profile_id);
           })
           .map(like => {
             const likerProfile = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
+            const photo = photoByProfile.get(like.liker_profile_id);
+            const d = calculateDistance(
+              profileDataContext?.profile?.latitude ?? null,
+              profileDataContext?.profile?.longitude ?? null,
+              likerProfile.latitude,
+              likerProfile.longitude,
+            );
             return {
               id: like.id,
               profile_id: like.liker_profile_id,
@@ -447,8 +490,12 @@ export default function Likes() {
                 age: likerProfile.age,
                 location_city: likerProfile.location_city,
                 location_state: likerProfile.location_state,
+                latitude: likerProfile.latitude,
+                longitude: likerProfile.longitude,
+                hide_distance: likerProfile.hide_distance || false,
+                distance: d >= 999999 ? undefined : d,
                 photo_blur_enabled: likerProfile.photo_blur_enabled || false,
-                photos: likerProfile.photos || [],
+                photos: photo ? [photo] : [],
               },
             };
           });
@@ -555,13 +602,10 @@ export default function Likes() {
               age,
               location_city,
               location_state,
-              photo_blur_enabled,
-              photos (
-                url,
-                storage_path,
-                is_primary,
-                blur_data_uri
-              )
+              latitude,
+              longitude,
+              hide_distance,
+              photo_blur_enabled
             )
           `)
           .eq('liked_profile_id', profileId)
@@ -615,22 +659,50 @@ export default function Likes() {
         bannedUsers?.map(b => b.banned_profile_id).filter(Boolean) || []
       );
 
-      const formattedLikes: LikeProfile[] = (likesData || [])
-        .filter(like => {
-          if (matchedProfileIds.has(like.liker_profile_id) ||
-              passedProfileIds.has(like.liker_profile_id) ||
-              blockedProfileIds.has(like.liker_profile_id) ||
-              bannedProfileIds.has(like.liker_profile_id)) {
-            return false;
+      // Apply the safety exclusions first, THEN fetch photos only for the
+      // survivors. The likes list used to embed every liker's full photo set
+      // (fat blur_data_uri rows, no limit) which took ~20s and hit the 8s
+      // statement timeout for popular users ("failed to load likes"). Instead
+      // fetch ONE photo per liker via get_liker_primary_photos (~0.7s for 127).
+      const candidateLikes = (likesData || []).filter(like =>
+        !matchedProfileIds.has(like.liker_profile_id) &&
+        !passedProfileIds.has(like.liker_profile_id) &&
+        !blockedProfileIds.has(like.liker_profile_id) &&
+        !bannedProfileIds.has(like.liker_profile_id)
+      );
+
+      const likerIds = Array.from(new Set(candidateLikes.map(l => l.liker_profile_id)));
+      const photoByProfile = new Map<string, any>();
+      if (likerIds.length > 0) {
+        const { data: photoRows } = await supabase.rpc('get_liker_primary_photos', { p_profile_ids: likerIds });
+        for (const r of (photoRows || [])) {
+          if (r?.profile_id && !photoByProfile.has(r.profile_id)) {
+            photoByProfile.set(r.profile_id, {
+              url: r.url,
+              storage_path: r.storage_path,
+              is_primary: r.is_primary,
+              blur_data_uri: r.blur_data_uri,
+            });
           }
-          // Exclude profiles with no approved photos
+        }
+      }
+
+      const formattedLikes: LikeProfile[] = candidateLikes
+        .filter(like => {
           const prof = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
-          if (!prof || !prof.photos || prof.photos.length === 0) return false;
-          return true;
+          // Exclude profiles we couldn't join or that have no visible photo.
+          return !!prof && photoByProfile.has(like.liker_profile_id);
         })
         .map(like => {
           // Supabase returns joined data as array, extract first element
           const likerProfile = Array.isArray(like.liker_profile) ? like.liker_profile[0] : like.liker_profile;
+          const photo = photoByProfile.get(like.liker_profile_id);
+          const d = calculateDistance(
+            profileDataContext?.profile?.latitude ?? null,
+            profileDataContext?.profile?.longitude ?? null,
+            likerProfile.latitude,
+            likerProfile.longitude,
+          );
           return {
             id: like.id,
             profile_id: like.liker_profile_id,
@@ -643,8 +715,12 @@ export default function Likes() {
               age: likerProfile.age,
               location_city: likerProfile.location_city,
               location_state: likerProfile.location_state,
+              latitude: likerProfile.latitude,
+              longitude: likerProfile.longitude,
+              hide_distance: likerProfile.hide_distance || false,
+              distance: d >= 999999 ? undefined : d,
               photo_blur_enabled: likerProfile.photo_blur_enabled || false,
-              photos: likerProfile.photos || [],
+              photos: photo ? [photo] : [],
             },
           };
         });
@@ -722,10 +798,39 @@ export default function Likes() {
         setShowPaywall(true);
         return;
       }
+
+      // Peak-intent upsell: this person ALREADY likes you, so liking back is a
+      // guaranteed match — the highest-intent moment to pitch Premium. Show it
+      // once per session so it lands without nagging. Dismissing STILL creates
+      // the match (keeps the marketplace liquid — matches are the scarce
+      // resource, so we don't suppress them to force a purchase).
+      if (!likeBackUpsellShownRef.current) {
+        likeBackUpsellShownRef.current = true;
+        Alert.alert(
+          t('likes.likeBackUpsell.title'),
+          t('likes.likeBackUpsell.message'),
+          [
+            { text: t('common.maybeLater'), style: 'cancel', onPress: () => { performLikeBack(likeProfileId); } },
+            { text: t('likes.likeBackUpsell.cta'), onPress: () => setShowPaywall(true) },
+          ]
+        );
+        return;
+      }
     }
 
-    // Optimistically remove from UI
+    performLikeBack(likeProfileId);
+  };
+
+  const performLikeBack = async (likeProfileId: string) => {
+    if (!currentProfileId) return;
+
+    // Optimistically remove from UI and keep the tab badge in sync with the
+    // VISIBLE list (see handlePass) — re-querying the RPC would leave a stale
+    // badge like "1" after liking back the last person.
+    const remainingAfterLikeBack = likes.filter(l => l.profile_id !== likeProfileId).length;
     setLikes(prev => prev.filter(l => l.profile_id !== likeProfileId));
+    setLikesCount(remainingAfterLikeBack);
+    setUnreadLikeCount(remainingAfterLikeBack);
 
     try {
       // Create a like back (use upsert to handle case where like already exists)
@@ -745,7 +850,14 @@ export default function Likes() {
         throw likeError;
       }
 
-      // Fetch both profiles with preferences to calculate compatibility
+      // Fetch both profiles with preferences to calculate compatibility.
+      // maybeSingle (not single): these reads are ONLY for the compatibility
+      // score and the match-celebration modal — both null-guarded below. The
+      // other profile can legitimately be missing from this SELECT (gone
+      // incognito/inactive, hidden by RLS). .single() threw PGRST116 ("Cannot
+      // coerce the result to a single JSON object") on 0 rows, which aborted
+      // the whole like-back AFTER the enforce_like_limits trigger had already
+      // deducted a daily like — the "Unable to match but a like was used" bug.
       const { data: myProfile } = await supabase
         .from('profiles')
         .select(`
@@ -753,7 +865,7 @@ export default function Likes() {
           preferences (*)
         `)
         .eq('id', currentProfileId)
-        .single();
+        .maybeSingle();
 
       const { data: otherProfileRaw } = await supabase
         .from('profiles')
@@ -768,7 +880,7 @@ export default function Likes() {
           )
         `)
         .eq('id', likeProfileId)
-        .single();
+        .maybeSingle();
 
       // Sign photo URLs for private storage buckets
       const [otherProfile] = otherProfileRaw
@@ -845,7 +957,7 @@ export default function Likes() {
               .select('id, status')
               .eq('profile1_id', profile1Id)
               .eq('profile2_id', profile2Id)
-              .single();
+              .maybeSingle();
             matchData = raceMatch;
           } else if (matchError.message?.includes('MATCH_LIMIT_REACHED')) {
             // Free user hit match cap — restore UI and show clear message
@@ -889,9 +1001,7 @@ export default function Likes() {
       if (!isPremium && !isPlatinum) {
         await incrementDailyLikeCount();
       }
-
-      // Refresh the notification badge count
-      refreshUnreadLikeCount();
+      // (tab badge already synced to the visible list above)
     } catch (error: any) {
       console.error('Error creating match:', error);
       // Restore the like back to UI on error
@@ -907,8 +1017,15 @@ export default function Likes() {
     const like = likes.find(l => l.id === likeId);
     if (!like) return;
 
-    // Optimistically remove from UI
+    // Optimistically remove from UI and keep the tab badge in sync with the
+    // VISIBLE list. loadLikes reconciles the badge to the filtered list (not the
+    // RPC, which uses different photo/eligibility criteria); re-querying the RPC
+    // here would re-add filtered-out likers and leave a stale badge (e.g. "1"
+    // after dismissing the last like).
+    const remainingAfterPass = likes.filter(l => l.id !== likeId).length;
     setLikes(prev => prev.filter(l => l.id !== likeId));
+    setLikesCount(remainingAfterPass);
+    setUnreadLikeCount(remainingAfterPass);
 
     try {
       // Create a pass record (so we remember this dismissal)
@@ -924,9 +1041,7 @@ export default function Likes() {
         .from('likes')
         .delete()
         .eq('id', likeId);
-
-      // Refresh the notification badge count
-      refreshUnreadLikeCount();
+      // (tab badge already synced to the visible list above)
     } catch (error) {
       console.error('Error passing:', error);
       // Reload likes to restore state

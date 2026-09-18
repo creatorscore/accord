@@ -7,32 +7,61 @@ const corsHeaders = {
 };
 
 /**
- * Daily "new matches" digest push notification.
+ * "New matches" digest push notification (PUSH channel).
  *
- * Targets dormant users who haven't opened the app in >= DORMANCY_DAYS days
- * and haven't received a digest in >= FREQ_CAP_DAYS days. For each, counts
- * NEW verified signups from the last WINDOW_DAYS that pass their hard
- * filters (via count_new_matches_for_digest RPC). If count >= MIN_COUNT,
- * enqueues a localized push into notification_queue. The aggregate count is
- * the only personal data surfaced — no individual names are revealed.
+ * Candidate selection — dormancy, 7-day freq cap (shared last_digest_sent_at
+ * with the email digest so the two channel audiences are disjoint), push
+ * reachability, and per-user LOCAL send hour (~TARGET_LOCAL_HOUR, derived from
+ * longitude) — is centralized in the get_digest_candidates RPC. For each
+ * candidate, counts NEW signups from the last WINDOW_DAYS that pass their hard
+ * filters (count_new_matches_for_digest). If count >= MIN_COUNT, enqueues a
+ * localized push; otherwise a generic "we miss you" fallback. Only the
+ * aggregate count is surfaced — never individual names.
  *
- * Schedule: pg_cron job `send-new-matches-digest-daily` at 17:00 UTC.
+ * Schedule: pg_cron job `send-new-matches-digest-daily`, hourly; each run sends
+ * to the users for whom it is ~TARGET_LOCAL_HOUR local right now.
  *
- * Idempotency: last_digest_sent_at guards double-sends within a single day
- * even if the cron fires twice.
- *
- * Translations: inlined below rather than imported from _shared/translations.ts
- * to keep the function self-contained. Keys are mirrored client-side at
- * notifications.newMatchesDigest.* if we ever want an in-app variant.
+ * Idempotency: last_digest_sent_at guards double-sends.
  */
 
-const DORMANCY_DAYS = 3;
+const DORMANCY_DAYS = 2;
 const FREQ_CAP_DAYS = 7;
 const WINDOW_DAYS   = 7;
 const MIN_COUNT     = 1;
-const BATCH_SIZE    = 500;
+const BATCH_SIZE    = 2000;
+const TARGET_LOCAL_HOUR = 18;
 
 type Translation = { title: string; bodySingular: string; bodyPlural: string };
+
+// Generic "we miss you" copy for dormant users with no compatible new signups
+// in the WINDOW_DAYS window. Without this fallback, users in low-density
+// regions never receive outreach at all.
+const FALLBACK_TRANSLATIONS: Record<string, { title: string; body: string }> = {
+  en: { title: 'We miss you 💜', body: 'Your matches are waiting. Come back and see who joined Accord.' },
+  es: { title: 'Te extrañamos 💜', body: 'Tus coincidencias te esperan. Vuelve y mira quién se unió a Accord.' },
+  fr: { title: 'Tu nous manques 💜', body: "Tes matchs t'attendent. Reviens voir qui a rejoint Accord." },
+  de: { title: 'Wir vermissen dich 💜', body: 'Deine Matches warten. Schau, wer Accord beigetreten ist.' },
+  ar: { title: 'نفتقدك 💜', body: 'توافقاتك بانتظارك. عُد وشاهد من انضم إلى Accord.' },
+  hi: { title: 'हमें आपकी याद आ रही है 💜', body: 'आपके मैच इंतज़ार कर रहे हैं। वापस आइए और देखिए कौन Accord से जुड़ा।' },
+  pt: { title: 'Sentimos sua falta 💜', body: 'Seus matches estão esperando. Volte e veja quem entrou no Accord.' },
+  ru: { title: 'Мы скучаем по вам 💜', body: 'Ваши совпадения ждут. Вернитесь и посмотрите, кто присоединился к Accord.' },
+  zh: { title: '我们想你了 💜', body: '你的匹配在等你。回来看看谁加入了 Accord。' },
+  tr: { title: 'Seni özledik 💜', body: 'Eşleşmelerin seni bekliyor. Geri dön ve Accord’a kimin katıldığını gör.' },
+  it: { title: 'Ci manchi 💜', body: "I tuoi match ti aspettano. Torna e scopri chi si è unito ad Accord." },
+  pl: { title: 'Tęsknimy za tobą 💜', body: 'Twoje dopasowania czekają. Wróć i zobacz, kto dołączył do Accord.' },
+  uk: { title: 'Ми сумуємо за вами 💜', body: 'Ваші збіги чекають. Поверніться і подивіться, хто приєднався до Accord.' },
+  he: { title: 'מתגעגעים אליך 💜', body: 'ההתאמות שלך מחכות. חזרו וראו מי הצטרף ל-Accord.' },
+  fa: { title: 'دلمان برایت تنگ شده 💜', body: 'همخوانی‌هایت منتظرند. بازگرد و ببین چه کسی به Accord پیوسته.' },
+  ur: { title: 'ہمیں آپ کی یاد آتی ہے 💜', body: 'آپ کے میچز انتظار کر رہے ہیں۔ واپس آئیں اور دیکھیں کون Accord سے جڑا۔' },
+  bn: { title: 'আপনাকে মিস করছি 💜', body: 'আপনার ম্যাচগুলো অপেক্ষা করছে। ফিরে আসুন এবং দেখুন কে Accord-এ যোগ দিয়েছে।' },
+  id: { title: 'Kami merindukanmu 💜', body: 'Kecocokanmu menunggu. Kembali dan lihat siapa yang bergabung dengan Accord.' },
+  ka: { title: 'გენატრებით 💜', body: 'თქვენი დამთხვევები გელით. დაბრუნდით და ნახეთ ვინ შემოუერთდა Accord-ს.' },
+};
+
+function pickFallback(lang: string | null | undefined): { title: string; body: string } {
+  const base = (lang ?? 'en').split('-')[0].toLowerCase();
+  return FALLBACK_TRANSLATIONS[base] ?? FALLBACK_TRANSLATIONS.en;
+}
 
 const TRANSLATIONS: Record<string, Translation> = {
   en: { title: 'New matches near you ✨', bodySingular: '{{count}} new compatible member joined this week. Come take a look.', bodyPlural: '{{count}} new compatible members joined this week. Come take a look.' },
@@ -83,36 +112,31 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const now = new Date();
-    const dormantBefore = new Date(now.getTime() - DORMANCY_DAYS * 86400_000).toISOString();
-    const digestCapBefore = new Date(now.getTime() - FREQ_CAP_DAYS * 86400_000).toISOString();
 
-    // 1. Fetch eligible dormant users.
-    const { data: candidates, error: fetchErr } = await supabase
-      .from('profiles')
-      .select('id, preferred_language, last_active_at, last_digest_sent_at')
-      .lt('last_active_at', dormantBefore)
-      .eq('push_enabled', true)
-      .eq('is_active', true)
-      .eq('profile_complete', true)
-      .or('policy_restricted.is.null,policy_restricted.eq.false')
-      .or('is_admin.is.null,is_admin.eq.false')
-      .or(`last_digest_sent_at.is.null,last_digest_sent_at.lt.${digestCapBefore}`)
-      .limit(BATCH_SIZE);
+    // Candidate selection (dormancy, freq cap, push reachability, per-user local
+    // ~TARGET_LOCAL_HOUR send hour) centralized in get_digest_candidates, shared
+    // with the email digest so both channels use one definition + one freq cap.
+    const { data: candidates, error: fetchErr } = await supabase.rpc('get_digest_candidates', {
+      p_channel: 'push',
+      p_target_local_hour: TARGET_LOCAL_HOUR,
+      p_dormancy_days: DORMANCY_DAYS,
+      p_freq_cap_days: FREQ_CAP_DAYS,
+      p_limit: BATCH_SIZE,
+    });
 
     if (fetchErr) throw fetchErr;
 
-    const targets: DigestTarget[] = (candidates ?? []).map((c) => ({
-      profileId: c.id as string,
+    const targets: DigestTarget[] = (candidates ?? []).map((c: any) => ({
+      profileId: c.profile_id as string,
       preferredLanguage: (c.preferred_language as string) || 'en',
     }));
 
     console.log(`[digest] ${targets.length} dormant candidate(s) to check`);
 
-    let enqueued = 0;
-    let skippedNoMatches = 0;
+    let enqueuedWithCount = 0;
+    let enqueuedFallback = 0;
     let errored = 0;
 
-    // 2. For each, count new matches via RPC; enqueue notification if >= MIN_COUNT.
     for (const tgt of targets) {
       try {
         const { data: count, error: rpcErr } = await supabase.rpc(
@@ -123,28 +147,32 @@ serve(async (req) => {
         if (rpcErr) {
           console.error(`[digest] RPC failed for ${tgt.profileId}:`, rpcErr);
           errored++;
+          // Stamp anyway so a misbehaving RPC doesn't permanently block the user.
+          await supabase
+            .from('profiles')
+            .update({ last_digest_sent_at: now.toISOString() })
+            .eq('id', tgt.profileId);
           continue;
         }
 
         const newMatchCount = Number(count ?? 0);
-        if (newMatchCount < MIN_COUNT) {
-          skippedNoMatches++;
-          continue;
-        }
+        const useCounted = newMatchCount >= MIN_COUNT;
 
-        const { title, body } = pickTranslation(tgt.preferredLanguage, newMatchCount);
+        const { title, body } = useCounted
+          ? pickTranslation(tgt.preferredLanguage, newMatchCount)
+          : pickFallback(tgt.preferredLanguage);
 
         const { error: insertErr } = await supabase
           .from('notification_queue')
           .insert({
             recipient_profile_id: tgt.profileId,
-            notification_type: 'new_matches_digest',
+            notification_type: useCounted ? 'new_matches_digest' : 'winback_generic',
             title,
             body,
             data: {
-              type: 'new_matches_digest',
+              type: useCounted ? 'new_matches_digest' : 'winback_generic',
               screen: 'discover',
-              count: newMatchCount,
+              count: useCounted ? newMatchCount : 0,
             },
             status: 'pending',
           });
@@ -155,8 +183,6 @@ serve(async (req) => {
           continue;
         }
 
-        // Stamp last_digest_sent_at so the frequency cap sticks even before
-        // process-notifications actually delivers the push.
         const { error: stampErr } = await supabase
           .from('profiles')
           .update({ last_digest_sent_at: now.toISOString() })
@@ -164,11 +190,10 @@ serve(async (req) => {
 
         if (stampErr) {
           console.error(`[digest] stamp failed for ${tgt.profileId}:`, stampErr);
-          // Don't roll back the queue row — the push will still send; next run
-          // will just double-stamp at worst.
         }
 
-        enqueued++;
+        if (useCounted) enqueuedWithCount++;
+        else enqueuedFallback++;
       } catch (e: any) {
         console.error(`[digest] unexpected error for ${tgt.profileId}:`, e?.message ?? e);
         errored++;
@@ -178,13 +203,16 @@ serve(async (req) => {
     const result = {
       success: true,
       candidates: targets.length,
-      enqueued,
-      skippedNoMatches,
+      enqueuedWithCount,
+      enqueuedFallback,
+      enqueuedTotal: enqueuedWithCount + enqueuedFallback,
       errored,
       window_days: WINDOW_DAYS,
       dormancy_days: DORMANCY_DAYS,
       freq_cap_days: FREQ_CAP_DAYS,
       min_count: MIN_COUNT,
+      batch_size: BATCH_SIZE,
+      target_local_hour: TARGET_LOCAL_HOUR,
     };
     console.log('[digest] run complete', result);
 

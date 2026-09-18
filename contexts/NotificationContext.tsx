@@ -14,8 +14,14 @@ import {
   deobfuscateId,
 } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from './ToastContext';
 import { useMatch } from './MatchContext';
+
+// Persisted across cold starts so an UNCHANGED push token isn't re-written on
+// every launch. Re-saving on each launch was ~4M redundant profiles UPDATEs +
+// device_tokens delete/insert churn (infra audit 2026-07-20).
+const LAST_PUSH_TOKEN_KEY = 'last_saved_push_token_key';
 
 interface NotificationContextType {
   pushToken: string | null;
@@ -86,14 +92,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!profileId) return;
 
     try {
-      const { count, error } = await supabase
-        .from('messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('receiver_profile_id', profileId)
-        .is('read_at', null);
+      // Count only unread messages from ACTIVE matches. The previous naive
+      // count of all unread received messages kept counting messages from
+      // conversations that were later unmatched/blocked, leaving a stuck badge
+      // (e.g. a "4" that never cleared after the other person unmatched).
+      const { data: count, error } = await supabase.rpc('count_unread_active_messages');
 
       if (!error && count !== null) {
-        setUnreadMessageCount(count);
+        setUnreadMessageCount(count || 0);
       }
     } catch (error) {
       console.error('Error fetching unread count:', error);
@@ -409,11 +415,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         setNotificationsEnabled(true);
         setPermissionStatus('granted');
 
-        // Save token to database (skip if already saved for this user+token)
+        // Save token to database (skip if already saved for this user+token).
+        // Hydrate the guard from storage first so a token unchanged since the
+        // last launch is a true no-op (no profile UPDATE / device_token churn).
         const key = `${user.id}:${token}`;
+        if (lastSavedTokenKey.current === null) {
+          try {
+            const stored = await AsyncStorage.getItem(LAST_PUSH_TOKEN_KEY);
+            if (stored) lastSavedTokenKey.current = stored;
+          } catch {}
+        }
         if (lastSavedTokenKey.current !== key) {
           await savePushToken(user.id, token);
           lastSavedTokenKey.current = key;
+          AsyncStorage.setItem(LAST_PUSH_TOKEN_KEY, key).catch(() => {});
         }
 
         // Set up notification listeners

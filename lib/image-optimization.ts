@@ -141,14 +141,19 @@ export async function optimizeImage(
     let finalQuality = quality;
     let fileSize = await getFileSize(manipulated.uri);
 
-    // If file is still too large, compress more aggressively
+    // If file is still too large, compress more aggressively. Re-compress from
+    // the ALREADY-RESIZED image (finalUri), not the full-res original — and
+    // skip the resize op since it's already at maxWidth. Previously each loop
+    // iteration re-decoded the full-resolution original, loading a huge bitmap
+    // into RAM every time; on lower-memory Android devices that spiked past the
+    // RAM ceiling and the OS watchdog killed the app (and made it crawl). A
+    // 1080px-wide image decodes in a fraction of the memory.
     if (fileSize > IMAGE_CONFIG.maxFileSize) {
-      // Progressive compression
       while (fileSize > IMAGE_CONFIG.maxFileSize && finalQuality > 0.3) {
         finalQuality -= 0.1;
         const recompressed = await ImageManipulator.manipulateAsync(
-          uri,
-          [{ resize: { width: maxWidth } }],
+          finalUri,
+          [],
           { compress: finalQuality, format, base64: false }
         );
 
@@ -174,10 +179,13 @@ export async function optimizeImage(
       },
     };
 
-    // Generate thumbnail if requested
+    // Generate thumbnail if requested. Derive it from the already-resized
+    // image (finalUri), not the full-res original — downscaling 1080px → 400px
+    // is cheap, whereas re-decoding the original was a second full-resolution
+    // bitmap load (more Android memory pressure for no benefit).
     if (generateThumbnail) {
       const thumb = await ImageManipulator.manipulateAsync(
-        uri,
+        finalUri,
         [{ resize: { width: IMAGE_CONFIG.thumbnail.maxWidth } }],
         {
           compress: IMAGE_CONFIG.thumbnail.quality,

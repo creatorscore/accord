@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, useColorScheme, Switch } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -18,7 +19,7 @@ interface ChipSelectProps {
   onVisibilityChange?: (visible: boolean) => void;
 }
 
-export default function ChipSelect({
+function ChipSelect({
   options,
   selected,
   onSelect,
@@ -108,6 +109,8 @@ export default function ChipSelect({
     </View>
   );
 }
+
+export default memo(ChipSelect);
 
 const styles = StyleSheet.create({
   container: {

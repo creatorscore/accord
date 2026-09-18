@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -29,10 +29,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri, cleanupOptimizedImages } from '@/lib/image-optimization';
 import { HeightUnit, cmToInches, inchesToCm } from '@/lib/height-utils';
 import { openAppSettings } from '@/lib/open-settings';
-import { validateContent } from '@/lib/content-moderation';
+import { validateContent, nameHasContactInfo, NAME_CONTACT_INFO_MESSAGE } from '@/lib/content-moderation';
 import { useTranslation } from 'react-i18next';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { PROMPT_KEYS } from '@/lib/prompt-options';
+import { EDUCATION_LEVELS, COMMON_LANGUAGES, POLITICAL_VIEWS } from '@/lib/onboarding-config';
+import Slider from '@react-native-community/slider';
+import { DISTANCE_MIN, DISTANCE_MAX, distanceToSlider, sliderToDistance, formatDistanceRangeLabel } from '@/lib/distance-utils';
+import ProfileVoiceNote from '@/components/profile/ProfileVoiceNote';
 
 interface Photo {
   id?: string;
@@ -129,16 +133,9 @@ const RELIGIONS = [
   'Prefer not to say',
 ];
 
-const POLITICAL_VIEWS = [
-  'Very Liberal',
-  'Liberal',
-  'Moderate',
-  'Conservative',
-  'Very Conservative',
-  'Apolitical',
-  'Other',
-  'Prefer not to say',
-];
+// POLITICAL_VIEWS now imported from '@/lib/onboarding-config' so edit-profile
+// matches onboarding exactly (was a divergent list missing Progressive /
+// Socialist / Libertarian — ~3,959 users couldn't edit their political view).
 
 const VOICE_PROMPTS = [
   "A story I love to tell...",
@@ -151,21 +148,7 @@ const VOICE_PROMPTS = [
   "The best trip I ever took...",
 ];
 
-const COMMON_LANGUAGES = [
-  'English',
-  'Spanish',
-  'Mandarin',
-  'French',
-  'German',
-  'Italian',
-  'Portuguese',
-  'Russian',
-  'Japanese',
-  'Korean',
-  'Arabic',
-  'Hindi',
-  'Other',
-];
+// COMMON_LANGUAGES now imported from '@/lib/onboarding-config' (shared with onboarding)
 
 // Hobby options imported from shared config
 
@@ -349,6 +332,11 @@ export default function EditProfile() {
   const [maxDistance, setMaxDistance] = useState('50');
   const [willingToRelocate, setWillingToRelocate] = useState(false);
   const [genderPreference, setGenderPreference] = useState<string[]>([]);
+  // Tracks whether the user's preferences row actually loaded. If the prefs
+  // fetch fails/races, the local pref state stays at its empty defaults — and we
+  // must NOT persist those, or a profile save would silently overwrite the
+  // user's real matching preferences (e.g. wipe gender_preference to "everyone").
+  const prefsLoadedRef = useRef(false);
   const [dealbreakers, setDealbreakers] = useState<string[]>([]);
   const [newDealbreaker, setNewDealbreaker] = useState('');
   const [mustHaves, setMustHaves] = useState<string[]>([]);
@@ -494,6 +482,7 @@ export default function EditProfile() {
             .single();
 
           if (prefsData) {
+            prefsLoadedRef.current = true;
             setPreferencesId(prefsData.id);
             // Prefer new primary_reasons column, fallback to legacy primary_reason
             if (prefsData.primary_reasons && Array.isArray(prefsData.primary_reasons)) {
@@ -566,9 +555,12 @@ export default function EditProfile() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        // Disable cropping on Android — native canhub/cropper crashes on low-end devices
-        allowsEditing: Platform.OS === 'ios',
-        aspect: [3, 4],
+        // No in-picker cropping on either platform. iOS's "Crop" button is the
+        // confirm action and users mistake it for an optional edit step — they
+        // back out instead of finishing. Android's canhub/cropper also crashes
+        // on low-end devices. Upload as-is; aspect ratio is enforced visually
+        // by the photo grid.
+        allowsEditing: false,
         quality: 0.8,
       });
 
@@ -611,8 +603,11 @@ export default function EditProfile() {
           }
 
           // Optimize image with compression now that dedup cleared
+          // No client thumbnail — it was discarded here anyway, and the
+          // privacy-blur thumbnail is generated separately (generateBlurDataUri)
+          // + server-side. Skipping it removes a redundant image decode.
           const { optimized } = await optimizeImage(selectedUri, {
-            generateThumbnail: true,
+            generateThumbnail: false,
           });
           const blurDataUri = await generateBlurDataUri(optimized.uri).catch(() => undefined);
 
@@ -851,6 +846,9 @@ export default function EditProfile() {
       const updateData: Record<string, any> = {
         latitude: location.latitude,
         longitude: location.longitude,
+        // ANTI-SCAM: this path is GPS-only (no manual entry), so mark the
+        // location as a trusted real-device fix.
+        location_source: 'gps',
       };
       if (location.city) updateData.location_city = location.city;
       if (location.state) updateData.location_state = location.state;
@@ -878,6 +876,12 @@ export default function EditProfile() {
   const saveProfile = async (skipAlert = false) => {
     if (!displayName) {
       Alert.alert('Required Fields', 'Please fill in your name');
+      return false;
+    }
+
+    // Anti-scam: block phone/email/link/app-handle as a name (server enforces too).
+    if (nameHasContactInfo(displayName)) {
+      Alert.alert('Invalid name', NAME_CONTACT_INFO_MESSAGE);
       return false;
     }
 
@@ -1032,26 +1036,39 @@ export default function EditProfile() {
       const photosToUpload = photos.filter(p => p.is_new && !p.to_delete);
       const photosToUpdate = photos.filter(p => !p.is_new && !p.to_delete && p.id);
 
-      // Delete photos from storage and database in parallel
+      // Delete the DB rows FIRST, then remove the storage objects only if the
+      // row deletion actually succeeded.
+      //
+      // Previously both ran in parallel and errors were merely logged. If the
+      // storage remove succeeded but the row delete silently failed (RLS, a
+      // partial batch, a transient error), the row was left pointing at a
+      // now-missing file — rendering as a permanent grey "ghost" box in the
+      // photo grid that the user couldn't get rid of (the reported bug).
+      //
+      // Deleting the row first inverts the failure mode: if anything goes
+      // wrong, the photo stays fully intact (row + file) and is recoverable,
+      // instead of being half-deleted into an orphaned row. The worst case
+      // now is an orphaned storage object (a file with no row), which is
+      // invisible to users and just wastes a little storage.
       if (photosToDelete.length > 0) {
-        // Batch storage deletions
-        const storagePaths = photosToDelete
-          .filter(p => p.storage_path && !p.storage_path.startsWith('file://'))
-          .map(p => p.storage_path!);
-        const storageDeletePromise = storagePaths.length > 0
-          ? supabase.storage.from('profile-photos').remove(storagePaths)
-          : Promise.resolve({ error: null });
-
-        // Batch DB deletions
         const photoIds = photosToDelete.map(p => p.id!);
-        const dbDeletePromise = supabase
+        const { error: dbDeleteError } = await supabase
           .from('photos')
           .delete()
           .in('id', photoIds);
 
-        const [storageResult, dbResult] = await Promise.all([storageDeletePromise, dbDeletePromise]);
-        if (storageResult.error) console.error('Error deleting from storage:', storageResult.error);
-        if (dbResult.error) console.error('Error deleting photos from database:', dbResult.error);
+        if (dbDeleteError) {
+          console.error('Error deleting photos from database:', dbDeleteError);
+          Alert.alert('Error', "Couldn't remove a photo. Please try again.");
+        } else {
+          const storagePaths = photosToDelete
+            .filter(p => p.storage_path && !p.storage_path.startsWith('file://'))
+            .map(p => p.storage_path!);
+          if (storagePaths.length > 0) {
+            const { error: storageError } = await supabase.storage.from('profile-photos').remove(storagePaths);
+            if (storageError) console.error('Error deleting from storage:', storageError);
+          }
+        }
       }
 
       // Upload new photos in parallel (each photo: convert -> upload -> sign -> insert -> moderate)
@@ -1101,13 +1118,25 @@ export default function EditProfile() {
           // Run NSFW moderation check
           const signedUrl = signedData?.signedUrl || '';
           try {
-            const { data: moderationResult, error: moderationError } = await supabase.functions.invoke('moderate-photo', {
-              body: {
-                photo_url: signedUrl,
-                photo_id: photoData?.id,
-                profile_id: finalProfileId,
-              },
-            });
+            // Moderate on upload with one retry + pass storage_path (see
+            // photos.tsx) so a transient invoke failure doesn't strand the photo
+            // as 'pending' and block liking until the retry cron.
+            let moderationResult: any = null;
+            let moderationError: any = null;
+            for (let attempt = 0; attempt < 2; attempt++) {
+              const res = await supabase.functions.invoke('moderate-photo', {
+                body: {
+                  photo_url: signedUrl,
+                  storage_path: fileName,
+                  photo_id: photoData?.id,
+                  profile_id: finalProfileId,
+                },
+              });
+              moderationResult = res.data;
+              moderationError = res.error;
+              if (!moderationError && moderationResult) break;
+              if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
+            }
 
             if (moderationError) {
               console.error('Moderation service error:', moderationError);
@@ -1187,7 +1216,12 @@ export default function EditProfile() {
       }
 
       // Save preferences
-      if (finalProfileId) {
+      // GUARD: only persist preferences if the row actually loaded. Otherwise a
+      // failed/racy prefs fetch would make us write empty-state defaults over the
+      // user's real preferences — this is what was flipping gender_preference to
+      // "everyone" (multiple support tickets). With no loaded row there is also
+      // nothing for .update() to change, so skipping is safe either way.
+      if (finalProfileId && prefsLoadedRef.current) {
         // Build lifestyle preferences object
         const lifestylePreferences: any = {};
         if (smoking) lifestylePreferences.smoking = smoking;
@@ -1207,9 +1241,14 @@ export default function EditProfile() {
           lifestyle_preferences: Object.keys(lifestylePreferences).length > 0 ? lifestylePreferences : null,
           age_min: parseInt(ageMin) || 25,
           age_max: parseInt(ageMax) || 45,
-          max_distance_miles: parseInt(maxDistance) || 50,
+          max_distance_miles: Math.min(DISTANCE_MAX, Math.max(DISTANCE_MIN, parseInt(maxDistance) || 50)),
           willing_to_relocate: willingToRelocate,
-          gender_preference: genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary'],
+          // Empty selection = "Everyone" → store canonical [] (the whole app
+          // treats [] as the skip-gender-filter sentinel). Never write
+          // ['Man','Woman','Non-binary'] as a fallback: it reads as an explicit
+          // overlap filter that excludes empty-gender profiles and, crucially,
+          // silently overrode users who had picked a specific gender.
+          gender_preference: genderPreference.length > 0 ? genderPreference : [],
           dealbreakers: dealbreakers.length > 0 ? dealbreakers : null,
           must_haves: mustHaves.length > 0 ? mustHaves : null,
         };
@@ -1556,19 +1595,22 @@ export default function EditProfile() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Education Level</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {['High School', "Associate's Degree", "Bachelor's Degree", "Master's Degree", 'Doctorate / PhD', 'Trade School', 'Self-Taught', 'Other'].map((level) => {
-                const value = level.toLowerCase().replace(/['\s\/]+/g, '_').replace(/_degree/g, 's');
-                const isSelected = educationLevel === value || educationLevel === level;
+              {/* Use the canonical EDUCATION_LEVELS from onboarding-config so the
+                  stored value (e.g. "masters") matches the chip exactly. The old
+                  inline regex derived "master_ss" and never matched what onboarding
+                  saved, so a filled-in education level rendered blank here. */}
+              {EDUCATION_LEVELS.map(({ value, label }) => {
+                const isSelected = educationLevel === value;
                 return (
                   <TouchableOpacity
-                    key={level}
+                    key={value}
                     style={[
                       styles.interestChip,
                       isSelected && { backgroundColor: '#A08AB7', borderColor: '#A08AB7' }
                     ]}
                     onPress={() => setEducationLevel(isSelected ? '' : value)}
                   >
-                    <Text style={[{ fontSize: 14, color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }, isSelected && { color: '#FFFFFF' }]}>{level}</Text>
+                    <Text style={[{ fontSize: 14, color: isDarkColorScheme ? '#9CA3AF' : '#4B5563' }, isSelected && { color: '#FFFFFF' }]}>{label}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -1805,7 +1847,14 @@ export default function EditProfile() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Political Views</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {POLITICAL_VIEWS.map((view) => (
+              {/* Include the user's stored value even if it's a retired option
+                  (e.g. legacy 'Very Liberal'/'Very Conservative') so it renders
+                  selected instead of blank — otherwise tapping any chip would
+                  silently overwrite their real value. */}
+              {(politicalViews && !(POLITICAL_VIEWS as readonly string[]).includes(politicalViews)
+                ? [...POLITICAL_VIEWS, politicalViews]
+                : POLITICAL_VIEWS
+              ).map((view) => (
                 <TouchableOpacity
                   key={view}
                   style={[
@@ -1932,6 +1981,20 @@ export default function EditProfile() {
             <View style={styles.voiceStatus}>
               <MaterialCommunityIcons name="check-circle" size={20} color="#10B981" />
               <Text style={styles.voiceStatusText}>Voice intro recorded</Text>
+            </View>
+          )}
+
+          {/* Let the user LISTEN to their current voice intro — previously the
+              section only offered re-recording with no way to hear the existing
+              one. Plays the signed URL (existing) or the freshly-recorded local
+              file. Renders nothing when there's no intro. */}
+          {voiceIntroUrl && !isRecording && (
+            <View style={{ marginTop: 12 }}>
+              <ProfileVoiceNote
+                voiceUrl={voiceIntroUrl}
+                duration={voiceDuration}
+                prompt={voiceIntroPrompt || 'Your voice intro'}
+              />
             </View>
           )}
 
@@ -2353,14 +2416,24 @@ export default function EditProfile() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Maximum Distance (miles)</Text>
-            <TextInput
-              style={styles.input}
-              value={maxDistance}
-              onChangeText={setMaxDistance}
-              placeholder="50"
-              keyboardType="number-pad"
-              placeholderTextColor="#9CA3AF"
+            {/* Bounded slider (5–500 mi) instead of a free number-pad field.
+                A raw TextInput let users type any value (e.g. 9999), which was
+                a way to bypass the 500-mile cap. The slider makes >500
+                unreachable; distance-utils maps position 0–1 to 5–500 mi. */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={styles.inputLabel}>Maximum Distance</Text>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#A08AB7' }}>
+                {formatDistanceRangeLabel(Math.min(DISTANCE_MAX, Math.max(DISTANCE_MIN, parseInt(maxDistance) || DISTANCE_MIN)))}
+              </Text>
+            </View>
+            <Slider
+              minimumValue={0}
+              maximumValue={1}
+              value={distanceToSlider(Math.min(DISTANCE_MAX, Math.max(DISTANCE_MIN, parseInt(maxDistance) || DISTANCE_MIN)))}
+              onValueChange={(v) => setMaxDistance(String(sliderToDistance(v)))}
+              minimumTrackTintColor="#A08AB7"
+              maximumTrackTintColor={isDarkColorScheme ? '#4B5563' : '#D1D5DB'}
+              thumbTintColor="#A08AB7"
             />
           </View>
 
@@ -2524,9 +2597,9 @@ export default function EditProfile() {
                 housing_preference: housingPreference,
                 age_min: parseInt(ageMin) || 25,
                 age_max: parseInt(ageMax) || 45,
-                max_distance_miles: parseInt(maxDistance) || 50,
+                max_distance_miles: Math.min(DISTANCE_MAX, Math.max(DISTANCE_MIN, parseInt(maxDistance) || 50)),
                 willing_to_relocate: willingToRelocate,
-                gender_preference: Array.isArray(genderPreference) && genderPreference.length > 0 ? genderPreference : ['Man', 'Woman', 'Non-binary'],
+                gender_preference: Array.isArray(genderPreference) ? genderPreference : [],
                 dealbreakers: Array.isArray(dealbreakers) ? dealbreakers : [],
                 must_haves: Array.isArray(mustHaves) ? mustHaves : [],
                 lifestyle_preferences: {

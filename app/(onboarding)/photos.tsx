@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { optimizeImage, uriToArrayBuffer, validateImage, generateImageHash, generateBlurDataUri, cleanupOptimizedImages } from '@/lib/image-optimization';
 import { signPhotoUrls } from '@/lib/signed-urls';
+import { captureException } from '@/lib/sentry';
 import { goToPreviousOnboardingStep, goToNextOnboardingStep } from '@/lib/onboarding-navigation';
 import { getGlobalStep } from '@/lib/onboarding-steps';
 import { useTranslation } from 'react-i18next';
@@ -42,9 +43,14 @@ interface PhotosProps {
   embedded?: boolean;
   onContinue?: () => void;
   onBack?: () => void;
+  // When embedded inside the unified onboarding flow, the parent already
+  // knows the profile id (it created the row at step 3). Passing it down
+  // skips a redundant SELECT roundtrip on mount — meaningful when the
+  // user is on a flaky connection or the chunk just loaded.
+  initialProfileId?: string | null;
 }
 
-export default function Photos({ embedded, onContinue: parentContinue, onBack: parentBack }: PhotosProps = {}) {
+export default function Photos({ embedded, onContinue: parentContinue, onBack: parentBack, initialProfileId }: PhotosProps = {}) {
   const router = useRouter();
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -55,7 +61,7 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [profileId, setProfileId] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(initialProfileId ?? null);
   const [photoBlurEnabled, setPhotoBlurEnabled] = useState(false);
   const [processingImage, setProcessingImage] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
@@ -63,25 +69,67 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
   // Start at 3 (the minimum required) so first paint never shows an empty grid.
   const [skeletonCount, setSkeletonCount] = useState(3);
   const [initialLoading, setInitialLoading] = useState(true);
+  // How many of this profile's photos were rejected by moderation. Surfaced as
+  // a notice so a user who was bounced back here understands why some photos
+  // are missing and what to do (replace them).
+  const [rejectedCount, setRejectedCount] = useState(0);
   const isMounted = useRef(true);
 
   useEffect(() => {
-    loadProfile();
     return () => {
       isMounted.current = false;
     };
   }, []);
 
+  // Re-run loadProfile when auth becomes available. Previous empty-deps
+  // useEffect fired once at mount and silently no-op'd if user wasn't
+  // hydrated yet, leaving profileId=null forever and surfacing
+  // "Profile not found" when the user hit Continue.
+  //
+  // Fast path: when the parent passed initialProfileId, skip the profile
+  // SELECT entirely and go straight to fetching existing photos (the
+  // common case for embedded onboarding — the parent already created the
+  // row at step 3 and has its id in state).
+  //
+  // Sync local profileId whenever the parent's initialProfileId transitions
+  // from null → real id. useState only captures the FIRST prop value, so a
+  // late-arriving parent profileId (e.g. parent's initial profile load
+  // finishes after Photos mounts) would otherwise leave us locked at null
+  // — handleContinue then fires the no-profile guard and surfaces
+  // "Profile not found" to a user whose row actually exists.
+  useEffect(() => {
+    if (initialProfileId) {
+      console.log('[photos] using initialProfileId from parent =', initialProfileId);
+      setProfileId(initialProfileId);
+      loadExistingPhotos(initialProfileId).finally(() => {
+        if (isMounted.current) setInitialLoading(false);
+      });
+      return;
+    }
+    if (user?.id) {
+      loadProfile();
+    }
+  }, [user?.id, initialProfileId]);
+
   const loadProfile = async () => {
+    const t0 = Date.now();
+    console.log('[photos.loadProfile] start, user?.id =', user?.id);
     try {
+      if (!user?.id) {
+        const err = new Error('photos.loadProfile called without user.id (auth not ready)');
+        console.warn('[photos.loadProfile]', err.message);
+        captureException(err, { context: 'photos_loadProfile_no_user' });
+        return;
+      }
       const { data, error } = await supabase
         .from('profiles')
         .select('id, photo_blur_enabled')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .single();
 
       if (error) throw error;
       if (!isMounted.current) return;
+      console.log('[photos.loadProfile] got profileId =', data.id, 'in', Date.now() - t0, 'ms');
       setProfileId(data.id);
 
       if (data.photo_blur_enabled !== null) {
@@ -90,6 +138,12 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
 
       await loadExistingPhotos(data.id);
     } catch (error: any) {
+      console.error('[photos.loadProfile] failed in', Date.now() - t0, 'ms:', error?.code, error?.message);
+      captureException(error instanceof Error ? error : new Error(error?.message || 'photos.loadProfile failed'), {
+        context: 'photos_loadProfile',
+        code: error?.code,
+        userId: user?.id,
+      });
       showToast({ type: 'error', title: t('common.error'), message: t('toast.profileLoadError') });
     } finally {
       if (isMounted.current) setInitialLoading(false);
@@ -98,17 +152,16 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
 
   const loadExistingPhotos = async (profileId: string) => {
     try {
-      // Exclude rejected photos so the count the user sees matches what
-      // actually counts toward the 3-photo minimum. Otherwise a user with
-      // 2 approved + 1 rejected sees "3 photos", taps Continue, and is
-      // either rejected again or advances with an invisible-in-discovery
-      // photo. 'pending' is included so that in-flight moderations still
-      // appear during the brief window before the edge function returns.
-      const { data: existingPhotos, error } = await supabase
+      // Fetch ALL photos (including rejected) so we can both (a) render only the
+      // usable ones and (b) tell the user how many were removed by moderation.
+      // Without that notice, a user bounced back here from the final step just
+      // sees fewer photos than they added, with no explanation — the silent
+      // hole behind JAVASCRIPT-REACT-71 / -8Y. 'pending' is treated as usable so
+      // in-flight moderations still appear before the edge function returns.
+      const { data: allPhotos, error } = await supabase
         .from('photos')
         .select('url, storage_path, display_order, content_hash, moderation_status')
         .eq('profile_id', profileId)
-        .neq('moderation_status', 'rejected')
         .order('display_order', { ascending: true });
 
       if (error) {
@@ -116,6 +169,10 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
         setSkeletonCount(0);
         return;
       }
+
+      const rejected = (allPhotos ?? []).filter((p) => p.moderation_status === 'rejected');
+      const existingPhotos = (allPhotos ?? []).filter((p) => p.moderation_status !== 'rejected');
+      if (isMounted.current) setRejectedCount(rejected.length);
 
       if (existingPhotos && existingPhotos.length > 0) {
         // Reserve skeleton slots immediately so the grid doesn't jump from 0 → N
@@ -197,8 +254,12 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
               }
             }
 
+            // No client thumbnail — it was discarded here anyway, and the
+            // privacy-blur thumbnail is generated separately below
+            // (generateBlurDataUri) + server-side. Skipping it removes a
+            // redundant image decode on Android.
             const { optimized } = await optimizeImage(selectedUri, {
-              generateThumbnail: true,
+              generateThumbnail: false,
             });
 
             const blurDataUri = await generateBlurDataUri(optimized.uri).catch(() => undefined);
@@ -254,6 +315,13 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
     }
 
     if (!profileId) {
+      console.error('[photos.handleContinue] profileId is null at Continue — embedded =', embedded, 'user?.id =', user?.id);
+      captureException(new Error('photos.handleContinue fired with null profileId'), {
+        context: 'photos_continue_no_profile',
+        embedded,
+        userId: user?.id,
+        photosCount: photos.length,
+      });
       showToast({ type: 'error', title: t('common.error'), message: t('toast.profileNotFound') });
       return;
     }
@@ -270,10 +338,33 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
       // duplicate constraint or a redundant moderation call. Keyed by
       // contentHash because the local URI is the only stable per-photo id.
       const uploadedHashes: Set<string> = new Set();
+      // Photos moderation rejected THIS pass. Collected instead of thrown so a
+      // single bad photo can't abort the whole batch — we drop these from local
+      // state after the loop so the user can replace them and still finish,
+      // rather than being stuck re-uploading + re-rejecting the same image.
+      const rejectedHashes: Set<string> = new Set();
 
       if (newPhotos.length === 0) {
         setUploadProgress(100);
       } else {
+        // Determine the starting display_order from the DATABASE, not the local
+        // `photos` array. On resume, existing photos can fail to hydrate into
+        // local state (e.g. a signed-URL load race/error), and numbering new
+        // photos from the local count then collides with the rows already in
+        // the DB — producing duplicate display_orders (two sets of 0/1/2 for one
+        // profile). Basing it on the current max in the DB makes new photos slot
+        // in after whatever already exists, regardless of local-state hydration.
+        let nextOrder = 0;
+        if (profileId) {
+          const { data: maxRow } = await supabase
+            .from('photos')
+            .select('display_order')
+            .eq('profile_id', profileId)
+            .order('display_order', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          nextOrder = maxRow ? (maxRow.display_order ?? -1) + 1 : 0;
+        }
         for (let i = 0; i < newPhotos.length; i++) {
           const photo = newPhotos[i];
           const timestamp = Date.now();
@@ -306,8 +397,8 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
                 profile_id: profileId,
                 storage_path: fileName,
                 url: fileName,
-                display_order: photos.length - newPhotos.length + i,
-                is_primary: photos.length - newPhotos.length + i === 0,
+                display_order: nextOrder + i,
+                is_primary: nextOrder + i === 0,
                 content_hash: photo.contentHash,
                 blur_data_uri: photo.blurDataUri || null,
                 moderation_status: 'pending',
@@ -323,30 +414,49 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
                 throw new Error(`Failed to save photo ${i + 1}. Please try again.`);
               }
             } else {
-              try {
-                const { data: moderationResult, error: moderationError } = await supabase.functions.invoke('moderate-photo', {
+              // Moderate on upload, with one retry. A transient invoke failure
+              // used to silently leave the photo 'pending' (not counting toward
+              // the 2-photo like minimum) until the retry cron swept it minutes
+              // later — the cause of the "need 2 approved photos" support
+              // tickets. Also pass storage_path so the function can mint a fresh
+              // signed URL if the passed one is stale.
+              let moderationResult: any = null;
+              let moderationError: any = null;
+              for (let attempt = 0; attempt < 2; attempt++) {
+                const res = await supabase.functions.invoke('moderate-photo', {
                   body: {
                     photo_url: signedUrl,
+                    storage_path: fileName,
                     photo_id: photoData?.id,
                     profile_id: profileId,
                   },
                 });
+                moderationResult = res.data;
+                moderationError = res.error;
+                if (!moderationError && moderationResult) break;
+                if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
+              }
 
-                if (moderationError) {
-                  console.error('Moderation service error:', moderationError);
-                }
+              if (moderationError) {
+                // Transient moderation-service error: leave the row 'pending'
+                // (still counts as usable) — the retry cron re-checks it later.
+                console.error('Moderation service error:', moderationError);
+              }
 
-                if (moderationResult?.approved === false && (moderationResult.reason === 'explicit_content' || moderationResult.reason === 'needs_review')) {
-                  throw new Error(t('onboardingPhotos.inappropriateContent'));
-                }
-                if (moderationResult?.approved === false && moderationResult.reason === 'contact_info') {
-                  throw new Error(t('onboardingPhotos.contactInfoDetected'));
-                }
-              } catch (moderationError: any) {
-                if (moderationError.message?.includes('inappropriate content') || moderationError.message?.includes('contact info')) {
-                  throw moderationError;
-                }
-                console.error('Moderation check failed:', moderationError);
+              // A hard rejection is permanent for THIS photo but must NOT abort
+              // the whole batch. Previously it threw, stranding the user in a
+              // retry loop that re-uploaded + re-rejected the same image forever
+              // (the step-27 drop-off). Record it and skip — it's dropped from
+              // local state after the loop so the user can replace it and finish.
+              const isRejected =
+                moderationResult?.approved === false &&
+                (moderationResult.reason === 'explicit_content' ||
+                  moderationResult.reason === 'needs_review' ||
+                  moderationResult.reason === 'contact_info');
+              if (isRejected) {
+                if (photo.contentHash) rejectedHashes.add(photo.contentHash);
+                setUploadProgress(Math.round(((i + 1) / newPhotos.length) * 100));
+                continue;
               }
             }
 
@@ -357,10 +467,58 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
             }
             setUploadProgress(Math.round(((i + 1) / newPhotos.length) * 100));
           } catch (photoError: any) {
+            // One photo failing (network blip, storage/DB error) must not throw
+            // away the photos that already uploaded this pass. Log and move on;
+            // the authoritative DB count after the loop decides whether we have
+            // enough usable photos to advance, and any un-uploaded photo stays
+            // in local state for a cheap retry.
             console.error(`Error processing photo ${i}:`, photoError);
-            throw photoError;
           }
         }
+      }
+
+      // Reconcile local state with what actually happened this pass: drop any
+      // photos moderation rejected (so a retry doesn't re-submit the same image
+      // and get stuck), and mark successfully-uploaded photos so a retry skips
+      // them (no re-upload, no flicker). The filter at the top of this handler
+      // checks both `uri` and `uploaded`.
+      if (isMounted.current && (rejectedHashes.size > 0 || uploadedHashes.size > 0)) {
+        setPhotos(prev => prev
+          .filter(p => !(p.contentHash && rejectedHashes.has(p.contentHash)))
+          .map(p => (p.contentHash && uploadedHashes.has(p.contentHash) ? { ...p, uploaded: true } : p))
+        );
+      }
+      if (rejectedHashes.size > 0 && isMounted.current) {
+        setRejectedCount(prev => prev + rejectedHashes.size);
+      }
+
+      // Authoritative advance gate: count the non-rejected rows actually in the
+      // DB (mirrors the final-step check_minimum_photos preflight). Local
+      // optimistic state can diverge from the DB on partial failures, so this —
+      // not photos.length — decides whether we can move on. Keep the user here
+      // with their uploaded photos intact and a clear message instead of the old
+      // all-or-nothing throw + stuck-loop.
+      let dbUsable = photos.length;
+      if (profileId) {
+        const { data: statusRows, error: statusErr } = await supabase
+          .from('photos')
+          .select('moderation_status')
+          .eq('profile_id', profileId);
+        if (!statusErr) {
+          dbUsable = (statusRows ?? []).filter((r) => r.moderation_status !== 'rejected').length;
+        }
+      }
+
+      if (dbUsable < 2) {
+        cleanupOptimizedImages().catch(() => {});
+        if (isMounted.current) {
+          setUploading(false);
+          setUploadProgress(0);
+          // The red rejection notice above the grid explains *why* photos are
+          // missing; this toast says what to do next.
+          showToast({ type: 'info', title: t('toast.morePhotosNeeded'), message: t('toast.morePhotosNeeded') });
+        }
+        return;
       }
 
       if (!embedded) {
@@ -381,16 +539,6 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
           .from('profiles')
           .update({ photo_blur_enabled: photoBlurEnabled })
           .eq('id', profileId);
-      }
-
-      // Mark uploaded photos in local state so a subsequent retry skips them
-      // (the filter at the top of this handler checks both `uri` and
-      // `uploaded`). Keeps the original local URI for rendering — no
-      // flicker on partial-failure retries.
-      if (uploadedHashes.size > 0 && isMounted.current) {
-        setPhotos(prev => prev.map(p =>
-          p.contentHash && uploadedHashes.has(p.contentHash) ? { ...p, uploaded: true } : p
-        ));
       }
 
       // Clean up persisted optimized images now that they're uploaded
@@ -439,6 +587,18 @@ export default function Photos({ embedded, onContinue: parentContinue, onBack: p
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Moderation-rejection notice — explains missing photos so the user can recover */}
+      {rejectedCount > 0 && (
+        <View style={[styles.rejectedNotice, { backgroundColor: isDark ? 'rgba(220,38,38,0.12)' : '#FEF2F2', borderColor: isDark ? 'rgba(248,113,113,0.4)' : '#FECACA' }]}>
+          <MaterialCommunityIcons name="alert-circle-outline" size={16} color={isDark ? '#FCA5A5' : '#DC2626'} />
+          <Text style={[styles.rejectedNoticeText, { color: isDark ? '#FCA5A5' : '#B91C1C' }]}>
+            {rejectedCount === 1
+              ? '1 photo was removed for not meeting our photo guidelines (no nudity or contact info). Please add a new one.'
+              : `${rejectedCount} photos were removed for not meeting our photo guidelines (no nudity or contact info). Please add new ones.`}
+          </Text>
+        </View>
+      )}
 
       {/* Photo Grid — tap to select, tap another to swap */}
       <View style={styles.photoGrid}>
@@ -694,6 +854,21 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 10,
     paddingHorizontal: 2,
+  },
+  rejectedNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  rejectedNoticeText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: '500',
+    lineHeight: 17,
   },
   hintText: {
     fontSize: 13,
